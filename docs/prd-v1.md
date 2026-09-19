@@ -104,6 +104,10 @@ Modelar en Go la representación de una tarea (mission o scout) como structs ser
 
 Lanzar UN solo soldier: spawnear una instancia de Claude Code en un camp (git worktree aislado), esperar a que termine, capturar el resultado. Un worker, secuencial, sin flota. Acá aparece el manejo de procesos en Go (`os/exec`) y la creación/teardown de un worktree. Al ser un solo proceso, un fallo se aísla con precisión.
 
+El camp es un slot de un pool de worktrees reutilizables por proyecto (inspirado en treehouse, ver `docs/references.md`), no un worktree que se crea y se destruye por tarea: un slot se libera al pool solo cuando está limpio (sin cambios sin commitear) y "aterrizado" (sus commits ya están mergeados en la rama base); nunca se destruye el worktree en sí, se devuelve limpio para que la próxima tarea lo reutilice (dependencias y build cache intactos).
+
+**Pendiente de decidir**: cómo entrega sus cambios una mission (equivalente al concepto de "modo de proyecto" de firstmate: `no-mistakes` / `direct-PR` / `local-only`, ver `docs/references.md`). No se definió en esta capa porque no hay flota ni gate todavía; hay que resolverlo antes de que una mission necesite abrir un PR de verdad (a más tardar en Capa 4, que es donde el PRD dice que "una mission termina entregando cambios de código").
+
 ---
 
 ## CAPA 4 - Concurrencia (intención)

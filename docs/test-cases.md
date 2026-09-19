@@ -133,14 +133,54 @@ Precondición: una tarea válida guardada y, además, un archivo corrupto en `~/
 Acción: `state.List`.
 Esperado: falla con un error claro que nombra el archivo problemático; no ignora la corrupción silenciosamente ni devuelve una lista parcial sin avisar.
 
-## CAPA 3 - Un proceso (criterios de aceptación de alto nivel)
+## CAPA 3 - Un proceso (casos concretos)
 
-- Se crea un camp (git worktree aislado) para una tarea, con su rama propia, sin ensuciar el working tree del proyecto.
-- Se lanza una instancia de Claude Code apuntada a ese camp; vexillum captura su salida y su exit code.
-- Cuando el proceso termina, su resultado y su estado final quedan persistidos (usando la Capa 2).
-- Al terminar (éxito o fallo), el camp se limpia según política definida (se borra, o se conserva para inspección); la política es explícita y consistente.
-- Un fallo del proceso lanzado (crash, exit distinto de 0) se detecta y se refleja en el estado de la tarea, sin dejar el camp colgado.
-- Matar vexillum mientras el proceso corre no deja estado mentiroso: al volver, el estado refleja que la tarea quedó interrumpida.
+Camp = un slot de un pool de worktrees reutilizables por proyecto (`internal/camp`, inspirado en treehouse). Soldier = el proceso que corre dentro de un camp (`internal/soldier`), con comando inyectable - en esta capa se prueba con comandos de test, no con el binario `claude` real (ver `docs/prd-v1.md`, Capa 3). Sin CLI todavía: se ejercita a mano, vía tests.
+
+**L3-01 - crear un camp aislado**
+Precondición: un proyecto git limpio, sin camps previos.
+Acción: `camp.Acquire` para una tarea nueva.
+Esperado: se crea un worktree en su propia rama (`vexillum/<task-id>`); el working tree del proyecto (rama actual, archivos) no se toca.
+
+**L3-02 - lanzar el soldier y capturar salida + exit code (éxito)**
+Precondición: un camp adquirido.
+Acción: `soldier.Run` con un comando que termina con exit 0.
+Esperado: el `Task` devuelto y el persistido en disco quedan en `status=done`, con la salida capturada y `exit_code=0`; se registra el camp asignado (`camp_slot`, `camp_path`, `camp_branch`).
+
+**L3-03 - detectar y reflejar un fallo del proceso**
+Precondición: un camp adquirido.
+Acción: `soldier.Run` con un comando que termina con exit distinto de 0.
+Esperado: `status=failed`, `exit_code` refleja el código real; `Run` no devuelve error de Go (es un resultado esperado del soldier, no una falla de vexillum); el camp queda con dueño claro en el pool (no huérfano), aunque no se libera automáticamente.
+
+**L3-04 - escritura "running" antes de arrancar**
+Precondición: un camp adquirido.
+Acción: `soldier.Run` con un comando que tarda un momento en terminar; se lee el estado desde otro punto mientras el proceso sigue corriendo.
+Esperado: el estado leído en pleno vuelo muestra `status=running`; si vexillum muriera en ese instante, el estado en disco no miente (queda "running", no "pending" ni un "done" falso).
+
+**L3-05 - Release nunca destruye un camp sucio**
+Precondición: un camp adquirido con cambios sin commitear.
+Acción: `camp.Release`.
+Esperado: falla con un error claro; el camp no se toca.
+
+**L3-06 - Release nunca devuelve al pool un camp no aterrizado**
+Precondición: un camp adquirido con commits que todavía no están mergeados en la rama base del proyecto.
+Acción: `camp.Release`.
+Esperado: falla con un error claro; el slot sigue leased.
+
+**L3-07 - reuso del pool**
+Precondición: un camp liberado (limpio y aterrizado).
+Acción: `camp.Acquire` para una tarea nueva.
+Esperado: reutiliza el mismo slot y el mismo directorio de worktree (no crea uno nuevo); dependencias/build cache del worktree quedan intactos porque nunca se borró.
+
+**L3-08 - un slot leased nunca se reutiliza**
+Precondición: un camp adquirido y todavía sin liberar.
+Acción: `camp.Acquire` para una segunda tarea, sobre el mismo proyecto.
+Esperado: se crea un slot distinto; el slot en uso no se toca.
+
+**L3-09 - verificación de dueño del slot**
+Precondición: un camp adquirido por la tarea A.
+Acción: `camp.Release` invocado con el id de una tarea B distinta.
+Esperado: falla con un error claro que nombra al dueño real; no libera el slot.
 
 ## CAPA 4 - Concurrencia (criterios de aceptación de alto nivel)
 
