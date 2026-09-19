@@ -14,12 +14,17 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/isaias-alt/vexillum/internal/atomicfile"
 )
 
 // SchemaVersion is the current version of the Task JSON schema. Bump it
 // when Task's shape changes in a way that breaks reading older state
 // files.
-const SchemaVersion = 1
+//
+// v2 (Capa 3) added the camp assignment, exit code and output fields, and
+// the running/done/failed statuses a soldier run transitions through.
+const SchemaVersion = 2
 
 // Kind distinguishes a mission (delivers a PR) from a scout (delivers a
 // report).
@@ -30,12 +35,14 @@ const (
 	KindScout   Kind = "scout"
 )
 
-// Status is a task's lifecycle state. Capa 2 only ever creates tasks as
-// StatusPending; later layers (workers) transition them.
+// Status is a task's lifecycle state.
 type Status string
 
 const (
 	StatusPending Status = "pending"
+	StatusRunning Status = "running"
+	StatusDone    Status = "done"
+	StatusFailed  Status = "failed"
 )
 
 // Task is a mission or scout, serialized to JSON in ~/.vexillum/tasks/.
@@ -47,6 +54,17 @@ type Task struct {
 	Status        Status    `json:"status"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+
+	// Camp assignment, set once a soldier run starts (Capa 3). Empty
+	// until then.
+	CampSlot   int    `json:"camp_slot,omitempty"`
+	CampPath   string `json:"camp_path,omitempty"`
+	CampBranch string `json:"camp_branch,omitempty"`
+
+	// Soldier run result (Capa 3). Nil/empty until the process finishes
+	// (or fails to start).
+	ExitCode *int   `json:"exit_code,omitempty"`
+	Output   string `json:"output,omitempty"`
 }
 
 // New creates a Task of the given kind with a fresh unique ID, in
@@ -92,31 +110,8 @@ func Save(vexillumHome string, t Task) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating tasks directory: %w", err)
 	}
-
-	data, err := json.MarshalIndent(t, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encoding task %s: %w", t.ID, err)
-	}
-	data = append(data, '\n')
-
-	tmp, err := os.CreateTemp(dir, t.ID+".*.tmp")
-	if err != nil {
-		return fmt.Errorf("creating temp file for task %s: %w", t.ID, err)
-	}
-	tmpPath := tmp.Name()
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("writing task %s: %w", t.ID, err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("closing temp file for task %s: %w", t.ID, err)
-	}
-	if err := os.Rename(tmpPath, taskPath(vexillumHome, t.ID)); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("committing task %s: %w", t.ID, err)
+	if err := atomicfile.WriteJSON(taskPath(vexillumHome, t.ID), t); err != nil {
+		return fmt.Errorf("saving task %s: %w", t.ID, err)
 	}
 	return nil
 }
