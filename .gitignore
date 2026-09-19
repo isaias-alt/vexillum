@@ -1,0 +1,4 @@
+/vexillum
+*.exe
+*.test
+.DS_Store
