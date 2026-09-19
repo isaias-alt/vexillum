@@ -89,16 +89,49 @@ Esperado: lista los comandos disponibles (`init`, `doctor`) con descripción; el
 
 ---
 
-## CAPA 2 - Estado en disco (criterios de aceptación de alto nivel)
+## CAPA 2 - Estado en disco (casos concretos)
 
-Bajar a casos concretos al construir la capa. Un caso concreto por cada criterio, como mínimo.
+Struct `state.Task` (mission o scout), serializado a JSON en `~/.vexillum/tasks/<id>.json`. Sin workers todavía: se crea y se lee a mano (vía tests), invocado por el autor.
 
-- Una tarea (mission o scout) se puede representar como struct y serializar a JSON en `~/.vexillum/` sin pérdida de datos.
-- El estado escrito se puede volver a leer y reconstruye el struct idéntico (round-trip fiel).
-- Un archivo de estado corrupto o incompleto se detecta al leer y produce un error claro, no un panic ni datos basura.
-- El esquema de estado tiene una versión, para poder evolucionarlo sin romper estados viejos.
-- Escrituras concurrentes al mismo archivo de estado no lo dejan corrupto (aunque en esta capa se invoque a mano, la escritura tiene que ser atómica de entrada, porque la Capa 4 va a escribir en paralelo).
-- Se puede listar el estado de todas las tareas conocidas leyendo `~/.vexillum/`.
+**L2-01 - guardar una tarea nueva**
+Precondición: no hay tarea previa con ese id.
+Acción: crear una `Task` con `state.New` y persistirla con `state.Save`.
+Esperado: se crea `~/.vexillum/tasks/<id>.json`; el archivo es JSON válido.
+
+**L2-02 - round-trip fiel (mission y scout)**
+Precondición: una tarea creada y guardada.
+Acción: `state.Load` sobre el id recién guardado.
+Esperado: el struct reconstruido es idéntico al original, campo a campo, tanto para mission como para scout.
+
+**L2-03 - archivo corrupto**
+Precondición: un archivo `<id>.json` en `~/.vexillum/tasks/` con contenido que no es JSON válido.
+Acción: `state.Load` sobre ese id.
+Esperado: error claro, no panic, no datos basura.
+
+**L2-04 - archivo incompleto**
+Precondición: un archivo JSON válido pero sin `id` o `kind`.
+Acción: `state.Load` sobre ese id.
+Esperado: error claro que indica que la tarea está incompleta.
+
+**L2-05 - versión de esquema no soportada**
+Precondición: un archivo JSON válido y completo, pero con `schema_version` distinto al soportado.
+Acción: `state.Load` sobre ese id.
+Esperado: error claro que nombra la versión encontrada y la esperada; no se interpreta como datos válidos.
+
+**L2-06 - escritura atómica**
+Precondición: ninguna.
+Acción: `state.Save` de una tarea.
+Esperado: no queda ningún archivo temporal huérfano en `~/.vexillum/tasks/` tras una escritura exitosa; el único archivo presente es `<id>.json`.
+
+**L2-07 - listar todas las tareas**
+Precondición: varias tareas guardadas, mezcla de mission y scout.
+Acción: `state.List` sobre `~/.vexillum/`.
+Esperado: devuelve todas las tareas guardadas, sin omitir ni duplicar ninguna. Si no hay ninguna tarea guardada (o `tasks/` no existe), devuelve una lista vacía, no error.
+
+**L2-08 - listar con un archivo corrupto**
+Precondición: una tarea válida guardada y, además, un archivo corrupto en `~/.vexillum/tasks/`.
+Acción: `state.List`.
+Esperado: falla con un error claro que nombra el archivo problemático; no ignora la corrupción silenciosamente ni devuelve una lista parcial sin avisar.
 
 ## CAPA 3 - Un proceso (criterios de aceptación de alto nivel)
 
