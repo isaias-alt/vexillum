@@ -68,15 +68,42 @@ evidencia del filesystem real, no solo de la transcripción del commander.
   `task.UpdatedAt` para no toparse ellos mismos con el nuevo período de
   gracia del sentinel - no era el comportamiento que estaban probando).
 
+## Verificación en vivo de los dos arreglos (hecha por el asistente directamente)
+
+El asistente corre dentro de su propio pane real de herdr
+(`HERDR_WORKSPACE_ID=wV`, workspace "VEXILLUM"), así que pudo probar esto
+él mismo en vez de pedírselo al general: repo scratch descartable en
+`/tmp`, `vexillum init`, y `vexillum dispatch` de una mission real
+("bubble sort en Python + README + tests, commiteá los cambios").
+
+- **Fix 1 confirmado**: `vexillum dispatch` volvió en ~20s (no bloqueó
+  para la tarea completa). Justo después de que volvió, se verificó el
+  camp real: `sort.py`/`test_sort.py` ya estaban ahí, `README.md`
+  modificado, todo sin commitear todavía - la tarea seguía
+  correctamente `running`, sin ningún falso `done`. Se la dejó correr:
+  se asentó a `done` genuinamente ~41s después de creada (bien pasado
+  el período de gracia de 8s), con un commit real
+  (`455866b "Add bubble sort implementation with tests and README
+  docs"`), código funcional, checkout limpio. La wake y el hook `Stop`
+  simulado (`vexillum sentinel drain`) reportaron la transición real
+  correctamente.
+- **Fix 2 confirmado**: corriendo `vexillum dispatch` desde adentro del
+  camp de esa misma tarea (a propósito, replicando el bug), el comando
+  se rechazó con exit 1 y el mensaje claro ("looks like a
+  vexillum-managed camp, not a project root") - no se creó ningún pool
+  fantasma ni tarea extra (`ls ~/.vexillum/tasks/` no cambió de
+  cantidad).
+- Todos los artefactos de esta prueba (repo scratch, camp, task, wake)
+  se limpiaron después - no queda nada residual en el `~/.vexillum/`
+  real del general por esta prueba en particular.
+
 ## Pendiente para la próxima
 
-- **Verificación en vivo de estos dos arreglos, todavía no hecha** -
-  repetir la misma prueba (mission real, commander corriendo por su
-  cuenta) y confirmar: (a) que ninguna tarea real quede marcada `done`
-  antes de que el soldier haya hecho algo de verdad, y (b) que si el
-  commander inspecciona un camp con `cd` y se olvida de volver, el
-  siguiente `vexillum dispatch`/`land`/`release` falle con un mensaje
-  claro en vez de crear un pool fantasma.
+- Sigue faltando repetir el escenario exacto que hizo el general en su
+  propia sesión de commander (para confirmar que el fix también se
+  sostiene con Claude Code real manejando el flujo completo, no solo
+  con el asistente operando `vexillum` directamente) - opcional, dado
+  que el mecanismo ya quedó verificado a fondo.
 - El camp huérfano bajo `vexillum-prueba-b728ba83` (y su tarea
   `d4159c3f64705e57`, que sí hizo trabajo real y comiteó `e1c42d6` en
   ESE camp) queda sin aterrizar ni liberar - no hay ningún comando que
