@@ -14,7 +14,11 @@ const (
 	herdrAgentKind = "claude"
 	herdrAgentArg  = "--dangerously-skip-permissions"
 
-	defaultPromptTimeoutMS  = 10 * 60 * 1000 // 10 minutes
+	// quickSettleTimeoutMS bounds a short probe, not the soldier's real
+	// work budget: "did this settle fast" (a trivial prompt), not "wait
+	// for it to finish". A real task almost always outlives this and
+	// hands off to internal/sentinel's polling instead - see RunInHerdr.
+	quickSettleTimeoutMS    = 15 * 1000 // 15 seconds
 	defaultReadLines        = 500
 	trustDialogSettleWindow = 15 * time.Second
 	trustDialogPollInterval = 200 * time.Millisecond
@@ -27,6 +31,13 @@ const (
 // session in a herdr pane inside c, instead of the headless one-shot Run
 // uses - the soldier is visible and attachable, not silent in the
 // background.
+//
+// It returns quickly, not once the soldier's work is done: it submits
+// the prompt and only waits out a short quick-settle probe
+// (quickSettleTimeoutMS). If the soldier is still going after that
+// (the normal case for real work), the task is left Running and
+// RunInHerdr returns successfully - internal/sentinel's polling is what
+// detects and records its eventual settlement, not this function.
 //
 // The soldier runs with --dangerously-skip-permissions: the camp's git
 // worktree isolation bounds the blast radius to that disposable
@@ -79,8 +90,27 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		}
 	}
 
-	status, err := client.AgentPrompt(agentName, task.Prompt, defaultPromptTimeoutMS)
+	// Submit the prompt and probe briefly for a fast settle - not a full
+	// wait for completion. firstmate's own fm-spawn.sh never blocks on
+	// worker completion either; a dedicated daemon supervises it
+	// (AGENTS.md section 8, "Supervision protocol"). Blocking here for
+	// the soldier's whole real task (previously up to 10 minutes) was
+	// exactly why internal/sentinel could never win the race for it: by
+	// the time the sentinel's next poll ran, dispatch had already
+	// written the final status itself. A short timeout means dispatch
+	// only self-reports for genuinely trivial prompts; anything real is
+	// handed off to the sentinel, which already polls every Running task
+	// (see internal/sentinel.Tick).
+	status, err := client.AgentPrompt(agentName, task.Prompt, quickSettleTimeoutMS)
 	if err != nil {
+		if herdr.IsTimeout(err) {
+			// Not a failure: the soldier is still working past the quick
+			// probe window, which is the normal case for real work. The
+			// task stays Running (already persisted above) - the
+			// sentinel owns detecting and recording its eventual
+			// settlement.
+			return task, nil
+		}
 		return failHerdrTask(vexillumHome, task, fmt.Errorf("prompting soldier: %w", err))
 	}
 

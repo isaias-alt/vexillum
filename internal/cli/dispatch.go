@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -26,8 +29,13 @@ fresh git worktree isolated from this project's own working tree, with
 --dangerously-skip-permissions (the worktree isolation bounds the blast
 radius; nothing reaches the project's real history until 'vexillum land'
 is explicitly approved). Requires HERDR_WORKSPACE_ID - run this from
-inside a herdr-managed pane. Blocks until the soldier settles into done
-or blocked; run it in the background if you don't want to wait.
+inside a herdr-managed pane.
+
+Returns quickly: it only waits out a short quick-settle probe, not the
+soldier's whole task. A trivial prompt may finish within that window and
+report its result immediately; anything else is left running and
+auto-starts a sentinel (if one isn't already watching this project) to
+record its final status - see 'vexillum sentinel'.
 `
 
 const landUsage = `Land a finished mission's work into this project's base branch.
@@ -74,7 +82,52 @@ func Dispatch(args []string) int {
 		return 1
 	}
 
+	ensureSentinelRunning(vexillumHome, os.Stderr)
+
 	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, herdr.CLI{}, os.Stdout, os.Stderr)
+}
+
+// ensureSentinelRunning best-effort auto-starts "vexillum sentinel"
+// detached in the background if one isn't already watching vexillumHome.
+// Dispatch now returns after only a short quick-settle probe (see
+// soldier.RunInHerdr) - for anything but a trivial prompt, the sentinel
+// is what eventually records the soldier's real outcome, so a dispatch
+// with no sentinel running would otherwise strand that task Running
+// forever. A failure here is reported but never fails dispatch itself:
+// the soldier is already started regardless: 'vexillum sentinel' remains
+// available to start by hand if this doesn't work.
+func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
+	if sentinel.IsRunning(vexillumHome) {
+		return
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: warning: could not auto-start the sentinel: %v\n", err)
+		return
+	}
+
+	logPath := filepath.Join(vexillumHome, "sentinel.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: warning: could not auto-start the sentinel: %v\n", err)
+		return
+	}
+	defer logFile.Close()
+
+	cmd := exec.Command(exe, "sentinel")
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	// Detach from this process's session so the sentinel survives long
+	// after this dispatch invocation (and whatever shell launched it)
+	// exits.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(stderr, "vexillum: warning: could not auto-start the sentinel: %v\n", err)
+		return
+	}
+	fmt.Fprintf(stderr, "vexillum: auto-started sentinel (pid %d), logging to %s\n", cmd.Process.Pid, logPath)
 }
 
 func parseDispatchArgs(args []string) (prompt string, kind state.Kind, err error) {
@@ -127,6 +180,9 @@ func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind stat
 	fmt.Fprintf(stdout, "status=%s\n", result.Status)
 	if result.HerdrPaneID != "" {
 		fmt.Fprintf(stdout, "herdr: workspace=%s tab=%s pane=%s agent=%s\n", result.HerdrWorkspaceID, result.HerdrTabID, result.HerdrPaneID, result.HerdrAgentName)
+	}
+	if result.Status == state.StatusRunning {
+		fmt.Fprintln(stdout, "still running past the quick-settle probe - the sentinel will record its final status")
 	}
 	if result.Output != "" {
 		fmt.Fprintln(stdout, "output:")

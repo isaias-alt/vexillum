@@ -1,6 +1,7 @@
 package soldier_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -200,6 +201,61 @@ func TestRunInHerdr_Blocked(t *testing.T) {
 	}
 	if got.Status != state.StatusBlocked {
 		t.Errorf("expected status blocked, got %s", got.Status)
+	}
+}
+
+// A soldier still working past the quick-settle probe (the normal case
+// for real work) is left Running, not treated as a failure - the whole
+// point of the redesign that fixed the sentinel's race condition
+// (dispatch used to block for up to 10 minutes and self-report the final
+// status, so the sentinel's poll never got a chance to see a transition).
+func TestRunInHerdr_TimeoutHandsOffToSentinel(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:     "w1:t2",
+		paneID:    "w1:p2",
+		promptErr: &herdr.APIError{Code: "timeout", Message: "agent prompt wait timed out"},
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: expected no error on a quick-settle timeout, got: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Errorf("expected status running, got %s", got.Status)
+	}
+
+	persisted, loadErr := state.Load(home, task.ID)
+	if loadErr != nil {
+		t.Fatalf("state.Load: %v", loadErr)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected persisted status running, got %s", persisted.Status)
+	}
+}
+
+// A real AgentPrompt failure (not the quick-settle timeout) still fails
+// the task, same as before this change.
+func TestRunInHerdr_NonTimeoutPromptErrorFails(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:     "w1:t2",
+		paneID:    "w1:p2",
+		promptErr: fmt.Errorf("herdr socket exploded"),
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err == nil {
+		t.Fatal("expected an error for a non-timeout prompt failure")
+	}
+	if got.Status != state.StatusFailed {
+		t.Errorf("expected status failed, got %s", got.Status)
 	}
 }
 
