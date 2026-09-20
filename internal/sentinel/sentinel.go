@@ -73,10 +73,23 @@ const tickReadLines = 500
 // machinery on this side.
 const settleGracePeriod = 8 * time.Second
 
+// notFoundConfirmWindow is how long Tick waits after first observing a
+// task's agent as genuinely gone (herdr's "agent_not_found", not a
+// transient read error - see herdr.IsNotFound) before marking that task
+// interrupted (PRD v1, Capa 4 restart-proof: "los soldiers que se puedan
+// resumir se resumen, los que no, quedan marcados como interrumpidos").
+// A single observation isn't enough on its own - a herdr hiccup during
+// something like its own restart could otherwise falsely condemn a
+// soldier that's actually still there; requiring it to still be gone a
+// tick or two later is what herdr.APIError alone can't tell us.
+const notFoundConfirmWindow = 10 * time.Second
+
 // Tick checks every task currently marked running against its live herdr
 // agent status, persists any status change, and records a wake for it.
 // Returns how many wakes it recorded. A transient read failure on one
-// task is skipped, not fatal - there's always a next tick.
+// task is skipped, not fatal - there's always a next tick. An agent
+// confirmed genuinely gone (not just transiently unreachable) instead
+// gets marked interrupted - see notFoundConfirmWindow.
 func Tick(vexillumHome string, client herdr.Client) (int, error) {
 	tasks, err := state.List(vexillumHome)
 	if err != nil {
@@ -93,8 +106,31 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 		}
 
 		live, err := client.AgentStatus(task.HerdrAgentName)
-		if err != nil || live == "" || live == "unknown" {
+		if err != nil {
+			if herdr.IsNotFound(err) {
+				interrupted, ierr := handleAgentNotFound(vexillumHome, task)
+				if ierr != nil {
+					return woke, ierr
+				}
+				if interrupted {
+					woke++
+				}
+			}
 			continue
+		}
+		if live == "" || live == "unknown" {
+			continue
+		}
+
+		if !task.AgentNotFoundSince.IsZero() {
+			// A prior tick saw this agent as gone, but it just resolved
+			// fine - that was a blip, not a real teardown. Clear the mark
+			// so a later genuine disappearance starts its own fresh
+			// confirmation window instead of inheriting a stale one.
+			task.AgentNotFoundSince = time.Time{}
+			if err := state.Save(vexillumHome, task); err != nil {
+				return woke, fmt.Errorf("clearing not-found mark for task %s: %w", task.ID, err)
+			}
 		}
 
 		newStatus := soldier.MapAgentStatus(live)
@@ -122,6 +158,39 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 		woke++
 	}
 	return woke, nil
+}
+
+// handleAgentNotFound records the first time task's agent was observed
+// genuinely gone, and marks the task Interrupted once that's held true
+// for notFoundConfirmWindow. Returns whether it interrupted the task
+// (and so recorded a wake) on this call.
+func handleAgentNotFound(vexillumHome string, task state.Task) (interrupted bool, err error) {
+	if task.AgentNotFoundSince.IsZero() {
+		task.AgentNotFoundSince = time.Now().UTC()
+		if err := state.Save(vexillumHome, task); err != nil {
+			return false, fmt.Errorf("recording not-found mark for task %s: %w", task.ID, err)
+		}
+		return false, nil
+	}
+
+	if time.Since(task.AgentNotFoundSince) < notFoundConfirmWindow {
+		return false, nil
+	}
+
+	old := task.Status
+	task.Status = state.StatusInterrupted
+	task.UpdatedAt = time.Now().UTC()
+	if task.Output != "" {
+		task.Output += "\n\n"
+	}
+	task.Output += "[vexillum] this soldier's herdr agent disappeared (pane closed, or herdr restarted) - marked interrupted. Any work it already committed is still in its camp."
+	if err := state.Save(vexillumHome, task); err != nil {
+		return false, fmt.Errorf("persisting interrupted task %s: %w", task.ID, err)
+	}
+	if err := recordWake(vexillumHome, task, old, state.StatusInterrupted); err != nil {
+		return false, fmt.Errorf("recording wake for interrupted task %s: %w", task.ID, err)
+	}
+	return true, nil
 }
 
 func recordWake(vexillumHome string, task state.Task, old, newStatus state.Status) error {

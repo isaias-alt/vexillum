@@ -30,10 +30,11 @@ type fakeHerdr struct {
 	readyAfter    int // AgentReady returns true starting from this call number
 	readyCalls    int
 
-	promptStatus string
-	promptErr    error
-	promptCalls  []string
-	promptNames  []string
+	promptStatus          string
+	promptErr             error
+	promptCalls           []string
+	promptNames           []string
+	promptStalledForCalls int // AgentPrompt reports agent_prompt_stalled for this many calls before promptErr/promptStatus
 
 	tabCloseErr   error
 	tabCloseCalls []string
@@ -75,6 +76,9 @@ func (f *fakeHerdr) AgentStatus(name string) (string, error) {
 func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
 	f.promptCalls = append(f.promptCalls, text)
 	f.promptNames = append(f.promptNames, name)
+	if len(f.promptCalls) <= f.promptStalledForCalls {
+		return "", &herdr.APIError{Code: "agent_prompt_stalled", Message: "no observed working or blocked state"}
+	}
 	if f.promptErr != nil {
 		return "", f.promptErr
 	}
@@ -308,6 +312,58 @@ func TestRunInHerdr_GivesUpOnPersistentPaneBusy(t *testing.T) {
 	}
 }
 
+// A prompt submission that herdr reports as agent_prompt_stalled (a
+// startup race right after a freshly started agent - see
+// herdr.IsStalled) is retried instead of failing the task outright.
+// Verified live: the pane's prompt line read back completely empty
+// after a stalled attempt, and a plain retry of the same call resolved
+// instantly - so it's safe to resubmit, not a real failure.
+func TestRunInHerdr_RetriesStalledPrompt(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:                 "w1:t2",
+		paneID:                "w1:p2",
+		promptStalledForCalls: 2,
+		promptStatus:          "done",
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected status done after the prompt stopped being stalled, got %s", got.Status)
+	}
+	if len(client.promptCalls) != 3 {
+		t.Errorf("expected 3 prompt attempts (2 stalled + 1 success), got %d", len(client.promptCalls))
+	}
+}
+
+// A prompt that stays stalled past the retry budget fails clearly
+// instead of retrying forever.
+func TestRunInHerdr_GivesUpOnPersistentlyStalledPrompt(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:                 "w1:t2",
+		paneID:                "w1:p2",
+		promptStalledForCalls: 100,
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err == nil {
+		t.Fatal("expected an error when the prompt never stops being stalled")
+	}
+	if got.Status != state.StatusFailed {
+		t.Errorf("expected status failed, got %s", got.Status)
+	}
+}
+
 // A candidate agent name that collides with another live agent (two
 // prompts producing the same slug, seen dispatching soldiers close
 // together) falls back to a disambiguated name instead of failing the
@@ -353,6 +409,40 @@ func TestRunInHerdr_FallsBackOnNameCollision(t *testing.T) {
 	}
 	if persisted.HerdrAgentName != got.HerdrAgentName {
 		t.Errorf("expected the disambiguated name to be persisted, got %q vs returned %q", persisted.HerdrAgentName, got.HerdrAgentName)
+	}
+}
+
+// A candidate name already at herdr's 32-char max (a long enough prompt
+// fills the slug out to exactly the limit) still produces a valid
+// fallback name on collision instead of herdr rejecting it outright.
+// Caught live: this exact prompt slugifies to a 32-char candidate, and
+// the naive candidateName+"-"+suffix fallback came out to 39 chars -
+// herdr refused it with invalid_agent_name, so the collision recovery
+// failed harder than the collision it was meant to recover from.
+func TestRunInHerdr_DisambiguatedNameStaysWithinLengthLimit(t *testing.T) {
+	home := t.TempDir()
+	task, err := state.New(state.KindMission, "Write a Python module implementing a simple binary search tree")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:        "w1:t2",
+		paneID:       "w1:p2",
+		startErr:     &herdr.APIError{Code: "agent_name_taken", Message: "agent name already used"},
+		promptStatus: "done",
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if len(got.HerdrAgentName) > 32 {
+		t.Errorf("expected the fallback agent name to stay within herdr's 32-char limit, got %d chars: %q", len(got.HerdrAgentName), got.HerdrAgentName)
+	}
+	if strings.HasSuffix(got.HerdrAgentName, "-") || strings.Contains(got.HerdrAgentName, "--") {
+		t.Errorf("expected a clean fallback name, got %q", got.HerdrAgentName)
 	}
 }
 
