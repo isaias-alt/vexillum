@@ -1,10 +1,12 @@
 package camp
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -277,5 +279,129 @@ func TestLand_RefusesDirtyProjectCheckout(t *testing.T) {
 
 	if err := Land(c); err == nil {
 		t.Fatal("expected Land to refuse a dirty project checkout")
+	}
+}
+
+// Capa 4 paso 3: N soldiers dispatched at once each call Acquire
+// concurrently (separate `vexillum dispatch` processes racing against the
+// same pool). Acquire's read-modify-write over pool.json (scan for an
+// idle slot, or compute len(pool.Slots)+1 for a new one, then save) has
+// no mutual exclusion between the read and the write - two concurrent
+// calls can both read the same pool state before either writes back,
+// both compute the same slot number, and both run `git worktree add` at
+// the identical path. Confirms every concurrent Acquire gets a genuinely
+// distinct slot and worktree, and the pool's own bookkeeping ends up
+// consistent (exactly N slots, all correctly leased).
+func TestAcquire_ConcurrentCallsNeverCollideOnASlot(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	const n = 8
+	type result struct {
+		c   Camp
+		err error
+	}
+	results := make([]result, n)
+
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			c, err := Acquire(project, home, fmt.Sprintf("task-%d", i))
+			results[i] = result{c: c, err: err}
+		}(i)
+	}
+	wg.Wait()
+
+	seenSlots := map[int]bool{}
+	seenPaths := map[string]bool{}
+	for i, r := range results {
+		if r.err != nil {
+			t.Fatalf("Acquire %d: %v", i, r.err)
+		}
+		if seenSlots[r.c.Slot] {
+			t.Fatalf("slot %d handed out to more than one concurrent Acquire", r.c.Slot)
+		}
+		seenSlots[r.c.Slot] = true
+		if seenPaths[r.c.Path] {
+			t.Fatalf("worktree path %s handed out to more than one concurrent Acquire", r.c.Path)
+		}
+		seenPaths[r.c.Path] = true
+
+		if info, err := os.Stat(r.c.Path); err != nil || !info.IsDir() {
+			t.Errorf("expected a real worktree at %s: %v", r.c.Path, err)
+		}
+	}
+	if len(seenSlots) != n {
+		t.Errorf("expected %d distinct slots, got %d", n, len(seenSlots))
+	}
+
+	pool, err := loadPool(filepath.Dir(filepath.Dir(results[0].c.Path)))
+	if err != nil {
+		t.Fatalf("loadPool: %v", err)
+	}
+	if len(pool.Slots) != n {
+		t.Fatalf("expected the pool to end up with exactly %d slots, got %d", n, len(pool.Slots))
+	}
+	leased := map[string]bool{}
+	for _, s := range pool.Slots {
+		if s.LeasedBy == "" {
+			t.Errorf("slot %d ended up unleased after every task acquired one", s.Number)
+		}
+		if leased[s.LeasedBy] {
+			t.Errorf("task %s leased more than one slot", s.LeasedBy)
+		}
+		leased[s.LeasedBy] = true
+	}
+}
+
+// Release has the same unprotected read-modify-write shape as Acquire -
+// N soldiers finishing around the same time means N concurrent Release
+// calls against the same pool.json. Confirms they don't lose each
+// other's updates (every slot ends up correctly unleased, not just
+// whichever write happened to land last).
+func TestRelease_ConcurrentCallsDoNotLoseUpdates(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	const n = 8
+	camps := make([]Camp, n)
+	for i := 0; i < n; i++ {
+		c, err := Acquire(project, home, fmt.Sprintf("task-%d", i))
+		if err != nil {
+			t.Fatalf("Acquire %d: %v", i, err)
+		}
+		camps[i] = c
+	}
+
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = Release(camps[i], fmt.Sprintf("task-%d", i))
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("Release %d: %v", i, err)
+		}
+	}
+
+	pool, err := loadPool(camps[0].PoolRoot)
+	if err != nil {
+		t.Fatalf("loadPool: %v", err)
+	}
+	if len(pool.Slots) != n {
+		t.Fatalf("expected %d slots, got %d", n, len(pool.Slots))
+	}
+	for _, s := range pool.Slots {
+		if s.LeasedBy != "" {
+			t.Errorf("slot %d still shows leased by %q after every task released", s.Number, s.LeasedBy)
+		}
 	}
 }
