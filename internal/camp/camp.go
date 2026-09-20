@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 )
@@ -60,6 +61,19 @@ func Acquire(projectDir, vexillumHome, taskID string) (Camp, error) {
 	if err := os.MkdirAll(poolRoot, 0o755); err != nil {
 		return Camp{}, fmt.Errorf("creating camp pool directory: %w", err)
 	}
+
+	// N soldiers dispatched at once means N concurrent Acquire calls (each
+	// a separate `vexillum dispatch` process) racing against the same
+	// pool.json - without serializing the read-modify-write below, two
+	// could both read the pool before either writes back, both compute
+	// the same slot number, and both run `git worktree add` at the
+	// identical path (confirmed live: reproduced 100% of the time with 8
+	// concurrent Acquire calls before this lock existed).
+	unlock, err := lockPool(poolRoot)
+	if err != nil {
+		return Camp{}, err
+	}
+	defer unlock()
 
 	pool, err := loadPool(poolRoot)
 	if err != nil {
@@ -188,6 +202,12 @@ func Land(c Camp) error {
 // released slot stays on disk, ready for the next Acquire to reset and
 // reuse.
 func Release(c Camp, taskID string) error {
+	unlock, err := lockPool(c.PoolRoot)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	pool, err := loadPool(c.PoolRoot)
 	if err != nil {
 		return err
@@ -243,6 +263,33 @@ func shortHash(s string) string {
 
 func poolStatePath(poolRoot string) string {
 	return filepath.Join(poolRoot, "pool.json")
+}
+
+func poolLockPath(poolRoot string) string {
+	return filepath.Join(poolRoot, "pool.lock")
+}
+
+// lockPool acquires an exclusive, blocking file lock scoped to poolRoot,
+// serializing Acquire/Release's read-modify-write over pool.json across
+// every process touching this same pool - this is a short critical
+// section held per call, not a long-lived singleton (contrast
+// internal/sentinel.AcquireLock, which guards one whole process's
+// lifetime, not a brief section). flock releases itself automatically if
+// the holding process dies mid-section, so a crash never leaves other
+// callers blocked on a stale lock the way a pid-file convention could.
+func lockPool(poolRoot string) (unlock func(), err error) {
+	f, err := os.OpenFile(poolLockPath(poolRoot), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("opening camp pool lock: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("locking camp pool: %w", err)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
 }
 
 func loadPool(poolRoot string) (poolState, error) {

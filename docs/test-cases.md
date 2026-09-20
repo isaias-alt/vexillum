@@ -348,9 +348,19 @@ Precondición: `AgentPrompt` devuelve `agent_not_running` - confirmado en el cha
 Acción: `soldier.RunInHerdr`.
 Esperado: falla la tarea (no tiene sentido reintentar - el pane está genuinamente cerrado, a diferencia de `agent_prompt_stalled`) con un mensaje explícito y accionable ("... safe to redispatch") en vez del string crudo de herdr. `sentinel.Tick` no necesita el mismo tratamiento: usa `AgentStatus` (sin `--wait`), que para un pane realmente cerrado siempre da `agent_not_found` (verificado matando el proceso subyacente a mano), nunca `agent_not_running` - los dos códigos están escopeados a formas de llamada distintas.
 
-## Pendiente (pasos 3 y 5, criterios de alto nivel; paso 4 mayormente cubierto)
+**L4-27 - `camp.Acquire` concurrente nunca colisiona un slot**
+Precondición: N tareas dispatchadas al mismo tiempo (N procesos `vexillum dispatch` reales, o N llamadas concurrentes a `camp.Acquire` sobre el mismo pool).
+Acción: N `camp.Acquire` en simultáneo.
+Esperado: cada una obtiene un slot y un worktree genuinamente distintos; `pool.json` termina con exactamente N slots, cada uno arrendado por una sola tarea. Bug real encontrado: sin lock, `Acquire` hace un read-modify-write sin exclusión mutua sobre `pool.json` (leer, calcular el próximo slot libre, escribir) - dos llamadas concurrentes pueden leer el mismo estado antes de que ninguna escriba, calcular el mismo número de slot, y correr `git worktree add` en la misma ruta. Reproducido 100% de las veces con 8 llamadas concurrentes antes del fix (`internal/camp/camp_test.go`); arreglado con un `flock` exclusivo (`lockPool`) alrededor de la sección crítica. Verificado también con `vexillum dispatch` real: 3 procesos genuinamente concurrentes, cada uno con su slot/camp/rama/commit propios, sin colisión.
 
-- N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido - probado informalmente (mission + scout en simultáneo), falta formalizar con casos concretos.
+**L4-28 - `camp.Release` concurrente no pierde actualizaciones**
+Precondición: N camps arrendados, liberados todos al mismo tiempo.
+Acción: N `camp.Release` en simultáneo.
+Esperado: los N terminan sin error, y `pool.json` refleja los N slots correctamente liberados - ninguna escritura se pisa con otra por la misma falta de exclusión mutua que L4-27. Mismo `lockPool` cubre este caso.
+
+## Pendiente (paso 5, criterio de alto nivel; pasos 3 y 4 mayormente cubiertos)
+
+- N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido - ✅ formalizado (L4-27, L4-28) y verificado en vivo con `vexillum dispatch` real concurrente. Sigue pendiente un caso con múltiples soldiers reales corriendo tiempo real en simultáneo (no solo `camp.Acquire`/`Release` aislados) para cerrar del todo el paso 5 (aislamiento de fallos) con uno de ellos fallando a propósito.
 - El sentinel detecta, vía la socket API de herdr, qué soldier está bloqueado o terminó, sin sondeo activo que gaste tokens (push vía `events.subscribe`, con fallback a polling) - decisión consciente de quedarse solo con el fallback de polling (ver binnacle `20260920-sentinel-paso2.md`), no pendiente.
 - Restart-proof: ✅ cubierto en la parte de reconciliación (L4-19, L4-20, L4-22) - una tarea que quedó `running` huérfana (ya sea porque `vexillum` murió a mitad de dispatch, o porque el agente mismo desapareció) siempre se resuelve, nunca queda colgada para siempre. **Todavía sin implementar**: la parte de "los que se puedan resumir se resumen" - hoy una tarea `interrupted` solo se detecta y reporta, no hay ningún mecanismo para relanzar un agente en el mismo camp/rama continuando el trabajo.
 - Una mission termina entregando cambios de código (un PR); un scout termina dejando un reporte de investigación; ambos resultados quedan persistidos y asociados a su tarea. - cubierto por Capa 3/4 paso 1.
