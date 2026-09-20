@@ -14,6 +14,7 @@ Usage:
 
 Commands:
   init      Prepare the current project to be orchestrated by vexillum
+  upgrade   Refresh an already-initialized project's scaffold to the latest
   doctor    Report on the health of the vexillum environment
   dispatch  Dispatch a soldier (mission or scout) into an isolated camp
   land      Land a finished mission's work into the base branch
@@ -40,6 +41,8 @@ func run(args []string) int {
 		return 0
 	case "init":
 		return cli.Init(args[1:])
+	case "upgrade":
+		return cli.Upgrade(args[1:])
 	case "doctor":
 		return cli.Doctor(args[1:])
 	case "dispatch":
