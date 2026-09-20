@@ -13,7 +13,7 @@ Convención: cada caso tiene un id (`L1-01`), una precondición, una acción y u
 **L1-01 - init en proyecto limpio**
 Precondición: directorio que es un repo git, sin scaffold previo de vexillum, `~/.vexillum/` no existe.
 Acción: correr `vexillum init`.
-Esperado: se crea `~/.vexillum/`; se crea el scaffold local del proyecto (config local + AGENTS.md de producto); salida confirma qué se creó; exit code 0.
+Esperado: se crea `~/.vexillum/`; se crea el scaffold local del proyecto (config local + `AGENTS.md` de producto + `CLAUDE.md` con `@AGENTS.md`); salida confirma qué se creó; exit code 0.
 
 **L1-02 - init es idempotente**
 Precondición: un proyecto donde ya se corrió `init` con éxito.
@@ -29,6 +29,11 @@ Esperado: el AGENTS.md editado NO se pisa silenciosamente; si init quisiera rege
 Precondición: proyecto con scaffold local presente, pero `~/.vexillum/` borrado a mano.
 Acción: correr `vexillum init`.
 Esperado: recrea `~/.vexillum/` sin tocar el scaffold local existente; exit code 0.
+
+**L1-04b - init sana un `CLAUDE.md` faltante en un proyecto ya inicializado**
+Precondición: proyecto ya inicializado (tiene `.vexillum/config.json` y `AGENTS.md`) pero sin `CLAUDE.md` - por ejemplo, inicializado con una versión de `vexillum` anterior a que este archivo existiera. Sin este shim, Claude Code nunca lee el `AGENTS.md` de producto en absoluto (carga `CLAUDE.md` automáticamente, no un `AGENTS.md` suelto) - encontrado en uso real, no hipotético.
+Acción: correr `vexillum init` de nuevo.
+Esperado: crea el `CLAUDE.md` faltante sin tocar `AGENTS.md` ni `.vexillum/config.json`; la salida indica que se restauró un archivo faltante; exit code 0.
 
 **L1-05 - init fuera de un repo git**
 Precondición: directorio que NO es repo git.
@@ -182,12 +187,94 @@ Precondición: un camp adquirido por la tarea A.
 Acción: `camp.Release` invocado con el id de una tarea B distinta.
 Esperado: falla con un error claro que nombra al dueño real; no libera el slot.
 
-## CAPA 4 - Concurrencia (criterios de aceptación de alto nivel)
+**L3-10 - aterrizar (Land) un camp limpio**
+Precondición: un camp adquirido, con cambios commiteados, sin divergencia respecto a la rama base del proyecto.
+Acción: `camp.Land`.
+Esperado: el checkout principal del proyecto queda fast-forwardeado a la rama del camp (mismo HEAD); no crea merge commit, no fuerza nada.
+
+**L3-11 - Land se niega ante una rama divergida**
+Precondición: un camp adquirido y commiteado, pero la rama base del proyecto avanzó con commits propios después de que se creó el camp (ya no es fast-forward).
+Acción: `camp.Land`.
+Esperado: falla con un error claro que dice que hay divergencia y sugiere rebasear; el checkout del proyecto queda intacto (no mergea, no fuerza, no rebasea por su cuenta).
+
+**L3-12 - Land se niega a tocar un checkout sucio**
+Precondición: el checkout principal del proyecto (no el camp) tiene cambios sin commitear.
+Acción: `camp.Land`.
+Esperado: falla con un error claro; no toca el checkout del proyecto.
+
+## CAPA 4 - Concurrencia
+
+Capa grande, partida en pasos verificables (ver `docs/prd-v1.md`, sección Capa 4). Paso 1 - soldier real en un pane de herdr, todavía secuencial - tiene casos concretos abajo. Los pasos 2 a 5 (N en paralelo, sentinel, restart-proof, aislamiento de fallos) quedan como criterios de alto nivel hasta que se construyan.
+
+### Paso 1 - soldier en un pane real de herdr (casos concretos)
+
+`internal/herdr` (wrapper del CLI de herdr) + `soldier.RunInHerdr` (`internal/soldier`). Reemplaza el `os/exec` headless de la Capa 3 por una sesión interactiva real, corriendo con `--dangerously-skip-permissions` (decisión revisada: ver `docs/prd-v1.md`, sección Capa 4) - el control de seguridad real es la aprobación humana en `camp.Land` antes de aterrizar, no un bloqueo por permiso a mitad de tarea. `blocked` sigue siendo un estado posible (una pregunta genuina del agente), solo que ahora es la excepción. Sin CLI todavía, sin paralelismo todavía - un soldier a la vez, invocado a mano.
+
+**L4-01 - correr un soldier de punta a punta**
+Precondición: un camp adquirido, un workspace de herdr válido.
+Acción: `soldier.RunInHerdr`.
+Esperado: crea un tab+pane en el workspace dado (vía `herdr tab create`), arranca el agente, manda el prompt, y persiste el `Task` con `status=done`, los ids de herdr (`herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name`) y el transcript capturado.
+
+**L4-02 - escritura "running" antes de arrancar el agente**
+Precondición: un camp adquirido.
+Acción: `soldier.RunInHerdr`, inspeccionando el estado justo antes de que se llame `agent start`.
+Esperado: el `Task` ya está persistido en `status=running` con el camp y los ids de herdr asignados, antes de que el agente arranque.
+
+**L4-03 - reflejar un bloqueo**
+Precondición: un camp adquirido; el agente termina su turno en estado `blocked` (necesita aprobación o input).
+Acción: `soldier.RunInHerdr`.
+Esperado: `Task.Status = blocked`, sin error de Go (es un resultado esperado, el sentinel lo va a escalar más adelante).
+
+**L4-04 - diálogo de confianza en un camp nuevo**
+Precondición: el agente queda `agent_not_ready` al arrancar, con el diálogo de "¿confiás en esta carpeta?" en pantalla.
+Acción: `soldier.RunInHerdr`.
+Esperado: reconoce el diálogo específico, lo descarta (`down`, `enter`), y sigue normalmente. Un bloqueo de arranque no reconocido (cualquier otro diálogo) **no** se adivina: falla con error claro, sin mandar teclas a ciegas.
+
+**L4-05 - fallo al crear el pane**
+Precondición: `herdr tab create` falla (workspace inválido, por ejemplo).
+Acción: `soldier.RunInHerdr`.
+Esperado: error de Go real; no se persiste ningún estado a medias (nunca se llegó a guardar `running`).
+
+**L4-06 - cerrar el pane al liberar un camp aterrizado**
+Precondición: un camp adquirido, con cambios commiteados y ya mergeados en la rama base (aterrizado).
+Acción: `soldier.ReleaseInHerdr`.
+Esperado: libera el slot del pool (`camp.Release`) **y**, recién ahí, cierra el tab de herdr - mismo momento, no antes.
+
+**L4-07 - el pane queda abierto si el camp no se puede liberar**
+Precondición: un camp adquirido con cambios sin commitear (dirty).
+Acción: `soldier.ReleaseInHerdr`.
+Esperado: falla (mismo motivo que `camp.Release` solo); el tab de herdr no se cierra - sigue habiendo algo para inspeccionar.
+
+**L4-08 - choque de nombre de agente**
+Precondición: dos tareas cuyos prompts generan el mismo slug (`vx-<slug>`), lanzadas en paralelo; la primera ya tiene ese nombre en uso en herdr.
+Acción: `soldier.RunInHerdr` para la segunda tarea.
+Esperado: `agent start` con el nombre candidato falla con `agent_name_taken`; se reintenta una vez con un nombre desambiguado (`vx-<slug>-<sufijo del id>`); ese es el nombre que se usa para el resto de la interacción y el que queda persistido en `Task.HerdrAgentName` - no falla toda la corrida.
+
+### CLI real: `vexillum dispatch` / `land` / `release`
+
+Reemplaza el binario descartable `tmp-demo/soldier-demo` (borrado). Mismo mecanismo que paso 1, ahora como subcomandos reales del binario (`internal/cli/dispatch.go`), con `projectDir`/`vexillumHome` resueltos igual que `init`/`doctor` (directorio actual / `~/.vexillum`), no pasados a mano.
+
+**L4-09 - dispatch se niega en un proyecto no inicializado**
+Precondición: repo git sin scaffold de vexillum (`.vexillum/config.json` ausente).
+Acción: `vexillum dispatch "<prompt>"`.
+Esperado: falla con mensaje claro que sugiere `vexillum init`; no crea ningún camp.
+
+**L4-10 - dispatch de punta a punta**
+Precondición: proyecto inicializado.
+Acción: `vexillum dispatch "<prompt>" [--kind mission|scout]` (default `mission`).
+Esperado: crea la tarea, adquiere el camp, corre `soldier.RunInHerdr`, imprime `task_id`, `status`, ids de herdr, y el transcript; exit code refleja si `RunInHerdr` tuvo un error real (no un `blocked`/`done` normal).
+
+**L4-11 - land y release reales**
+Precondición: una tarea despachada con `dispatch`, con commits landeables.
+Acción: `vexillum land <task-id>` y después `vexillum release <task-id>`.
+Esperado: ambos resuelven el camp desde `task.CampSlot` (vía `camp.Resolve`) y delegan en `camp.Land` / `soldier.ReleaseInHerdr` - mismas garantías de seguridad ya probadas en esos paquetes.
+
+## Pendiente (pasos 2 a 5, criterios de alto nivel)
 
 - N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido.
-- El sentinel detecta, vía la socket API de herdr, qué soldier está bloqueado o terminó, sin sondeo activo que gaste tokens.
+- El sentinel detecta, vía la socket API de herdr, qué soldier está bloqueado o terminó, sin sondeo activo que gaste tokens (push vía `events.subscribe`, con fallback a polling).
 - El sentinel despierta al commander solo cuando hay algo que atender (un soldier bloqueado o terminado), no en cada ciclo.
-- Restart-proof: matar la sesión entera y volver a levantar vexillum reconstruye el estado de todas las tareas desde disco; los soldiers que se puedan resumir se resumen, los que no, quedan marcados como interrumpidos. herdr restaura el layout visual; el estado de dominio lo restaura vexillum.
+- Restart-proof: matar la sesión entera y volver a levantar vexillum reconstruye el estado de todas las tareas desde disco (reconciliando contra `pane.list` real de herdr); los soldiers que se puedan resumir se resumen, los que no, quedan marcados como interrumpidos. herdr restaura el layout visual; el estado de dominio lo restaura vexillum.
 - Una mission termina entregando cambios de código (un PR); un scout termina dejando un reporte de investigación; ambos resultados quedan persistidos y asociados a su tarea.
 - Un soldier que falla no tumba a los demás ni al commander; su fallo queda aislado y reflejado en su estado.
-- Dos soldiers nunca comparten el mismo camp ni la misma rama
+- Dos soldiers nunca comparten el mismo camp ni la misma rama.

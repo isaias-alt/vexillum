@@ -176,3 +176,106 @@ func TestAcquire_DoesNotReuseLeasedSlot(t *testing.T) {
 		t.Fatalf("expected a distinct slot while task-1's camp is still leased, got %d for both", c1.Slot)
 	}
 }
+
+// Resolve reconstructs an already-acquired camp from just its slot
+// number, matching what Acquire returned.
+func TestResolve_ReconstructsAcquiredCamp(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	acquired, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+
+	resolved, err := Resolve(project, home, acquired.Slot)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if resolved != acquired {
+		t.Errorf("expected Resolve to reconstruct the same camp:\n got:  %+v\n want: %+v", resolved, acquired)
+	}
+}
+
+// L3-10: Land fast-forwards the project's checkout to a clean camp
+// branch that's ahead of the base with no divergence.
+func TestLand_FastForwardsCleanBranch(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "change.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatalf("writing change: %v", err)
+	}
+	commitAll(t, c.Path, "task 1 change")
+
+	if err := Land(c); err != nil {
+		t.Fatalf("Land: %v", err)
+	}
+
+	got := strings.TrimSpace(runGitT(t, project, "log", "-1", "--format=%s"))
+	if got != "task 1 change" {
+		t.Errorf("expected the project checkout's HEAD to be the landed commit, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(project, "change.txt")); err != nil {
+		t.Errorf("expected change.txt to exist in the project checkout after landing: %v", err)
+	}
+}
+
+// L3-11: Land refuses a branch that has diverged from the base instead
+// of forcing or rebasing it.
+func TestLand_RefusesDivergedBranch(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "change.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatalf("writing change: %v", err)
+	}
+	commitAll(t, c.Path, "task 1 change")
+
+	// Advance the base past the camp's branch point, so the camp's
+	// branch is no longer a fast-forward.
+	if err := os.WriteFile(filepath.Join(project, "diverge.txt"), []byte("diverge\n"), 0o644); err != nil {
+		t.Fatalf("writing diverging change: %v", err)
+	}
+	commitAll(t, project, "diverging base change")
+
+	if err := Land(c); err == nil {
+		t.Fatal("expected Land to refuse a diverged branch")
+	}
+
+	got := strings.TrimSpace(runGitT(t, project, "log", "-1", "--format=%s"))
+	if got != "diverging base change" {
+		t.Errorf("expected the project checkout to be untouched by the refused merge, got HEAD %q", got)
+	}
+}
+
+// L3-12: Land refuses to touch a dirty project checkout.
+func TestLand_RefusesDirtyProjectCheckout(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "change.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatalf("writing change: %v", err)
+	}
+	commitAll(t, c.Path, "task 1 change")
+
+	if err := os.WriteFile(filepath.Join(project, "uncommitted.txt"), []byte("oops\n"), 0o644); err != nil {
+		t.Fatalf("writing uncommitted file in project: %v", err)
+	}
+
+	if err := Land(c); err == nil {
+		t.Fatal("expected Land to refuse a dirty project checkout")
+	}
+}

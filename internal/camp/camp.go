@@ -118,6 +118,69 @@ func Acquire(projectDir, vexillumHome, taskID string) (Camp, error) {
 	return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: branch, Slot: number}, nil
 }
 
+// Resolve reconstructs the Camp for an already-acquired slot from the
+// pool's own bookkeeping. Useful for a caller that only kept the slot
+// number (e.g. persisted on a state.Task) and needs the rest of Camp back
+// to call Release.
+func Resolve(projectDir, vexillumHome string, slot int) (Camp, error) {
+	absProject, err := filepath.Abs(projectDir)
+	if err != nil {
+		return Camp{}, fmt.Errorf("resolving project path: %w", err)
+	}
+	repoName := filepath.Base(absProject)
+	poolRoot := filepath.Join(vexillumHome, fmt.Sprintf("%s-%s", repoName, shortHash(absProject)))
+
+	pool, err := loadPool(poolRoot)
+	if err != nil {
+		return Camp{}, err
+	}
+	for _, s := range pool.Slots {
+		if s.Number == slot {
+			worktreePath := filepath.Join(poolRoot, strconv.Itoa(slot), repoName)
+			return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: s.Branch, Slot: slot}, nil
+		}
+	}
+	return Camp{}, fmt.Errorf("camp slot %d not found in pool state for %s", slot, absProject)
+}
+
+// Land fast-forwards the project's own checkout to c's branch - the
+// "local-only" delivery mode from firstmate (bin/fm-merge-local.sh),
+// which vexillum mirrors here rather than leaving the commander to run
+// raw git commands on its own judgment. It never forces anything: the
+// project's checkout must already be clean, and the merge must be a
+// clean fast-forward (c's branch has no divergent history from the base -
+// only commits ahead of it). If the base moved since the camp was
+// created, Land refuses and says so, instead of rebasing or forcing a
+// merge - that's a decision for a human or the soldier that owns the
+// branch, not this function.
+func Land(c Camp) error {
+	base, err := currentBranch(c.ProjectDir)
+	if err != nil {
+		return fmt.Errorf("resolving base branch: %w", err)
+	}
+
+	dirty, err := isDirty(c.ProjectDir)
+	if err != nil {
+		return fmt.Errorf("checking project checkout for uncommitted changes: %w", err)
+	}
+	if dirty {
+		return fmt.Errorf("project checkout %s has uncommitted changes, refusing to land %s", c.ProjectDir, c.Branch)
+	}
+
+	fastForward, err := isAncestor(c.ProjectDir, base, c.Branch)
+	if err != nil {
+		return fmt.Errorf("checking whether %s is a fast-forward of %s: %w", c.Branch, base, err)
+	}
+	if !fastForward {
+		return fmt.Errorf("%s is not a fast-forward of %s (it has diverged) - rebase it first", c.Branch, base)
+	}
+
+	if _, err := runGit(c.ProjectDir, "merge", "--ff-only", c.Branch); err != nil {
+		return fmt.Errorf("landing %s into %s: %w", c.Branch, base, err)
+	}
+	return nil
+}
+
 // Release returns c's slot to the pool for reuse, but only when it's safe:
 // taskID must be the slot's recorded owner, the worktree must have no
 // uncommitted changes, and its branch must already be landed (merged) on
