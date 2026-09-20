@@ -42,9 +42,57 @@ func TestInit_CleanProject(t *testing.T) {
 	mustStat(t, vexillumHome)
 	mustStat(t, filepath.Join(projectDir, ".vexillum", "config.json"))
 	mustStat(t, filepath.Join(projectDir, "AGENTS.md"))
+	mustStat(t, filepath.Join(projectDir, "CLAUDE.md"))
+
+	claudeMD, err := os.ReadFile(filepath.Join(projectDir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("reading CLAUDE.md: %v", err)
+	}
+	if string(claudeMD) != "@AGENTS.md\n" {
+		t.Errorf("expected CLAUDE.md to import AGENTS.md, got %q", claudeMD)
+	}
 
 	if out := stdout.String(); out == "" {
 		t.Error("expected confirmation output, got none")
+	}
+}
+
+// Claude Code auto-loads CLAUDE.md, not a bare AGENTS.md, so a project
+// initialized before this shim existed never had its AGENTS.md actually
+// read. Re-running init on such a project heals the gap: it creates the
+// missing CLAUDE.md without touching AGENTS.md or config.json.
+func TestInit_HealsMissingClaudeMD(t *testing.T) {
+	projectDir := t.TempDir()
+	initGitRepo(t, projectDir)
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+
+	var buf bytes.Buffer
+	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
+		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
+	}
+
+	claudePath := filepath.Join(projectDir, "CLAUDE.md")
+	if err := os.Remove(claudePath); err != nil {
+		t.Fatalf("removing CLAUDE.md to simulate a pre-fix project: %v", err)
+	}
+	agentsBefore, err := os.ReadFile(filepath.Join(projectDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("reading AGENTS.md: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	mustStat(t, claudePath)
+	agentsAfter, err := os.ReadFile(filepath.Join(projectDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("reading AGENTS.md after healing: %v", err)
+	}
+	if !bytes.Equal(agentsBefore, agentsAfter) {
+		t.Error("AGENTS.md changed while only CLAUDE.md should have been healed")
 	}
 }
 

@@ -24,7 +24,10 @@ import (
 //
 // v2 (Capa 3) added the camp assignment, exit code and output fields, and
 // the running/done/failed statuses a soldier run transitions through.
-const SchemaVersion = 2
+// v3 (Capa 4) added the herdr workspace/tab/pane/agent identifiers and
+// the blocked status, for soldiers that run in a real herdr pane instead
+// of headless.
+const SchemaVersion = 3
 
 // Kind distinguishes a mission (delivers a PR) from a scout (delivers a
 // report).
@@ -41,6 +44,7 @@ type Status string
 const (
 	StatusPending Status = "pending"
 	StatusRunning Status = "running"
+	StatusBlocked Status = "blocked"
 	StatusDone    Status = "done"
 	StatusFailed  Status = "failed"
 )
@@ -61,10 +65,21 @@ type Task struct {
 	CampPath   string `json:"camp_path,omitempty"`
 	CampBranch string `json:"camp_branch,omitempty"`
 
-	// Soldier run result (Capa 3). Nil/empty until the process finishes
-	// (or fails to start).
+	// Soldier run result. ExitCode applies only to a headless run
+	// (internal/soldier.Run); a run in a real herdr pane
+	// (internal/soldier.RunInHerdr) has no process exit code, since
+	// it's an interactive agent session, not a one-shot command.
+	// Output holds the captured transcript either way.
 	ExitCode *int   `json:"exit_code,omitempty"`
 	Output   string `json:"output,omitempty"`
+
+	// herdr pane assignment, set once a soldier runs in a real herdr
+	// pane (Capa 4, internal/soldier.RunInHerdr). Empty for a headless
+	// run.
+	HerdrWorkspaceID string `json:"herdr_workspace_id,omitempty"`
+	HerdrTabID       string `json:"herdr_tab_id,omitempty"`
+	HerdrPaneID      string `json:"herdr_pane_id,omitempty"`
+	HerdrAgentName   string `json:"herdr_agent_name,omitempty"`
 }
 
 // New creates a Task of the given kind with a fresh unique ID, in

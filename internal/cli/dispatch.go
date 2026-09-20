@@ -1,0 +1,235 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/soldier"
+	"github.com/isaias-alt/vexillum/internal/state"
+)
+
+const dispatchUsage = `Dispatch a soldier (mission or scout) into an isolated camp.
+
+Usage:
+  vexillum dispatch <prompt> [--kind mission|scout]
+
+A mission changes code and delivers something to land; a scout only
+investigates and reports back (default: mission).
+
+Runs a real, interactive Claude Code session in a herdr pane, inside a
+fresh git worktree isolated from this project's own working tree, with
+--dangerously-skip-permissions (the worktree isolation bounds the blast
+radius; nothing reaches the project's real history until 'vexillum land'
+is explicitly approved). Requires HERDR_WORKSPACE_ID - run this from
+inside a herdr-managed pane. Blocks until the soldier settles into done
+or blocked; run it in the background if you don't want to wait.
+`
+
+const landUsage = `Land a finished mission's work into this project's base branch.
+
+Usage:
+  vexillum land <task-id>
+
+Fast-forwards this project's own checkout to the mission's branch.
+Refuses (leaving everything untouched) unless this checkout is clean and
+the merge is a clean fast-forward - never forces or rebases anything.
+`
+
+const releaseUsage = `Release a soldier's camp back to the pool once its work has landed.
+
+Usage:
+  vexillum release <task-id>
+
+Refuses unless the camp is clean and (for a mission) landed. On success,
+returns the worktree to the pool for reuse and closes the herdr pane.
+`
+
+// Dispatch runs the "vexillum dispatch" command.
+func Dispatch(args []string) int {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Print(dispatchUsage)
+		return 0
+	}
+
+	prompt, kind, err := parseDispatchArgs(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		return 1
+	}
+
+	projectDir, vexillumHome, err := resolveDirs()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		return 1
+	}
+
+	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
+	if workspaceID == "" {
+		fmt.Fprintln(os.Stderr, "vexillum: HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane")
+		return 1
+	}
+
+	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, herdr.CLI{}, os.Stdout, os.Stderr)
+}
+
+func parseDispatchArgs(args []string) (prompt string, kind state.Kind, err error) {
+	kind = state.KindMission
+	var promptParts []string
+	for i := 0; i < len(args); i++ {
+		if args[i] != "--kind" {
+			promptParts = append(promptParts, args[i])
+			continue
+		}
+		if i+1 >= len(args) {
+			return "", "", fmt.Errorf("--kind requires a value (mission or scout)")
+		}
+		i++
+		switch args[i] {
+		case "mission":
+			kind = state.KindMission
+		case "scout":
+			kind = state.KindScout
+		default:
+			return "", "", fmt.Errorf("unknown kind %q, expected mission or scout", args[i])
+		}
+	}
+	if len(promptParts) == 0 {
+		return "", "", fmt.Errorf("missing prompt")
+	}
+	return strings.Join(promptParts, " "), kind, nil
+}
+
+func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind state.Kind, client herdr.Client, stdout, stderr io.Writer) int {
+	if !projectAlreadyInitialized(projectDir) {
+		fmt.Fprintln(stderr, "vexillum: project not initialized, run 'vexillum init' first")
+		return 1
+	}
+
+	task, err := state.New(kind, prompt)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: creating task: %v\n", err)
+		return 1
+	}
+
+	c, err := camp.Acquire(projectDir, vexillumHome, task.ID)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: acquiring camp: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "task_id=%s kind=%s camp_slot=%d camp_branch=%s\n", task.ID, task.Kind, c.Slot, c.Branch)
+
+	result, runErr := soldier.RunInHerdr(vexillumHome, workspaceID, task, c, client)
+	fmt.Fprintf(stdout, "status=%s\n", result.Status)
+	if result.HerdrPaneID != "" {
+		fmt.Fprintf(stdout, "herdr: workspace=%s tab=%s pane=%s agent=%s\n", result.HerdrWorkspaceID, result.HerdrTabID, result.HerdrPaneID, result.HerdrAgentName)
+	}
+	if result.Output != "" {
+		fmt.Fprintln(stdout, "output:")
+		fmt.Fprintln(stdout, result.Output)
+	}
+
+	if runErr != nil {
+		fmt.Fprintf(stderr, "vexillum: %v\n", runErr)
+		return 1
+	}
+	return 0
+}
+
+// Land runs the "vexillum land" command.
+func Land(args []string) int {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Print(landUsage)
+		return 0
+	}
+	if len(args) == 0 {
+		fmt.Print(landUsage)
+		return 1
+	}
+
+	projectDir, vexillumHome, err := resolveDirs()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		return 1
+	}
+
+	return runLand(projectDir, vexillumHome, args[0], os.Stdout, os.Stderr)
+}
+
+func runLand(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) int {
+	task, err := state.Load(vexillumHome, taskID)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
+		return 1
+	}
+
+	c, err := camp.Resolve(projectDir, vexillumHome, task.CampSlot)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: resolving camp: %v\n", err)
+		return 1
+	}
+
+	if err := camp.Land(c); err != nil {
+		fmt.Fprintf(stderr, "vexillum: land refused: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "landed: fast-forwarded %s to %s\n", projectDir, c.Branch)
+	return 0
+}
+
+// Release runs the "vexillum release" command.
+func Release(args []string) int {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Print(releaseUsage)
+		return 0
+	}
+	if len(args) == 0 {
+		fmt.Print(releaseUsage)
+		return 1
+	}
+
+	projectDir, vexillumHome, err := resolveDirs()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		return 1
+	}
+
+	return runRelease(projectDir, vexillumHome, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
+}
+
+func runRelease(projectDir, vexillumHome, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
+	task, err := state.Load(vexillumHome, taskID)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
+		return 1
+	}
+
+	c, err := camp.Resolve(projectDir, vexillumHome, task.CampSlot)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: resolving camp: %v\n", err)
+		return 1
+	}
+
+	if err := soldier.ReleaseInHerdr(task, c, client); err != nil {
+		fmt.Fprintf(stderr, "vexillum: release refused: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "released: camp returned to the pool, herdr pane closed.")
+	return 0
+}
+
+func resolveDirs() (projectDir, vexillumHome string, err error) {
+	projectDir, err = os.Getwd()
+	if err != nil {
+		return "", "", fmt.Errorf("cannot determine current directory: %w", err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return projectDir, filepath.Join(home, ".vexillum"), nil
+}
