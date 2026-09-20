@@ -263,6 +263,33 @@ func TestRunInHerdr_NonTimeoutPromptErrorFails(t *testing.T) {
 	}
 }
 
+// agent_not_running (herdr's own CHANGELOG: returned when the target
+// pane closes while a --wait call is watching it) fails the task with a
+// clear, specific message instead of the raw herdr error string - there's
+// nothing left in that pane to retry against, unlike agent_prompt_stalled.
+func TestRunInHerdr_NotRunningFailsWithClearMessage(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:     "w1:t2",
+		paneID:    "w1:p2",
+		promptErr: &herdr.APIError{Code: "agent_not_running", Message: "agent is no longer running in the target pane"},
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err == nil {
+		t.Fatal("expected an error when the pane closed before prompting")
+	}
+	if got.Status != state.StatusFailed {
+		t.Errorf("expected status failed, got %s", got.Status)
+	}
+	if !strings.Contains(err.Error(), "redispatch") {
+		t.Errorf("expected a clear, actionable message, got: %v", err)
+	}
+}
+
 // A pane that briefly reports agent_pane_busy right after creation (a
 // real, undocumented race observed in use) is retried instead of failing
 // immediately.

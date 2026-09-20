@@ -343,6 +343,11 @@ Precondición: una tarea `running` cuyo `AgentStatus` falla con un error transit
 Acción: `sentinel.Tick` sobre una lista con esa tarea (y, en el caso real, otras tareas junto a ella).
 Esperado: la tarea con la lectura fallida se saltea (sin wake, sin cambio de estado) - `Tick` no devuelve error ni aborta el resto del loop; cualquier otra tarea en la misma corrida se procesa igual.
 
+**L4-26 - el pane se cierra mientras se somete el prompt**
+Precondición: `AgentPrompt` devuelve `agent_not_running` - confirmado en el changelog de herdr (`Cellar/herdr/0.9.0/CHANGELOG.md`): código que devuelve una llamada `--wait` específicamente cuando el pane objetivo se cierra mientras se espera. Encontrado en vivo en el primer intento de una prueba real de commander, antes de que nadie tocara nada.
+Acción: `soldier.RunInHerdr`.
+Esperado: falla la tarea (no tiene sentido reintentar - el pane está genuinamente cerrado, a diferencia de `agent_prompt_stalled`) con un mensaje explícito y accionable ("... safe to redispatch") en vez del string crudo de herdr. `sentinel.Tick` no necesita el mismo tratamiento: usa `AgentStatus` (sin `--wait`), que para un pane realmente cerrado siempre da `agent_not_found` (verificado matando el proceso subyacente a mano), nunca `agent_not_running` - los dos códigos están escopeados a formas de llamada distintas.
+
 ## Pendiente (pasos 3 y 5, criterios de alto nivel; paso 4 mayormente cubierto)
 
 - N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido - probado informalmente (mission + scout en simultáneo), falta formalizar con casos concretos.
