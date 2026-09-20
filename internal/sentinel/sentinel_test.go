@@ -17,6 +17,7 @@ import (
 type fakeHerdr struct {
 	statuses   map[string]string
 	err        error
+	errFor     map[string]error // per-name error, checked before the blanket err
 	readOutput string
 }
 
@@ -27,6 +28,9 @@ func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) e
 func (f *fakeHerdr) AgentSendKeys(name string, keys ...string) error                 { return nil }
 func (f *fakeHerdr) AgentReady(name string) (bool, error)                            { return true, nil }
 func (f *fakeHerdr) AgentStatus(name string) (string, error) {
+	if err, ok := f.errFor[name]; ok {
+		return "", err
+	}
 	if f.err != nil {
 		return "", f.err
 	}
@@ -333,6 +337,65 @@ func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 	}
 	if len(wakes) != 1 || wakes[0].TaskID != task.ID || wakes[0].NewStatus != state.StatusInterrupted {
 		t.Errorf("expected one drained wake for %s -> interrupted, got %+v", task.ID, wakes)
+	}
+}
+
+// Capa 4 paso 5 (fault isolation), formalized: three tasks in one Tick
+// call - one settles normally, one has its agent confirmed gone
+// (interrupted), one is still genuinely running - none of that interferes
+// with any of the others. Matches a live test: three real parallel
+// `vexillum dispatch` missions, one pane killed on purpose, the other two
+// landed clean while the killed one interrupted independently.
+func TestTick_OneFailingTaskDoesNotAffectItsSiblings(t *testing.T) {
+	home := t.TempDir()
+	settled := newRunningTask(t, home, "vx-settles-fine")
+	failing := newRunningTask(t, home, "vx-agent-is-gone")
+	failing.AgentNotFoundSince = time.Now().Add(-11 * time.Second)
+	if err := state.Save(home, failing); err != nil {
+		t.Fatalf("state.Save (failing): %v", err)
+	}
+	stillRunning := newRunningTask(t, home, "vx-still-working")
+
+	client := &fakeHerdr{
+		statuses: map[string]string{
+			"vx-settles-fine":  "done",
+			"vx-still-working": "working",
+		},
+		errFor: map[string]error{
+			"vx-agent-is-gone": &herdr.APIError{Code: "agent_not_found", Message: "agent target vx-agent-is-gone not found"},
+		},
+	}
+
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 2 {
+		t.Fatalf("expected 2 wakes (settled + interrupted; still-working produces none), got %d", woke)
+	}
+
+	gotSettled, err := state.Load(home, settled.ID)
+	if err != nil {
+		t.Fatalf("Load settled: %v", err)
+	}
+	if gotSettled.Status != state.StatusDone {
+		t.Errorf("expected the settled task to be done, got %s", gotSettled.Status)
+	}
+
+	gotFailing, err := state.Load(home, failing.ID)
+	if err != nil {
+		t.Fatalf("Load failing: %v", err)
+	}
+	if gotFailing.Status != state.StatusInterrupted {
+		t.Errorf("expected the failing task to be interrupted, got %s", gotFailing.Status)
+	}
+
+	gotStillRunning, err := state.Load(home, stillRunning.ID)
+	if err != nil {
+		t.Fatalf("Load stillRunning: %v", err)
+	}
+	if gotStillRunning.Status != state.StatusRunning {
+		t.Errorf("expected the still-working task to remain running, got %s", gotStillRunning.Status)
 	}
 }
 

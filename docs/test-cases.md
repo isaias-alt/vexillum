@@ -358,11 +358,14 @@ Precondición: N camps arrendados, liberados todos al mismo tiempo.
 Acción: N `camp.Release` en simultáneo.
 Esperado: los N terminan sin error, y `pool.json` refleja los N slots correctamente liberados - ninguna escritura se pisa con otra por la misma falta de exclusión mutua que L4-27. Mismo `lockPool` cubre este caso.
 
-## Pendiente (paso 5, criterio de alto nivel; pasos 3 y 4 mayormente cubiertos)
+**L4-29 - un soldier que falla no afecta a sus hermanos**
+Precondición: tres tareas `running` en el mismo `Tick`: una se asienta normal, otra tiene su agente confirmado desaparecido (pasado `notFoundConfirmWindow`), otra sigue genuinamente trabajando.
+Acción: `sentinel.Tick` sobre las tres juntas.
+Esperado: cada una termina en el estado que le corresponde de forma completamente independiente - la asentada en `done`, la desaparecida en `interrupted`, la que sigue trabajando se mantiene `running` - sin que ninguna interfiera con las otras. Verificado en vivo con el mecanismo real: 3 `vexillum dispatch` genuinamente concurrentes (con colisión de nombre real entre las tres, desambiguada correctamente), el pane de una cerrado a mano a propósito nada más arrancar. Resultado: la interrumpida marcó `interrupted` a los 10s exactos (igual que L4-22), sus archivos quedaron escritos pero sin comitear (el trabajo físico no se pierde, solo falta el commit); las otras dos comitearon limpio y se pudieron aterrizar/liberar sin ninguna interferencia de la tercera - cada camp se evalúa de forma completamente independiente.
 
-- N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido - ✅ formalizado (L4-27, L4-28) y verificado en vivo con `vexillum dispatch` real concurrente. Sigue pendiente un caso con múltiples soldiers reales corriendo tiempo real en simultáneo (no solo `camp.Acquire`/`Release` aislados) para cerrar del todo el paso 5 (aislamiento de fallos) con uno de ellos fallando a propósito.
-- El sentinel detecta, vía la socket API de herdr, qué soldier está bloqueado o terminó, sin sondeo activo que gaste tokens (push vía `events.subscribe`, con fallback a polling) - decisión consciente de quedarse solo con el fallback de polling (ver binnacle `20260920-sentinel-paso2.md`), no pendiente.
-- Restart-proof: ✅ cubierto en la parte de reconciliación (L4-19, L4-20, L4-22) - una tarea que quedó `running` huérfana (ya sea porque `vexillum` murió a mitad de dispatch, o porque el agente mismo desapareció) siempre se resuelve, nunca queda colgada para siempre. **Todavía sin implementar**: la parte de "los que se puedan resumir se resumen" - hoy una tarea `interrupted` solo se detecta y reporta, no hay ningún mecanismo para relanzar un agente en el mismo camp/rama continuando el trabajo.
-- Una mission termina entregando cambios de código (un PR); un scout termina dejando un reporte de investigación; ambos resultados quedan persistidos y asociados a su tarea. - cubierto por Capa 3/4 paso 1.
-- Un soldier que falla no tumba a los demás ni al commander; su fallo queda aislado y reflejado en su estado - cubierto estructuralmente (ver L4-25), falta un caso formal con múltiples soldiers reales en paralelo, uno de ellos fallando.
-- Dos soldiers nunca comparten el mismo camp ni la misma rama - cubierto por el pool de camps de Capa 3 (cada `camp.Acquire` asigna un slot propio); L4-21 cierra el caso donde un comando corrido desde el lugar equivocado podía romper esta garantía.
+## Pendiente
+
+Con L4-27 a L4-29, los pasos 3 (N en paralelo), 4 (restart-proof) y 5 (aislamiento de fallos) de Capa 4 quedan formalizados y verificados en vivo. Lo único que sigue sin implementar de toda la Capa 4:
+
+- **Resumption real de una tarea `interrupted`** - "los que se puedan resumir se resumen" (PRD v1) no está hecho; hoy una tarea `interrupted` solo se detecta y reporta, sin ningún mecanismo para relanzar un agente en el mismo camp/rama retomando el trabajo. Alcance deliberadamente dejado afuera (ver binnacle `20260920-restart-proof-agente-desaparecido.md`).
+- **Push real vía `events.subscribe`** en vez de solo polling - decisión consciente de quedarse con el fallback de polling como mecanismo permanente (ver binnacle `20260920-sentinel-paso2.md`), no un pendiente real.
