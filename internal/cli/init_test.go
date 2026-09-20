@@ -377,3 +377,26 @@ func TestEnsureSentinelHook_RefusesMalformedSettings(t *testing.T) {
 		t.Errorf("expected the malformed file to be left untouched, got: %s", data)
 	}
 }
+
+// vexillum init refuses to run from inside a vexillum-managed camp - see
+// TestRefuseInsideVexillumHome for the underlying bug this guards
+// against.
+func TestInit_RefusesInsideVexillumHome(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	campPath := filepath.Join(vexillumHome, "myproject-abc12345", "1", "myproject")
+	if err := os.MkdirAll(campPath, 0o755); err != nil {
+		t.Fatalf("mkdir camp path: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runInit(campPath, vexillumHome, &stdout, &stderr)
+	if code == 0 {
+		t.Fatal("expected non-zero exit code when run from inside a camp")
+	}
+	if stderr.String() == "" {
+		t.Error("expected an error message on stderr")
+	}
+	if _, err := os.Stat(filepath.Join(campPath, ".vexillum")); !os.IsNotExist(err) {
+		t.Error("expected no scaffold to be written inside the camp")
+	}
+}

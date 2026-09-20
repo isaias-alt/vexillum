@@ -295,3 +295,22 @@ func TestUpgrade_ForceCoversUnknownProvenance(t *testing.T) {
 		t.Error("expected --force to overwrite AGENTS.md even without a stored hash")
 	}
 }
+
+// vexillum upgrade refuses to run from inside a vexillum-managed camp,
+// same guard as init - see TestRefuseInsideVexillumHome.
+func TestUpgrade_RefusesInsideVexillumHome(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	campPath := filepath.Join(vexillumHome, "myproject-abc12345", "1", "myproject")
+	if err := os.MkdirAll(campPath, 0o755); err != nil {
+		t.Fatalf("mkdir camp path: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runUpgrade(campPath, vexillumHome, false, &stdout, &stderr)
+	if code == 0 {
+		t.Fatal("expected non-zero exit code when run from inside a camp")
+	}
+	if stderr.String() == "" {
+		t.Error("expected an error message on stderr")
+	}
+}

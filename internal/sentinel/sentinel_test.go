@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -34,6 +35,10 @@ func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error)             { return f.readOutput, nil }
 func (f *fakeHerdr) TabClose(tabID string) error                                  { return nil }
 
+// newRunningTask backdates UpdatedAt well past Tick's settle-race grace
+// period, so tests exercising a real transition aren't accidentally
+// testing the grace period instead - see
+// TestTick_SkipsTasksWithinSettleGracePeriod for that.
 func newRunningTask(t *testing.T, home, agentName string) state.Task {
 	t.Helper()
 	task, err := state.New(state.KindMission, "do the thing")
@@ -42,6 +47,7 @@ func newRunningTask(t *testing.T, home, agentName string) state.Task {
 	}
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = agentName
+	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
 	if err := state.Save(home, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
@@ -104,6 +110,45 @@ func TestTick_CapturesOutputOnTransition(t *testing.T) {
 	}
 	if persisted.Output != "soldier: all done, opened PR #4" {
 		t.Errorf("expected captured output, got %q", persisted.Output)
+	}
+}
+
+// A just-submitted task (UpdatedAt still fresh) is never acted on, even
+// if its live status already reads as settled - the exact race caught
+// live: the sentinel auto-starts right alongside dispatch, and herdr can
+// briefly still report "idle" (not yet picked up the prompt) before an
+// agent transitions to "working". Without this grace period, that
+// stale idle gets misread as "already done".
+func TestTick_SkipsTasksWithinSettleGracePeriod(t *testing.T) {
+	home := t.TempDir()
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = "vx-do-the-thing"
+	// Deliberately NOT backdated - this is what a task looks like the
+	// instant after RunInHerdr submits its prompt.
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected 0 wakes within the settle grace period, got %d", woke)
+	}
+
+	persisted, err := state.Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running within the grace period, got %s", persisted.Status)
 	}
 }
 

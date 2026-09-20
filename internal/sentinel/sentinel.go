@@ -55,6 +55,24 @@ func wakePath(vexillumHome, taskID string) string {
 // RunInHerdr doc comment), which is the normal case for real work.
 const tickReadLines = 500
 
+// settleGracePeriod is how long Tick refuses to act on a just-submitted
+// task at all, regardless of what its live status reads. herdr's own
+// "agent prompt --wait" documents that a submission starting from a
+// non-working state needs up to 5000ms before a working/blocked
+// transition is observed - internal/soldier.RunInHerdr's own probe call
+// already accounts for that internally (herdr requires seeing
+// working/blocked before it will accept a subsequent idle/done as a
+// real settle). Tick's own AgentStatus read has no such protection - a
+// live case caught this exactly: with the sentinel auto-started right
+// alongside dispatch (see internal/cli.ensureSentinelRunning), Tick
+// polled a task 5s after submission, read the still-stale pre-work
+// "idle", mapped it straight to Done, and won the race against
+// RunInHerdr's own (correctly guarded) probe - recording a false "done"
+// for a soldier that had done nothing yet. A margin over herdr's
+// documented 5s bound closes it without needing the same --until
+// machinery on this side.
+const settleGracePeriod = 8 * time.Second
+
 // Tick checks every task currently marked running against its live herdr
 // agent status, persists any status change, and records a wake for it.
 // Returns how many wakes it recorded. A transient read failure on one
@@ -68,6 +86,9 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 	woke := 0
 	for _, task := range tasks {
 		if task.Status != state.StatusRunning || task.HerdrAgentName == "" {
+			continue
+		}
+		if time.Since(task.UpdatedAt) < settleGracePeriod {
 			continue
 		}
 
