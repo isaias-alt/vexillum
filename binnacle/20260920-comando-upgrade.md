@@ -77,6 +77,23 @@
   corrida real. Tampoco quedó ninguna wake mal armada (`~/.vexillum/wakes/`
   ni existe). 3 tests nuevos (`TestSentinelMode`).
 
+- **Bug real encontrado en el primer uso en vivo, ya arreglado**: el
+  general corrió `vexillum upgrade` en `vexillum-prueba` (proyecto de
+  antes de esta funcionalidad, sin hash guardado) y el `AGENTS.md` en
+  disco no coincidía con la plantilla actual (que además había cambiado
+  de contenido por el rediseño async del sentinel) - resultado: "has
+  local changes, left untouched" para siempre, sin ninguna salida sin
+  borrar el archivo a mano. Ni `init` (no toca un archivo que ya existe)
+  ni `upgrade` (conservador por diseño) tenían forma de resolver ese
+  caso - exactamente la fricción que `upgrade` se suponía que iba a
+  eliminar. **Arreglado con un flag `--force`**: pisa la plantilla sin
+  importar el hash guardado (o su ausencia), reportando explícitamente
+  "force-upgraded ... (local changes discarded)" para que quede claro
+  qué se descartó. Sigue sin ser el default - el general lo pide a
+  propósito cuando ya confirmó que no hay nada local que valga la pena
+  conservar. 2 tests nuevos (`TestUpgrade_ForceOverwritesHandEditedFile`,
+  `TestUpgrade_ForceCoversUnknownProvenance`).
+
 ## Pendiente para la próxima
 
 Según el orden que ya había fijado el general en
