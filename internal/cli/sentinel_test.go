@@ -9,6 +9,43 @@ import (
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
+// sentinelMode classifies the three recognized forms and rejects anything
+// else - an unrecognized subcommand must not silently fall through to
+// starting the infinite polling loop (the bug found via a real commander
+// session running "vexillum sentinel status").
+func TestSentinelMode(t *testing.T) {
+	cases := []struct {
+		args    []string
+		want    string
+		wantErr bool
+	}{
+		{args: nil, want: "run"},
+		{args: []string{}, want: "run"},
+		{args: []string{"-h"}, want: "help"},
+		{args: []string{"--help"}, want: "help"},
+		{args: []string{"drain"}, want: "drain"},
+		{args: []string{"status"}, wantErr: true},
+		{args: []string{"drain", "extra"}, want: "drain"},
+	}
+
+	for _, c := range cases {
+		got, err := sentinelMode(c.args)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("sentinelMode(%v): expected an error, got mode %q", c.args, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("sentinelMode(%v): unexpected error: %v", c.args, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("sentinelMode(%v) = %q, want %q", c.args, got, c.want)
+		}
+	}
+}
+
 // No pending wakes -> the empty hook JSON, so a Stop hook lets the turn
 // end normally.
 func TestRunSentinelDrain_NoWakes(t *testing.T) {
