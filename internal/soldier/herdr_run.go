@@ -88,7 +88,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		task.Output = output
 	}
 
-	task.Status = mapAgentStatus(status)
+	task.Status = MapAgentStatus(status)
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(vexillumHome, task); err != nil {
 		return task, fmt.Errorf("persisting final state: %w", err)
@@ -170,8 +170,16 @@ func slugify(s string, maxLen int) string {
 	return strings.Trim(out, "-")
 }
 
-func mapAgentStatus(status string) state.Status {
+// MapAgentStatus maps herdr's agent_status vocabulary (idle, working,
+// blocked, done, unknown) to a Task status. Shared with internal/sentinel,
+// which needs the exact same mapping when reconciling a live status
+// against a task's persisted one.
+func MapAgentStatus(status string) state.Status {
 	switch status {
+	case "working":
+		// Only ever observed by a live poll (internal/sentinel) - a
+		// settled agent prompt --wait result never returns this.
+		return state.StatusRunning
 	case "blocked":
 		return state.StatusBlocked
 	case "idle", "done":

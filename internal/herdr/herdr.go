@@ -44,6 +44,11 @@ type Client interface {
 	// interactive input.
 	AgentReady(name string) (bool, error)
 
+	// AgentStatus reports the named agent's current agent_status (idle,
+	// working, blocked, done, unknown) without waiting for it to change -
+	// used by internal/sentinel to poll for transitions.
+	AgentStatus(name string) (string, error)
+
 	// AgentPrompt submits text to the named agent and waits (up to
 	// timeoutMS) for it to settle into idle, done, or blocked.
 	// Returns the settled agent_status.
@@ -139,6 +144,16 @@ func (CLI) AgentReady(name string) (bool, error) {
 	agent, _ := result["agent"].(map[string]any)
 	ready, _ := agent["interactive_ready"].(bool)
 	return ready, nil
+}
+
+func (CLI) AgentStatus(name string) (string, error) {
+	result, err := run("agent", "get", name)
+	if err != nil {
+		return "", err
+	}
+	agent, _ := result["agent"].(map[string]any)
+	status, _ := agent["agent_status"].(string)
+	return status, nil
 }
 
 func (CLI) AgentPrompt(name, text string, timeoutMS int) (string, error) {

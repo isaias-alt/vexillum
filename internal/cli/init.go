@@ -33,9 +33,29 @@ as you learn what works for this project.
 - **scout**: a task that only investigates and reports back - never
   commits or pushes anything.
 - **camp**: the isolated git worktree a soldier works in.
-- **sentinel**: watches soldiers and wakes you only when something needs
-  attention. Not built yet (v1 is still sequential) - for now, you find
-  out a soldier is done by waiting on the backgrounded dispatch command.
+- **sentinel**: a background process that watches soldiers and wakes you
+  only when something needs attention (a soldier finished or got
+  blocked) - see "The sentinel" below.
+
+## The sentinel
+
+Start it once per project, in the background, if it isn't already
+running:
+
+` + "```" + `
+vexillum sentinel
+` + "```" + `
+
+It polls every dispatched soldier's live status and, when one settles, it
+surfaces that to you automatically: a Claude Code Stop hook (wired up by
+` + "`vexillum init`" + `) blocks your turn from quietly ending and tells you what
+changed, so you don't have to remember to check. If it's already running
+(` + "`vexillum sentinel`" + ` refuses with "a sentinel is already running" naming
+its pid), that's fine - don't start a second one.
+
+If your turn is about to end and you're told a soldier's status changed,
+that's the sentinel - go check on it (report to the general, or
+land/release as appropriate) before actually stopping.
 
 ## Dispatching a soldier
 
@@ -206,20 +226,31 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	// .claude/settings.json isn't vexillum's file - it's the user's own
+	// Claude Code config. Merge our Stop hook in carefully; a malformed
+	// existing file is a pre-existing problem, warn but don't fail init
+	// over it.
+	hookAdded, hookErr := ensureSentinelHook(projectDir)
+	if hookErr != nil {
+		fmt.Fprintf(stderr, "vexillum: warning: could not add the sentinel Stop hook: %v\n", hookErr)
+	} else if hookAdded {
+		fmt.Fprintln(stdout, "Added vexillum sentinel Stop hook to .claude/settings.json")
+	}
+
 	if alreadyInitialized {
-		if !agentsCreated && !claudeCreated {
+		if !agentsCreated && !claudeCreated && !hookAdded {
 			fmt.Fprintln(stdout, "Project already initialized (found .vexillum/config.json). Nothing to do.")
 			return 0
 		}
-		// Healing an older init that predates one of these files: the
-		// scaffold itself isn't new, but restore what's missing.
+		// Healing an older init that predates one of these: the scaffold
+		// itself isn't new, but restore what's missing.
 		if agentsCreated {
 			fmt.Fprintln(stdout, "Created missing AGENTS.md")
 		}
 		if claudeCreated {
 			fmt.Fprintln(stdout, "Created missing CLAUDE.md")
 		}
-		fmt.Fprintln(stdout, "Project already initialized (found .vexillum/config.json); restored the missing file(s) above.")
+		fmt.Fprintln(stdout, "Project already initialized (found .vexillum/config.json); restored the missing piece(s) above.")
 		return 0
 	}
 
@@ -236,6 +267,77 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintln(stdout, "vexillum initialized.")
 	return 0
+}
+
+const sentinelHookCommand = "vexillum sentinel drain"
+
+// ensureSentinelHook merges a Stop hook running `vexillum sentinel drain`
+// into the project's .claude/settings.json, so a soldier's status change
+// surfaces to the commander instead of it quietly ending its turn.
+// Reads and merges rather than overwriting - existing hooks and settings
+// are preserved untouched, and the hook is added at most once. A
+// malformed existing file is left untouched and reported as an error
+// rather than risk corrupting it.
+func ensureSentinelHook(projectDir string) (added bool, err error) {
+	path := filepath.Join(projectDir, ".claude", "settings.json")
+
+	settings := map[string]any{}
+	data, readErr := os.ReadFile(path)
+	switch {
+	case readErr == nil:
+		if jsonErr := json.Unmarshal(data, &settings); jsonErr != nil {
+			return false, fmt.Errorf("%s has invalid JSON, leaving it untouched: %w", path, jsonErr)
+		}
+	case os.IsNotExist(readErr):
+		// settings stays the empty map created above.
+	default:
+		return false, readErr
+	}
+
+	hooks, _ := settings["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+	stopGroups, _ := hooks["Stop"].([]any)
+
+	for _, g := range stopGroups {
+		group, ok := g.(map[string]any)
+		if !ok {
+			continue
+		}
+		entries, _ := group["hooks"].([]any)
+		for _, e := range entries {
+			entry, ok := e.(map[string]any)
+			if !ok {
+				continue
+			}
+			if cmd, _ := entry["command"].(string); cmd == sentinelHookCommand {
+				return false, nil
+			}
+		}
+	}
+
+	stopGroups = append(stopGroups, map[string]any{
+		"hooks": []any{
+			map[string]any{"type": "command", "command": sentinelHookCommand},
+		},
+	})
+	hooks["Stop"] = stopGroups
+	settings["hooks"] = hooks
+
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	out = append(out, '\n')
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func isGitRepo(dir string) bool {
