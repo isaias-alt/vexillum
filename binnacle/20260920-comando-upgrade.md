@@ -60,21 +60,34 @@
   "has local changes, left untouched" - exactamente el comportamiento
   esperado.
 
+- **Ítem 2 de esa misma lista, resuelto en la misma sesión**:
+  `internal/cli/sentinel.go` ahora tiene `sentinelMode(args) (mode string,
+  err error)`, que clasifica `nil`/vacío → `"run"`, `-h`/`--help` →
+  `"help"`, `drain` → `"drain"`, cualquier otra cosa → error. `Sentinel`
+  usa esa clasificación antes de tocar el filesystem o arrancar el loop -
+  un subcomando no reconocido ahora sale con exit 1 y el usage, en vez de
+  arrancar el polling infinito en silencio. Verificado en vivo:
+  `vexillum sentinel status` ahora falla con "unknown sentinel subcommand
+  \"status\"" y exit 1. Se confirmó que el proceso accidental (pid 12336
+  del reporte anterior) ya no está corriendo (`ps aux` sin resultados) -
+  el pid file huérfano en `~/.vexillum/sentinel.pid` sigue apuntando a
+  ese pid muerto, pero no hace falta tocarlo a mano: `AcquireLock` ya
+  reclama un lock huérfano automáticamente (cubierto por
+  `TestAcquireLock_ReclaimsStaleLock`), se reclama solo en la próxima
+  corrida real. Tampoco quedó ninguna wake mal armada (`~/.vexillum/wakes/`
+  ni existe). 3 tests nuevos (`TestSentinelMode`).
+
 ## Pendiente para la próxima
 
 Según el orden que ya había fijado el general en
-`20260920-sentinel-bug-race-y-upgrade-pendiente.md` (ítem 1 de esa lista
-queda resuelto acá):
+`20260920-sentinel-bug-race-y-upgrade-pendiente.md`, quedan los ítems 1 y
+2 de esa lista resueltos acá (comando `upgrade` y el parseo de argumentos
+de `sentinel`). Queda:
 
-1. **Arreglar el parseo de argumentos de `vexillum sentinel`**: cualquier
-   `args[0]` no reconocido (ej. `status`) hoy cae al comportamiento por
-   defecto y arranca el loop infinito en vez de fallar con un error de
-   uso. Confirmar además si el proceso accidental (pid 12336 en el
-   reporte anterior) sigue vivo y matarlo si corresponde.
-2. **Repensar el diseño del sentinel** dado el bug de carrera ya
+1. **Repensar el diseño del sentinel** dado el bug de carrera ya
    documentado (dispatch síncrono le gana la carrera al polling del
    sentinel en el camino feliz). Necesita su propia sesión de diseño, no
    un parche rápido - no arrancar sin volver a alinear con el general.
-- Repo con cambios sin commitear de esta sesión (comando `upgrade`
-  completo) - falta que el general revise el mensaje de commit antes de
-  commitear, como siempre.
+- Repo con cambios sin commitear de esta sesión (comando `upgrade` +
+  arreglo de `sentinelMode`) - falta que el general revise el mensaje de
+  commit antes de commitear, como siempre.

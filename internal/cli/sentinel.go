@@ -28,9 +28,33 @@ otherwise it prints {}.
 
 const sentinelPollInterval = 5 * time.Second
 
+// sentinelMode classifies args into which action "vexillum sentinel" should
+// take. Any args[0] other than "drain"/"-h"/"--help" is an error - without
+// this, an unrecognized subcommand (a typo, a guess like "status") used to
+// fall through silently to starting the infinite polling loop.
+func sentinelMode(args []string) (mode string, err error) {
+	if len(args) == 0 {
+		return "run", nil
+	}
+	switch args[0] {
+	case "-h", "--help":
+		return "help", nil
+	case "drain":
+		return "drain", nil
+	default:
+		return "", fmt.Errorf("unknown sentinel subcommand %q", args[0])
+	}
+}
+
 // Sentinel runs the "vexillum sentinel" command.
 func Sentinel(args []string) int {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+	mode, err := sentinelMode(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprint(os.Stderr, sentinelUsage)
+		return 1
+	}
+	if mode == "help" {
 		fmt.Print(sentinelUsage)
 		return 0
 	}
@@ -41,7 +65,7 @@ func Sentinel(args []string) int {
 		return 1
 	}
 
-	if len(args) > 0 && args[0] == "drain" {
+	if mode == "drain" {
 		return runSentinelDrain(vexillumHome, os.Stdout, os.Stderr)
 	}
 
