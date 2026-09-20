@@ -12,14 +12,34 @@ CLAUDE.md, the sentinel Stop hook) to match this binary's latest version,
 without deleting and re-running 'vexillum init' from scratch.
 
 Usage:
-  vexillum upgrade
+  vexillum upgrade [--force]
+
+By default, AGENTS.md/CLAUDE.md are only refreshed when vexillum can tell
+they weren't hand-edited since it last wrote them (tracked by a stored
+content hash) - anything else is left untouched and reported instead.
+
+--force overwrites AGENTS.md/CLAUDE.md to the latest template
+regardless, including a project from before this hash tracking existed
+whose content vexillum can't otherwise vouch for. Only pass it once
+you've confirmed there's nothing local worth keeping in those files -
+it discards it.
 `
 
 // Upgrade runs the "vexillum upgrade" command.
 func Upgrade(args []string) int {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(upgradeUsage)
-		return 0
+	force := false
+	for _, a := range args {
+		switch a {
+		case "-h", "--help":
+			fmt.Print(upgradeUsage)
+			return 0
+		case "--force":
+			force = true
+		default:
+			fmt.Fprintf(os.Stderr, "vexillum: unknown upgrade flag %q\n", a)
+			fmt.Fprint(os.Stderr, upgradeUsage)
+			return 1
+		}
 	}
 
 	cwd, err := os.Getwd()
@@ -34,10 +54,10 @@ func Upgrade(args []string) int {
 		return 1
 	}
 
-	return runUpgrade(cwd, filepath.Join(home, ".vexillum"), os.Stdout, os.Stderr)
+	return runUpgrade(cwd, filepath.Join(home, ".vexillum"), force, os.Stdout, os.Stderr)
 }
 
-func runUpgrade(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
+func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.Writer) int {
 	if !projectAlreadyInitialized(projectDir) {
 		fmt.Fprintln(stderr, "vexillum: project not initialized here (no .vexillum/config.json)")
 		fmt.Fprintln(stderr, "run 'vexillum init' first.")
@@ -55,12 +75,12 @@ func runUpgrade(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	agentsResult, err := upgradeScaffoldFile(projectDir, "AGENTS.md", productAgentsMD, cfg.AgentsMDHash)
+	agentsResult, err := upgradeScaffoldFile(projectDir, "AGENTS.md", productAgentsMD, cfg.AgentsMDHash, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot upgrade AGENTS.md: %v\n", err)
 		return 1
 	}
-	claudeResult, err := upgradeScaffoldFile(projectDir, "CLAUDE.md", productClaudeMD, cfg.ClaudeMDHash)
+	claudeResult, err := upgradeScaffoldFile(projectDir, "CLAUDE.md", productClaudeMD, cfg.ClaudeMDHash, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot upgrade CLAUDE.md: %v\n", err)
 		return 1
@@ -101,8 +121,10 @@ type scaffoldResult struct {
 //   - matches the hash vexillum stored when it last wrote this file: safe
 //     to refresh, since nothing has touched it since.
 //   - anything else (no stored hash, or content diverged from that hash):
-//     the general may have edited it - left untouched, reported instead.
-func upgradeScaffoldFile(projectDir, name, latest, storedHash string) (scaffoldResult, error) {
+//     the general may have edited it - left untouched and reported
+//     instead, unless force is set (see the --force flag's own doc in
+//     upgradeUsage), which overwrites regardless.
+func upgradeScaffoldFile(projectDir, name, latest, storedHash string, force bool) (scaffoldResult, error) {
 	path := filepath.Join(projectDir, name)
 
 	data, err := os.ReadFile(path)
@@ -121,12 +143,17 @@ func upgradeScaffoldFile(projectDir, name, latest, storedHash string) (scaffoldR
 		return scaffoldResult{status: "already up to date"}, nil
 	}
 
-	if storedHash == "" || storedHash != hashContent(current) {
-		return scaffoldResult{status: "has local changes, left untouched (compare manually for the latest template)"}, nil
+	safeToRefresh := storedHash != "" && storedHash == hashContent(current)
+	if !safeToRefresh && !force {
+		return scaffoldResult{status: "has local changes, left untouched (compare manually, or rerun with --force to overwrite)"}, nil
 	}
 
 	if err := os.WriteFile(path, []byte(latest), 0o644); err != nil {
 		return scaffoldResult{}, err
 	}
-	return scaffoldResult{changed: true, status: "upgraded to the latest template"}, nil
+	status := "upgraded to the latest template"
+	if !safeToRefresh {
+		status = "force-upgraded to the latest template (local changes discarded)"
+	}
+	return scaffoldResult{changed: true, status: status}, nil
 }

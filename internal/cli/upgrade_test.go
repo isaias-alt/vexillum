@@ -15,7 +15,7 @@ func TestUpgrade_RefusesUninitializedProject(t *testing.T) {
 	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
 
 	var stdout, stderr bytes.Buffer
-	code := runUpgrade(projectDir, vexillumHome, &stdout, &stderr)
+	code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit code for an uninitialized project")
@@ -39,7 +39,7 @@ func TestUpgrade_RefreshesUntouchedScaffold(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := runUpgrade(projectDir, vexillumHome, &stdout, &stderr)
+	code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -73,7 +73,7 @@ func TestUpgrade_LeavesHandEditedFilesUntouched(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := runUpgrade(projectDir, vexillumHome, &stdout, &stderr)
+	code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -116,7 +116,7 @@ func TestUpgrade_TreatsUnknownProvenanceAsCustomized(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := runUpgrade(projectDir, vexillumHome, &stdout, &stderr)
+	code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -147,7 +147,7 @@ func TestUpgrade_RecreatesMissingFile(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := runUpgrade(projectDir, vexillumHome, &stdout, &stderr)
+	code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -165,7 +165,7 @@ func TestUpgrade_IdempotentOnSecondRun(t *testing.T) {
 	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
 		t.Fatalf("init failed: exit %d: %s", code, buf.String())
 	}
-	if code := runUpgrade(projectDir, vexillumHome, &buf, &buf); code != 0 {
+	if code := runUpgrade(projectDir, vexillumHome, false, &buf, &buf); code != 0 {
 		t.Fatalf("first upgrade failed: exit %d: %s", code, buf.String())
 	}
 
@@ -175,7 +175,7 @@ func TestUpgrade_IdempotentOnSecondRun(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := runUpgrade(projectDir, vexillumHome, &stdout, &stderr)
+	code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -210,7 +210,7 @@ func TestUpgrade_AddsMissingSentinelHook(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := runUpgrade(projectDir, vexillumHome, &stdout, &stderr)
+	code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -221,5 +221,77 @@ func TestUpgrade_AddsMissingSentinelHook(t *testing.T) {
 	}
 	if !bytes.Contains(data, []byte(sentinelHookCommand)) {
 		t.Errorf("expected settings.json to contain the sentinel hook, got: %s", data)
+	}
+}
+
+// --force overwrites a hand-edited AGENTS.md that upgrade would otherwise
+// leave untouched - the explicit escape hatch for exactly the case a
+// plain upgrade refuses to guess about.
+func TestUpgrade_ForceOverwritesHandEditedFile(t *testing.T) {
+	projectDir := t.TempDir()
+	initGitRepo(t, projectDir)
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+
+	var buf bytes.Buffer
+	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
+		t.Fatalf("init failed: exit %d: %s", code, buf.String())
+	}
+
+	agentsPath := filepath.Join(projectDir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte("# My custom commander instructions\n"), 0o644); err != nil {
+		t.Fatalf("writing custom AGENTS.md: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runUpgrade(projectDir, vexillumHome, true, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	got, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("reading AGENTS.md: %v", err)
+	}
+	if string(got) != productAgentsMD {
+		t.Error("expected --force to overwrite AGENTS.md with the latest template")
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte("discarded")) {
+		t.Errorf("expected output to warn that local changes were discarded, got: %s", stdout.String())
+	}
+}
+
+// --force also covers a project from before hash tracking existed - the
+// exact case a plain upgrade can't otherwise tell apart from a real
+// hand edit.
+func TestUpgrade_ForceCoversUnknownProvenance(t *testing.T) {
+	projectDir := t.TempDir()
+	initGitRepo(t, projectDir)
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+
+	var buf bytes.Buffer
+	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
+		t.Fatalf("init failed: exit %d: %s", code, buf.String())
+	}
+
+	if err := os.WriteFile(filepath.Join(projectDir, "AGENTS.md"), []byte("# stale pre-hash content\n"), 0o644); err != nil {
+		t.Fatalf("writing stale AGENTS.md: %v", err)
+	}
+	cfgPath := filepath.Join(projectDir, ".vexillum", "config.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"version":1,"initialized_at":"2026-01-01T00:00:00Z"}`), 0o644); err != nil {
+		t.Fatalf("stripping stored hash: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runUpgrade(projectDir, vexillumHome, true, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	got, err := os.ReadFile(filepath.Join(projectDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("reading AGENTS.md: %v", err)
+	}
+	if string(got) != productAgentsMD {
+		t.Error("expected --force to overwrite AGENTS.md even without a stored hash")
 	}
 }
