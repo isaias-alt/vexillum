@@ -357,15 +357,42 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-const sentinelHookCommand = "vexillum sentinel drain"
+const (
+	// sentinelHookCommand is registered as an async Stop hook
+	// ("asyncRewake": true, a generous "timeout"): it blocks, polling
+	// for a wake, until one appears or the timeout elapses - so the
+	// commander gets woken even if its turn already ended before a
+	// soldier settled, not just when a wake happens to already be
+	// pending at the exact moment a turn is ending. Verified live: a
+	// real asyncRewake Stop hook that sleeps then exits 2 with a stderr
+	// message woke an idle Claude Code session on its own, no new user
+	// prompt sent - "Stop hook feedback" arrived automatically.
+	sentinelHookCommand = "vexillum sentinel await"
 
-// ensureSentinelHook merges a Stop hook running `vexillum sentinel drain`
-// into the project's .claude/settings.json, so a soldier's status change
-// surfaces to the commander instead of it quietly ending its turn.
-// Reads and merges rather than overwriting - existing hooks and settings
-// are preserved untouched, and the hook is added at most once. A
-// malformed existing file is left untouched and reported as an error
-// rather than risk corrupting it.
+	// legacySentinelHookCommand is the older, synchronous-only hook
+	// (an instant check-and-return, registered without asyncRewake)
+	// this replaces. ensureSentinelHook detects and upgrades it in
+	// place instead of leaving a stale, redundant hook alongside the
+	// new one.
+	legacySentinelHookCommand = "vexillum sentinel drain"
+
+	// sentinelHookTimeoutSeconds bounds how long a single async hook
+	// invocation may block. runSentinelAwait's own internal deadline
+	// (sentinelAwaitMaxWait) stays comfortably under this so it always
+	// exits 0 cleanly on its own before Claude Code would have to kill
+	// it - Claude Code re-fires this hook on every turn end regardless,
+	// so a shorter self-imposed deadline costs nothing.
+	sentinelHookTimeoutSeconds = 3600
+)
+
+// ensureSentinelHook merges the async sentinel Stop hook into the
+// project's .claude/settings.json, so a soldier's status change surfaces
+// to the commander instead of it quietly ending its turn - even if that
+// turn already ended before anything settled. Reads and merges rather
+// than overwriting - existing hooks and settings are preserved untouched.
+// An older project's synchronous-only hook (legacySentinelHookCommand)
+// is upgraded in place, not duplicated. A malformed existing file is
+// left untouched and reported as an error rather than risk corrupting it.
 func ensureSentinelHook(projectDir string) (added bool, err error) {
 	path := filepath.Join(projectDir, ".claude", "settings.json")
 
@@ -388,30 +415,56 @@ func ensureSentinelHook(projectDir string) (added bool, err error) {
 	}
 	stopGroups, _ := hooks["Stop"].([]any)
 
+	newEntry := map[string]any{
+		"type":        "command",
+		"command":     sentinelHookCommand,
+		"asyncRewake": true,
+		"timeout":     sentinelHookTimeoutSeconds,
+	}
+
+	found := false
+	changed := false
 	for _, g := range stopGroups {
 		group, ok := g.(map[string]any)
 		if !ok {
 			continue
 		}
 		entries, _ := group["hooks"].([]any)
-		for _, e := range entries {
+		for i, e := range entries {
 			entry, ok := e.(map[string]any)
 			if !ok {
 				continue
 			}
-			if cmd, _ := entry["command"].(string); cmd == sentinelHookCommand {
-				return false, nil
+			switch cmd, _ := entry["command"].(string); cmd {
+			case sentinelHookCommand:
+				found = true
+				asyncOK, _ := entry["asyncRewake"].(bool)
+				if !asyncOK || entry["timeout"] == nil {
+					entries[i] = newEntry
+					group["hooks"] = entries
+					changed = true
+				}
+			case legacySentinelHookCommand:
+				entries[i] = newEntry
+				group["hooks"] = entries
+				found = true
+				changed = true
 			}
 		}
 	}
 
-	stopGroups = append(stopGroups, map[string]any{
-		"hooks": []any{
-			map[string]any{"type": "command", "command": sentinelHookCommand},
-		},
-	})
-	hooks["Stop"] = stopGroups
-	settings["hooks"] = hooks
+	if !found {
+		stopGroups = append(stopGroups, map[string]any{
+			"hooks": []any{newEntry},
+		})
+		hooks["Stop"] = stopGroups
+		settings["hooks"] = hooks
+		changed = true
+	}
+
+	if !changed {
+		return false, nil
+	}
 
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
