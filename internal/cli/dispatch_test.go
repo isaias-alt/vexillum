@@ -26,6 +26,7 @@ func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, e
 func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error { return nil }
 func (f *fakeHerdr) AgentSendKeys(name string, keys ...string) error                 { return nil }
 func (f *fakeHerdr) AgentReady(name string) (bool, error)                            { return true, nil }
+func (f *fakeHerdr) AgentStatus(name string) (string, error)                         { return f.promptStatus, nil }
 func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
 	return f.promptStatus, nil
 }

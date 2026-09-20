@@ -272,3 +272,108 @@ func TestInit_VexillumHomeNotWritable(t *testing.T) {
 		t.Error("expected no local scaffold left behind when ~/.vexillum/ creation fails")
 	}
 }
+
+// vexillum init adds the sentinel Stop hook to a fresh .claude/settings.json.
+func TestInit_AddsSentinelStopHook(t *testing.T) {
+	projectDir := t.TempDir()
+	initGitRepo(t, projectDir)
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+
+	var stdout, stderr bytes.Buffer
+	if code := runInit(projectDir, vexillumHome, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	added, err := ensureSentinelHook(projectDir)
+	if err != nil {
+		t.Fatalf("ensureSentinelHook (re-check): %v", err)
+	}
+	if added {
+		t.Error("expected the hook to already be present (init should have added it), but ensureSentinelHook added it again")
+	}
+
+	data, err := os.ReadFile(filepath.Join(projectDir, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatalf("reading .claude/settings.json: %v", err)
+	}
+	if !bytes.Contains(data, []byte(sentinelHookCommand)) {
+		t.Errorf("expected settings.json to contain %q, got: %s", sentinelHookCommand, data)
+	}
+}
+
+// ensureSentinelHook preserves existing settings and hooks, and never
+// adds the hook twice.
+func TestEnsureSentinelHook_MergesAndDedupes(t *testing.T) {
+	projectDir := t.TempDir()
+	settingsDir := filepath.Join(projectDir, ".claude")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	existing := `{
+  "model": "sonnet",
+  "hooks": {
+    "PostToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "prettier --write"}]}]
+  }
+}`
+	settingsPath := filepath.Join(settingsDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o644); err != nil {
+		t.Fatalf("writing existing settings: %v", err)
+	}
+
+	added, err := ensureSentinelHook(projectDir)
+	if err != nil {
+		t.Fatalf("ensureSentinelHook: %v", err)
+	}
+	if !added {
+		t.Fatal("expected the hook to be added")
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("reading settings.json: %v", err)
+	}
+	if !bytes.Contains(data, []byte(`"model": "sonnet"`)) {
+		t.Errorf("expected existing model setting to survive the merge, got: %s", data)
+	}
+	if !bytes.Contains(data, []byte("prettier --write")) {
+		t.Errorf("expected existing PostToolUse hook to survive the merge, got: %s", data)
+	}
+	if !bytes.Contains(data, []byte(sentinelHookCommand)) {
+		t.Errorf("expected the sentinel Stop hook to be present, got: %s", data)
+	}
+
+	addedAgain, err := ensureSentinelHook(projectDir)
+	if err != nil {
+		t.Fatalf("ensureSentinelHook (second call): %v", err)
+	}
+	if addedAgain {
+		t.Error("expected the second call to be a no-op, not add a duplicate hook")
+	}
+}
+
+// ensureSentinelHook refuses to touch a settings.json with invalid JSON,
+// rather than risk corrupting it.
+func TestEnsureSentinelHook_RefusesMalformedSettings(t *testing.T) {
+	projectDir := t.TempDir()
+	settingsDir := filepath.Join(projectDir, ".claude")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	settingsPath := filepath.Join(settingsDir, "settings.json")
+	malformed := []byte("{not valid json")
+	if err := os.WriteFile(settingsPath, malformed, 0o644); err != nil {
+		t.Fatalf("writing malformed settings: %v", err)
+	}
+
+	if _, err := ensureSentinelHook(projectDir); err == nil {
+		t.Fatal("expected an error for malformed settings.json")
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("reading settings.json: %v", err)
+	}
+	if !bytes.Equal(data, malformed) {
+		t.Errorf("expected the malformed file to be left untouched, got: %s", data)
+	}
+}

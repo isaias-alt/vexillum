@@ -269,6 +269,45 @@ Precondición: una tarea despachada con `dispatch`, con commits landeables.
 Acción: `vexillum land <task-id>` y después `vexillum release <task-id>`.
 Esperado: ambos resuelven el camp desde `task.CampSlot` (vía `camp.Resolve`) y delegan en `camp.Land` / `soldier.ReleaseInHerdr` - mismas garantías de seguridad ya probadas en esos paquetes.
 
+## Paso 2 - sentinel (casos concretos)
+
+`internal/sentinel`: polling (no `events.subscribe` - mismo fallback que `firstmate` documenta como "permanente", ver `docs/prd-v1.md`), no daemon con push real. `vexillum sentinel` corre el loop en foreground; `vexillum sentinel drain` es lo que llama el hook `Stop` de Claude Code (agregado por `vexillum init` a `.claude/settings.json`).
+
+**L4-12 - detectar una transición y registrar una wake**
+Precondición: una tarea con `status=running` y `herdr_agent_name` asignado; el `agent_status` real en herdr cambió (ej. a `done`).
+Acción: `sentinel.Tick`.
+Esperado: persiste el nuevo status en el `Task`; registra una `Wake` sin ack en `~/.vexillum/wakes/<id>.json`.
+
+**L4-13 - sin transición, sin wake**
+Precondición: una tarea `running` cuyo `agent_status` real sigue siendo `working` (todavía no asentó).
+Acción: `sentinel.Tick`.
+Esperado: no registra ninguna wake, no toca el `Task`. (`working` mapea a `StatusRunning`, no a fallo - bug encontrado y corregido en esta misma sesión.)
+
+**L4-14 - una wake se entrega una sola vez**
+Precondición: una wake sin ack ya registrada.
+Acción: `sentinel.Drain` dos veces seguidas.
+Esperado: la primera devuelve la wake y la marca ack; la segunda no devuelve nada.
+
+**L4-15 - drain sin wakes pendientes**
+Precondición: ninguna wake sin ack.
+Acción: `vexillum sentinel drain`.
+Esperado: imprime `{}` (formato exacto que un hook `Stop` interpreta como "dejar terminar el turno normalmente").
+
+**L4-16 - drain con wakes pendientes bloquea el `Stop`**
+Precondición: al menos una wake sin ack.
+Acción: `vexillum sentinel drain`.
+Esperado: imprime `{"decision":"block","reason":"..."}` nombrando la tarea y la transición - el hook `Stop` de Claude Code impide que el turno termine e inyecta ese motivo como contexto.
+
+**L4-17 - lock de instancia única**
+Precondición: un `vexillum sentinel` ya corriendo (o un lock huérfano de un proceso muerto).
+Acción: `sentinel.AcquireLock` de nuevo.
+Esperado: se niega si el proceso dueño del lock sigue vivo (nombra el pid); si el pid ya no existe, reclama el lock sin problema (no queda bloqueado para siempre por un proceso muerto).
+
+**L4-18 - `vexillum init` agrega el hook `Stop`**
+Precondición: proyecto sin `.claude/settings.json`, o con uno existente con otros hooks/settings.
+Acción: `vexillum init` (o `ensureSentinelHook` directamente).
+Esperado: agrega el hook de `vexillum sentinel drain` sin pisar nada existente; correrlo de nuevo no duplica el hook; un `settings.json` con JSON inválido se deja intacto y se reporta como error, nunca se sobrescribe a ciegas.
+
 ## Pendiente (pasos 2 a 5, criterios de alto nivel)
 
 - N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido.

@@ -67,6 +67,10 @@ func (f *fakeHerdr) AgentReady(name string) (bool, error) {
 	return f.readyCalls >= f.readyAfter, nil
 }
 
+func (f *fakeHerdr) AgentStatus(name string) (string, error) {
+	return f.promptStatus, nil
+}
+
 func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
 	f.promptCalls = append(f.promptCalls, text)
 	f.promptNames = append(f.promptNames, name)

@@ -18,6 +18,7 @@ Commands:
   dispatch  Dispatch a soldier (mission or scout) into an isolated camp
   land      Land a finished mission's work into the base branch
   release   Release a soldier's camp back to the pool
+  sentinel  Watch dispatched soldiers and record status changes
 
 Flags:
   -h, --help   Show this help message
@@ -47,6 +48,8 @@ func run(args []string) int {
 		return cli.Land(args[1:])
 	case "release":
 		return cli.Release(args[1:])
+	case "sentinel":
+		return cli.Sentinel(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "vexillum: unknown command %q\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run 'vexillum --help' for a list of commands.")
