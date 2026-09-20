@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -163,6 +165,53 @@ const productClaudeMD = "@AGENTS.md\n"
 type localConfig struct {
 	Version       int       `json:"version"`
 	InitializedAt time.Time `json:"initialized_at"`
+	// AgentsMDHash/ClaudeMDHash are the sha256 hex digest of the content
+	// vexillum itself last wrote to AGENTS.md/CLAUDE.md. 'vexillum upgrade'
+	// compares the file's current content against this to tell "still
+	// exactly what we wrote" (safe to refresh to the latest template) apart
+	// from "the general edited this" (leave it alone). Empty means unknown
+	// provenance (predates this tracking, or never written by vexillum).
+	AgentsMDHash string `json:"agents_md_hash,omitempty"`
+	ClaudeMDHash string `json:"claude_md_hash,omitempty"`
+}
+
+func hashContent(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
+}
+
+func readLocalConfig(projectDir string) (localConfig, error) {
+	data, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
+	if err != nil {
+		return localConfig{}, err
+	}
+	var cfg localConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return localConfig{}, err
+	}
+	return cfg, nil
+}
+
+// recordScaffoldHashes updates the stored content hash for AGENTS.md and/or
+// CLAUDE.md in .vexillum/config.json, preserving the rest of the config.
+func recordScaffoldHashes(projectDir string, updateAgents, updateClaude bool) error {
+	cfg, err := readLocalConfig(projectDir)
+	if err != nil {
+		return err
+	}
+	if updateAgents {
+		cfg.AgentsMDHash = hashContent(productAgentsMD)
+	}
+	if updateClaude {
+		cfg.ClaudeMDHash = hashContent(productClaudeMD)
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return os.WriteFile(filepath.Join(projectDir, ".vexillum", "config.json"), data, 0o644)
 }
 
 // Init runs the "vexillum init" command.
@@ -250,6 +299,11 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 		if claudeCreated {
 			fmt.Fprintln(stdout, "Created missing CLAUDE.md")
 		}
+		if agentsCreated || claudeCreated {
+			if err := recordScaffoldHashes(projectDir, agentsCreated, claudeCreated); err != nil {
+				fmt.Fprintf(stderr, "vexillum: warning: could not record scaffold hash: %v\n", err)
+			}
+		}
 		fmt.Fprintln(stdout, "Project already initialized (found .vexillum/config.json); restored the missing piece(s) above.")
 		return 0
 	}
@@ -263,6 +317,11 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "Created CLAUDE.md")
 	} else {
 		fmt.Fprintln(stdout, "CLAUDE.md already exists, left untouched")
+	}
+	if agentsCreated || claudeCreated {
+		if err := recordScaffoldHashes(projectDir, agentsCreated, claudeCreated); err != nil {
+			fmt.Fprintf(stderr, "vexillum: warning: could not record scaffold hash: %v\n", err)
+		}
 	}
 
 	fmt.Fprintln(stdout, "vexillum initialized.")
