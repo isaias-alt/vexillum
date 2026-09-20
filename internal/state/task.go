@@ -29,7 +29,8 @@ import (
 // of headless.
 const SchemaVersion = 3
 
-// Kind distinguishes a mission (delivers a PR) from a scout (delivers a
+// Kind distinguishes a mission (delivers code changes, landed locally via
+// vexillum land - v1 never opens a real PR) from a scout (delivers a
 // report).
 type Kind string
 

@@ -14,7 +14,7 @@ Este PRD cubre la **v1** y está seccionado por capas de construcción. La Capa 
 | Orquestador (le hablás vos) | commander |
 | Subagentes ejecutores | soldiers |
 | El humano (vos) | general |
-| Tarea que cambia código y entrega PR | mission |
+| Tarea que cambia código y aterriza local (`vexillum land`) | mission |
 | Tarea que solo investiga y deja reporte | scout |
 | Worktree aislado de cada tarea | camp |
 | Componente de supervisión (watcher) | sentinel |
@@ -106,7 +106,7 @@ Lanzar UN solo soldier: spawnear una instancia de Claude Code en un camp (git wo
 
 El camp es un slot de un pool de worktrees reutilizables por proyecto (inspirado en treehouse, ver `docs/references.md`), no un worktree que se crea y se destruye por tarea: un slot se libera al pool solo cuando está limpio (sin cambios sin commitear) y "aterrizado" (sus commits ya están mergeados en la rama base); nunca se destruye el worktree en sí, se devuelve limpio para que la próxima tarea lo reutilice (dependencias y build cache intactos).
 
-**Pendiente de decidir**: cómo entrega sus cambios una mission (equivalente al concepto de "modo de proyecto" de firstmate: `no-mistakes` / `direct-PR` / `local-only`, ver `docs/references.md`). No se definió en esta capa porque no hay flota ni gate todavía; hay que resolverlo antes de que una mission necesite abrir un PR de verdad (a más tardar en Capa 4, que es donde el PRD dice que "una mission termina entregando cambios de código").
+**Resuelto en Capa 4, paso 1** (esta nota quedó pendiente en su momento - ver "Decisiones tomadas en el paso 1" más abajo para el detalle): cómo entrega sus cambios una mission (equivalente al concepto de "modo de proyecto" de firstmate: `no-mistakes` / `direct-PR` / `local-only`, ver `docs/references.md`). vexillum v1 solo implementa `local-only` - `camp.Land` aterriza con un fast-forward local al estilo `fm-merge-local.sh` de firstmate, nunca abre un PR de verdad. `no-mistakes` y `direct-PR` (que sí abren un PR real en un forge) quedan fuera de alcance de v1 - no hay decisión pendiente al respecto, es una limitación de alcance consciente.
 
 ---
 
@@ -114,7 +114,7 @@ El camp es un slot de un pool de worktrees reutilizables por proyecto (inspirado
 
 El corazón y el pico de dificultad. Varios soldiers en paralelo, cada uno en su camp, coordinados por el commander. El sentinel implementa la supervisión event-driven zero-token: en vez de sondear a ciegas, consulta la socket API de herdr para saber qué soldier está bloqueado o terminó, y despierta al commander solo cuando hace falta. Restart-proof completo: matar la sesión y reconciliar el estado de dominio desde disco al reiniciar (herdr restaura el layout visual pero no el proceso ni el estado de tarea; esa mitad la persiste vexillum).
 
-Las dos formas de tarea (mission y scout) se materializan en esta capa: mission entrega cambios de código (un PR), scout deja un reporte de investigación.
+Las dos formas de tarea (mission y scout) se materializan en esta capa: mission entrega cambios de código (aterrizados localmente con `vexillum land`, no un PR - ver la nota resuelta en Capa 3 y "Decisiones tomadas en el paso 1" más abajo), scout deja un reporte de investigación.
 
 **División interna de Capa 4 en pasos verificables** (ver `docs/test-cases.md`): 1) soldier real en un pane de herdr, todavía secuencial - hecho; 2) sentinel event-driven; 3) N soldiers en paralelo; 4) restart-proof; 5) aislamiento de fallos.
 
