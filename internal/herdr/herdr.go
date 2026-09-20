@@ -101,6 +101,18 @@ func IsNameTaken(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.Code == "agent_name_taken"
 }
 
+// IsTimeout reports whether err is the "timeout" APIError herdr returns
+// when a caller-supplied --timeout on "agent prompt --wait" expires
+// before the agent settles ("herdr agent prompt --help": "A caller
+// timeout that expires first returns timeout"). internal/soldier uses a
+// short timeout as a quick-settle probe rather than a failure signal -
+// this lets it tell "still working, the sentinel will pick it up" apart
+// from a real error.
+func IsTimeout(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Code == "timeout"
+}
+
 // CLI is the real Client, implemented by shelling out to the `herdr`
 // binary.
 type CLI struct{}

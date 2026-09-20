@@ -49,6 +49,12 @@ func wakePath(vexillumHome, taskID string) string {
 	return filepath.Join(wakesDir(vexillumHome), taskID+".json")
 }
 
+// tickReadLines matches soldier.defaultReadLines: the sentinel is now
+// the one that captures a task's final output for any soldier that
+// outlives dispatch's own short quick-settle probe (internal/soldier's
+// RunInHerdr doc comment), which is the normal case for real work.
+const tickReadLines = 500
+
 // Tick checks every task currently marked running against its live herdr
 // agent status, persists any status change, and records a wake for it.
 // Returns how many wakes it recorded. A transient read failure on one
@@ -78,6 +84,14 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 		old := task.Status
 		task.Status = newStatus
 		task.UpdatedAt = time.Now().UTC()
+		// Every transition reaching here settles a Running task into a
+		// terminal one (MapAgentStatus never re-maps live status back to
+		// Running once it's left it) - capture its final transcript now,
+		// since dispatch's own quick-settle probe usually returned long
+		// before this point.
+		if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
+			task.Output = output
+		}
 		if err := state.Save(vexillumHome, task); err != nil {
 			return woke, fmt.Errorf("persisting task %s: %w", task.ID, err)
 		}
@@ -168,6 +182,21 @@ func AcquireLock(vexillumHome string) (release func(), err error) {
 		return nil, err
 	}
 	return func() { _ = os.Remove(path) }, nil
+}
+
+// IsRunning reports whether a sentinel process is currently alive for
+// vexillumHome, without claiming the lock itself - internal/cli uses
+// this to decide whether dispatch needs to auto-start one.
+func IsRunning(vexillumHome string) bool {
+	data, err := os.ReadFile(lockPath(vexillumHome))
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return false
+	}
+	return processAlive(pid)
 }
 
 func processAlive(pid int) bool {

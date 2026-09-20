@@ -41,19 +41,18 @@ as you learn what works for this project.
 
 ## The sentinel
 
-Start it once per project, in the background, if it isn't already
-running:
+` + "`vexillum dispatch`" + ` auto-starts one in the background if none is running
+yet, so you normally don't need to think about it. It polls every
+dispatched soldier's live status and, when one settles, surfaces that to
+you: a Claude Code Stop hook (wired up by ` + "`vexillum init`" + `) blocks your
+turn from quietly ending and tells you what changed - just keep doing
+other things (or talk to the general) while a soldier works, and you'll
+be interrupted with the update the next time you'd otherwise stop.
 
-` + "```" + `
-vexillum sentinel
-` + "```" + `
-
-It polls every dispatched soldier's live status and, when one settles, it
-surfaces that to you automatically: a Claude Code Stop hook (wired up by
-` + "`vexillum init`" + `) blocks your turn from quietly ending and tells you what
-changed, so you don't have to remember to check. If it's already running
-(` + "`vexillum sentinel`" + ` refuses with "a sentinel is already running" naming
-its pid), that's fine - don't start a second one.
+If you ever need to start one yourself (e.g. the auto-start failed -
+` + "`vexillum dispatch`" + ` warns on stderr if so), run ` + "`vexillum sentinel`" + ` in
+the background yourself. It refuses a second one ("a sentinel is already
+running", naming its pid) - that's fine, don't start another.
 
 If your turn is about to end and you're told a soldier's status changed,
 that's the sentinel - go check on it (report to the general, or
@@ -87,13 +86,14 @@ nothing a soldier does reaches this project's real history until you
 explicitly approve landing it. A soldier can still come back blocked if
 Claude Code asks a genuine clarifying question, just rarely.
 
-**Run it in the background, not inline.** The command blocks until the
-soldier settles (there's no sentinel yet to watch it for you), so running
-it in the foreground makes you go silent and unresponsive to the general
-for that whole time - which defeats the point of dispatching a soldier
-instead of doing the work yourself. Use your Bash tool's
-background-execution option (not ` + "`&`" + `/` + "`nohup`" + ` by hand), tell the general
-it's underway, and report back when you're notified it's done.
+**It returns quickly, not when the soldier finishes.** It only waits out
+a short probe (a handful of seconds) to catch trivial prompts that settle
+immediately - anything else is left running, and you'll find out it
+settled from the sentinel (see above), not from this command's own
+output. Run it inline, not backgrounded - there's nothing to wait out
+yourself anymore. Note the task id it reports if it's still running, tell
+the general it's underway, and move on to other things until the Stop
+hook interrupts you with the update.
 
 **Report the outcome, not the plumbing.** When a soldier finishes, tell
 the general what got done the way you'd report work you did yourself -

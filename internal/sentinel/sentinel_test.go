@@ -13,8 +13,9 @@ import (
 // fakeHerdr implements just enough of herdr.Client for these tests
 // (AgentStatus is all Tick uses); the rest are no-ops.
 type fakeHerdr struct {
-	statuses map[string]string
-	err      error
+	statuses   map[string]string
+	err        error
+	readOutput string
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
@@ -30,7 +31,7 @@ func (f *fakeHerdr) AgentStatus(name string) (string, error) {
 	return f.statuses[name], nil
 }
 func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) { return "", nil }
-func (f *fakeHerdr) AgentRead(name string, lines int) (string, error)             { return "", nil }
+func (f *fakeHerdr) AgentRead(name string, lines int) (string, error)             { return f.readOutput, nil }
 func (f *fakeHerdr) TabClose(tabID string) error                                  { return nil }
 
 func newRunningTask(t *testing.T, home, agentName string) state.Task {
@@ -77,6 +78,32 @@ func TestTick_RecordsWakeOnTransition(t *testing.T) {
 	}
 	if len(wakes) != 1 || wakes[0].TaskID != task.ID || wakes[0].NewStatus != state.StatusDone {
 		t.Errorf("expected one drained wake for %s -> done, got %+v", task.ID, wakes)
+	}
+}
+
+// A task that settles captures its final transcript, since dispatch's
+// own quick-settle probe (internal/soldier.RunInHerdr) usually returns
+// long before real work finishes - the sentinel is now the one that
+// reads it.
+func TestTick_CapturesOutputOnTransition(t *testing.T) {
+	home := t.TempDir()
+	task := newRunningTask(t, home, "vx-do-the-thing")
+
+	client := &fakeHerdr{
+		statuses:   map[string]string{"vx-do-the-thing": "done"},
+		readOutput: "soldier: all done, opened PR #4",
+	}
+
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	persisted, err := state.Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Output != "soldier: all done, opened PR #4" {
+		t.Errorf("expected captured output, got %q", persisted.Output)
 	}
 }
 
@@ -220,4 +247,41 @@ func TestAcquireLock_ReclaimsStaleLock(t *testing.T) {
 		t.Fatalf("expected AcquireLock to reclaim a stale lock, got: %v", err)
 	}
 	release()
+}
+
+// IsRunning reflects a live lock without claiming it itself - dispatch
+// uses this to decide whether to auto-start a sentinel.
+func TestIsRunning(t *testing.T) {
+	home := t.TempDir()
+
+	if sentinel.IsRunning(home) {
+		t.Error("expected IsRunning to be false with no lock file at all")
+	}
+
+	release, err := sentinel.AcquireLock(home)
+	if err != nil {
+		t.Fatalf("AcquireLock: %v", err)
+	}
+	if !sentinel.IsRunning(home) {
+		t.Error("expected IsRunning to be true while this process holds the lock")
+	}
+
+	release()
+	if sentinel.IsRunning(home) {
+		t.Error("expected IsRunning to be false after the lock was released")
+	}
+}
+
+// A stale lock file (dead pid) reads as not running, same as
+// AcquireLock's own reclaim logic.
+func TestIsRunning_FalseForStaleLock(t *testing.T) {
+	home := t.TempDir()
+	const deadPID = 999999
+	if err := os.WriteFile(filepath.Join(home, "sentinel.pid"), []byte(strconv.Itoa(deadPID)), 0o644); err != nil {
+		t.Fatalf("writing stale lock: %v", err)
+	}
+
+	if sentinel.IsRunning(home) {
+		t.Error("expected IsRunning to be false for a stale pid")
+	}
 }
