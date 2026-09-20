@@ -25,6 +25,7 @@ func TestSentinelMode(t *testing.T) {
 		{args: []string{"-h"}, want: "help"},
 		{args: []string{"--help"}, want: "help"},
 		{args: []string{"drain"}, want: "drain"},
+		{args: []string{"await"}, want: "await"},
 		{args: []string{"status"}, wantErr: true},
 		{args: []string{"drain", "extra"}, want: "drain"},
 	}
@@ -98,5 +99,85 @@ func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 	}
 	if !strings.Contains(got, task.ID) {
 		t.Errorf("expected the reason to name the task id, got: %s", got)
+	}
+}
+
+// runSentinelAwait is what the async Stop hook actually calls. A wake
+// already pending when it's invoked is found on its very first check -
+// exit 2 with the reason on stderr, the block signal a real asyncRewake
+// hook uses (verified live against a real Claude Code session).
+func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
+	home := t.TempDir()
+
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = "vx-do-the-thing"
+	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	client := &fakeHerdr{promptStatus: "done"}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("sentinel.Tick: %v", err)
+	}
+
+	var stderr bytes.Buffer
+	code := runSentinelAwait(home, time.Hour, time.Millisecond, &stderr)
+	if code != 2 {
+		t.Fatalf("expected exit 2, got %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), task.ID) {
+		t.Errorf("expected the reason to name the task id, got: %s", stderr.String())
+	}
+}
+
+// With nothing ever pending, runSentinelAwait exits 0 once maxWait
+// elapses - the async hook lets the turn end quietly, same as
+// runSentinelDrain's {} for the instant-check case.
+func TestRunSentinelAwait_TimesOutWithNothingPending(t *testing.T) {
+	home := t.TempDir()
+
+	var stderr bytes.Buffer
+	code := runSentinelAwait(home, 20*time.Millisecond, 5*time.Millisecond, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0 on timeout, got %d: %s", code, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Errorf("expected no output on a silent timeout, got: %s", stderr.String())
+	}
+}
+
+// A wake that only shows up after a couple of poll cycles is still
+// found before maxWait elapses - not just on the very first check.
+func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
+	home := t.TempDir()
+
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = "vx-do-the-thing"
+	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{promptStatus: "done"}
+	go func() {
+		time.Sleep(15 * time.Millisecond)
+		_, _ = sentinel.Tick(home, client)
+	}()
+
+	var stderr bytes.Buffer
+	code := runSentinelAwait(home, time.Second, 5*time.Millisecond, &stderr)
+	if code != 2 {
+		t.Fatalf("expected exit 2 once the wake appeared, got %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), task.ID) {
+		t.Errorf("expected the reason to name the task id, got: %s", stderr.String())
 	}
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -299,6 +300,125 @@ func TestInit_AddsSentinelStopHook(t *testing.T) {
 	if !bytes.Contains(data, []byte(sentinelHookCommand)) {
 		t.Errorf("expected settings.json to contain %q, got: %s", sentinelHookCommand, data)
 	}
+}
+
+// The hook init writes has the async fields set - verified live that a
+// real asyncRewake Stop hook wakes an idle Claude Code session with no
+// new user prompt, which a synchronous-only hook cannot do.
+func TestInit_SentinelStopHookIsAsync(t *testing.T) {
+	projectDir := t.TempDir()
+	initGitRepo(t, projectDir)
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+
+	var stdout, stderr bytes.Buffer
+	if code := runInit(projectDir, vexillumHome, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	data, err := os.ReadFile(filepath.Join(projectDir, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatalf("reading .claude/settings.json: %v", err)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatalf("parsing settings.json: %v", err)
+	}
+	entry := findStopHookEntry(t, settings, sentinelHookCommand)
+	if asyncRewake, _ := entry["asyncRewake"].(bool); !asyncRewake {
+		t.Errorf("expected asyncRewake: true on the sentinel hook, got: %+v", entry)
+	}
+	if entry["timeout"] == nil {
+		t.Errorf("expected a timeout on the sentinel hook, got: %+v", entry)
+	}
+}
+
+// A project initialized with an older vexillum has the synchronous-only
+// hook (legacySentinelHookCommand, no asyncRewake) registered.
+// ensureSentinelHook must upgrade it in place - replace it with the new
+// async hook - not leave it as a stale duplicate alongside the new one.
+func TestEnsureSentinelHook_UpgradesLegacySyncHook(t *testing.T) {
+	projectDir := t.TempDir()
+	settingsDir := filepath.Join(projectDir, ".claude")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	legacy := `{
+  "hooks": {
+    "Stop": [{"hooks": [{"type": "command", "command": "vexillum sentinel drain"}]}]
+  }
+}`
+	settingsPath := filepath.Join(settingsDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte(legacy), 0o644); err != nil {
+		t.Fatalf("writing legacy settings: %v", err)
+	}
+
+	added, err := ensureSentinelHook(projectDir)
+	if err != nil {
+		t.Fatalf("ensureSentinelHook: %v", err)
+	}
+	if !added {
+		t.Fatal("expected the legacy hook to be upgraded (reported as a change)")
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("reading settings.json: %v", err)
+	}
+	if bytes.Contains(data, []byte(legacySentinelHookCommand)) {
+		t.Errorf("expected the legacy hook command to be gone, got: %s", data)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatalf("parsing settings.json: %v", err)
+	}
+	stopGroups, _ := settings["hooks"].(map[string]any)["Stop"].([]any)
+	entryCount := 0
+	for _, g := range stopGroups {
+		group, _ := g.(map[string]any)
+		entries, _ := group["hooks"].([]any)
+		entryCount += len(entries)
+	}
+	if entryCount != 1 {
+		t.Errorf("expected exactly one Stop hook entry after upgrading, got %d", entryCount)
+	}
+
+	entry := findStopHookEntry(t, settings, sentinelHookCommand)
+	if asyncRewake, _ := entry["asyncRewake"].(bool); !asyncRewake {
+		t.Errorf("expected the upgraded hook to have asyncRewake: true, got: %+v", entry)
+	}
+
+	// Re-running is a no-op: the upgraded hook is already current.
+	addedAgain, err := ensureSentinelHook(projectDir)
+	if err != nil {
+		t.Fatalf("ensureSentinelHook (second call): %v", err)
+	}
+	if addedAgain {
+		t.Error("expected the second call to be a no-op after the upgrade")
+	}
+}
+
+func findStopHookEntry(t *testing.T, settings map[string]any, command string) map[string]any {
+	t.Helper()
+	hooks, _ := settings["hooks"].(map[string]any)
+	stopGroups, _ := hooks["Stop"].([]any)
+	for _, g := range stopGroups {
+		group, ok := g.(map[string]any)
+		if !ok {
+			continue
+		}
+		entries, _ := group["hooks"].([]any)
+		for _, e := range entries {
+			entry, ok := e.(map[string]any)
+			if !ok {
+				continue
+			}
+			if cmd, _ := entry["command"].(string); cmd == command {
+				return entry
+			}
+		}
+	}
+	t.Fatalf("no Stop hook entry found with command %q in %+v", command, settings)
+	return nil
 }
 
 // ensureSentinelHook preserves existing settings and hooks, and never
