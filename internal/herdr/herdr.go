@@ -101,6 +101,32 @@ func IsNameTaken(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.Code == "agent_name_taken"
 }
 
+// IsNotFound reports whether err is the "agent_not_found" APIError herdr
+// returns when the named agent doesn't exist - verified live
+// (`herdr agent get <bogus-name>` -> {"error":{"code":"agent_not_found",...}}).
+// A real pane teardown (closed by hand, herdr restarted and lost session
+// state), not a transient read hiccup - internal/sentinel uses this to
+// eventually mark a task whose agent is genuinely gone as interrupted,
+// instead of leaving it Running forever.
+func IsNotFound(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Code == "agent_not_found"
+}
+
+// IsStalled reports whether err is the "agent_prompt_stalled" APIError
+// herdr returns when "agent prompt --wait" never observes a
+// working/blocked transition within herdr's own internal ~5s bound -
+// observed live right after a freshly started agent, where the pane's
+// prompt line reads back completely empty afterward (confirmed via
+// "agent read"): the text was never actually injected, not merely
+// unobserved. A plain retry of the same prompt call resolved instantly
+// in that same live test, so this is a startup race safe to retry, the
+// same way agent_pane_busy already is.
+func IsStalled(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Code == "agent_prompt_stalled"
+}
+
 // IsTimeout reports whether err is the "timeout" APIError herdr returns
 // when a caller-supplied --timeout on "agent prompt --wait" expires
 // before the agent settles ("herdr agent prompt --help": "A caller

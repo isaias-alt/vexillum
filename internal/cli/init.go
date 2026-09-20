@@ -58,6 +58,15 @@ If your turn is about to end and you're told a soldier's status changed,
 that's the sentinel - go check on it (report to the general, or
 land/release as appropriate) before actually stopping.
 
+A status of "interrupted" (instead of the usual done/blocked) means the
+sentinel lost the soldier itself, not that it failed at its task - its
+herdr pane disappeared (closed by hand, or herdr restarted) while it was
+still working. Check its camp directly (` + "`git log`" + `/` + "`git status`" + `) before
+assuming nothing happened: any work it had already committed is still
+there and can still be landed normally. There's no automatic way to
+resume it yet - tell the general what you found and ask whether to
+re-dispatch the remaining work as a fresh mission.
+
 ## Dispatching a soldier
 
 **Do NOT use your own Agent/Task tool for this.** That spawns your own

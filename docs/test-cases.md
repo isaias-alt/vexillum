@@ -308,12 +308,46 @@ Precondición: proyecto sin `.claude/settings.json`, o con uno existente con otr
 Acción: `vexillum init` (o `ensureSentinelHook` directamente).
 Esperado: agrega el hook de `vexillum sentinel drain` sin pisar nada existente; correrlo de nuevo no duplica el hook; un `settings.json` con JSON inválido se deja intacto y se reporta como error, nunca se sobrescribe a ciegas.
 
-## Pendiente (pasos 2 a 5, criterios de alto nivel)
+**L4-19 - `dispatch` no se autoreporta para trabajo real**
+Precondición: un soldier real que tarda más que el sondeo rápido (`quickSettleTimeoutMS`, 15s).
+Acción: `vexillum dispatch`.
+Esperado: vuelve tras el sondeo corto con `status=running`, no bloquea hasta que el soldier termina; el sentinel (auto-arrancado si no había uno corriendo) es quien detecta y persiste la transición final más tarde. Verificado en vivo (ver binnacle `20260920-sentinel-rediseno-async.md` y `20260920-bugs-primera-prueba-en-vivo.md`).
 
-- N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido.
-- El sentinel detecta, vía la socket API de herdr, qué soldier está bloqueado o terminó, sin sondeo activo que gaste tokens (push vía `events.subscribe`, con fallback a polling).
-- El sentinel despierta al commander solo cuando hay algo que atender (un soldier bloqueado o terminado), no en cada ciclo.
-- Restart-proof: matar la sesión entera y volver a levantar vexillum reconstruye el estado de todas las tareas desde disco (reconciliando contra `pane.list` real de herdr); los soldiers que se puedan resumir se resumen, los que no, quedan marcados como interrumpidos. herdr restaura el layout visual; el estado de dominio lo restaura vexillum.
-- Una mission termina entregando cambios de código (un PR); un scout termina dejando un reporte de investigación; ambos resultados quedan persistidos y asociados a su tarea.
-- Un soldier que falla no tumba a los demás ni al commander; su fallo queda aislado y reflejado en su estado.
-- Dos soldiers nunca comparten el mismo camp ni la misma rama.
+**L4-20 - el sentinel no confunde "recién arrancado" con "terminado"**
+Precondición: un soldier recién despachado, con el sentinel corriendo en paralelo.
+Acción: `sentinel.Tick` sondea el estado en vivo casi al mismo tiempo que `dispatch` somete el prompt.
+Esperado: ignora cualquier tarea `running` cuyo `UpdatedAt` sea más reciente que `settleGracePeriod` (8s) - un `idle` leído en esa ventana (el agente todavía no arrancó a procesar el prompt) nunca se confunde con un asentamiento real. Bug real encontrado y arreglado en vivo (ver binnacle `20260920-bugs-primera-prueba-en-vivo.md`).
+
+**L4-21 - despachar desde adentro de un camp se rechaza**
+Precondición: el directorio de trabajo actual es un camp (`projectDir` está bajo `vexillumHome`).
+Acción: `vexillum dispatch`/`init`/`upgrade`/`land`/`release`/`sentinel`.
+Esperado: falla con un mensaje claro en vez de crear un pool de camps fantasma bajo el hash de la ruta del camp. Bug real encontrado y arreglado en vivo.
+
+**L4-22 - un agente genuinamente desaparecido marca la tarea `interrupted`, no la deja `running` para siempre**
+Precondición: una tarea `running` cuyo agente de herdr fue destruido de verdad (pane cerrado a mano, herdr reiniciado) - `AgentStatus` devuelve `agent_not_found`, no un error transitorio.
+Acción: `sentinel.Tick`, repetido a lo largo de `notFoundConfirmWindow` (10s).
+Esperado: la primera observación de `agent_not_found` solo registra el momento (`AgentNotFoundSince`), sin tocar el estado - evita condenar a una tarea por un hipo pasajero de herdr. Si sigue sin encontrarse pasado el período de confirmación, la tarea pasa a `state.StatusInterrupted`, se registra una wake, y se anota en `Output` que el pane desapareció. Si el agente se resuelve bien en el medio (era un hipo, no una desaparición real), la marca se limpia. Verificado en vivo: se cerró el pane de una mission real a mano, y quedó `interrupted` exactamente 10s después de la primera observación (ver binnacle `20260920-restart-proof-agente-desaparecido.md`).
+
+**L4-23 - un `agent prompt` "atascado" se reintenta, no se trata como fallo**
+Precondición: `agent prompt --wait` devuelve `agent_prompt_stalled` (herdr no observó `working`/`blocked` en su propia ventana interna de ~5s) - observado en vivo justo después de arrancar un agente recién creado, con el prompt nunca inyectado en el pane (confirmado leyendo la transcripción, vacía).
+Acción: `soldier.RunInHerdr`.
+Esperado: reintenta el envío del prompt hasta `promptStalledMaxAttempts` (3) antes de fallar - un reintento simple lo resolvió al instante en la prueba en vivo. Solo falla la tarea si sigue atascado después de agotar los reintentos.
+
+**L4-24 - el nombre de fallback por colisión nunca excede el límite de herdr**
+Precondición: el nombre candidato del agente ya está en el límite de 32 caracteres de herdr, y colisiona con un agente vivo (`agent_name_taken`).
+Acción: `soldier.RunInHerdr` (vía `disambiguatedName`).
+Esperado: el nombre de fallback (candidato + sufijo) se trunca para nunca superar 32 caracteres, en vez de que herdr lo rechace con `invalid_agent_name` - encontrado en vivo con el prompt "Write a Python module implementing a simple binary search tree..." (candidato de 32 caracteres exactos).
+
+**L4-25 - una lectura de estado fallida no tumba el resto del tick**
+Precondición: una tarea `running` cuyo `AgentStatus` falla con un error transitorio genérico (no `agent_not_found`, no un error estructurado de herdr).
+Acción: `sentinel.Tick` sobre una lista con esa tarea (y, en el caso real, otras tareas junto a ella).
+Esperado: la tarea con la lectura fallida se saltea (sin wake, sin cambio de estado) - `Tick` no devuelve error ni aborta el resto del loop; cualquier otra tarea en la misma corrida se procesa igual.
+
+## Pendiente (pasos 3 y 5, criterios de alto nivel; paso 4 mayormente cubierto)
+
+- N soldiers corren en paralelo, cada uno en su propio camp, sin pisarse entre ellos ni corromper estado compartido - probado informalmente (mission + scout en simultáneo), falta formalizar con casos concretos.
+- El sentinel detecta, vía la socket API de herdr, qué soldier está bloqueado o terminó, sin sondeo activo que gaste tokens (push vía `events.subscribe`, con fallback a polling) - decisión consciente de quedarse solo con el fallback de polling (ver binnacle `20260920-sentinel-paso2.md`), no pendiente.
+- Restart-proof: ✅ cubierto en la parte de reconciliación (L4-19, L4-20, L4-22) - una tarea que quedó `running` huérfana (ya sea porque `vexillum` murió a mitad de dispatch, o porque el agente mismo desapareció) siempre se resuelve, nunca queda colgada para siempre. **Todavía sin implementar**: la parte de "los que se puedan resumir se resumen" - hoy una tarea `interrupted` solo se detecta y reporta, no hay ningún mecanismo para relanzar un agente en el mismo camp/rama continuando el trabajo.
+- Una mission termina entregando cambios de código (un PR); un scout termina dejando un reporte de investigación; ambos resultados quedan persistidos y asociados a su tarea. - cubierto por Capa 3/4 paso 1.
+- Un soldier que falla no tumba a los demás ni al commander; su fallo queda aislado y reflejado en su estado - cubierto estructuralmente (ver L4-25), falta un caso formal con múltiples soldiers reales en paralelo, uno de ellos fallando.
+- Dos soldiers nunca comparten el mismo camp ni la misma rama - cubierto por el pool de camps de Capa 3 (cada `camp.Acquire` asigna un slot propio); L4-21 cierra el caso donde un comando corrido desde el lugar equivocado podía romper esta garantía.

@@ -47,6 +47,14 @@ const (
 	StatusBlocked Status = "blocked"
 	StatusDone    Status = "done"
 	StatusFailed  Status = "failed"
+	// StatusInterrupted marks a task whose herdr agent genuinely
+	// disappeared (pane closed, herdr restarted and lost session state)
+	// while it was Running - internal/sentinel.Tick sets this once it's
+	// confirmed the agent is gone, not just unreachable for a moment.
+	// Distinct from StatusFailed: the soldier didn't necessarily do
+	// anything wrong, vexillum just lost the ability to observe it -
+	// any work it had already committed is still sitting in its camp.
+	StatusInterrupted Status = "interrupted"
 )
 
 // Task is a mission or scout, serialized to JSON in ~/.vexillum/tasks/.
@@ -80,6 +88,14 @@ type Task struct {
 	HerdrTabID       string `json:"herdr_tab_id,omitempty"`
 	HerdrPaneID      string `json:"herdr_pane_id,omitempty"`
 	HerdrAgentName   string `json:"herdr_agent_name,omitempty"`
+
+	// AgentNotFoundSince marks when internal/sentinel.Tick first observed
+	// this task's herdr agent as gone (herdr's specific "agent_not_found",
+	// not a transient read error) - zero means never observed missing.
+	// Purely additive: an older task file without it just decodes to the
+	// zero value, which already means exactly "never observed missing",
+	// so this does not need a SchemaVersion bump.
+	AgentNotFoundSince time.Time `json:"agent_not_found_since,omitzero"`
 }
 
 // New creates a Task of the given kind with a fresh unique ID, in

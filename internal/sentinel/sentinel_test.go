@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -239,6 +240,129 @@ func TestTick_ToleratesTransientReadFailure(t *testing.T) {
 type errFake struct{}
 
 func (errFake) Error() string { return "transient herdr read failure" }
+
+// The first time Tick sees a task's agent as genuinely gone
+// (agent_not_found, not a generic read error), it just records the
+// moment - it doesn't interrupt the task yet, in case this is only a
+// momentary blip.
+func TestTick_FirstNotFoundJustMarksIt(t *testing.T) {
+	home := t.TempDir()
+	task := newRunningTask(t, home, "vx-do-the-thing")
+
+	client := &fakeHerdr{err: &herdr.APIError{Code: "agent_not_found", Message: "agent target vx-do-the-thing not found"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected 0 wakes on the first not-found observation, got %d", woke)
+	}
+
+	persisted, err := state.Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running on the first observation, got %s", persisted.Status)
+	}
+	if persisted.AgentNotFoundSince.IsZero() {
+		t.Error("expected AgentNotFoundSince to be recorded")
+	}
+}
+
+// A second not-found observation still within the confirm window
+// doesn't interrupt the task yet either.
+func TestTick_NotFoundWithinConfirmWindowDoesNotInterrupt(t *testing.T) {
+	home := t.TempDir()
+	task := newRunningTask(t, home, "vx-do-the-thing")
+	task.AgentNotFoundSince = time.Now().Add(-3 * time.Second)
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{err: &herdr.APIError{Code: "agent_not_found", Message: "agent target vx-do-the-thing not found"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected 0 wakes within the confirm window, got %d", woke)
+	}
+
+	persisted, err := state.Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running within the confirm window, got %s", persisted.Status)
+	}
+}
+
+// A task whose agent has been confirmed gone (not-found held true past
+// the confirm window) is marked interrupted, and a wake is recorded for
+// it - the fix for the restart-proof gap: an agent that's genuinely
+// disappeared no longer leaves its task Running forever.
+func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
+	home := t.TempDir()
+	task := newRunningTask(t, home, "vx-do-the-thing")
+	task.AgentNotFoundSince = time.Now().Add(-11 * time.Second)
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{err: &herdr.APIError{Code: "agent_not_found", Message: "agent target vx-do-the-thing not found"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("expected 1 wake once the confirm window elapses, got %d", woke)
+	}
+
+	persisted, err := state.Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusInterrupted {
+		t.Errorf("expected status interrupted, got %s", persisted.Status)
+	}
+
+	wakes, err := sentinel.Drain(home)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 || wakes[0].TaskID != task.ID || wakes[0].NewStatus != state.StatusInterrupted {
+		t.Errorf("expected one drained wake for %s -> interrupted, got %+v", task.ID, wakes)
+	}
+}
+
+// A prior not-found mark is cleared once the agent resolves fine again -
+// a blip, not a real teardown - so a later genuine disappearance starts
+// its own fresh confirmation window rather than interrupting instantly.
+func TestTick_RecoveringFromNotFoundClearsTheMark(t *testing.T) {
+	home := t.TempDir()
+	task := newRunningTask(t, home, "vx-do-the-thing")
+	task.AgentNotFoundSince = time.Now().Add(-3 * time.Second)
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	persisted, err := state.Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !persisted.AgentNotFoundSince.IsZero() {
+		t.Error("expected AgentNotFoundSince to be cleared after the agent resolved fine again")
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running, got %s", persisted.Status)
+	}
+}
 
 // Sanity: Drain on a project with no wakes yet returns an empty slice,
 // not an error.

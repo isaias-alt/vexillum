@@ -25,6 +25,14 @@ const (
 
 	paneBusyMaxAttempts = 5
 	paneBusyRetryDelay  = 500 * time.Millisecond
+
+	// promptStalledMaxAttempts/promptStalledRetryDelay retry a prompt
+	// submission that herdr reports as agent_prompt_stalled - a startup
+	// race, not a real failure (see herdr.IsStalled's doc comment for
+	// the live evidence: the pane's prompt line reads back empty after
+	// the first attempt, and a plain retry resolves it).
+	promptStalledMaxAttempts = 3
+	promptStalledRetryDelay  = 500 * time.Millisecond
 )
 
 // RunInHerdr runs task's prompt through a real, interactive Claude Code
@@ -112,7 +120,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	// only self-reports for genuinely trivial prompts; anything real is
 	// handed off to the sentinel, which already polls every Running task
 	// (see internal/sentinel.Tick).
-	status, err := client.AgentPrompt(agentName, task.Prompt, quickSettleTimeoutMS)
+	status, err := promptWithStalledRetry(client, agentName, task.Prompt, quickSettleTimeoutMS)
 	if err != nil {
 		if herdr.IsTimeout(err) {
 			// Not a failure: the soldier is still working past the quick
@@ -261,7 +269,7 @@ func failHerdrTask(vexillumHome string, task state.Task, cause error) (state.Tas
 func startAgent(client herdr.Client, candidateName, taskID, paneID string) (string, error) {
 	err := startAgentWithBusyRetry(client, candidateName, paneID)
 	if herdr.IsNameTaken(err) {
-		fallback := candidateName + "-" + shortSuffix(taskID)
+		fallback := disambiguatedName(candidateName, taskID)
 		fbErr := startAgentWithBusyRetry(client, fallback, paneID)
 		if fbErr != nil {
 			return fallback, fmt.Errorf("starting soldier agent: %w", fbErr)
@@ -283,12 +291,51 @@ func startAgentWithBusyRetry(client herdr.Client, name, paneID string) error {
 	return err
 }
 
+// promptWithStalledRetry retries a prompt submission that herdr reports
+// as agent_prompt_stalled - a startup race right after a freshly started
+// agent (see herdr.IsStalled), not a real failure, and safe to retry: a
+// stalled attempt never actually reached the agent in the first place.
+func promptWithStalledRetry(client herdr.Client, name, text string, timeoutMS int) (string, error) {
+	status, err := client.AgentPrompt(name, text, timeoutMS)
+	for attempt := 1; attempt < promptStalledMaxAttempts && herdr.IsStalled(err); attempt++ {
+		time.Sleep(promptStalledRetryDelay)
+		status, err = client.AgentPrompt(name, text, timeoutMS)
+	}
+	return status, err
+}
+
 func shortSuffix(taskID string) string {
 	const n = 6
 	if len(taskID) <= n {
 		return taskID
 	}
 	return taskID[:n]
+}
+
+// disambiguatedName builds candidateName's collision fallback
+// ("<candidate>-<suffix>"), truncating candidateName as needed so the
+// result never exceeds herdr's agentNameMaxLen. A live case caught this:
+// herdrAgentName already fills a slug out to exactly the 32-char limit
+// for any long enough prompt, so appending "-<6-char-suffix>" without
+// trimming produced a 39-char name herdr rejected outright
+// (invalid_agent_name) - the fallback path failed even harder than the
+// collision it was meant to recover from.
+func disambiguatedName(candidateName, taskID string) string {
+	suffix := shortSuffix(taskID)
+	fallback := candidateName + "-" + suffix
+	if len(fallback) <= agentNameMaxLen {
+		return fallback
+	}
+
+	keep := agentNameMaxLen - 1 - len(suffix)
+	if keep < 0 {
+		keep = 0
+	}
+	if keep > len(candidateName) {
+		keep = len(candidateName)
+	}
+	trimmed := strings.TrimRight(candidateName[:keep], "-")
+	return trimmed + "-" + suffix
 }
 
 func startAgentOnce(client herdr.Client, name, paneID string) error {
