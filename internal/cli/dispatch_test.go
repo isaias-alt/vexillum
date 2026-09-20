@@ -33,6 +33,29 @@ func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error) { return f.readOutput, nil }
 func (f *fakeHerdr) TabClose(tabID string) error                      { return nil }
 
+// refuseInsideVexillumHome catches running a project command from
+// inside a camp's own worktree - a real bug caught live: a commander
+// cd'd into a task's camp to inspect it, then dispatched a second
+// mission without cd-ing back, creating a whole separate camp pool
+// keyed off the camp's own path (invisible to every future command run
+// correctly from the real project root).
+func TestRefuseInsideVexillumHome(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	campPath := filepath.Join(vexillumHome, "myproject-abc12345", "1", "myproject")
+	if err := os.MkdirAll(campPath, 0o755); err != nil {
+		t.Fatalf("mkdir camp path: %v", err)
+	}
+
+	if err := refuseInsideVexillumHome(campPath, vexillumHome); err == nil {
+		t.Error("expected an error when projectDir is inside vexillumHome")
+	}
+
+	realProject := t.TempDir()
+	if err := refuseInsideVexillumHome(realProject, vexillumHome); err != nil {
+		t.Errorf("expected no error for a real project dir outside vexillumHome, got: %v", err)
+	}
+}
+
 func TestParseDispatchArgs(t *testing.T) {
 	cases := []struct {
 		name       string

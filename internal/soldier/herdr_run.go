@@ -90,6 +90,17 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		}
 	}
 
+	// Mark the moment submission actually starts, not just when the task
+	// was first marked Running above - startAgent can itself take a
+	// while (the workspace trust dialog alone allows up to
+	// trustDialogSettleWindow). internal/sentinel.Tick anchors its own
+	// settle-race grace period to this timestamp, and an earlier one
+	// would leave that guard covering the wrong window on a slow start.
+	task.UpdatedAt = time.Now().UTC()
+	if err := state.Save(vexillumHome, task); err != nil {
+		return task, fmt.Errorf("persisting pre-prompt state: %w", err)
+	}
+
 	// Submit the prompt and probe briefly for a fast settle - not a full
 	// wait for completion. firstmate's own fm-spawn.sh never blocks on
 	// worker completion either; a dedicated daemon supervises it

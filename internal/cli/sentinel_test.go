@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -72,6 +73,10 @@ func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 	}
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = "vx-do-the-thing"
+	// Backdated past sentinel.Tick's settle-race grace period, so this
+	// test exercises a real transition rather than the grace period
+	// itself (see internal/sentinel.TestTick_SkipsTasksWithinSettleGracePeriod).
+	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
 	if err := state.Save(home, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}

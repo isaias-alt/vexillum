@@ -237,6 +237,11 @@ func Init(args []string) int {
 }
 
 func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
+	if err := refuseInsideVexillumHome(projectDir, vexillumHome); err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
 	if !isGitRepo(projectDir) {
 		fmt.Fprintln(stderr, "vexillum: current directory is not a git repository")
 		fmt.Fprintln(stderr, "vexillum requires git; run 'git init' first.")

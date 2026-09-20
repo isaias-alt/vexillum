@@ -58,6 +58,11 @@ func Upgrade(args []string) int {
 }
 
 func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.Writer) int {
+	if err := refuseInsideVexillumHome(projectDir, vexillumHome); err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
 	if !projectAlreadyInitialized(projectDir) {
 		fmt.Fprintln(stderr, "vexillum: project not initialized here (no .vexillum/config.json)")
 		fmt.Fprintln(stderr, "run 'vexillum init' first.")

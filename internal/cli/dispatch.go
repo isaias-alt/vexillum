@@ -287,5 +287,37 @@ func resolveDirs() (projectDir, vexillumHome string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return projectDir, filepath.Join(home, ".vexillum"), nil
+	vexillumHome = filepath.Join(home, ".vexillum")
+
+	if err := refuseInsideVexillumHome(projectDir, vexillumHome); err != nil {
+		return "", "", err
+	}
+	return projectDir, vexillumHome, nil
+}
+
+// refuseInsideVexillumHome reports an error if projectDir is itself
+// under vexillumHome - i.e. running a project command from inside a
+// camp's own worktree, not the real project root. Caught live: a
+// commander cd'd into a task's camp to inspect it, then dispatched a
+// second mission without cd-ing back. That created an entirely separate
+// camp pool keyed off the camp's own path hash - invisible to every
+// future command run correctly from the real project root, and a
+// correctly-run 'vexillum land'/'release' for that slot number would
+// have resolved the WRONG camp in the real project's own pool.
+func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
+	absProject, err := filepath.Abs(projectDir)
+	if err != nil {
+		return err
+	}
+	absHome, err := filepath.Abs(vexillumHome)
+	if err != nil {
+		return err
+	}
+	absProject = filepath.Clean(absProject)
+	absHome = filepath.Clean(absHome)
+
+	if absProject == absHome || strings.HasPrefix(absProject, absHome+string(filepath.Separator)) {
+		return fmt.Errorf("running from inside %s, which looks like a vexillum-managed camp, not a project root - cd back to the real project and try again", absProject)
+	}
+	return nil
 }
