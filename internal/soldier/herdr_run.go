@@ -130,6 +130,17 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 			// settlement.
 			return task, nil
 		}
+		if herdr.IsNotRunning(err) {
+			// The pane closed while herdr was waiting on it (confirmed
+			// via herdr's own CHANGELOG - see herdr.IsNotRunning's doc
+			// comment), not a startup timing blip like IsStalled - there's
+			// nothing left to retry against. A clear, specific message
+			// here means the commander doesn't have to infer what
+			// happened from a raw herdr error string; a fresh dispatch
+			// starts a new camp/pane regardless, so there's nothing to
+			// recover in this one.
+			return failHerdrTask(vexillumHome, task, fmt.Errorf("the soldier's herdr pane closed before it could be prompted (not something vexillum did) - safe to redispatch: %w", err))
+		}
 		return failHerdrTask(vexillumHome, task, fmt.Errorf("prompting soldier: %w", err))
 	}
 

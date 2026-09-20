@@ -23,6 +23,30 @@
 - Se encontraron y limpiaron también dos wakes huérfanas de intentos manuales anteriores de esta misma sesión de pruebas (tareas ya borradas, wake files que habían quedado atrás) - no eran del general.
 - Todos los artefactos de esta ronda de pruebas (repos scratch, camps, tasks, wakes, tabs de herdr) quedaron limpios al terminar - se verificó que `~/.vexillum/tasks/` volvió a las 18 tareas originales del general, y el workspace "PRUEBA VEXILLUM" volvió a sus 2 tabs originales.
 
+## Prueba en vivo con el commander real (hecha por el general, no por el asistente)
+
+El general repitió la prueba a través de un commander real en `vexillum-prueba` (no un self-test del asistente). Resultado, revisado directamente contra el estado real y la transcripción del commander (`~/.claude/projects/.../de95dcaf-....jsonl`), no solo lo que el general recordaba:
+
+- **El fix de `interrupted` funcionó de punta a punta, en un commander real**: el commander detectó la transición vía el hook `Stop`, revisó el camp directamente (estaba limpio, sin trabajo perdido), explicó correctamente que fue "un problema de infraestructura" (no un fallo del soldier), y preguntó si redespachar - siguiendo la guía nueva de `AGENTS.md` casi al pie de la letra.
+- **Encontrado en el camino, no relacionado con lo que se estaba probando**: el *primer* `vexillum dispatch` (antes de que el general tocara nada) falló solo, con un código de error de herdr nuevo: `agent_not_running` ("agent is no longer running in the target pane"). El commander reaccionó bien por su cuenta (corrió `vexillum doctor`, confirmó el entorno sano, reintentó) - pero el mensaje que vio era el error crudo de herdr, no algo explicado por vexillum.
+- **Fricción real, no un bug de vexillum**: el commander intentó `vexillum release` para limpiar el camp interrumpido antes de reintentar, y el clasificador de permisos de auto mode de Claude Code lo bloqueó - tuvo que pararse a preguntarle al general en vez de seguir solo. Queda anotado como observación, no como algo a arreglar en el código de vexillum.
+- **Ciclo feliz completo, confirmado**: en el reintento, el soldier hizo trabajo real (BST + tests + README) pero no comiteó. El commander no intentó aterrizarlo (correcto), le pidió al general indicaciones, y cuando el general aprobó, **re-promptió directamente al soldier ya vivo** (`herdr agent prompt`, sin volver a dispatchar) pidiéndole que comiteara - funcionó, comiteó `d86b03c`, y de ahí `vexillum land` + `vexillum release` cerraron el ciclo solos.
+
+### Investigación de `agent_not_running` (a pedido del general, después de la prueba)
+
+Se intentó reproducir en vivo antes de tocar código (mismo criterio que con `agent_prompt_stalled`):
+
+1. **Matar el proceso de Claude Code directamente** (simulando un crash real) con el pane todavía abierto → herdr devolvió `agent_not_found`, no `agent_not_running`. Conclusión: herdr limpia su propio registro apenas detecta que el proceso murió; no se queda en un estado intermedio "registrado pero no corriendo" accesible vía `agent get`.
+2. **Arrancar un agente y prompearlo inmediatamente, sin esperar nada** (la carrera más agresiva posible) → funcionó sin error.
+
+Ninguno de los dos reprodujo el bug. **La respuesta real se encontró en el changelog local de herdr** (`/opt/homebrew/Cellar/herdr/0.9.0/CHANGELOG.md`, no en el skill ni en `--help`):
+
+> "`herdr agent wait` now returns `agent_not_running` promptly when its target pane closes instead of waiting for the full timeout."
+
+Esto confirma qué es exactamente: el código que devuelve una llamada `--wait` (que es lo que usa `AgentPrompt`) cuando el pane objetivo se cierra mientras herdr está esperando - a diferencia de `agent_not_found` (que se ve en una consulta posterior tipo `agent get`, confirmado en el experimento 1 de arriba), este es específico del momento de espera. No es una carrera de arranque inofensiva como `agent_prompt_stalled` - el pane está genuinamente cerrado, no hay nada a lo que reintentar.
+
+**Arreglo, con esta base ya verificada**: nuevo `herdr.IsNotRunning(err)`. En `RunInHerdr`, en vez de reintentar (no tendría sentido - no hay nada del otro lado), falla la tarea con un mensaje explícito y accionable ("the soldier's herdr pane closed before it could be prompted (not something vexillum did) - safe to redispatch") en vez del string crudo de herdr - así el commander no tiene que inferirlo por su cuenta la próxima vez. Se confirmó además que `sentinel.Tick` no necesita el mismo tratamiento: usa `AgentStatus` (`agent get`, sin `--wait`), y el experimento 1 ya mostró que esa vía siempre da `agent_not_found` para un pane realmente cerrado, nunca `agent_not_running` - los dos códigos están escopeados a formas de llamada distintas, no se solapan. 1 test nuevo (`TestRunInHerdr_NotRunningFailsWithClearMessage`). Build, vet, gofmt y toda la suite en verde.
+
 ## Pendiente para la próxima
 
 - **Resumption real no está implementada** - una tarea `interrupted` hoy solo se detecta y reporta; no hay ningún mecanismo para relanzar un agente en el mismo camp/rama retomando el trabajo donde quedó. El PRD lo pide explícitamente ("los que se puedan resumir se resumen") - queda como trabajo futuro, alcance deliberadamente NO cubierto en esta ronda (se acotó a detección/marcado, que era el hueco real encontrado).

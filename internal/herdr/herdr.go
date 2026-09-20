@@ -113,6 +113,20 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.Code == "agent_not_found"
 }
 
+// IsNotRunning reports whether err is the "agent_not_running" APIError
+// herdr returns from a "--wait" call (agent prompt/wait) specifically
+// when the target pane closes while herdr was waiting on it - confirmed
+// from herdr's own CHANGELOG.md (0.9.0, Cellar/herdr): "herdr agent wait
+// now returns agent_not_running promptly when its target pane closes
+// instead of waiting for the full timeout." Unlike IsStalled, this means
+// the pane is genuinely gone (not a startup blip) - retrying the same
+// prompt has nothing left to reach, so RunInHerdr fails the task instead
+// of retrying, but with a clear message naming what happened.
+func IsNotRunning(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Code == "agent_not_running"
+}
+
 // IsStalled reports whether err is the "agent_prompt_stalled" APIError
 // herdr returns when "agent prompt --wait" never observes a
 // working/blocked transition within herdr's own internal ~5s bound -
