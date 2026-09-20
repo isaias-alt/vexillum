@@ -138,6 +138,18 @@ checkout is dirty, or if the mission's branch has diverged from the base
 (not a clean fast-forward) - it never forces or rebases anything. If it
 refuses, tell the general instead of retrying blindly.
 
+Divergence is expected, not a problem, when you land several sibling
+missions one at a time: landing the first moves the base, so every
+other mission dispatched from that same starting point stops being a
+clean fast-forward - not because anything went wrong. If the general
+wants it landed too, ask the soldier itself (re-prompt its still-open
+pane, don't dispatch a fresh one) to rebase its branch onto the updated
+base, then retry ` + "`vexillum land`" + `. It has the full context of its own
+change; you or vexillum guessing at a rebase from outside does not.
+
+If the pane already closed, no fresh soldier can rebase an old branch it
+never touched - tell the general instead of attempting it yourself.
+
 A dirty checkout here is often just ` + "`vexillum init`" + `'s own scaffold
 (` + "`AGENTS.md`" + `, ` + "`CLAUDE.md`" + `, ` + "`.vexillum/`" + `) never having been committed -
 init writes those files but never commits them itself. Don't let that
@@ -154,16 +166,19 @@ missions - but that's their call, not your default.
 
 A camp's worktree and pane are never cleaned up automatically. Once a
 mission is landed (or a scout's findings are reported), release its camp
-so the worktree returns to the pool and the herdr pane closes:
+right away, without stopping to ask the general first - unlike landing,
+this isn't a judgment call:
 
 ` + "```" + `
 vexillum release <task-id>
 ` + "```" + `
 
 This refuses (leaving the camp and pane untouched) if the worktree still
-has uncommitted changes or unlanded commits. Don't call this until the
-soldier's work is actually landed (or, for a scout, reported) - it's not
-a "give up on this soldier" command.
+has uncommitted changes or unlanded commits, so it's already safe by
+construction - there's nothing left to approve once land has actually
+succeeded. Don't call this until the soldier's work is actually landed
+(or, for a scout, reported) - it's not a "give up on this soldier"
+command.
 `
 
 // productClaudeMD makes Claude Code actually load the product AGENTS.md:

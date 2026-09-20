@@ -186,7 +186,17 @@ func Land(c Camp) error {
 		return fmt.Errorf("checking whether %s is a fast-forward of %s: %w", c.Branch, base, err)
 	}
 	if !fastForward {
-		return fmt.Errorf("%s is not a fast-forward of %s (it has diverged) - rebase it first", c.Branch, base)
+		// firstmate's own fm-merge-local.sh hits this exact case landing
+		// sibling missions dispatched from the same base one at a time:
+		// once the first lands, base has moved, so every other still-open
+		// mission stops being a fast-forward - not a defect, an inherent
+		// property of fast-forward-only landing with more than one
+		// branch sharing an ancestor. Its own message ("Have the crewmate
+		// rebase $BRANCH onto $DEFAULT, then retry") names who should do
+		// it - the soldier, with full context of its own change, not
+		// this function or the commander guessing at a rebase from
+		// outside.
+		return fmt.Errorf("%s is not a fast-forward of %s (it has diverged) - have the soldier rebase %s onto %s, then retry", c.Branch, base, c.Branch, base)
 	}
 
 	if _, err := runGit(c.ProjectDir, "merge", "--ff-only", c.Branch); err != nil {
