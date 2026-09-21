@@ -1,0 +1,61 @@
+version: 2
+
+project_name: vexillum
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: vexillum
+    main: ./cmd/vexillum
+    binary: vexillum
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: vexillum
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^binnacle:"
+      - "^docs:"
+
+brews:
+  - name: vexillum
+    repository:
+      owner: isaias-alt
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    commit_author:
+      name: vexillum release bot
+      email: cascolucasisaias@gmail.com
+    homepage: https://github.com/isaias-alt/vexillum
+    description: "CLI orchestrator for code agents"
+    install: |
+      bin.install "vexillum"
+    test: |
+      system "#{bin}/vexillum", "--version"
+
+release:
+  github:
+    owner: isaias-alt
+    name: vexillum
