@@ -22,8 +22,13 @@ Commands:
   sentinel  Watch dispatched soldiers and record status changes
 
 Flags:
-  -h, --help   Show this help message
+  -h, --help      Show this help message
+  -v, --version   Show version information
 `
+
+// version is set at build time via -ldflags "-X main.version=...".
+// It stays "dev" for a plain `go build` outside the release pipeline.
+var version = "dev"
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -38,6 +43,9 @@ func run(args []string) int {
 	switch args[0] {
 	case "-h", "--help":
 		fmt.Print(usage)
+		return 0
+	case "-v", "--version":
+		fmt.Printf("vexillum %s\n", version)
 		return 0
 	case "init":
 		return cli.Init(args[1:])
