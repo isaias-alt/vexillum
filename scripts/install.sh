@@ -63,7 +63,7 @@ install_via_binary() {
 
     local tmpdir
     tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
+    trap 'rm -rf "${tmpdir:-}"' EXIT
 
     info "Downloading ${archive}..."
     curl -fsSL -o "${tmpdir}/${archive}" "${base_url}/${archive}" \
