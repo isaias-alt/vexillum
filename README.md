@@ -40,3 +40,7 @@ vexillum upgrade     # refresh an already-initialized project's scaffold
 
 Run `vexillum --help` for the full command list, or `vexillum <command> -h`
 for a specific command.
+
+## License
+
+[MIT](LICENSE)
