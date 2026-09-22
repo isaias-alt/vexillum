@@ -18,9 +18,10 @@ type fakeHerdr struct {
 	tabID, paneID string
 	promptStatus  string
 	readOutput    string
+	tabCloseErr   error
 }
 
-func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
+func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
 	return f.tabID, f.paneID, nil
 }
 func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error { return nil }
@@ -31,7 +32,7 @@ func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error
 	return f.promptStatus, nil
 }
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error) { return f.readOutput, nil }
-func (f *fakeHerdr) TabClose(tabID string) error                      { return nil }
+func (f *fakeHerdr) TabClose(tabID string) error                      { return f.tabCloseErr }
 
 // refuseInsideVexillumHome catches running a project command from
 // inside a camp's own worktree - a real bug caught live: a commander

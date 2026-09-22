@@ -18,6 +18,7 @@ type fakeHerdr struct {
 	createTabErr error
 	tabID        string
 	paneID       string
+	createTabEnv [][]string // env passed on each CreateTab call
 
 	startErr      error // returned once busyForCalls attempts have passed
 	busyForCalls  int   // AgentStart reports agent_pane_busy for this many calls before startErr/success
@@ -40,7 +41,8 @@ type fakeHerdr struct {
 	tabCloseCalls []string
 }
 
-func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
+func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
+	f.createTabEnv = append(f.createTabEnv, env)
 	if f.createTabErr != nil {
 		return "", "", f.createTabErr
 	}
@@ -140,6 +142,10 @@ func TestRunInHerdr_Success(t *testing.T) {
 	}
 	if len(client.startArgs) != 1 || len(client.startArgs[0]) != 1 || client.startArgs[0][0] != "--dangerously-skip-permissions" {
 		t.Errorf("expected the soldier to start with --dangerously-skip-permissions, got %v", client.startArgs)
+	}
+	wantEnv := "CHROME_DEVTOOLS_AXI_SESSION=vx-" + task.ID
+	if len(client.createTabEnv) != 1 || len(client.createTabEnv[0]) != 1 || client.createTabEnv[0][0] != wantEnv {
+		t.Errorf("expected the pane to carry %q (PRD v2, B.3), got %v", wantEnv, client.createTabEnv)
 	}
 
 	persisted, err := state.Load(home, task.ID)

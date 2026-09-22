@@ -91,3 +91,63 @@ func TestReleaseInHerdr_KeepsTabOpenWhenCampRefuses(t *testing.T) {
 		t.Errorf("expected the pane to stay open when release is refused, but TabClose was called: %v", client.tabCloseCalls)
 	}
 }
+
+// B3-03: DiscardInHerdr stops a dead soldier's orphaned browser bridge, if
+// one was ever started - PRD v2, B.3's requisito derivado on A.2.
+func TestDiscardInHerdr_StopsOrphanBrowser(t *testing.T) {
+	project := initReleaseTestProject(t)
+	home := t.TempDir()
+	task := newMissionTask(t)
+
+	c, err := camp.Acquire(project, home, task.ID)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+
+	homeDir := t.TempDir()
+	sessionDir := filepath.Join(homeDir, ".chrome-devtools-axi", "sessions", "vx-"+task.ID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("creating session dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "bridge.pid"), []byte("1 2\n"), 0o644); err != nil {
+		t.Fatalf("writing bridge.pid: %v", err)
+	}
+	logFile := filepath.Join(t.TempDir(), "npx.log")
+	npxDir := t.TempDir()
+	script := "#!/bin/sh\necho \"$@ $CHROME_DEVTOOLS_AXI_SESSION\" >> " + logFile + "\n"
+	if err := os.WriteFile(filepath.Join(npxDir, "npx"), []byte(script), 0o755); err != nil {
+		t.Fatalf("writing npx stub: %v", err)
+	}
+	t.Setenv("PATH", npxDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	client := &fakeHerdr{}
+	if err := soldier.DiscardInHerdr(task, c, client, homeDir); err != nil {
+		t.Fatalf("DiscardInHerdr: %v", err)
+	}
+
+	out, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("expected the orphaned browser bridge to be stopped, but npx was never invoked: %v", err)
+	}
+	if !strings.Contains(string(out), "vx-"+task.ID) {
+		t.Errorf("expected the stop invocation scoped to this task's session, got: %q", out)
+	}
+}
+
+// B3-04: DiscardInHerdr never fails just because there's nothing to stop -
+// the common case, where a soldier never touched a browser.
+func TestDiscardInHerdr_NoOrphanBrowserIsFine(t *testing.T) {
+	project := initReleaseTestProject(t)
+	home := t.TempDir()
+	task := newMissionTask(t)
+
+	c, err := camp.Acquire(project, home, task.ID)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+
+	client := &fakeHerdr{}
+	if err := soldier.DiscardInHerdr(task, c, client, t.TempDir()); err != nil {
+		t.Fatalf("DiscardInHerdr: %v", err)
+	}
+}

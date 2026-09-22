@@ -65,7 +65,7 @@ const (
 func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, client herdr.Client) (state.Task, error) {
 	agentName := herdrAgentName(task)
 
-	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName)
+	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName, chromeDevtoolsSessionEnvVar+"="+chromeDevtoolsSessionName(task.ID))
 	if err != nil {
 		return task, fmt.Errorf("creating herdr tab for camp: %w", err)
 	}
@@ -180,6 +180,36 @@ func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
 	if err := client.TabClose(task.HerdrTabID); err != nil {
 		return fmt.Errorf("closing soldier pane: %w", err)
 	}
+	return nil
+}
+
+// DiscardInHerdr is ReleaseInHerdr's destructive counterpart (PRD v2,
+// A.2): it throws away c (camp.Discard - a dead soldier's dirty,
+// possibly unlanded worktree) instead of insisting it's clean and
+// landed, then closes whatever herdr tab the task still had recorded.
+// The tab close is best-effort: a task reaching this point is normally
+// Interrupted precisely because its herdr agent is already gone, so a
+// TabClose error here is reported but never blocks the caller from
+// proceeding to re-dispatch - there's nothing left to clean up on
+// herdr's side either way.
+//
+// This is the seam PRD v2's B.3 (chrome-devtools-axi) extends later: a
+// soldier-with-browser's live browser process would also need killing
+// here when that camp's soldier dies mid-task. Not built yet - no
+// browser-tracking state exists on Task today.
+func DiscardInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir string) error {
+	if err := camp.Discard(c, task.ID); err != nil {
+		return err
+	}
+	stopOrphanBrowser(task.ID, homeDir)
+	if task.HerdrTabID == "" {
+		return nil
+	}
+	// Best-effort: an Interrupted task's tab is typically already gone
+	// (that's usually why it's Interrupted in the first place) - a
+	// failure here is nothing to act on, and must never block the
+	// re-dispatch that called this.
+	_ = client.TabClose(task.HerdrTabID)
 	return nil
 }
 

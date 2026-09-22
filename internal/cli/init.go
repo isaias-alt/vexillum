@@ -62,10 +62,20 @@ A status of "interrupted" (instead of the usual done/blocked) means the
 sentinel lost the soldier itself, not that it failed at its task - its
 herdr pane disappeared (closed by hand, or herdr restarted) while it was
 still working. Check its camp directly (` + "`git log`" + `/` + "`git status`" + `) before
-assuming nothing happened: any work it had already committed is still
-there and can still be landed normally. There's no automatic way to
-resume it yet - tell the general what you found and ask whether to
-re-dispatch the remaining work as a fresh mission.
+doing anything else: any work it had already committed is still there. If
+that work matters, land it normally first (` + "`vexillum land <task-id>`" + `) -
+` + "`vexillum redispatch`" + ` (below) destroys the camp, uncommitted or not.
+
+` + "`vexillum redispatch <task-id>`" + ` relaunches the mission from its original
+prompt in a fresh camp - it is re-dispatch, not resumption. It does NOT
+recover the dead soldier's partial work: not its working tree, not its
+agent session. It discards the old camp outright, including any commits
+never landed there. Because that's destructive, tell the general what you
+found in the old camp and ask before running it - don't redispatch on
+your own judgment just because a task went interrupted. If the dead
+soldier had a browser open (chrome-devtools-axi), redispatch also stops
+that orphaned browser process on its own - nothing for you to check or
+clean up there.
 
 ## Dispatching a soldier
 
@@ -161,6 +171,29 @@ instead of hitting the refusal later while a mission is waiting to land.
 If the general tells you to land things going forward without asking each
 time for this project, you can skip the approval step for future
 missions - but that's their call, not your default.
+
+## Shipping through the no-mistakes gate (alternative to landing)
+
+` + "`vexillum land`" + ` merges locally, no PR, no review pipeline - the right
+default for most missions in this project. If the general instead wants
+a real, validated GitHub PR for a finished mission, offer ` + "`vexillum ship <task-id>`" + `
+instead (see ` + "`docs/no-mistakes.md`" + ` for the full design). It pushes the
+mission's branch through the no-mistakes gate - deterministically, you
+never decide on your own that a mission is "ready to ship" the way you
+might decide it's ready to land; ask first, same as landing, but treat
+this one as more consequential: it produces a real PR outside the
+machine.
+
+Requires the ` + "`no-mistakes`" + ` binary installed (` + "`vexillum doctor`" + ` reports
+whether it is). If it isn't, ` + "`vexillum ship`" + ` refuses and tells the
+general so. If it's installed but this project hasn't been gated yet,
+` + "`vexillum ship`" + ` runs ` + "`no-mistakes init`" + ` itself the first time - there's no
+separate setup step for you or the general to remember. Once shipped,
+no-mistakes runs its own review/test/lint pipeline and opens the PR
+itself when it's green - you don't supervise that pipeline, and you
+don't release the camp afterward the way you would after landing: the
+branch is still in flight until the general merges the real PR, not
+something vexillum can call "landed" on its own.
 
 ## Releasing a camp
 

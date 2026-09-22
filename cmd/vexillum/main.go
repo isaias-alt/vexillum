@@ -13,13 +13,15 @@ Usage:
   vexillum <command> [flags]
 
 Commands:
-  init      Prepare the current project to be orchestrated by vexillum
-  upgrade   Refresh an already-initialized project's scaffold to the latest
-  doctor    Report on the health of the vexillum environment
-  dispatch  Dispatch a soldier (mission or scout) into an isolated camp
-  land      Land a finished mission's work into the base branch
-  release   Release a soldier's camp back to the pool
-  sentinel  Watch dispatched soldiers and record status changes
+  init        Prepare the current project to be orchestrated by vexillum
+  upgrade     Refresh an already-initialized project's scaffold to the latest
+  doctor      Report on the health of the vexillum environment
+  dispatch    Dispatch a soldier (mission or scout) into an isolated camp
+  redispatch  Re-dispatch an interrupted task from its original prompt
+  land        Land a finished mission's work into the base branch
+  ship        Push a finished mission through the no-mistakes gate for a real PR
+  release     Release a soldier's camp back to the pool
+  sentinel    Watch dispatched soldiers and record status changes
 
 Flags:
   -h, --help      Show this help message
@@ -55,8 +57,12 @@ func run(args []string) int {
 		return cli.Doctor(args[1:])
 	case "dispatch":
 		return cli.Dispatch(args[1:])
+	case "redispatch":
+		return cli.Redispatch(args[1:])
 	case "land":
 		return cli.Land(args[1:])
+	case "ship":
+		return cli.Ship(args[1:])
 	case "release":
 		return cli.Release(args[1:])
 	case "sentinel":

@@ -266,6 +266,68 @@ func Release(c Camp, taskID string) error {
 	return savePool(c.PoolRoot, pool)
 }
 
+// Discard is Release's deliberately destructive counterpart (PRD v2,
+// A.2): where Release refuses anything but a clean, landed camp, Discard
+// throws away whatever's there - a dead soldier's half-finished working
+// tree and any commits it never landed - and returns the slot to the pool
+// clean, ready for immediate reuse (typically by a re-dispatch of the
+// same task). taskID must still be the slot's recorded owner: that guard
+// isn't relaxed just because this path is destructive - never discard
+// another task's camp.
+func Discard(c Camp, taskID string) error {
+	unlock, err := lockPool(c.PoolRoot)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	pool, err := loadPool(c.PoolRoot)
+	if err != nil {
+		return err
+	}
+
+	idx := -1
+	for i := range pool.Slots {
+		if pool.Slots[i].Number == c.Slot {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return fmt.Errorf("camp slot %d not found in pool state", c.Slot)
+	}
+
+	slot := pool.Slots[idx]
+	if slot.LeasedBy == "" {
+		return fmt.Errorf("camp slot %d is not leased, nothing to discard", c.Slot)
+	}
+	if slot.LeasedBy != taskID {
+		return fmt.Errorf("camp slot %d is leased by task %s, not %s, refusing to discard", c.Slot, slot.LeasedBy, taskID)
+	}
+
+	base, err := currentBranch(c.ProjectDir)
+	if err != nil {
+		return fmt.Errorf("resolving base branch: %w", err)
+	}
+
+	if _, err := runGit(c.Path, "reset", "--hard"); err != nil {
+		return fmt.Errorf("resetting camp worktree: %w", err)
+	}
+	if _, err := runGit(c.Path, "clean", "-fd"); err != nil {
+		return fmt.Errorf("cleaning camp worktree: %w", err)
+	}
+	if _, err := runGit(c.Path, "checkout", "--detach", base); err != nil {
+		return fmt.Errorf("detaching camp worktree from %s: %w", c.Branch, err)
+	}
+	if _, err := runGit(c.Path, "branch", "-D", c.Branch); err != nil {
+		return fmt.Errorf("deleting camp branch %s: %w", c.Branch, err)
+	}
+
+	pool.Slots[idx].LeasedBy = ""
+	pool.Slots[idx].Branch = ""
+	return savePool(c.PoolRoot, pool)
+}
+
 func shortHash(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])[:8]
