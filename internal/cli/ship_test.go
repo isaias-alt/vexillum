@@ -85,6 +85,49 @@ func TestRunShip_Success(t *testing.T) {
 	}
 }
 
+// A successful ship records the task as shipped, so a later "vexillum
+// land" knows to merge the real PR instead of fast-forwarding the camp.
+func TestRunShip_RecordsShippedStatus(t *testing.T) {
+	project := gatedTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+
+	var out bytes.Buffer
+	if code := runShip(project, home, task.ID, &out, &out); code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+
+	reloaded, err := state.Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if reloaded.Status != state.StatusShipped {
+		t.Errorf("expected status %q after a successful ship, got %q", state.StatusShipped, reloaded.Status)
+	}
+}
+
+// A mission already shipped can be shipped again - pushing follow-up
+// commits onto the same open PR is a normal continuation, not an error.
+func TestRunShip_AllowsReshippingAShippedTask(t *testing.T) {
+	project := gatedTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	task.Status = state.StatusShipped
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	var out bytes.Buffer
+	code := runShip(project, home, task.ID, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 reshipping an already-shipped task, got %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "pushed "+task.CampBranch) {
+		t.Errorf("expected output to confirm the push, got: %s", out.String())
+	}
+}
+
 // B4-05: ship refuses a task that isn't done yet.
 func TestRunShip_RefusesNotDone(t *testing.T) {
 	project := gatedTestProject(t)
