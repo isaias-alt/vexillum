@@ -400,6 +400,16 @@ const (
 	// real asyncRewake Stop hook that sleeps then exits 2 with a stderr
 	// message woke an idle Claude Code session on its own, no new user
 	// prompt sent - "Stop hook feedback" arrived automatically.
+	//
+	// This gets written into .claude/settings.json in the project
+	// directory, which git tracks - so it reaches every checkout,
+	// including a worktree an unrelated tool creates for its own
+	// headless Claude Code turn (e.g. no-mistakes' review/test/lint
+	// steps). runSentinelAwaitGuarded (see cli/sentinel.go) is what
+	// keeps that turn from sitting blocked on a wake the sentinel can
+	// never produce for it: it only actually waits inside a
+	// herdr-managed pane (HERDR_WORKSPACE_ID set), same as dispatch and
+	// redispatch already require of their own caller.
 	sentinelHookCommand = "vexillum sentinel await"
 
 	// legacySentinelHookCommand is the older, synchronous-only hook

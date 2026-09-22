@@ -28,6 +28,10 @@ Stop hook actually calls - it blocks (re-checking every few seconds)
 until a wake shows up or it times out, so the commander gets woken even
 if its turn already ended before a soldier settled, not just when a wake
 happens to already be pending at the exact moment a turn is ending.
+"await" exits immediately, without waiting, outside a herdr-managed pane
+(no HERDR_WORKSPACE_ID) - the hook is committed into the project and so
+reaches any other tool's own Claude Code turns too, which have no task
+for the sentinel to track.
 `
 
 const (
@@ -84,7 +88,7 @@ func Sentinel(args []string) int {
 		return runSentinelDrain(vexillumHome, os.Stdout, os.Stderr)
 	}
 	if mode == "await" {
-		return runSentinelAwait(vexillumHome, sentinelAwaitMaxWait, sentinelAwaitPollInterval, os.Stderr)
+		return runSentinelAwaitGuarded(vexillumHome, sentinelAwaitMaxWait, sentinelAwaitPollInterval, os.Stderr, os.Getenv("HERDR_WORKSPACE_ID"))
 	}
 
 	release, err := sentinel.AcquireLock(vexillumHome)
@@ -118,6 +122,37 @@ func runSentinelDrain(vexillumHome string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, string(out))
 	return 0
+}
+
+// runSentinelAwaitGuarded is the actual entry point the async Stop hook
+// reaches. It only makes sense for a genuine vexillum-managed turn - the
+// commander's own interactive session, or a dispatched soldier's - both
+// of which always run inside a herdr-managed pane (vexillum dispatch and
+// redispatch already require the same HERDR_WORKSPACE_ID from their
+// caller; see cli/dispatch.go). workspaceID is that same env var, read
+// by the caller.
+//
+// The Stop hook itself is registered in .claude/settings.json, which
+// ensureSentinelHook writes into the project directory and which git
+// then tracks like any other file - so it travels into every checkout
+// of the repo, including a worktree a completely different tool creates
+// for its own purposes. A third-party tool that runs its own headless
+// Claude Code turn there - no-mistakes' review/test/lint steps, which
+// each shell out to "claude -p ..." inside an isolated run worktree
+// checked out from a vexillum-initialized repo, is the case that
+// surfaced this - inherits the hook too, with no HERDR_WORKSPACE_ID in
+// its environment (no-mistakes' daemon isn't a herdr pane). Without this
+// guard, that unrelated turn would sit blocked in runSentinelAwait for
+// up to maxWait: the sentinel has no task tracking an invocation it
+// never dispatched, so a wake for it can never arrive. An empty
+// workspaceID means exactly that - exit 0 immediately, the same "let
+// the turn end quietly" result runSentinelAwait itself returns on a
+// real timeout, just without waiting first.
+func runSentinelAwaitGuarded(vexillumHome string, maxWait, pollInterval time.Duration, stderr io.Writer, workspaceID string) int {
+	if workspaceID == "" {
+		return 0
+	}
+	return runSentinelAwait(vexillumHome, maxWait, pollInterval, stderr)
 }
 
 // runSentinelAwait is what the async Stop hook actually invokes

@@ -181,3 +181,76 @@ func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 		t.Errorf("expected the reason to name the task id, got: %s", stderr.String())
 	}
 }
+
+// Outside a herdr-managed pane (no HERDR_WORKSPACE_ID), runSentinelAwaitGuarded
+// must exit 0 immediately, without ever polling - the case that surfaced
+// this: a third-party tool's own headless Claude Code turn (e.g.
+// no-mistakes' review/test/lint steps) inherits the committed Stop hook
+// too, but the sentinel has no task tracking it, so a real wake could
+// never arrive and the turn would otherwise sit blocked for the full
+// maxWait. A pending wake existing is irrelevant here - the whole point
+// is that this invocation isn't the one meant to receive it.
+func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
+	home := t.TempDir()
+
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = "vx-do-the-thing"
+	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	client := &fakeHerdr{promptStatus: "done"}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("sentinel.Tick: %v", err)
+	}
+
+	start := time.Now()
+	var stderr bytes.Buffer
+	code := runSentinelAwaitGuarded(home, time.Hour, 5*time.Millisecond, &stderr, "")
+	elapsed := time.Since(start)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 with no workspace id, got %d: %s", code, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Errorf("expected no output, got: %s", stderr.String())
+	}
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("expected an immediate return, took %s", elapsed)
+	}
+}
+
+// Inside a herdr-managed pane (HERDR_WORKSPACE_ID set), runSentinelAwaitGuarded
+// behaves exactly like the unguarded runSentinelAwait - a pending wake is
+// still found and still blocks the turn.
+func TestRunSentinelAwaitGuarded_WithWorkspaceFindsWake(t *testing.T) {
+	home := t.TempDir()
+
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = "vx-do-the-thing"
+	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
+	if err := state.Save(home, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	client := &fakeHerdr{promptStatus: "done"}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("sentinel.Tick: %v", err)
+	}
+
+	var stderr bytes.Buffer
+	code := runSentinelAwaitGuarded(home, time.Hour, time.Millisecond, &stderr, "ws-123")
+	if code != 2 {
+		t.Fatalf("expected exit 2 with a workspace id set, got %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), task.ID) {
+		t.Errorf("expected the reason to name the task id, got: %s", stderr.String())
+	}
+}
