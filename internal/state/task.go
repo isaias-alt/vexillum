@@ -97,6 +97,13 @@ type Task struct {
 	// zero value, which already means exactly "never observed missing",
 	// so this does not need a SchemaVersion bump.
 	AgentNotFoundSince time.Time `json:"agent_not_found_since,omitzero"`
+
+	// Redispatches counts how many times this task has been re-dispatched
+	// after going Interrupted (PRD v2, A.2) - zero means never. Re-dispatch
+	// reuses this same Task (same ID), so a re-dispatched task's identity
+	// stays stable rather than forking into a new one - same reasoning as
+	// AgentNotFoundSince: purely additive, no SchemaVersion bump needed.
+	Redispatches int `json:"redispatches,omitempty"`
 }
 
 // New creates a Task of the given kind with a fresh unique ID, in

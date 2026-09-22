@@ -367,5 +367,192 @@ Esperado: cada una termina en el estado que le corresponde de forma completament
 
 Con L4-27 a L4-29, los pasos 3 (N en paralelo), 4 (restart-proof) y 5 (aislamiento de fallos) de Capa 4 quedan formalizados y verificados en vivo. Lo único que sigue sin implementar de toda la Capa 4:
 
-- **Resumption real de una tarea `interrupted`** - "los que se puedan resumir se resumen" (PRD v1) no está hecho; hoy una tarea `interrupted` solo se detecta y reporta, sin ningún mecanismo para relanzar un agente en el mismo camp/rama retomando el trabajo. Alcance deliberadamente dejado afuera (ver binnacle `20260920-restart-proof-agente-desaparecido.md`).
+- ~~**Resumption real de una tarea `interrupted`**~~ - cerrado en v2 Parte A (ver `## V2 - PARTE A` abajo), pero como **re-dispatch, no resumption**: se descarta el camp del soldier muerto y se relanza desde el prompt original; no se retoma trabajo parcial ni sesión de agente. Decisión de alcance explícita del PRD v2 (A.2), no una implementación parcial del pendiente original.
 - **Push real vía `events.subscribe`** en vez de solo polling - decisión consciente de quedarse con el fallback de polling como mecanismo permanente (ver binnacle `20260920-sentinel-paso2.md`), no un pendiente real.
+
+## V2 - PARTE A (saneamiento)
+
+### A.1 - Anclaje del contrato con herdr
+
+**A1-01 - herdr reporta una versión 0.9.x soportada**
+Precondición: `herdr` en PATH, `herdr --version` imprime `herdr 0.9.x`.
+Acción: `vexillum doctor`.
+Esperado: línea `[ok] herdr version - 0.9.x` (la versión detectada, siempre reportada, no solo cuando falla); exit code 0.
+
+**A1-02 - herdr reporta una versión fuera de 0.9.x**
+Precondición: `herdr --version` imprime una versión que no empieza con `0.9.`.
+Acción: `vexillum doctor`.
+Esperado: línea `[warn] herdr version - <versión> ...` nombrando que el contrato se verificó contra 0.9.x; **exit code 0** (advertencia, no fallo bloqueante - así lo pide el PRD explícitamente).
+
+**A1-03 - `herdr --version` falla o da salida no parseable**
+Precondición: `herdr --version` sale con error o imprime algo que no matchea el formato esperado.
+Acción: `vexillum doctor`.
+Esperado: línea `[warn] herdr version - could not determine herdr version ...`; exit code 0.
+
+**A1-04 - herdr no está instalado**
+Precondición: `herdr` no está en PATH.
+Acción: `vexillum doctor`.
+Esperado: solo la línea existente `[missing] herdr` de `checkBinary` - ninguna línea separada de "herdr version" (no se duplica la ausencia).
+
+**Limitación conocida y aceptada** (documentada también en el código, `herdr.SupportedVersionPrefix`): esto detecta que la versión cambió, no que el parseo de `internal/herdr` sigue siendo correcto contra la versión nueva. Es un detector de cambio, no una verificación de contrato - el PRD v2 descarta explícitamente un test de contrato contra herdr real en CI para esta versión (sobreingeniería para uso personal).
+
+### A.2 - Re-dispatch de tareas interrupted
+
+**A2-01 - `camp.Discard` descarta un camp sucio y sin aterrizar**
+Precondición: un camp arrendado con un commit sin aterrizar y cambios sin comitear encima.
+Acción: `camp.Discard(camp, taskID)`.
+Esperado: worktree vuelve a estar limpio; la rama del camp se borra (`git branch -D`); el slot vuelve al pool libre; un `Acquire` posterior con el mismo task id puede reusar ese slot, y el commit descartado ya no está presente.
+
+**A2-02 - `camp.Discard` refuse un dueño equivocado**
+Precondición: un camp arrendado por `task-1`.
+Acción: `camp.Discard(camp, "task-2")`.
+Esperado: error explícito, el slot sigue arrendado por `task-1` sin tocar nada - misma guarda que ya tiene `Release`, no se relaja para el camino destructivo.
+
+**A2-03 - `vexillum redispatch` refuse una tarea que no está interrupted**
+Precondición: una tarea en `done` (o cualquier estado que no sea `interrupted`).
+Acción: `vexillum redispatch <task-id>`.
+Esperado: error explícito nombrando el estado actual y qué hacer en cambio (aterrizar/liberar una `done`, no re-despachar); exit code distinto de 0; la tarea y su camp quedan sin tocar.
+
+**A2-04 - `vexillum redispatch` sobre una tarea interrupted, caso feliz**
+Precondición: una tarea `interrupted` con un camp real que tiene un commit sin aterrizar.
+Acción: `vexillum redispatch <task-id>`.
+Esperado: mismo task id (no se crea uno nuevo); `Redispatches` pasa de 0 a 1; `AgentNotFoundSince` queda en cero (crítico: si no se limpia, el sentinel puede volver a marcar `interrupted` la tarea recién re-despachada en el primer hipo de lectura, superando de inmediato la ventana de confirmación ya vencida); camp viejo descartado (commit sin aterrizar ya no presente); camp nuevo creado y soldier corriendo, exactamente como un `vexillum dispatch` fresco; termina en el mismo estado final que un lanzamiento que salió bien a la primera.
+
+**A2-05 - `vexillum redispatch` no se bloquea si el pane viejo ya no se puede cerrar**
+Precondición: una tarea `interrupted` cuyo `TabClose` sobre el pane viejo falla (el caso normal: ya está muerto, por eso está interrupted).
+Acción: `vexillum redispatch <task-id>`.
+Esperado: el re-dispatch igual termina bien - el cierre del pane viejo es best-effort, nunca bloquea el camino de recuperación.
+
+**Nota de alcance, verificada contra el código real**: una tarea `interrupted` siempre tiene `CampSlot` ya asignado antes de poder llegar a ese estado (`sentinel.Tick` solo marca `interrupted` una tarea con `HerdrAgentName` no vacío, y `RunInHerdr` setea `CampSlot`/`HerdrAgentName` en el mismo bloque, antes del primer `state.Save`) - así que `runRedispatch` no necesita un camino de "tarea interrupted sin camp" para el caso real, solo se protege defensivamente si `CampSlot` es cero.
+
+## V2 - PARTE B (integraciones AXI)
+
+### B.1 - quota-tool
+
+Investigación hecha antes de implementar (no supuesta): `github.com/upstream` es un repo real; su propio README recomienda `npx skills add upstream --skill quota-tool -g`. El mecanismo real de `npx skills add` (repo `vercel-labs/skills`) deja el skill instalado como `<destino>/.claude/skills/<nombre>/SKILL.md` - global (`-g`) en `~/.claude/skills/`, project-level (sin el flag) en `<proyecto>/.claude/skills/`. Sin manifest ni lockfile: la única forma de detectar instalación es un stat directo a ese archivo.
+
+**B1-01 - quota-tool instalado globalmente**
+Precondición: `~/.claude/skills/quota-tool/SKILL.md` existe; no hay nada a nivel proyecto.
+Acción: `vexillum doctor`.
+Esperado: línea `[installed] quota-tool` en la sección "AXIs".
+
+**B1-02 - quota-tool instalado a nivel proyecto**
+Precondición: `<proyecto>/.claude/skills/quota-tool/SKILL.md` existe; no hay nada global.
+Acción: `vexillum doctor`.
+Esperado: también `[installed] quota-tool` - cualquiera de las dos ubicaciones alcanza, a `doctor` no le importa cuál.
+
+**B1-03 - quota-tool no instalado en ningún lado**
+Precondición: ni `~/.claude/skills/quota-tool/` ni `<proyecto>/.claude/skills/quota-tool/` existen.
+Acción: `vexillum doctor`.
+Esperado: `[not installed] quota-tool - install with: npx skills add upstream --skill quota-tool -g` - el comando exacto recomendado por el propio README de quota-tool.
+
+**B1-04 - el estado de AXIs nunca afecta el exit code**
+Precondición: entorno sano (todo lo demás en `ok`), probado con y sin quota-tool instalado.
+Acción: `vexillum doctor` en ambos casos.
+Esperado: exit code 0 en los dos, resumen "Environment ready" sin cambios - la sección AXIs es puramente informativa, ni siquiera al nivel de `warn` que tiene A.1.
+
+**Alcance de B.1, según el PRD**: esto es todo lo que entra al binario. No hay lógica de cuota en Go, no hay gate de admisión de tareas, no hay instrucción sobre quota-tool escrita en `productAgentsMD` - una vez instalado, el propio `SKILL.md` le enseña al agente a usarlo. `doctor` solo reporta presencia, nunca instala.
+
+### B.2 - forum-tool
+
+Investigación hecha antes de implementar: `github.com/upstream` es un repo real (3.8k estrellas, MIT). Su propio README recomienda `npx skills add upstream --skill forum` - **sin** `-g` (a diferencia de quota-tool). El valor de `--skill` es `forum`, no `forum-tool` - el nombre de carpeta del skill no tiene por qué coincidir con el nombre del repo. Esto confirmó que no convenía asumir que el patrón de B.1 se repetía tal cual; `axiSkill` ganó un campo `Global` para que cada AXI declare su propio comando recomendado.
+
+**B2-01 - forum instalado (a nivel proyecto, su ubicación recomendada)**
+Precondición: `<proyecto>/.claude/skills/forum/SKILL.md` existe.
+Acción: `vexillum doctor`.
+Esperado: línea `[installed] forum` en la sección "AXIs" (el nombre reportado es `forum`, no `forum-tool`).
+
+**B2-02 - forum no instalado**
+Precondición: ni `~/.claude/skills/forum/` ni `<proyecto>/.claude/skills/forum/` existen.
+Acción: `vexillum doctor`.
+Esperado: `[not installed] forum - install with: npx skills add upstream --skill forum` - sin `-g`, a diferencia de la línea de quota-tool.
+
+**Alcance de B.2, según el PRD**: igual que B.1 - solo `doctor` reporta presencia. Nada de lógica de forum en el binario; el commander lo corre bajo demanda cuando el general se lo pide, aprendido de su propio `SKILL.md`.
+
+### B.3 - chrome-devtools-tool
+
+Investigación real: `github.com/upstream` recomienda `npx skills add upstream --skill chrome-devtools-tool -g` (mismo patrón que quota-tool: `--skill` = nombre del repo, con `-g`). Arquitectura: un proceso "bridge" persistente por sesión (`CHROME_DEVTOOLS_AXI_SESSION=<nombre>`), con estado en `~/.chrome-devtools-tool/sessions/<nombre>/bridge.pid`, cerrado con `CHROME_DEVTOOLS_AXI_SESSION=<nombre> chrome-devtools-tool stop`. A diferencia de B.1/B.2, este es "el único AXI" con acople real al core (PRD): un browser vivo por soldier no muere solo cuando su pane de herdr se cierra, y eso extiende el criterio de terminado de A.2.
+
+**Verificado en la máquina real**: `herdr tab create --help` expone `--env <KEY=VALUE>` ("Set an environment variable for the launched process"), y acepta múltiples `--env` sin error de parseo. Esto es lo que permite namespacear el browser de cada soldier por su propio task id desde que arranca el pane, sin que el soldier tenga que hacer nada especial.
+
+**B3-01 - chrome-devtools-tool instalado**
+Precondición: `~/.claude/skills/chrome-devtools-tool/SKILL.md` existe.
+Acción: `vexillum doctor`.
+Esperado: `[installed] chrome-devtools-tool`.
+
+**B3-02 - chrome-devtools-tool no instalado**
+Precondición: no existe en ninguna ubicación.
+Acción: `vexillum doctor`.
+Esperado: `[not installed] chrome-devtools-tool - install with: npx skills add upstream --skill chrome-devtools-tool -g`.
+
+**B3-03 - `soldier.RunInHerdr` namespacea el browser del soldier por task id**
+Precondición: un dispatch (fresco o redispatch) cualquiera.
+Acción: `RunInHerdr`.
+Esperado: `CreateTab` recibe `CHROME_DEVTOOLS_AXI_SESSION=vx-<task-id>` como env - siempre, sin importar si la mission termina usando un browser o no (costo nulo si no lo usa).
+
+**B3-04 - `stopOrphanBrowser` no invoca nada si nunca hubo un bridge**
+Precondición: `~/.chrome-devtools-tool/sessions/vx-<task-id>/bridge.pid` no existe.
+Acción: `DiscardInHerdr` (vía `redispatch`).
+Esperado: cero invocaciones de `npx` - ni red, ni proceso lanzado. Caso común: la mayoría de las missions no usan browser.
+
+**B3-05 - `stopOrphanBrowser` cierra un bridge real cuando hay evidencia**
+Precondición: `~/.chrome-devtools-tool/sessions/vx-<task-id>/bridge.pid` existe (evidencia de que el soldier sí abrió un browser).
+Acción: `DiscardInHerdr` (vía `redispatch`).
+Esperado: se invoca `npx -y chrome-devtools-tool stop` con `CHROME_DEVTOOLS_AXI_SESSION=vx-<task-id>` en el entorno - scoped exactamente a la sesión de esa tarea, best-effort (un fallo acá no bloquea el redispatch, mismo criterio que ya rige para `TabClose`).
+
+**Alcance de B.3, según el PRD**: sin browser por defecto en ninguna mission - el soldier decide usarlo, vexillum solo le da el namespacing gratis vía el env var. Nada de lógica de scraping/automatización en el binario Go.
+
+**Diferido a la tanda de pruebas en vivo**: confirmar con un browser real que `chrome-devtools-tool stop` efectivamente mata el proceso (los tests de arriba verifican que se invoca correctamente el comando correcto con el env correcto, no que un browser real muere - eso requiere el AXI instalado y un soldier real usándolo).
+
+### B.4 - review-tool
+
+Investigación real (vía GitHub API, no supuesta): `review-tool` es su propio repo standalone (`upstream`), no una feature interna de upstream-tool. Se instala por `curl` (no es un Agent Skill vía `npx skills add`). Pone un git remote local delante del real; `git push review-tool <branch>` corre su propio pipeline y abre el PR él mismo, sin gh-tool. Diseño completo, incluida la decisión abierta del PRD ya cerrada, en `docs/review-tool.md`.
+
+**B4-01 - `review-tool` no instalado**
+Precondición: el binario `review-tool` no está en PATH.
+Acción: `vexillum doctor`.
+Esperado: `[missing] review-tool - not found in PATH (optional...)`; exit code sin cambios (opcional, igual que los AXIs).
+
+**B4-02 - `review-tool` instalado pero el proyecto no está gateado**
+Precondición: el binario está en PATH, pero el proyecto nunca corrió `review-tool init` (no existe el remote git `review-tool`).
+Acción: `vexillum doctor`.
+Esperado: `[missing] review-tool - installed, but this project hasn't run 'review-tool init' yet - 'vexillum ship' will do this automatically the first time`.
+
+**B4-03 - `review-tool` instalado y el proyecto gateado**
+Precondición: el binario está en PATH y el proyecto tiene el remote `review-tool` configurado.
+Acción: `vexillum doctor`.
+Esperado: `[ok] review-tool - installed and this project is gated`; exit code 0.
+
+**B4-04 - `vexillum ship` empuja una mission terminada a través del gate**
+Precondición: una tarea `done`, camp con un commit real, proyecto con el remote `review-tool` apuntando a un bare repo real (sin necesitar el binario `review-tool` real ni GitHub real - el test usa un bare repo local).
+Acción: `vexillum ship <task-id>`.
+Esperado: `git push review-tool <camp-branch>` sale bien, exit code 0, salida confirma el push y dice cómo seguir el pipeline (`review-tool axi status` / la TUI) sin que vexillum lo supervise.
+
+**B4-05 - `vexillum ship` refuse una tarea que no está done**
+Precondición: una tarea `running` (o cualquier estado que no sea `done`).
+Acción: `vexillum ship <task-id>`.
+Esperado: error explícito nombrando el estado; exit code distinto de 0; nada se pushea.
+
+**B4-06 - `vexillum ship` refuse un scout**
+Precondición: una tarea `KindScout` en estado `done`.
+Acción: `vexillum ship <task-id>`.
+Esperado: error explícito ("a scout should never have committed anything to ship"); exit code distinto de 0.
+
+**B4-07 - `vexillum ship` refuse cuando `review-tool` no está instalado**
+Precondición: una tarea `done` válida, proyecto no gateado, y `review-tool` no está en PATH.
+Acción: `vexillum ship <task-id>`.
+Esperado: error explícito ("'review-tool' is not installed") ofreciendo `vexillum land` como alternativa; exit code distinto de 0; nada se pushea, ni se intenta gatear.
+
+**B4-08 - `vexillum ship` auto-gatea un proyecto no gateado en el primer uso**
+Precondición: una tarea `done` válida, proyecto no gateado, `review-tool` instalado (en el test, un stub cuyo subcomando `init` agrega el remote `review-tool` apuntando a un bare repo real).
+Acción: `vexillum ship <task-id>`.
+Esperado: corre `review-tool init` primero (salida lo menciona explícitamente), después el push sale bien - exit code 0, mismo mensaje de confirmación que B4-04. Decisión tomada con el general después de la primera implementación (que refusaba en vez de auto-gatear) - ver `docs/review-tool.md`, "Auto-gate en `ship`, no en `init`".
+
+**B4-09 - un auto-gate fallido se reporta y no intenta el push**
+Precondición: una tarea `done` válida, proyecto no gateado, `review-tool` instalado pero su `init` falla (ej. sin remote real configurado).
+Acción: `vexillum ship <task-id>`.
+Esperado: error explícito ("'review-tool init' failed") con la salida de la herramienta; exit code distinto de 0; ningún intento de push después de un gate fallido.
+
+**Alcance de B.4, según el diseño cerrado en `docs/review-tool.md`**: el binario dispara el gate (si hace falta) y el push determinista (`vexillum ship`). Ninguna lógica de review/test/lint/docs en Go - eso es 100% de `review-tool`. Ninguna supervisión del pipeline post-push - el general usa las herramientas propias de la herramienta (`review-tool axi status`, la TUI). `review-tool init` nunca se corre desde `vexillum init` - vive en `ship`, lazy, en el primer uso.
+
+**Diferido a la tanda de pruebas en vivo**: confirmar con el binario `review-tool` real y un repo con remote de GitHub real que el pipeline efectivamente corre y abre un PR de verdad - los tests de arriba verifican el `git push` determinista contra un bare repo local, no el pipeline completo de la herramienta.

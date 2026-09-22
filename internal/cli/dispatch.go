@@ -169,6 +169,15 @@ func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind stat
 		return 1
 	}
 
+	return acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID, task, client, stdout, stderr)
+}
+
+// acquireAndRunInHerdr acquires a camp for task and runs it in a real
+// herdr pane - the exact sequence both a fresh dispatch and a re-dispatch
+// (internal/cli.runRedispatch) go through once task is ready to run, kept
+// in one place so the two commands can't drift out of step with each
+// other.
+func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task state.Task, client herdr.Client, stdout, stderr io.Writer) int {
 	c, err := camp.Acquire(projectDir, vexillumHome, task.ID)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: acquiring camp: %v\n", err)

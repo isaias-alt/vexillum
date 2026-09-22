@@ -23,9 +23,13 @@ import (
 // server or a real Claude Code session.
 type Client interface {
 	// CreateTab creates a tab (and its root pane) in workspaceID, with
-	// the pane's shell starting in cwd. Returns the new tab and pane
-	// ids.
-	CreateTab(workspaceID, cwd, label string) (tabID, paneID string, err error)
+	// the pane's shell starting in cwd, and each of env ("KEY=VALUE")
+	// set as an environment variable for the launched process (herdr
+	// tab create's own "--env", verified live - PRD v2, B.3: this is
+	// what lets a soldier's pane carry a deterministic
+	// CHROME_DEVTOOLS_AXI_SESSION without the soldier doing anything
+	// special). Returns the new tab and pane ids.
+	CreateTab(workspaceID, cwd, label string, env ...string) (tabID, paneID string, err error)
 
 	// AgentStart starts a supported interactive agent (kind, e.g.
 	// "claude") in an existing, at-prompt pane. name must match
@@ -157,8 +161,13 @@ func IsTimeout(err error) bool {
 // binary.
 type CLI struct{}
 
-func (CLI) CreateTab(workspaceID, cwd, label string) (string, string, error) {
-	result, err := run("tab", "create", "--workspace", workspaceID, "--cwd", cwd, "--label", label, "--no-focus")
+func (CLI) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
+	args := []string{"tab", "create", "--workspace", workspaceID, "--cwd", cwd, "--label", label}
+	for _, kv := range env {
+		args = append(args, "--env", kv)
+	}
+	args = append(args, "--no-focus")
+	result, err := run(args...)
 	if err != nil {
 		return "", "", err
 	}

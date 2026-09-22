@@ -405,3 +405,71 @@ func TestRelease_ConcurrentCallsDoNotLoseUpdates(t *testing.T) {
 		}
 	}
 }
+
+// A2-01: Discard throws away a dirty, unlanded camp - the worktree comes
+// back clean, the branch is gone, and a later Acquire for the same task
+// reuses the freed slot instead of creating a new one.
+func TestDiscard_ClearsDirtyUnlandedCamp(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(c.Path, "wip.txt"), []byte("half-finished\n"), 0o644); err != nil {
+		t.Fatalf("writing wip file: %v", err)
+	}
+	commitAll(t, c.Path, "unlanded work from a dead soldier")
+	if err := os.WriteFile(filepath.Join(c.Path, "untracked.txt"), []byte("stray\n"), 0o644); err != nil {
+		t.Fatalf("writing untracked file: %v", err)
+	}
+
+	if err := Discard(c, "task-1"); err != nil {
+		t.Fatalf("Discard: %v", err)
+	}
+
+	if status := strings.TrimSpace(runGitT(t, c.Path, "status", "--porcelain")); status != "" {
+		t.Errorf("expected a clean worktree after Discard, got status:\n%s", status)
+	}
+	branches := runGitT(t, c.Path, "branch", "--list", c.Branch)
+	if strings.TrimSpace(branches) != "" {
+		t.Errorf("expected branch %s to be deleted, still present: %s", c.Branch, branches)
+	}
+
+	c2, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire after Discard: %v", err)
+	}
+	if c2.Slot != c.Slot {
+		t.Errorf("expected Acquire to reuse discarded slot %d, got slot %d", c.Slot, c2.Slot)
+	}
+	if _, err := os.Stat(filepath.Join(c2.Path, "wip.txt")); err == nil {
+		t.Errorf("expected the discarded commit's file to be gone from the reused slot")
+	}
+}
+
+// A2-02: Discard refuses a slot leased by another task, exactly like
+// Release does.
+func TestDiscard_RefusesWrongOwner(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+
+	if err := Discard(c, "task-2"); err == nil {
+		t.Fatal("expected Discard to refuse a slot leased by a different task")
+	}
+
+	pool, err := loadPool(c.PoolRoot)
+	if err != nil {
+		t.Fatalf("loadPool: %v", err)
+	}
+	if pool.Slots[0].LeasedBy != "task-1" {
+		t.Errorf("expected slot to remain leased by task-1, got %q", pool.Slots[0].LeasedBy)
+	}
+}
