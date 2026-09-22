@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -30,6 +31,13 @@ no-mistakes then runs its own review/test/lint/docs pipeline in an
 isolated worktree and opens the PR itself once every check is green.
 Track that pipeline with 'no-mistakes axi status' or the 'no-mistakes'
 TUI - vexillum does not supervise it.
+
+A mission already shipped can be shipped again, to push follow-up
+commits onto the same open PR - only "done" and "shipped" are valid
+starting states. Once shipped, land the PR with 'vexillum land
+<task-id>' rather than 'vexillum land'-ing the camp locally; the camp's
+own branch is no longer the source of truth once no-mistakes may have
+applied fixes to it.
 `
 
 // Ship runs the "vexillum ship" command.
@@ -63,8 +71,8 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		fmt.Fprintf(stderr, "vexillum: task %s is a scout, not a mission - a scout should never have committed anything to ship\n", taskID)
 		return 1
 	}
-	if task.Status != state.StatusDone {
-		fmt.Fprintf(stderr, "vexillum: task %s is %s, not done - only a finished mission can be shipped\n", taskID, task.Status)
+	if task.Status != state.StatusDone && task.Status != state.StatusShipped {
+		fmt.Fprintf(stderr, "vexillum: task %s is %s, not done or already shipped - only a finished mission can be shipped\n", taskID, task.Status)
 		return 1
 	}
 
@@ -85,6 +93,13 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 	out, pushErr := cmd.CombinedOutput()
 	if pushErr != nil {
 		fmt.Fprintf(stderr, "vexillum: pushing %s through the no-mistakes gate: %v\n%s\n", c.Branch, pushErr, strings.TrimSpace(string(out)))
+		return 1
+	}
+
+	task.Status = state.StatusShipped
+	task.UpdatedAt = time.Now().UTC()
+	if err := state.Save(vexillumHome, task); err != nil {
+		fmt.Fprintf(stderr, "vexillum: pushed %s, but failed to record shipped status: %v\n", c.Branch, err)
 		return 1
 	}
 

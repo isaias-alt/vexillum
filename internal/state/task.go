@@ -56,6 +56,13 @@ const (
 	// anything wrong, vexillum just lost the ability to observe it -
 	// any work it had already committed is still sitting in its camp.
 	StatusInterrupted Status = "interrupted"
+	// StatusShipped marks a mission pushed through the no-mistakes gate
+	// (vexillum ship). From here the PR is the source of truth, not this
+	// camp: land merges the real PR instead of fast-forwarding a local
+	// branch that no-mistakes may have moved (auto-fix commits, or a
+	// rebase before merging), and release can no longer rely on a plain
+	// ancestor check once GitHub squashes or rebases the merge.
+	StatusShipped Status = "shipped"
 )
 
 // Task is a mission or scout, serialized to JSON in ~/.vexillum/tasks/.

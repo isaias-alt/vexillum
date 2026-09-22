@@ -521,6 +521,43 @@ func TestDoctor_NoMistakesGated(t *testing.T) {
 	}
 }
 
+// gh not installed is reported, informational only - it never affects
+// the exit code, same posture as no-mistakes above.
+func TestDoctor_GitHubCLINotInstalled(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+	vexillumHome := t.TempDir()
+	homeDir := t.TempDir()
+
+	var out bytes.Buffer
+	code := runDoctor(projectDir, vexillumHome, homeDir, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d\noutput:\n%s", code, out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("[missing] GitHub CLI (gh) - not found in PATH")) {
+		t.Errorf("expected gh reported not found, got:\n%s", out.String())
+	}
+}
+
+// gh installed reports ok.
+func TestDoctor_GitHubCLIInstalled(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux", "gh"))
+	projectDir := initializedProject(t)
+	vexillumHome := t.TempDir()
+	homeDir := t.TempDir()
+
+	var out bytes.Buffer
+	code := runDoctor(projectDir, vexillumHome, homeDir, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d\noutput:\n%s", code, out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("[ok] GitHub CLI (gh)")) {
+		t.Errorf("expected gh reported ok, got:\n%s", out.String())
+	}
+}
+
 // snapshotTree returns a string describing every entry under dir (relative
 // path, size, mode, mod time), so two snapshots can be compared for any
 // change doctor might have made.

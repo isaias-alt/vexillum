@@ -143,6 +143,66 @@ func TestRelease_RefusesUnlandedCamp(t *testing.T) {
 	}
 }
 
+// A squash (or rebase) merge on GitHub never makes the camp branch a git
+// ancestor of the base branch - the merge commit's parent is the
+// pre-merge base, not the camp's tip. Release must still recognize the
+// work as landed once the project's own checkout has the same content,
+// via the content-in-base fallback (mirrors github.com/kunchenguid/
+// firstmate's content_in_default, used for exactly this case).
+func TestRelease_AcceptsSquashMergedContent(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "change.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatalf("writing change in camp: %v", err)
+	}
+	commitAll(t, c.Path, "camp change")
+
+	// Simulate GitHub squash-merging the camp's branch: the exact same
+	// content lands on the project's base branch, but as a brand new
+	// commit with no ancestry link back to the camp's branch tip.
+	if err := os.WriteFile(filepath.Join(project, "change.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatalf("writing change in project: %v", err)
+	}
+	commitAll(t, project, "squash-merge camp change")
+
+	if err := Release(c, "task-1"); err != nil {
+		t.Fatalf("expected Release to accept squash-merged content, got: %v", err)
+	}
+}
+
+// A camp whose branch genuinely diverged - neither an ancestor of base
+// nor matching its content - is still refused. The content fallback must
+// not paper over real unlanded work.
+func TestRelease_RefusesGenuinelyDivergedCamp(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "change.txt"), []byte("camp-only\n"), 0o644); err != nil {
+		t.Fatalf("writing change in camp: %v", err)
+	}
+	commitAll(t, c.Path, "camp change")
+
+	// The project's base branch also moved, but with unrelated content -
+	// the camp's change was never applied anywhere.
+	if err := os.WriteFile(filepath.Join(project, "unrelated.txt"), []byte("unrelated\n"), 0o644); err != nil {
+		t.Fatalf("writing unrelated change: %v", err)
+	}
+	commitAll(t, project, "unrelated base change")
+
+	if err := Release(c, "task-1"); err == nil {
+		t.Fatal("expected Release to refuse a camp whose content never landed")
+	}
+}
+
 // L3-09: Release refuses when the caller isn't the slot's recorded owner.
 func TestRelease_RefusesWrongOwner(t *testing.T) {
 	project := initProjectRepo(t)

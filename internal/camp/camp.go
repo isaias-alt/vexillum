@@ -259,6 +259,21 @@ func Release(c Camp, taskID string) error {
 		return fmt.Errorf("checking whether camp branch landed: %w", err)
 	}
 	if !landed {
+		// A plain ancestor check only proves a "vexillum land"
+		// fast-forward. A shipped mission whose PR merged via squash or
+		// rebase on GitHub never satisfies it, even after a real local
+		// pull - the merge commit's parent is the pre-merge base, not
+		// this camp's tip. Fall back to a content check: does merging
+		// this branch into the current base introduce anything base
+		// doesn't already have? If not, the work already landed, just
+		// under different commit SHAs. Same technique
+		// github.com/kunchenguid/firstmate uses for this exact case.
+		landed, err = contentAlreadyInBase(c.Path, base)
+		if err != nil {
+			return fmt.Errorf("checking whether camp content already landed: %w", err)
+		}
+	}
+	if !landed {
 		return fmt.Errorf("camp %s branch %s has commits not yet landed on %s, refusing to release", c.Path, c.Branch, base)
 	}
 
@@ -427,4 +442,27 @@ func isAncestor(dir, ancestor, descendant string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("git merge-base --is-ancestor %s %s (in %s): %w", ancestor, descendant, dir, err)
+}
+
+// contentAlreadyInBase reports whether campDir's current HEAD introduces
+// nothing that base doesn't already contain - the squash/rebase-merge
+// case isAncestor can't see. campDir is a worktree of the same repository
+// as base, so base resolves there directly; no fetch needed, since the
+// general's own "git pull" on the project's checkout is what brings a
+// real GitHub merge in locally. Merges base into HEAD in memory
+// (git merge-tree, nothing written to disk) and compares the resulting
+// tree to base's own tree: if they match, HEAD added nothing base
+// lacked, so the content already landed even though the commit graphs
+// never touch. A real conflict returns (false, nil), not an error -
+// that's still-diverged, unlanded work, not a landed match.
+func contentAlreadyInBase(campDir, base string) (bool, error) {
+	baseTree, err := runGit(campDir, "rev-parse", base+"^{tree}")
+	if err != nil {
+		return false, fmt.Errorf("resolving %s's tree: %w", base, err)
+	}
+	mergedTree, err := runGit(campDir, "merge-tree", "--write-tree", base, "HEAD")
+	if err != nil {
+		return false, nil
+	}
+	return strings.TrimSpace(mergedTree) == strings.TrimSpace(baseTree), nil
 }

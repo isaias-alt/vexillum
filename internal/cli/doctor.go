@@ -92,6 +92,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		checkHerdrVersion(),
 		checkBinary("tmux", "tmux", false),
 		checkNoMistakes(projectDir),
+		checkGitHubCLI(),
 		checkVexillumHome(vexillumHome),
 		checkProjectInitialized(projectDir),
 		checkGitRepo(projectDir),
@@ -212,6 +213,20 @@ func checkNoMistakes(projectDir string) checkResult {
 		return checkResult{Name: name, Detail: "installed, but this project hasn't run 'no-mistakes init' yet - 'vexillum ship' will do this automatically the first time"}
 	}
 	return checkResult{Name: name, OK: true, Detail: "installed and this project is gated"}
+}
+
+// checkGitHubCLI reports whether the "gh" binary is installed - the
+// official GitHub CLI, called directly by "vexillum land" to merge a
+// shipped mission's real PR (mergeShippedPR, land_merge.go), not the
+// separate "gh-axi" agent-facing AXI. Optional and purely informational:
+// a project that never ships through the no-mistakes gate never needs
+// it, same posture as the no-mistakes check above.
+func checkGitHubCLI() checkResult {
+	const name = "GitHub CLI (gh)"
+	if _, err := exec.LookPath("gh"); err != nil {
+		return checkResult{Name: name, Detail: "not found in PATH (optional - only needed for 'vexillum land' on a shipped mission)"}
+	}
+	return checkResult{Name: name, OK: true}
 }
 
 // noMistakesGateConfigured reports whether projectDir already has the

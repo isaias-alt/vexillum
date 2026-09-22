@@ -46,6 +46,13 @@ Usage:
 Fast-forwards this project's own checkout to the mission's branch.
 Refuses (leaving everything untouched) unless this checkout is clean and
 the merge is a clean fast-forward - never forces or rebases anything.
+
+For a task already shipped through the no-mistakes gate ('vexillum
+ship'), this instead merges the real pull request on GitHub - the camp's
+own branch is no longer the source of truth once no-mistakes may have
+applied fixes to it in its own isolated worktree. Requires "gh". Refuses
+unless the pull request is open, not a draft, mergeable, and every check
+is green; the merge is bound to the exact head just verified.
 `
 
 const releaseUsage = `Release a soldier's camp back to the pool once its work has landed.
@@ -230,6 +237,10 @@ func runLand(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
 		return 1
+	}
+
+	if task.Status == state.StatusShipped {
+		return mergeShippedPR(projectDir, task, stdout, stderr)
 	}
 
 	c, err := camp.Resolve(projectDir, vexillumHome, task.CampSlot)
