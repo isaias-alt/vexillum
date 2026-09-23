@@ -40,7 +40,7 @@ Trabajá en la capa activa. No adelantes código de capas futuras salvo pedido e
 
 ## Bitácora de sesiones (binnacle)
 
-Cada decisión que se toma en una sesión de trabajo se guarda en la carpeta `binnacle/` del repo. Una decisión (lo que se resolvió, lo que se probó y se revirtió, lo que quedó pendiente) no vive solo en el chat: se registra en un archivo de bitácora.
+Cada decisión que se toma en una sesión de trabajo se guarda en la carpeta `binnacle/` en la raíz del proyecto. Es local: `binnacle/` está en `.gitignore`, nunca se commitea ni se pushea, para no exponer públicamente el detalle de cómo se construye vexillum. Aun así, una decisión (lo que se resolvió, lo que se probó y se revirtió, lo que quedó pendiente) no vive solo en el chat: se registra en un archivo de bitácora, ahí, aunque ese archivo no viaje con el repo.
 
 **Nomenclatura del archivo:** `YYYYMMDD-tema-corto-con-guiones.md`
 Ejemplo: `20260903-prompt-colors-claude-theme-vim.md`
@@ -73,6 +73,6 @@ revirtió, qué archivos quedaron como estaban).
   (un enlace, un comando, un archivo a mirar) en vez de arrancar de cero.
 ```
 
-No todas las secciones son obligatorias en cada archivo: si una sesión solo resolvió cosas, alcanza con "Resuelto y en pie". Si solo exploró sin cerrar, "Probado y revertido" y "Pendiente" bastan. Lo obligatorio es que **toda decisión de la sesión quede registrada** en un archivo de bitácora con la nomenclatura de arriba, para que el historial de por qué las cosas son como son viva en el repo y no en la memoria de un chat.
+No todas las secciones son obligatorias en cada archivo: si una sesión solo resolvió cosas, alcanza con "Resuelto y en pie". Si solo exploró sin cerrar, "Probado y revertido" y "Pendiente" bastan. Lo obligatorio es que **toda decisión de la sesión quede registrada** en un archivo de bitácora con la nomenclatura de arriba, para que el historial de por qué las cosas son como son viva en `binnacle/` local y no en la memoria de un chat.
 
 Distinción con el ADR: el ADR guarda decisiones de arquitectura estructurales y duraderas (por qué Go, por qué herdr). La binnacle guarda el registro cronológico de cada sesión de trabajo, incluidas las cosas chicas, los experimentos fallidos y los pendientes. Una decisión de arquitectura grande puede empezar en una entrada de binnacle y graduarse a un ADR.
