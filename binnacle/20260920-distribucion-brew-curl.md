@@ -11,8 +11,11 @@
 
 - **Tap de Homebrew separado, no fórmula en el mismo repo**: se investigó
   primero cómo lo resuelve un proyecto Go comparable real en el mismo
-  dominio (`Gentleman-Programming/gentle-ai`, orquestador de agentes de
-  código) en vez de asumir - mismo criterio que pide el AGENTS.md. Ese
+  dominio (`Gentleman-Programming/gentle-ai`, configurador de ecosistema
+  de agentes - memoria persistente, flujo Spec-Driven Development, skills
+  curadas, servidores MCP y una persona; no lanza ni supervisa agentes en
+  paralelo, configura el entorno y sale del camino) en vez de asumir -
+  mismo criterio que pide el AGENTS.md. Ese
   proyecto usa un tap separado (`Gentleman-Programming/homebrew-tap`, no
   `homebrew-<proyecto>`) con un token dedicado, dando el one-liner estándar
   `brew install owner/tap/formula`. Se descartó la alternativa más simple
