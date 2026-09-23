@@ -8,6 +8,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -60,7 +61,13 @@ func Redispatch(args []string) int {
 }
 
 func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
-	task, err := state.Load(vexillumHome, taskID)
+	projectRoot, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
+	task, err := state.Load(projectRoot, taskID)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
 		return 1
@@ -102,7 +109,7 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 	// AgentStatus hiccup.
 	task.AgentNotFoundSince = time.Time{}
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		fmt.Fprintf(stderr, "vexillum: persisting reset task: %v\n", err)
 		return 1
 	}

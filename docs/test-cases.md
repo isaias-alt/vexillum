@@ -573,3 +573,78 @@ Esperado: error explícito ("'no-mistakes init' failed") con la salida de la her
 **Alcance de B.4, según el diseño cerrado en `docs/no-mistakes.md`**: el binario dispara el gate (si hace falta) y el push determinista (`vexillum ship`). Ninguna lógica de review/test/lint/docs en Go - eso es 100% de `no-mistakes`. Ninguna supervisión del pipeline post-push - el general usa las herramientas propias de la herramienta (`no-mistakes axi status`, la TUI). `no-mistakes init` nunca se corre desde `vexillum init` - vive en `ship`, lazy, en el primer uso.
 
 **Diferido a la tanda de pruebas en vivo**: confirmar con el binario `no-mistakes` real y un repo con remote de GitHub real que el pipeline efectivamente corre y abre un PR de verdad - los tests de arriba verifican el `git push` determinista contra un bare repo local, no el pipeline completo de la herramienta.
+
+## V3 - PARTE C (saneamiento)
+
+### C.1 - Namespace por proyecto en ~/.vexillum
+
+Problema cerrado: `tasks/` y `wakes/` eran globales por máquina (`~/.vexillum/tasks/`, `~/.vexillum/wakes/`), sin proyecto en `Task`/`Wake`. Con dos proyectos abiertos, `sentinel.Drain` (que devolvía y ackeaba *todas* las wakes) dejaba que el Stop hook del commander del proyecto A consumiera las wakes de un soldier del proyecto B. Nuevo layout: `~/.vexillum/projects/<key>/{tasks,wakes,camps}`, con `<key>` calculado por una sola función compartida (`internal/project.Key`, antes duplicada en `camp.Acquire`/`camp.Resolve`). `sentinel.pid`/`sentinel.log` siguen globales (un sentinel por máquina, que recorre todos los proyectos en cada `Tick`). `Task` no cambia de formato ni de `SchemaVersion` - el directorio es el filtro. `Wake` pierde el campo `Acked`: `Drain` borra el archivo de la wake al entregarla en vez de marcarlo.
+
+**C1-01 - `project.Key` es estable para la misma ruta absoluta**
+Acción: llamar `project.Key(path)` dos veces con el mismo `path`.
+Esperado: mismo resultado las dos veces.
+
+**C1-02 - `project.Key` difiere entre dos proyectos con el mismo nombre base**
+Precondición: dos rutas absolutas distintas que terminan en el mismo nombre de carpeta (`.../a/myproject`, `.../b/myproject`).
+Acción: `project.Key` sobre cada una.
+Esperado: claves distintas - la clave hashea la ruta absoluta completa, no solo el nombre base.
+
+**C1-03 - `project.Root` ubica el proyecto en `vexillumHome/projects/<key>`**
+Acción: `project.Root(vexillumHome, projectDir)`.
+Esperado: `filepath.Join(vexillumHome, "projects", project.Key(<projectDir resuelto>))`.
+
+**C1-04 - `project.Root` normaliza symlinks antes de hashear**
+Precondición: un directorio real y un symlink a ese mismo directorio, desde otra ubicación.
+Acción: `project.Root(vexillumHome, real)` y `project.Root(vexillumHome, symlink)`.
+Esperado: la misma raíz para los dos - lo que mantiene a `vexillum dispatch` (resuelve el proyecto desde `os.Getwd()` sin tocar symlinks) y `vexillum sentinel drain` (resuelve desde `git rev-parse --show-toplevel`, que sí los sigue) de acuerdo sobre el mismo proyecto en una máquina donde su ruta involucra un symlink (ej. `$TMPDIR` de macOS bajo `/var` → `/private/var`).
+
+**C1-05 - `project.AllRoots` da lista vacía, no error, sin `projects/`**
+Precondición: `vexillumHome` recién creado, sin ningún proyecto namespaceado todavía.
+Acción: `project.AllRoots(vexillumHome)`.
+Esperado: slice vacío, `err == nil`.
+
+**C1-06 - `project.AllRoots` lista todos los proyectos namespaceados**
+Precondición: dos proyectos con raíz creada bajo `vexillumHome/projects/`.
+Acción: `project.AllRoots(vexillumHome)`.
+Esperado: las dos raíces, sin importar el orden - es lo que `sentinel.Tick` recorre en cada barrido.
+
+**C1-07 - `sentinel.Drain` borra el archivo de la wake al entregarla**
+Precondición: una wake pendiente real, generada por un `Tick` que detectó una transición.
+Acción: `sentinel.Drain(projectRoot)`.
+Esperado: el archivo `<project root>/wakes/<task-id>.json` deja de existir después del drain - no queda marcado con ningún campo de "acked", simplemente se borra.
+
+**C1-08 - `sentinel.Tick` recorre todos los proyectos y aísla sus wakes**
+Precondición: dos proyectos distintos bajo el mismo `vexillumHome`, cada uno con una tarea `running` que settlea en el mismo `Tick`.
+Acción: `sentinel.Tick(vexillumHome, client)`, después `sentinel.Drain` sobre cada proyecto por separado.
+Esperado: 2 wakes en total; el drain del proyecto A solo devuelve la wake de la tarea de A, el de B solo la de B - la garantía central de todo este cambio: dos proyectos abiertos a la vez ya no comparten `tasks/` ni `wakes/`.
+
+**C1-09 - `resolveDrainTarget` fuera de un repo git es un no-op**
+Precondición: `cwd` no está dentro de ningún repositorio git.
+Acción: `resolveDrainTarget(cwd, vexillumHome)`.
+Esperado: `("", nil)` - ni error ni proyecto resuelto.
+
+**C1-10 - `resolveDrainTarget` resuelve la misma raíz que usa `camp.Acquire`**
+Precondición: un proyecto git real, inicializado.
+Acción: `resolveDrainTarget(projectDir, vexillumHome)` y por separado `camp.Acquire(projectDir, vexillumHome, taskID)`.
+Esperado: la raíz que devuelve `resolveDrainTarget` es exactamente el padre de `c.PoolRoot` (que ahora es `<project root>/camps`) - `dispatch` y `drain` concuerdan en el mismo proyecto.
+
+**C1-11 - `resolveDrainTarget` funciona desde una subcarpeta del proyecto**
+Precondición: un proyecto git real con una subcarpeta.
+Acción: `resolveDrainTarget` desde la raíz del proyecto y por separado desde la subcarpeta.
+Esperado: la misma raíz de proyecto en los dos casos - a diferencia de `dispatch`/`land`/`release`/`redispatch`/`ship`, que exigen correr desde la raíz exacta (usan `os.Getwd()` sin buscar el toplevel), `drain`/`await` funcionan desde cualquier subdirectorio porque resuelven vía `git rev-parse --show-toplevel`.
+
+**C1-12 - `resolveDrainTarget` desde dentro de un camp es un no-op**
+Precondición: un camp real, adquirido con `camp.Acquire` sobre un proyecto real.
+Acción: `resolveDrainTarget(c.Path, vexillumHome)`.
+Esperado: `("", nil)` - el toplevel de un camp es el propio worktree, que vive bajo `vexillumHome`; el Stop hook de un soldier corriendo en su propio camp no tiene nada que drenar para sí mismo.
+
+**Bug encontrado en vivo por este caso (arreglado antes de que este test pasara)**: la comparación de "¿el toplevel está bajo `vexillumHome`?" (`refuseInsideVexillumHome`) comparaba el toplevel resuelto por git (que sigue symlinks al buscar hacia arriba) contra un `vexillumHome` sin resolver. En una máquina donde la ruta de `vexillumHome` involucra un symlink (el caso de cualquier test bajo el `$TMPDIR` de macOS, `/var` → `/private/var`), la comparación de prefijos fallaba en silencio y un camp real no se reconocía como tal. Arreglado normalizando `vexillumHome` con `filepath.EvalSymlinks` antes de esa comparación específica (`internal/cli/sentinel.go`, `resolveDrainTarget`).
+
+**C1-13 - un drain desde un camp no toca las wakes reales del proyecto**
+Precondición: un proyecto real con una wake pendiente genuina (generada por un `Tick` real); un camp real de ese mismo proyecto.
+Acción: `resolveDrainTarget` con `cwd = c.Path` (simulando el Stop hook de un soldier corriendo en su propio camp).
+Esperado: no se resuelve ningún proyecto (ver C1-12), y la wake pendiente del proyecto sigue intacta en `<project root>/wakes/` después del intento - un drain lanzado desde un camp nunca consume las wakes del proyecto real.
+
+**Verificado en el código (no en test)**: los soldiers heredan el Stop hook committeado por `vexillum init` en `.claude/settings.json` solo si ese archivo está comiteado en el proyecto - `vexillum init` lo escribe pero nunca lo comitea, y `camp.Acquire` crea el worktree vía `git worktree add`, que solo refleja lo que ya está en el commit. Confirma el paréntesis del general: "si `.claude/settings.json` está commiteado, sí" heredan el hook.
+
+**Riesgo aceptado, documentado en el código** (`internal/project.Key`): renombrar o mover el proyecto cambia la clave y deja huérfanas sus tareas/wakes/camps previas - no hay migración ni detección del layout viejo. El estado previo (si existía, de antes de este cambio) se borra a mano antes del primer uso real; no hay código ni tests para el layout anterior.

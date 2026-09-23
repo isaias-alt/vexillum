@@ -1,8 +1,16 @@
 // Package sentinel implements vexillum's supervision loop (Capa 4, paso
 // 2): it polls herdr for status changes on tasks vexillum is tracking,
-// persists any transition, and records a durable, ack-based wake so the
-// commander's Stop hook can surface it and keep working instead of
-// quietly ending its turn.
+// persists any transition, and records a durable wake so the commander's
+// Stop hook can surface it and keep working instead of quietly ending its
+// turn.
+//
+// One sentinel process runs per machine (AcquireLock, IsRunning), not per
+// project - it sweeps every project namespaced under vexillumHome (see
+// internal/project) in a single Tick. A wake, like the task it's about,
+// belongs to exactly one project's <project root>/wakes/ - Drain only
+// ever surfaces (and removes) the wakes for the one project root it's
+// given, so a commander in project A never drains a wake that belongs to
+// a soldier in project B.
 //
 // Polling, not push (herdr's events.subscribe): this matches firstmate's
 // own acknowledged fallback - "polling runs every cycle and remains the
@@ -26,27 +34,30 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
-// Wake is a durable, ack-based record that a tracked task's status
-// changed - the sentinel's equivalent of firstmate's wake queue.
+// Wake is a durable record that a tracked task's status changed - the
+// sentinel's equivalent of firstmate's wake queue. It's delivered, not
+// acknowledged: Drain removes a wake's file the moment it hands it back,
+// so a wake's mere presence on disk under <project root>/wakes/ already
+// means "pending" - there's no separate acked flag to go stale.
 type Wake struct {
 	TaskID     string       `json:"task_id"`
 	Kind       state.Kind   `json:"kind"`
 	OldStatus  state.Status `json:"old_status"`
 	NewStatus  state.Status `json:"new_status"`
 	DetectedAt time.Time    `json:"detected_at"`
-	Acked      bool         `json:"acked"`
 }
 
-func wakesDir(vexillumHome string) string {
-	return filepath.Join(vexillumHome, "wakes")
+func wakesDir(projectRoot string) string {
+	return filepath.Join(projectRoot, "wakes")
 }
 
-func wakePath(vexillumHome, taskID string) string {
-	return filepath.Join(wakesDir(vexillumHome), taskID+".json")
+func wakePath(projectRoot, taskID string) string {
+	return filepath.Join(wakesDir(projectRoot), taskID+".json")
 }
 
 // tickReadLines matches soldier.defaultReadLines: the sentinel is now
@@ -84,14 +95,39 @@ const settleGracePeriod = 8 * time.Second
 // tick or two later is what herdr.APIError alone can't tell us.
 const notFoundConfirmWindow = 10 * time.Second
 
-// Tick checks every task currently marked running against its live herdr
-// agent status, persists any status change, and records a wake for it.
-// Returns how many wakes it recorded. A transient read failure on one
-// task is skipped, not fatal - there's always a next tick. An agent
-// confirmed genuinely gone (not just transiently unreachable) instead
-// gets marked interrupted - see notFoundConfirmWindow.
+// Tick sweeps every project namespaced under vexillumHome
+// (vexillumHome/projects/*, see internal/project) and, within each,
+// checks every task currently marked running against its live herdr
+// agent status - persisting any status change and recording a wake for
+// it. Returns how many wakes it recorded across all projects. There's
+// one sentinel process per machine (see AcquireLock), so this is the
+// single place responsible for reconciling every project's tasks, not
+// just whichever one last called dispatch. A fatal error in one
+// project's sweep stops the whole Tick early, the same way a fatal error
+// already stopped a single-project Tick before projects existed - the
+// next Tick (5s later, see Run) picks up wherever this one left off.
 func Tick(vexillumHome string, client herdr.Client) (int, error) {
-	tasks, err := state.List(vexillumHome)
+	roots, err := project.AllRoots(vexillumHome)
+	if err != nil {
+		return 0, fmt.Errorf("listing projects: %w", err)
+	}
+
+	woke := 0
+	for _, projectRoot := range roots {
+		n, err := tickProject(projectRoot, client)
+		woke += n
+		if err != nil {
+			return woke, err
+		}
+	}
+	return woke, nil
+}
+
+// tickProject is Tick's per-project body: it never crosses project
+// boundaries, so a wake it records can only ever belong to the project
+// rooted at projectRoot.
+func tickProject(projectRoot string, client herdr.Client) (int, error) {
+	tasks, err := state.List(projectRoot)
 	if err != nil {
 		return 0, fmt.Errorf("listing tasks: %w", err)
 	}
@@ -108,7 +144,7 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 		live, err := client.AgentStatus(task.HerdrAgentName)
 		if err != nil {
 			if herdr.IsNotFound(err) {
-				interrupted, ierr := handleAgentNotFound(vexillumHome, task)
+				interrupted, ierr := handleAgentNotFound(projectRoot, task)
 				if ierr != nil {
 					return woke, ierr
 				}
@@ -128,7 +164,7 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 			// so a later genuine disappearance starts its own fresh
 			// confirmation window instead of inheriting a stale one.
 			task.AgentNotFoundSince = time.Time{}
-			if err := state.Save(vexillumHome, task); err != nil {
+			if err := state.Save(projectRoot, task); err != nil {
 				return woke, fmt.Errorf("clearing not-found mark for task %s: %w", task.ID, err)
 			}
 		}
@@ -149,10 +185,10 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 		if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
 			task.Output = output
 		}
-		if err := state.Save(vexillumHome, task); err != nil {
+		if err := state.Save(projectRoot, task); err != nil {
 			return woke, fmt.Errorf("persisting task %s: %w", task.ID, err)
 		}
-		if err := recordWake(vexillumHome, task, old, newStatus); err != nil {
+		if err := recordWake(projectRoot, task, old, newStatus); err != nil {
 			return woke, fmt.Errorf("recording wake for task %s: %w", task.ID, err)
 		}
 		woke++
@@ -164,10 +200,10 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 // genuinely gone, and marks the task Interrupted once that's held true
 // for notFoundConfirmWindow. Returns whether it interrupted the task
 // (and so recorded a wake) on this call.
-func handleAgentNotFound(vexillumHome string, task state.Task) (interrupted bool, err error) {
+func handleAgentNotFound(projectRoot string, task state.Task) (interrupted bool, err error) {
 	if task.AgentNotFoundSince.IsZero() {
 		task.AgentNotFoundSince = time.Now().UTC()
-		if err := state.Save(vexillumHome, task); err != nil {
+		if err := state.Save(projectRoot, task); err != nil {
 			return false, fmt.Errorf("recording not-found mark for task %s: %w", task.ID, err)
 		}
 		return false, nil
@@ -184,17 +220,17 @@ func handleAgentNotFound(vexillumHome string, task state.Task) (interrupted bool
 		task.Output += "\n\n"
 	}
 	task.Output += "[vexillum] this soldier's herdr agent disappeared (pane closed, or herdr restarted) - marked interrupted. Any work it already committed is still in its camp."
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		return false, fmt.Errorf("persisting interrupted task %s: %w", task.ID, err)
 	}
-	if err := recordWake(vexillumHome, task, old, state.StatusInterrupted); err != nil {
+	if err := recordWake(projectRoot, task, old, state.StatusInterrupted); err != nil {
 		return false, fmt.Errorf("recording wake for interrupted task %s: %w", task.ID, err)
 	}
 	return true, nil
 }
 
-func recordWake(vexillumHome string, task state.Task, old, newStatus state.Status) error {
-	dir := wakesDir(vexillumHome)
+func recordWake(projectRoot string, task state.Task, old, newStatus state.Status) error {
+	dir := wakesDir(projectRoot)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -204,15 +240,17 @@ func recordWake(vexillumHome string, task state.Task, old, newStatus state.Statu
 		OldStatus:  old,
 		NewStatus:  newStatus,
 		DetectedAt: time.Now().UTC(),
-		Acked:      false,
 	}
-	return atomicfile.WriteJSON(wakePath(vexillumHome, task.ID), w)
+	return atomicfile.WriteJSON(wakePath(projectRoot, task.ID), w)
 }
 
-// Drain returns every unacknowledged wake, oldest first, and marks them
-// acknowledged - a wake is surfaced once, not repeated on every drain.
-func Drain(vexillumHome string) ([]Wake, error) {
-	dir := wakesDir(vexillumHome)
+// Drain returns every pending wake for the project rooted at projectRoot,
+// oldest first, deleting each one's file as it's delivered - a wake is
+// surfaced once, not repeated on every drain, and its file's mere
+// existence on disk is what "pending" means (no separate acked flag to
+// keep in sync).
+func Drain(projectRoot string) ([]Wake, error) {
+	dir := wakesDir(projectRoot)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -232,13 +270,12 @@ func Drain(vexillumHome string) ([]Wake, error) {
 			continue
 		}
 		var w Wake
-		if err := json.Unmarshal(data, &w); err != nil || w.Acked {
+		if err := json.Unmarshal(data, &w); err != nil {
 			continue
 		}
 		drained = append(drained, w)
-		w.Acked = true
-		if err := atomicfile.WriteJSON(path, w); err != nil {
-			return nil, fmt.Errorf("acknowledging wake for task %s: %w", w.TaskID, err)
+		if err := os.Remove(path); err != nil {
+			return nil, fmt.Errorf("removing delivered wake for task %s: %w", w.TaskID, err)
 		}
 	}
 

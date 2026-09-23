@@ -40,11 +40,20 @@ func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error)             { return f.readOutput, nil }
 func (f *fakeHerdr) TabClose(tabID string) error                                  { return nil }
 
+// projectRoot returns a namespaced project root under vexillumHome, the
+// same shape internal/project.Root would produce (vexillumHome/projects/<key>),
+// without needing a real project directory or git repo - Tick only cares
+// that it's a subdirectory of vexillumHome/projects, and Drain/state don't
+// care about its name at all.
+func projectRoot(vexillumHome, name string) string {
+	return filepath.Join(vexillumHome, "projects", name)
+}
+
 // newRunningTask backdates UpdatedAt well past Tick's settle-race grace
 // period, so tests exercising a real transition aren't accidentally
 // testing the grace period instead - see
 // TestTick_SkipsTasksWithinSettleGracePeriod for that.
-func newRunningTask(t *testing.T, home, agentName string) state.Task {
+func newRunningTask(t *testing.T, projectRoot, agentName string) state.Task {
 	t.Helper()
 	task, err := state.New(state.KindMission, "do the thing")
 	if err != nil {
@@ -53,7 +62,7 @@ func newRunningTask(t *testing.T, home, agentName string) state.Task {
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = agentName
 	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 	return task
@@ -63,7 +72,8 @@ func newRunningTask(t *testing.T, home, agentName string) state.Task {
 // persisted status updated and a wake recorded.
 func TestTick_RecordsWakeOnTransition(t *testing.T) {
 	home := t.TempDir()
-	task := newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
 
 	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "done"}}
 
@@ -75,7 +85,7 @@ func TestTick_RecordsWakeOnTransition(t *testing.T) {
 		t.Fatalf("expected 1 wake, got %d", woke)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -83,7 +93,7 @@ func TestTick_RecordsWakeOnTransition(t *testing.T) {
 		t.Errorf("expected persisted status done, got %s", persisted.Status)
 	}
 
-	wakes, err := sentinel.Drain(home)
+	wakes, err := sentinel.Drain(proj)
 	if err != nil {
 		t.Fatalf("Drain: %v", err)
 	}
@@ -98,7 +108,8 @@ func TestTick_RecordsWakeOnTransition(t *testing.T) {
 // reads it.
 func TestTick_CapturesOutputOnTransition(t *testing.T) {
 	home := t.TempDir()
-	task := newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
 
 	client := &fakeHerdr{
 		statuses:   map[string]string{"vx-do-the-thing": "done"},
@@ -109,7 +120,7 @@ func TestTick_CapturesOutputOnTransition(t *testing.T) {
 		t.Fatalf("Tick: %v", err)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -126,6 +137,7 @@ func TestTick_CapturesOutputOnTransition(t *testing.T) {
 // stale idle gets misread as "already done".
 func TestTick_SkipsTasksWithinSettleGracePeriod(t *testing.T) {
 	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
 	task, err := state.New(state.KindMission, "do the thing")
 	if err != nil {
 		t.Fatalf("state.New: %v", err)
@@ -134,7 +146,7 @@ func TestTick_SkipsTasksWithinSettleGracePeriod(t *testing.T) {
 	task.HerdrAgentName = "vx-do-the-thing"
 	// Deliberately NOT backdated - this is what a task looks like the
 	// instant after RunInHerdr submits its prompt.
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -148,7 +160,7 @@ func TestTick_SkipsTasksWithinSettleGracePeriod(t *testing.T) {
 		t.Errorf("expected 0 wakes within the settle grace period, got %d", woke)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -160,7 +172,8 @@ func TestTick_SkipsTasksWithinSettleGracePeriod(t *testing.T) {
 // A task whose live status hasn't changed produces no wake.
 func TestTick_NoWakeWithoutTransition(t *testing.T) {
 	home := t.TempDir()
-	newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	newRunningTask(t, proj, "vx-do-the-thing")
 
 	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
 
@@ -177,14 +190,15 @@ func TestTick_NoWakeWithoutTransition(t *testing.T) {
 // yields nothing.
 func TestDrain_OnlySurfacesEachWakeOnce(t *testing.T) {
 	home := t.TempDir()
-	newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	newRunningTask(t, proj, "vx-do-the-thing")
 	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "done"}}
 
 	if _, err := sentinel.Tick(home, client); err != nil {
 		t.Fatalf("Tick: %v", err)
 	}
 
-	first, err := sentinel.Drain(home)
+	first, err := sentinel.Drain(proj)
 	if err != nil {
 		t.Fatalf("Drain 1: %v", err)
 	}
@@ -192,7 +206,7 @@ func TestDrain_OnlySurfacesEachWakeOnce(t *testing.T) {
 		t.Fatalf("expected 1 wake on first drain, got %d", len(first))
 	}
 
-	second, err := sentinel.Drain(home)
+	second, err := sentinel.Drain(proj)
 	if err != nil {
 		t.Fatalf("Drain 2: %v", err)
 	}
@@ -201,17 +215,46 @@ func TestDrain_OnlySurfacesEachWakeOnce(t *testing.T) {
 	}
 }
 
+// C1-07: Drain deletes a delivered wake's file outright, rather than
+// rewriting it with some acked marker - a directory listing of pending
+// wakes (wakes/) is never left holding files for wakes that already went
+// out.
+func TestDrain_DeletesTheWakeFileOnDelivery(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "done"}}
+
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	wakeFile := filepath.Join(proj, "wakes", task.ID+".json")
+	if _, err := os.Stat(wakeFile); err != nil {
+		t.Fatalf("expected a wake file to exist before draining: %v", err)
+	}
+
+	if _, err := sentinel.Drain(proj); err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+
+	if _, err := os.Stat(wakeFile); !os.IsNotExist(err) {
+		t.Errorf("expected the wake file to be removed after Drain, stat error: %v", err)
+	}
+}
+
 // Tasks that aren't running (pending/done/failed/blocked already) are
 // never polled - only running tasks are actionable for the sentinel.
 func TestTick_IgnoresNonRunningTasks(t *testing.T) {
 	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
 	task, err := state.New(state.KindScout, "look into it")
 	if err != nil {
 		t.Fatalf("state.New: %v", err)
 	}
 	task.Status = state.StatusDone
 	task.HerdrAgentName = "vx-look-into-it"
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -229,7 +272,8 @@ func TestTick_IgnoresNonRunningTasks(t *testing.T) {
 // whole tick.
 func TestTick_ToleratesTransientReadFailure(t *testing.T) {
 	home := t.TempDir()
-	newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	newRunningTask(t, proj, "vx-do-the-thing")
 
 	client := &fakeHerdr{err: errFake{}}
 	woke, err := sentinel.Tick(home, client)
@@ -251,7 +295,8 @@ func (errFake) Error() string { return "transient herdr read failure" }
 // momentary blip.
 func TestTick_FirstNotFoundJustMarksIt(t *testing.T) {
 	home := t.TempDir()
-	task := newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
 
 	client := &fakeHerdr{err: &herdr.APIError{Code: "agent_not_found", Message: "agent target vx-do-the-thing not found"}}
 	woke, err := sentinel.Tick(home, client)
@@ -262,7 +307,7 @@ func TestTick_FirstNotFoundJustMarksIt(t *testing.T) {
 		t.Errorf("expected 0 wakes on the first not-found observation, got %d", woke)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -278,9 +323,10 @@ func TestTick_FirstNotFoundJustMarksIt(t *testing.T) {
 // doesn't interrupt the task yet either.
 func TestTick_NotFoundWithinConfirmWindowDoesNotInterrupt(t *testing.T) {
 	home := t.TempDir()
-	task := newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
 	task.AgentNotFoundSince = time.Now().Add(-3 * time.Second)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -293,7 +339,7 @@ func TestTick_NotFoundWithinConfirmWindowDoesNotInterrupt(t *testing.T) {
 		t.Errorf("expected 0 wakes within the confirm window, got %d", woke)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -308,9 +354,10 @@ func TestTick_NotFoundWithinConfirmWindowDoesNotInterrupt(t *testing.T) {
 // disappeared no longer leaves its task Running forever.
 func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 	home := t.TempDir()
-	task := newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
 	task.AgentNotFoundSince = time.Now().Add(-11 * time.Second)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -323,7 +370,7 @@ func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 		t.Fatalf("expected 1 wake once the confirm window elapses, got %d", woke)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -331,7 +378,7 @@ func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 		t.Errorf("expected status interrupted, got %s", persisted.Status)
 	}
 
-	wakes, err := sentinel.Drain(home)
+	wakes, err := sentinel.Drain(proj)
 	if err != nil {
 		t.Fatalf("Drain: %v", err)
 	}
@@ -348,13 +395,14 @@ func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 // landed clean while the killed one interrupted independently.
 func TestTick_OneFailingTaskDoesNotAffectItsSiblings(t *testing.T) {
 	home := t.TempDir()
-	settled := newRunningTask(t, home, "vx-settles-fine")
-	failing := newRunningTask(t, home, "vx-agent-is-gone")
+	proj := projectRoot(home, "proj1")
+	settled := newRunningTask(t, proj, "vx-settles-fine")
+	failing := newRunningTask(t, proj, "vx-agent-is-gone")
 	failing.AgentNotFoundSince = time.Now().Add(-11 * time.Second)
-	if err := state.Save(home, failing); err != nil {
+	if err := state.Save(proj, failing); err != nil {
 		t.Fatalf("state.Save (failing): %v", err)
 	}
-	stillRunning := newRunningTask(t, home, "vx-still-working")
+	stillRunning := newRunningTask(t, proj, "vx-still-working")
 
 	client := &fakeHerdr{
 		statuses: map[string]string{
@@ -374,7 +422,7 @@ func TestTick_OneFailingTaskDoesNotAffectItsSiblings(t *testing.T) {
 		t.Fatalf("expected 2 wakes (settled + interrupted; still-working produces none), got %d", woke)
 	}
 
-	gotSettled, err := state.Load(home, settled.ID)
+	gotSettled, err := state.Load(proj, settled.ID)
 	if err != nil {
 		t.Fatalf("Load settled: %v", err)
 	}
@@ -382,7 +430,7 @@ func TestTick_OneFailingTaskDoesNotAffectItsSiblings(t *testing.T) {
 		t.Errorf("expected the settled task to be done, got %s", gotSettled.Status)
 	}
 
-	gotFailing, err := state.Load(home, failing.ID)
+	gotFailing, err := state.Load(proj, failing.ID)
 	if err != nil {
 		t.Fatalf("Load failing: %v", err)
 	}
@@ -390,7 +438,7 @@ func TestTick_OneFailingTaskDoesNotAffectItsSiblings(t *testing.T) {
 		t.Errorf("expected the failing task to be interrupted, got %s", gotFailing.Status)
 	}
 
-	gotStillRunning, err := state.Load(home, stillRunning.ID)
+	gotStillRunning, err := state.Load(proj, stillRunning.ID)
 	if err != nil {
 		t.Fatalf("Load stillRunning: %v", err)
 	}
@@ -404,9 +452,10 @@ func TestTick_OneFailingTaskDoesNotAffectItsSiblings(t *testing.T) {
 // its own fresh confirmation window rather than interrupting instantly.
 func TestTick_RecoveringFromNotFoundClearsTheMark(t *testing.T) {
 	home := t.TempDir()
-	task := newRunningTask(t, home, "vx-do-the-thing")
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
 	task.AgentNotFoundSince = time.Now().Add(-3 * time.Second)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -415,7 +464,7 @@ func TestTick_RecoveringFromNotFoundClearsTheMark(t *testing.T) {
 		t.Fatalf("Tick: %v", err)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -427,11 +476,55 @@ func TestTick_RecoveringFromNotFoundClearsTheMark(t *testing.T) {
 	}
 }
 
+// C1-08: Tick sweeps every project namespaced under vexillumHome, not
+// just one - a wake recorded for a task in project A must never leak
+// into project B's own wakes/, and vice versa. This is the core guarantee
+// the whole namespacing change exists for: two projects open at once no
+// longer share tasks/ or wakes/.
+func TestTick_SweepsEveryProjectAndKeepsWakesIsolated(t *testing.T) {
+	home := t.TempDir()
+	projA := projectRoot(home, "proj-a")
+	projB := projectRoot(home, "proj-b")
+
+	taskA := newRunningTask(t, projA, "vx-task-a")
+	taskB := newRunningTask(t, projB, "vx-task-b")
+
+	client := &fakeHerdr{statuses: map[string]string{
+		"vx-task-a": "done",
+		"vx-task-b": "done",
+	}}
+
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 2 {
+		t.Fatalf("expected 2 wakes across both projects, got %d", woke)
+	}
+
+	wakesA, err := sentinel.Drain(projA)
+	if err != nil {
+		t.Fatalf("Drain(A): %v", err)
+	}
+	if len(wakesA) != 1 || wakesA[0].TaskID != taskA.ID {
+		t.Errorf("expected project A's drain to contain only task A, got %+v", wakesA)
+	}
+
+	wakesB, err := sentinel.Drain(projB)
+	if err != nil {
+		t.Fatalf("Drain(B): %v", err)
+	}
+	if len(wakesB) != 1 || wakesB[0].TaskID != taskB.ID {
+		t.Errorf("expected project B's drain to contain only task B, got %+v", wakesB)
+	}
+}
+
 // Sanity: Drain on a project with no wakes yet returns an empty slice,
 // not an error.
 func TestDrain_EmptyWhenNoWakesDir(t *testing.T) {
 	home := t.TempDir()
-	wakes, err := sentinel.Drain(home)
+	proj := projectRoot(home, "proj1")
+	wakes, err := sentinel.Drain(proj)
 	if err != nil {
 		t.Fatalf("Drain: %v", err)
 	}
@@ -442,6 +535,8 @@ func TestDrain_EmptyWhenNoWakesDir(t *testing.T) {
 
 // AcquireLock refuses a second lock while this process (a real, live
 // pid - our own) holds it, and the released lock can be re-acquired.
+// Global - keyed directly off vexillumHome, not a project root: one
+// sentinel per machine, not one per project.
 func TestAcquireLock_RefusesSecondWhileHeld(t *testing.T) {
 	home := t.TempDir()
 

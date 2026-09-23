@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -47,12 +48,17 @@ func ClaudeCommand(task state.Task) CommandSpec {
 // vexillum-side failures - the process couldn't even be started, or the
 // task state couldn't be persisted.
 func Run(vexillumHome string, task state.Task, c camp.Camp, cmd CommandSpec) (state.Task, error) {
+	projectRoot, err := project.Root(vexillumHome, c.ProjectDir)
+	if err != nil {
+		return task, fmt.Errorf("resolving project root: %w", err)
+	}
+
 	task.CampSlot = c.Slot
 	task.CampPath = c.Path
 	task.CampBranch = c.Branch
 	task.Status = state.StatusRunning
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting running state: %w", err)
 	}
 
@@ -80,7 +86,7 @@ func Run(vexillumHome string, task state.Task, c camp.Camp, cmd CommandSpec) (st
 		task.Output += runErr.Error()
 	}
 
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting final state: %w", err)
 	}
 	return task, runErr

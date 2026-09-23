@@ -7,6 +7,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -63,6 +64,11 @@ const (
 // normally the caller's own $HERDR_WORKSPACE_ID, since vexillum expects
 // to be dispatched from within a herdr-managed session.
 func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, client herdr.Client) (state.Task, error) {
+	projectRoot, err := project.Root(vexillumHome, c.ProjectDir)
+	if err != nil {
+		return task, fmt.Errorf("resolving project root: %w", err)
+	}
+
 	agentName := herdrAgentName(task)
 
 	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName, chromeDevtoolsSessionEnvVar+"="+chromeDevtoolsSessionName(task.ID))
@@ -79,13 +85,13 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	task.HerdrAgentName = agentName
 	task.Status = state.StatusRunning
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting running state: %w", err)
 	}
 
 	agentName, err = startAgent(client, agentName, task.ID, paneID)
 	if err != nil {
-		return failHerdrTask(vexillumHome, task, err)
+		return failHerdrTask(projectRoot, task, err)
 	}
 	if agentName != task.HerdrAgentName {
 		// The candidate name collided with another live agent (two
@@ -93,7 +99,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		// disambiguated one. Persist the name that's actually live.
 		task.HerdrAgentName = agentName
 		task.UpdatedAt = time.Now().UTC()
-		if err := state.Save(vexillumHome, task); err != nil {
+		if err := state.Save(projectRoot, task); err != nil {
 			return task, fmt.Errorf("persisting disambiguated agent name: %w", err)
 		}
 	}
@@ -105,7 +111,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	// settle-race grace period to this timestamp, and an earlier one
 	// would leave that guard covering the wrong window on a slow start.
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting pre-prompt state: %w", err)
 	}
 
@@ -139,9 +145,9 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 			// happened from a raw herdr error string; a fresh dispatch
 			// starts a new camp/pane regardless, so there's nothing to
 			// recover in this one.
-			return failHerdrTask(vexillumHome, task, fmt.Errorf("the soldier's herdr pane closed before it could be prompted (not something vexillum did) - safe to redispatch: %w", err))
+			return failHerdrTask(projectRoot, task, fmt.Errorf("the soldier's herdr pane closed before it could be prompted (not something vexillum did) - safe to redispatch: %w", err))
 		}
-		return failHerdrTask(vexillumHome, task, fmt.Errorf("prompting soldier: %w", err))
+		return failHerdrTask(projectRoot, task, fmt.Errorf("prompting soldier: %w", err))
 	}
 
 	if output, readErr := client.AgentRead(agentName, defaultReadLines); readErr == nil {
@@ -150,7 +156,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 
 	task.Status = MapAgentStatus(status)
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting final state: %w", err)
 	}
 	return task, nil
@@ -276,11 +282,11 @@ func MapAgentStatus(status string) state.Status {
 	}
 }
 
-func failHerdrTask(vexillumHome string, task state.Task, cause error) (state.Task, error) {
+func failHerdrTask(projectRoot string, task state.Task, cause error) (state.Task, error) {
 	task.Status = state.StatusFailed
 	task.Output = cause.Error()
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(vexillumHome, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting failed state (after: %v): %w", cause, err)
 	}
 	return task, cause
