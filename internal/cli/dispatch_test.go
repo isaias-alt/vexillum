@@ -206,7 +206,7 @@ func TestRunLandAndRunRelease(t *testing.T) {
 
 	client := &fakeHerdr{}
 	out.Reset()
-	if code := runRelease(project, home, task.ID, client, &out, &out); code != 0 {
+	if code := runRelease(project, home, t.TempDir(), task.ID, client, &out, &out); code != 0 {
 		t.Fatalf("runRelease: expected exit 0, got %d: %s", code, out.String())
 	}
 }
