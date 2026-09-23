@@ -81,3 +81,13 @@ Formato: **Decisión** / **Razón** / **Alternativa descartada**.
 **Razón:** depende de que el commander único exista y sea sólido primero (es, literalmente, "un segundo commander"). Sus partes difíciles (coordinación entre dos commanders, estado compartido y reconciliado) no las simplifica Go; Go solo facilita el transporte remoto, que es el problema chico. Meterlo antes carga el diseño con decisiones que no se ejecutan hasta mucho después.
 
 **Alternativa descartada:** incluirlo en la v1 apoyándose en que "Go lo hace autosostenido". Se descartó: el argumento del binario estático solo cubre el transporte (el 33% fácil), no la coordinación ni el estado compartido (el 66% difícil, que queda igual de difícil en cualquier lenguaje).
+
+## ADR-10 - Lieutenant cerrado
+
+**Decisión:** el lieutenant, que ADR-09 dejaba abierto para reconsiderar "después de la Capa 4", queda cerrado - no es un diferimiento más, es un cierre. No se reabre solo porque la Capa 4 (o la v2 entera) ya esté sólida, que era la condición que ADR-09 planteaba.
+
+**Razón:** el cuello de botella real del uso personal es la cuota del plan de Claude, no la capacidad de despachar o supervisar agentes. Un segundo commander - local o remoto - consume de esa misma cuota y no agrega capacidad; el problema que un lieutenant resolvería (más paralelismo) no es el problema que efectivamente limita. El camino remoto además exige acotar los proyectos a solo-ship (nada de land local desde la máquina remota) y una durabilidad de endpoint (sesión GUI viva, o credenciales de vuelta en keychain) más cara de operar y mantener de lo que ADR-09 había estimado.
+
+**Alternativa descartada:** reabrir el diseño ahora que la Capa 4 y la v2 completa están resueltas (exactamente la condición que ADR-09 dejó planteada para reconsiderar). Se descartó: tener una base sólida no cambia el argumento de fondo - la cuota sigue siendo el límite real, y un lieutenant no la mueve un bit.
+
+**Se reabre solo** ante un límite distinto de la cuota del plan (por ejemplo, un límite de paralelismo real que la cuota no explique).
