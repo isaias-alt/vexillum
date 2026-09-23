@@ -6,8 +6,7 @@ own git worktree (camp), returning a PR (mission) or a report (scout). A
 sentinel process watches dispatched soldiers and wakes the commander when
 something needs attention.
 
-See `AGENTS.md` for how vexillum itself is built, and `docs/prd-v1.md` /
-`docs/adr.md` for the product and architecture decisions behind it.
+See `AGENTS.md` for how vexillum itself is built.
 
 ## Install
 
@@ -29,10 +28,12 @@ script verifies the release checksum before installing.
 ## Usage
 
 ```sh
-vexillum init      # prepare the current project to be orchestrated by vexillum
-vexillum doctor     # check the health of the vexillum environment
-vexillum dispatch   # dispatch a soldier into an isolated camp
+vexillum init        # prepare the current project to be orchestrated by vexillum
+vexillum doctor      # check the health of the vexillum environment
+vexillum dispatch    # dispatch a soldier (mission or scout) into an isolated camp
+vexillum redispatch  # re-dispatch an interrupted task from its original prompt
 vexillum land        # land a finished mission's work into the base branch
+vexillum ship        # push a finished mission through the no-mistakes gate for a real PR
 vexillum release     # release a soldier's camp back to the pool
 vexillum sentinel    # watch dispatched soldiers and record status changes
 vexillum upgrade     # refresh an already-initialized project's scaffold
