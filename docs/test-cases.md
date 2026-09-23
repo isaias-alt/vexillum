@@ -13,7 +13,7 @@ Convención: cada caso tiene un id (`L1-01`), una precondición, una acción y u
 **L1-01 - init en proyecto limpio**
 Precondición: directorio que es un repo git, sin scaffold previo de vexillum, `~/.vexillum/` no existe.
 Acción: correr `vexillum init`.
-Esperado: se crea `~/.vexillum/`; se crea el scaffold local del proyecto (config local + `AGENTS.md` de producto + `CLAUDE.md` con `@AGENTS.md`); salida confirma qué se creó; exit code 0.
+Esperado: se crea `~/.vexillum/`; se crea el scaffold local del proyecto (config local + `.claude/rules/vexillum.md` de producto); nunca lee ni escribe `AGENTS.md`/`CLAUDE.md` del proyecto, existan o no; salida confirma qué se creó; exit code 0.
 
 **L1-02 - init es idempotente**
 Precondición: un proyecto donde ya se corrió `init` con éxito.
@@ -21,19 +21,24 @@ Acción: correr `vexillum init` de nuevo.
 Esperado: no se duplica ni se corrompe nada; la salida informa que ya estaba inicializado; no se sobrescribe ningún archivo sin aviso; exit code 0.
 
 **L1-03 - init no sobrescribe cambios del usuario**
-Precondición: un proyecto inicializado donde el usuario editó a mano el AGENTS.md de producto.
+Precondición: un proyecto inicializado donde el usuario editó a mano `.claude/rules/vexillum.md`.
 Acción: correr `vexillum init` de nuevo.
-Esperado: el AGENTS.md editado NO se pisa silenciosamente; si init quisiera regenerarlo, avisa y pide confirmación o lo deja intacto; exit code 0.
+Esperado: `.claude/rules/vexillum.md` editado NO se pisa silenciosamente; si init quisiera regenerarlo, avisa y pide confirmación o lo deja intacto; exit code 0.
 
 **L1-04 - init crea `~/.vexillum/` si falta pero el proyecto ya estaba**
 Precondición: proyecto con scaffold local presente, pero `~/.vexillum/` borrado a mano.
 Acción: correr `vexillum init`.
 Esperado: recrea `~/.vexillum/` sin tocar el scaffold local existente; exit code 0.
 
-**L1-04b - init sana un `CLAUDE.md` faltante en un proyecto ya inicializado**
-Precondición: proyecto ya inicializado (tiene `.vexillum/config.json` y `AGENTS.md`) pero sin `CLAUDE.md` - por ejemplo, inicializado con una versión de `vexillum` anterior a que este archivo existiera. Sin este shim, Claude Code nunca lee el `AGENTS.md` de producto en absoluto (carga `CLAUDE.md` automáticamente, no un `AGENTS.md` suelto) - encontrado en uso real, no hipotético.
+**L1-04b - init sana un `.claude/rules/vexillum.md` faltante en un proyecto ya inicializado**
+Precondición: proyecto ya inicializado (tiene `.vexillum/config.json`) pero sin `.claude/rules/vexillum.md` - por ejemplo borrado a mano, o inicializado con una versión de `vexillum` anterior a la migración a `.claude/rules/` (ver `binnacle/`, sesión de migración de `AGENTS.md`/`CLAUDE.md` a `.claude/rules/vexillum.md`: el viejo esquema dependía de que el proyecto no tuviera ya su propio `AGENTS.md`/`CLAUDE.md` con contenido ajeno, lo cual fallaba en proyectos reales - verificado en vivo contra `nutrione-api` y `nondeterministic`).
 Acción: correr `vexillum init` de nuevo.
-Esperado: crea el `CLAUDE.md` faltante sin tocar `AGENTS.md` ni `.vexillum/config.json`; la salida indica que se restauró un archivo faltante; exit code 0.
+Esperado: crea el `.claude/rules/vexillum.md` faltante sin tocar `.vexillum/config.json` más que el hash; nunca toca `AGENTS.md`/`CLAUDE.md`, existan o no; la salida indica que se restauró un archivo faltante; exit code 0.
+
+**L1-04c - `vexillum init --global` scaffoldea el rule file una sola vez para toda la máquina**
+Precondición: `~/.claude/rules/vexillum.md` no existe.
+Acción: correr `vexillum init --global`.
+Esperado: no requiere estar en un repo git; crea `~/.claude/rules/vexillum.md` (mismo contenido que el local) y registra su hash en `~/.vexillum/config.json` (no en el `.vexillum/config.json` de ningún proyecto); no crea ningún scaffold con forma de proyecto bajo `~/`; exit code 0. Opt-in explícito, nunca el comportamiento por defecto de `vexillum init`.
 
 **L1-05 - init fuera de un repo git**
 Precondición: directorio que NO es repo git.
@@ -648,3 +653,27 @@ Esperado: no se resuelve ningún proyecto (ver C1-12), y la wake pendiente del p
 **Verificado en el código (no en test)**: los soldiers heredan el Stop hook committeado por `vexillum init` en `.claude/settings.json` solo si ese archivo está comiteado en el proyecto - `vexillum init` lo escribe pero nunca lo comitea, y `camp.Acquire` crea el worktree vía `git worktree add`, que solo refleja lo que ya está en el commit. Confirma el paréntesis del general: "si `.claude/settings.json` está commiteado, sí" heredan el hook.
 
 **Riesgo aceptado, documentado en el código** (`internal/project.Key`): renombrar o mover el proyecto cambia la clave y deja huérfanas sus tareas/wakes/camps previas - no hay migración ni detección del layout viejo. El estado previo (si existía, de antes de este cambio) se borra a mano antes del primer uso real; no hay código ni tests para el layout anterior.
+
+## V3 - PARTE D (model/effort por soldier)
+
+### D.1 - `vexillum dispatch --model/--effort`
+
+Inspirado en el `crew-dispatch.json` de firstmate (kunchenguid), pero respetando ADR-05: acá el matching de reglas en lenguaje natural nunca se reimplementa en Go. La tabla de reglas (`when` → `model`/`effort`) vive como markdown en `productVexillumRule` (sección "Choosing a model and effort", `internal/cli/init.go`), interpretada por el commander. El binario solo gana `--model`/`--effort` en `vexillum dispatch`, valida ambos contra el set fijo que acepta el `claude` real (confirmado en vivo con `claude --help`: `--model` admite `haiku`/`sonnet`/`opus`/`fable`; `--effort` admite `low`/`medium`/`high`/`xhigh`/`max`) y los pasa tal cual, sin leer el prompt. `state.Task` gana `Model`/`Effort` (`omitempty`, sin bump de `SchemaVersion` - mismo criterio que `Redispatches`/`AgentNotFoundSince`); un re-dispatch los conserva porque reutiliza el mismo `Task`.
+
+**D1-01 - `parseDispatchArgs` acepta `--model`/`--effort` mezclados con el prompt**
+Acción: `parseDispatchArgs` con `--model`, `--effort`, `--kind` y palabras del prompt en cualquier orden.
+Esperado: `model`/`effort` extraídos correctamente, el resto de las palabras se unen como prompt; `--model`/`--effort` sin valor es error (`internal/cli/dispatch_test.go`, `TestParseDispatchArgs`).
+
+**D1-02 - `soldier.ValidateModelEffort` rechaza valores desconocidos**
+Acción: `ValidateModelEffort(model, effort)` con cada valor válido, con `""` (ambos opcionales) y con valores inventados.
+Esperado: `nil` para cualquier combinación de valores válidos/vacíos; error para un valor fuera del set fijo (`internal/soldier/claude_args_test.go`, `TestValidateModelEffort`).
+
+**D1-03 - los flags llegan verbatim al lanzamiento real de `claude`**
+Acción: `runDispatch` con `--model haiku --effort low` contra un `fakeHerdr`; por separado, `soldier.RunInHerdr` con un `state.Task{Model: "haiku", Effort: "low"}`.
+Esperado: `client.AgentStart` recibe `--dangerously-skip-permissions --model haiku --effort low`, en ese orden (`internal/cli/dispatch_test.go`, `TestRunDispatch_PassesModelEffortToClaude`; `internal/soldier/herdr_run_test.go`, `TestRunInHerdr_PassesModelAndEffort`).
+
+**D1-04 - `soldier.ClaudeCommand` (path headless) hace el mismo passthrough**
+Acción: `ClaudeCommand(task)` con y sin `Model`/`Effort` seteados.
+Esperado: los args incluyen `--model`/`--effort` solo cuando están seteados en el task, en el mismo formato que el path herdr (`internal/soldier/claude_args_test.go`, `TestClaudeCommand_ModelEffort`, `TestClaudeCommand_NoModelEffort`).
+
+**Verificado en vivo, no en test**: `vexillum dispatch "<prompt>" --model haiku --effort low` contra un proyecto real (`vexillum-prueba`), confirmando que el soldier arranca con esos flags en un pane de herdr real - ver la bitácora de la sesión.

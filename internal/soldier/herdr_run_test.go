@@ -2,6 +2,7 @@ package soldier_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -171,6 +172,28 @@ func TestRunInHerdr_Success(t *testing.T) {
 	}
 	if persisted.Status != state.StatusDone {
 		t.Errorf("expected persisted status done, got %s", persisted.Status)
+	}
+}
+
+// A task carrying Model/Effort (set by the commander per ADR-05's rules,
+// before dispatch ever reaches this package) gets them appended to the
+// real claude launch, unexamined - RunInHerdr never decides between them.
+func TestRunInHerdr_PassesModelAndEffort(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	task.Model = "haiku"
+	task.Effort = "low"
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+
+	want := []string{"--dangerously-skip-permissions", "--model", "haiku", "--effort", "low"}
+	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], want) {
+		t.Errorf("expected the soldier to start with %v, got %v", want, client.startArgs)
 	}
 }
 

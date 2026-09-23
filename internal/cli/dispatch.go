@@ -20,10 +20,16 @@ import (
 const dispatchUsage = `Dispatch a soldier (mission or scout) into an isolated camp.
 
 Usage:
-  vexillum dispatch <prompt> [--kind mission|scout]
+  vexillum dispatch <prompt> [--kind mission|scout] [--model <model>] [--effort <level>]
 
 A mission changes code and delivers something to land; a scout only
 investigates and reports back (default: mission).
+
+--model and --effort are passed straight through to the real claude CLI
+(--model: haiku, sonnet, opus, fable; --effort: low, medium, high,
+xhigh, max). vexillum only validates the value is one claude accepts -
+it never picks one for you; see the product AGENTS.md's "Choosing a
+model and effort" section for how to choose.
 
 Runs a real, interactive Claude Code session in a herdr pane, inside a
 fresh git worktree isolated from this project's own working tree, with
@@ -72,8 +78,12 @@ func Dispatch(args []string) int {
 		return 0
 	}
 
-	prompt, kind, err := parseDispatchArgs(args)
+	prompt, kind, model, effort, err := parseDispatchArgs(args)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		return 1
+	}
+	if err := soldier.ValidateModelEffort(model, effort); err != nil {
 		fmt.Fprintln(os.Stderr, "vexillum:", err)
 		return 1
 	}
@@ -92,7 +102,7 @@ func Dispatch(args []string) int {
 
 	ensureSentinelRunning(vexillumHome, os.Stderr)
 
-	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, herdr.CLI{}, os.Stdout, os.Stderr)
+	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, model, effort, herdr.CLI{}, os.Stdout, os.Stderr)
 }
 
 // ensureSentinelRunning best-effort auto-starts "vexillum sentinel"
@@ -138,34 +148,47 @@ func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 	fmt.Fprintf(stderr, "vexillum: auto-started sentinel (pid %d), logging to %s\n", cmd.Process.Pid, logPath)
 }
 
-func parseDispatchArgs(args []string) (prompt string, kind state.Kind, err error) {
+func parseDispatchArgs(args []string) (prompt string, kind state.Kind, model, effort string, err error) {
 	kind = state.KindMission
 	var promptParts []string
 	for i := 0; i < len(args); i++ {
-		if args[i] != "--kind" {
-			promptParts = append(promptParts, args[i])
-			continue
-		}
-		if i+1 >= len(args) {
-			return "", "", fmt.Errorf("--kind requires a value (mission or scout)")
-		}
-		i++
 		switch args[i] {
-		case "mission":
-			kind = state.KindMission
-		case "scout":
-			kind = state.KindScout
+		case "--kind":
+			if i+1 >= len(args) {
+				return "", "", "", "", fmt.Errorf("--kind requires a value (mission or scout)")
+			}
+			i++
+			switch args[i] {
+			case "mission":
+				kind = state.KindMission
+			case "scout":
+				kind = state.KindScout
+			default:
+				return "", "", "", "", fmt.Errorf("unknown kind %q, expected mission or scout", args[i])
+			}
+		case "--model":
+			if i+1 >= len(args) {
+				return "", "", "", "", fmt.Errorf("--model requires a value")
+			}
+			i++
+			model = args[i]
+		case "--effort":
+			if i+1 >= len(args) {
+				return "", "", "", "", fmt.Errorf("--effort requires a value")
+			}
+			i++
+			effort = args[i]
 		default:
-			return "", "", fmt.Errorf("unknown kind %q, expected mission or scout", args[i])
+			promptParts = append(promptParts, args[i])
 		}
 	}
 	if len(promptParts) == 0 {
-		return "", "", fmt.Errorf("missing prompt")
+		return "", "", "", "", fmt.Errorf("missing prompt")
 	}
-	return strings.Join(promptParts, " "), kind, nil
+	return strings.Join(promptParts, " "), kind, model, effort, nil
 }
 
-func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind state.Kind, client herdr.Client, stdout, stderr io.Writer) int {
+func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind state.Kind, model, effort string, client herdr.Client, stdout, stderr io.Writer) int {
 	if !projectAlreadyInitialized(projectDir) {
 		fmt.Fprintln(stderr, "vexillum: project not initialized, run 'vexillum init' first")
 		return 1
@@ -176,6 +199,8 @@ func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind stat
 		fmt.Fprintf(stderr, "vexillum: creating task: %v\n", err)
 		return 1
 	}
+	task.Model = model
+	task.Effort = effort
 
 	return acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID, task, client, stdout, stderr)
 }
