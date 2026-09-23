@@ -42,6 +42,12 @@ vexillum upgrade     # refresh an already-initialized project's scaffold
 Run `vexillum --help` for the full command list, or `vexillum <command> -h`
 for a specific command.
 
+## Contributing
+
+See `CONTRIBUTING.md` for how to build, test, and submit a PR. Found a bug or
+have a feature request? Open an issue using the templates in
+`.github/ISSUE_TEMPLATE/`.
+
 ## License
 
 [MIT](LICENSE)
