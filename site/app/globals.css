@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #0d0c0a;
+  --color-bg-elevated: #17140f;
+  --color-border: #2e2a22;
+  --color-border-subtle: #1b1912;
+  --color-text: #ede8de;
+  --color-text-muted: #9c9585;
+  --color-text-dim: #6b6862;
+  --color-text-faint: #4a4640;
+  --color-accent: #bf9455;
+  --color-accent-hover: #d9af6e;
+  --color-dot-red: #4a3b33;
+  --color-dot-yellow: #4a4433;
+  --color-dot-green: #3b4a38;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-bg-elevated: var(--color-bg-elevated);
+  --color-border: var(--color-border);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-dim: var(--color-text-dim);
+  --color-text-faint: var(--color-text-faint);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-dot-red: var(--color-dot-red);
+  --color-dot-yellow: var(--color-dot-yellow);
+  --color-dot-green: var(--color-dot-green);
+  --font-serif: var(--font-spectral);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
