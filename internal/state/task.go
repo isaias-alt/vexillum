@@ -113,6 +113,15 @@ type Task struct {
 	// stays stable rather than forking into a new one - same reasoning as
 	// AgentNotFoundSince: purely additive, no SchemaVersion bump needed.
 	Redispatches int `json:"redispatches,omitempty"`
+
+	// Model and Effort are the soldier's --model/--effort choice (ADR-05:
+	// the commander picks these by judgment from its AGENTS.md rules, this
+	// is only where the choice is recorded). Empty means the flag was
+	// never passed to claude, which then falls back to its own default.
+	// A re-dispatch reuses whatever this task already carries. Purely
+	// additive, no SchemaVersion bump needed.
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
 }
 
 // New creates a Task of the given kind with a fresh unique ID, in

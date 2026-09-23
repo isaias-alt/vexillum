@@ -30,9 +30,11 @@ type CommandSpec struct {
 // ever affect its own disposable worktree, not the project's own working
 // tree or anything outside it.
 func ClaudeCommand(task state.Task) CommandSpec {
+	args := []string{"-p", task.Prompt, "--dangerously-skip-permissions"}
+	args = append(args, claudeModelEffortArgs(task)...)
 	return CommandSpec{
 		Command: "claude",
-		Args:    []string{"-p", task.Prompt, "--dangerously-skip-permissions"},
+		Args:    args,
 	}
 }
 

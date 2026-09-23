@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -20,15 +21,20 @@ type fakeHerdr struct {
 	promptStatus  string
 	readOutput    string
 	tabCloseErr   error
+
+	lastAgentArgs []string
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
 	return f.tabID, f.paneID, nil
 }
-func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error { return nil }
-func (f *fakeHerdr) AgentSendKeys(name string, keys ...string) error                 { return nil }
-func (f *fakeHerdr) AgentReady(name string) (bool, error)                            { return true, nil }
-func (f *fakeHerdr) AgentStatus(name string) (string, error)                         { return f.promptStatus, nil }
+func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error {
+	f.lastAgentArgs = agentArgs
+	return nil
+}
+func (f *fakeHerdr) AgentSendKeys(name string, keys ...string) error { return nil }
+func (f *fakeHerdr) AgentReady(name string) (bool, error)            { return true, nil }
+func (f *fakeHerdr) AgentStatus(name string) (string, error)         { return f.promptStatus, nil }
 func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
 	return f.promptStatus, nil
 }
@@ -64,18 +70,24 @@ func TestParseDispatchArgs(t *testing.T) {
 		args       []string
 		wantPrompt string
 		wantKind   state.Kind
+		wantModel  string
+		wantEffort string
 		wantErr    bool
 	}{
-		{"defaults to mission", []string{"do", "the", "thing"}, "do the thing", state.KindMission, false},
-		{"explicit mission", []string{"--kind", "mission", "do it"}, "do it", state.KindMission, false},
-		{"explicit scout", []string{"--kind", "scout", "look into it"}, "look into it", state.KindScout, false},
-		{"unknown kind", []string{"--kind", "bogus", "x"}, "", "", true},
-		{"kind without value", []string{"--kind"}, "", "", true},
-		{"missing prompt", []string{"--kind", "scout"}, "", "", true},
+		{"defaults to mission", []string{"do", "the", "thing"}, "do the thing", state.KindMission, "", "", false},
+		{"explicit mission", []string{"--kind", "mission", "do it"}, "do it", state.KindMission, "", "", false},
+		{"explicit scout", []string{"--kind", "scout", "look into it"}, "look into it", state.KindScout, "", "", false},
+		{"unknown kind", []string{"--kind", "bogus", "x"}, "", "", "", "", true},
+		{"kind without value", []string{"--kind"}, "", "", "", "", true},
+		{"missing prompt", []string{"--kind", "scout"}, "", "", "", "", true},
+		{"model and effort", []string{"--model", "haiku", "--effort", "low", "do it"}, "do it", state.KindMission, "haiku", "low", false},
+		{"model without value", []string{"--model"}, "", "", "", "", true},
+		{"effort without value", []string{"--effort"}, "", "", "", "", true},
+		{"flags mixed with prompt words", []string{"do", "--model", "sonnet", "the", "thing"}, "do the thing", state.KindMission, "sonnet", "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			prompt, kind, err := parseDispatchArgs(c.args)
+			prompt, kind, model, effort, err := parseDispatchArgs(c.args)
 			if c.wantErr {
 				if err == nil {
 					t.Fatal("expected an error")
@@ -85,8 +97,9 @@ func TestParseDispatchArgs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if prompt != c.wantPrompt || kind != c.wantKind {
-				t.Errorf("got prompt=%q kind=%q, want prompt=%q kind=%q", prompt, kind, c.wantPrompt, c.wantKind)
+			if prompt != c.wantPrompt || kind != c.wantKind || model != c.wantModel || effort != c.wantEffort {
+				t.Errorf("got prompt=%q kind=%q model=%q effort=%q, want prompt=%q kind=%q model=%q effort=%q",
+					prompt, kind, model, effort, c.wantPrompt, c.wantKind, c.wantModel, c.wantEffort)
 			}
 		})
 	}
@@ -127,7 +140,7 @@ func TestRunDispatch_RefusesUninitializedProject(t *testing.T) {
 	home := t.TempDir()
 
 	var out bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, &fakeHerdr{}, &out, &out)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an uninitialized project")
@@ -141,7 +154,7 @@ func TestRunDispatch_RefusesUninitializedProject(t *testing.T) {
 // task id and status.
 func TestRunDispatch_Success(t *testing.T) {
 	project := initDispatchTestProject(t)
-	if err := writeLocalConfig(project); err != nil {
+	if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
 		t.Fatalf("writing local config: %v", err)
 	}
 	home := t.TempDir()
@@ -149,7 +162,7 @@ func TestRunDispatch_Success(t *testing.T) {
 	client := &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done", readOutput: "did the thing"}
 
 	var out bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, client, &out, &out)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -159,6 +172,30 @@ func TestRunDispatch_Success(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "did the thing") {
 		t.Errorf("expected output to include the transcript, got: %s", out.String())
+	}
+}
+
+// A dispatch with --model/--effort threads both through to the real
+// claude launch (client.AgentStart's agentArgs) unexamined - vexillum
+// validates them but never decides which ones to use (ADR-05).
+func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
+	project := initDispatchTestProject(t)
+	if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
+		t.Fatalf("writing local config: %v", err)
+	}
+	home := t.TempDir()
+
+	client := &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done", readOutput: "did the thing"}
+
+	var out bytes.Buffer
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "haiku", "low", client, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	want := []string{"--dangerously-skip-permissions", "--model", "haiku", "--effort", "low"}
+	if !slices.Equal(client.lastAgentArgs, want) {
+		t.Errorf("got agent args %v, want %v", client.lastAgentArgs, want)
 	}
 }
 

@@ -89,7 +89,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		return task, fmt.Errorf("persisting running state: %w", err)
 	}
 
-	agentName, err = startAgent(client, agentName, task.ID, paneID)
+	agentName, err = startAgent(client, agentName, task.ID, paneID, claudeModelEffortArgs(task))
 	if err != nil {
 		return failHerdrTask(projectRoot, task, err)
 	}
@@ -310,11 +310,11 @@ func failHerdrTask(projectRoot string, task state.Task, cause error) (state.Task
 // parallel), startAgent falls back once to a name disambiguated with a
 // slice of taskID and returns whichever name actually ended up live -
 // the caller needs that exact name for every later call.
-func startAgent(client herdr.Client, candidateName, taskID, paneID string) (string, error) {
-	err := startAgentWithBusyRetry(client, candidateName, paneID)
+func startAgent(client herdr.Client, candidateName, taskID, paneID string, extraArgs []string) (string, error) {
+	err := startAgentWithBusyRetry(client, candidateName, paneID, extraArgs)
 	if herdr.IsNameTaken(err) {
 		fallback := disambiguatedName(candidateName, taskID)
-		fbErr := startAgentWithBusyRetry(client, fallback, paneID)
+		fbErr := startAgentWithBusyRetry(client, fallback, paneID, extraArgs)
 		if fbErr != nil {
 			return fallback, fmt.Errorf("starting soldier agent: %w", fbErr)
 		}
@@ -326,11 +326,11 @@ func startAgent(client herdr.Client, candidateName, taskID, paneID string) (stri
 	return candidateName, nil
 }
 
-func startAgentWithBusyRetry(client herdr.Client, name, paneID string) error {
-	err := startAgentOnce(client, name, paneID)
+func startAgentWithBusyRetry(client herdr.Client, name, paneID string, extraArgs []string) error {
+	err := startAgentOnce(client, name, paneID, extraArgs)
 	for attempt := 1; attempt < paneBusyMaxAttempts && herdr.IsPaneBusy(err); attempt++ {
 		time.Sleep(paneBusyRetryDelay)
-		err = startAgentOnce(client, name, paneID)
+		err = startAgentOnce(client, name, paneID, extraArgs)
 	}
 	return err
 }
@@ -382,8 +382,9 @@ func disambiguatedName(candidateName, taskID string) string {
 	return trimmed + "-" + suffix
 }
 
-func startAgentOnce(client herdr.Client, name, paneID string) error {
-	err := client.AgentStart(name, herdrAgentKind, paneID, herdrAgentArg)
+func startAgentOnce(client herdr.Client, name, paneID string, extraArgs []string) error {
+	args := append([]string{herdrAgentArg}, extraArgs...)
+	err := client.AgentStart(name, herdrAgentKind, paneID, args...)
 	if err == nil {
 		return nil
 	}

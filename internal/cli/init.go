@@ -16,15 +16,23 @@ import (
 const initUsage = `Prepare the current project to be orchestrated by vexillum.
 
 Usage:
-  vexillum init
+  vexillum init [--global]
+
+--global scaffolds the commander rules once for every project on this
+machine (~/.claude/rules/vexillum.md) instead of the current project. Opt-in
+only - it makes the commander persona apply to every Claude Code session on
+this machine, not just vexillum projects. Without it, init only ever touches
+the current project.
 `
 
-const productAgentsMD = `# AGENTS.md - Commander
+const productVexillumRule = `# Vexillum commander rules
 
-This file governs how the vexillum commander behaves in this project. Claude
-Code reads it when vexillum dispatches work here. It was scaffolded by
-` + "`vexillum init`" + ` and will not be overwritten once it exists - edit it freely
-as you learn what works for this project.
+You are the commander. The general is the human you report to. These rules
+govern how you behave in this project. Claude Code loads this file every
+session, unconditionally - regardless of whatever AGENTS.md or CLAUDE.md
+this project already has. It was scaffolded by ` + "`vexillum init`" + ` and will
+not be overwritten once it exists - edit it freely as you learn what works
+for this project.
 
 ## Vocabulary
 
@@ -38,6 +46,24 @@ as you learn what works for this project.
 - **sentinel**: a background process that watches soldiers and wakes you
   only when something needs attention (a soldier finished or got
   blocked) - see "The sentinel" below.
+
+## Authority
+
+An explicit instruction from the general overrides a conflicting rule
+written elsewhere in this file - but say so plainly when it happens (name
+the rule you're setting aside and why), don't silently comply. This is
+about a specific instruction for the moment at hand, not a standing
+change to how you operate - if the general wants a rule changed going
+forward, that's an edit to this file, not something to infer from one
+exchange.
+
+## Tone
+
+Address the general as "general" and let a light commander register
+color how you report, if you want to - it's decoration on top of the
+actual content, never a substitute for it. Drop it the moment you're
+delivering bad news (a blocked or failed task, a refusal, anything that
+went wrong) - report that plainly, no flavor.
 
 ## The sentinel
 
@@ -88,7 +114,7 @@ tool, you have not done what was asked - use ` + "`vexillum dispatch`" + ` inste
 via your Bash tool:
 
 ` + "```" + `
-vexillum dispatch "<prompt>" [--kind mission|scout]
+vexillum dispatch "<prompt>" [--kind mission|scout] [--model <model>] [--effort <level>]
 ` + "```" + `
 
 Kind defaults to mission. Use scout for investigation, diagnosis, or
@@ -121,7 +147,49 @@ camp path, branch name, task id, or exact commands; you already have
 them (from the dispatch output and the task's persisted state) if the
 general asks to see them. Asking whether to land a finished mission is
 the one routine exception (see below) - ask it naturally, not as a
-technical footer.
+technical footer. A failed or blocked soldier is bad news - report it
+per "Tone" above (plainly, no flavor), not dressed up as a normal
+update.
+
+## Choosing a model and effort
+
+Every dispatch needs a ` + "`--model`" + ` and ` + "`--effort`" + `, passed straight through
+to the real ` + "`claude`" + ` CLI on the soldier's side. vexillum only checks the
+value is one claude itself accepts (` + "`--model`" + `: haiku, sonnet, opus,
+fable; ` + "`--effort`" + `: low, medium, high, xhigh, max) - it never reads the
+prompt to guess which fits. That judgment is yours, made before you call
+dispatch, from the rules below, in order - the first one that matches
+wins:
+
+1. **Scout whose question reduces to verifiable facts from an
+   authoritative source** (a flag, a signature, a version, a changelog
+   entry, whether an issue is fixed) -> ` + "`--model haiku --effort low`" + `.
+   Retrieval, not judgment - the report must cite a URL and version per
+   claim and mark what it couldn't confirm.
+2. **Scout that requires judgment** (conflicting sources, comparing
+   options, recommending, diagnosing unexpected behavior) ->
+   ` + "`--model sonnet --effort medium`" + `. You act on this report without
+   verifying it yourself; a confident wrong answer propagates straight
+   into a mission.
+3. **Mission that is a trivial mechanical edit** (rote rename, formatting
+   sweep, targeted typo fix), checked by build or tests ->
+   ` + "`--model haiku --effort low`" + `. What makes an edit "mechanical" is
+   that every touched file gets the exact same transformation, not how
+   many files it touches - a rename across 40 files is still this rule
+   if it's the same substitution repeated; if even one of those 40 needs
+   its own judgment call, it isn't, and rule 4 applies instead.
+4. **Mission that is a big or ambiguous multi-file feature, a risky
+   refactor, or work that requires holding many moving parts in mind** ->
+   ` + "`--model sonnet --effort high`" + `. Strong coding profile without
+   spending Opus quota on soldiers.
+5. **The general explicitly asks for Opus on this task** ->
+   ` + "`--model opus --effort high`" + `. Opus on soldiers is opt-in by the
+   general, never something you choose on your own.
+6. **Nothing above fits** -> ` + "`--model sonnet --effort medium`" + `. The
+   default - fall back to it, don't reach for it on purpose.
+
+This list is yours to edit as you learn what actually works for this
+project - it's plain markdown, not something vexillum enforces.
 
 ## Landing a finished mission
 
@@ -161,7 +229,7 @@ If the pane already closed, no fresh soldier can rebase an old branch it
 never touched - tell the general instead of attempting it yourself.
 
 A dirty checkout here is often just ` + "`vexillum init`" + `'s own scaffold
-(` + "`AGENTS.md`" + `, ` + "`CLAUDE.md`" + `, ` + "`.vexillum/`" + `) never having been committed -
+(` + "`.claude/rules/vexillum.md`" + `, ` + "`.vexillum/`" + `) never having been committed -
 init writes those files but never commits them itself. Don't let that
 surprise you mid-land: if you notice this project's checkout has
 uncommitted scaffold files (or anything else untracked) before you ever
@@ -214,22 +282,16 @@ succeeded. Don't call this until the soldier's work is actually landed
 command.
 `
 
-// productClaudeMD makes Claude Code actually load the product AGENTS.md:
-// Claude Code auto-loads CLAUDE.md, not a bare AGENTS.md, so without this
-// shim the commander never sees AGENTS.md's instructions at all.
-const productClaudeMD = "@AGENTS.md\n"
-
 type localConfig struct {
 	Version       int       `json:"version"`
 	InitializedAt time.Time `json:"initialized_at"`
-	// AgentsMDHash/ClaudeMDHash are the sha256 hex digest of the content
-	// vexillum itself last wrote to AGENTS.md/CLAUDE.md. 'vexillum upgrade'
+	// VexillumRuleHash is the sha256 hex digest of the content vexillum
+	// itself last wrote to .claude/rules/vexillum.md. 'vexillum upgrade'
 	// compares the file's current content against this to tell "still
 	// exactly what we wrote" (safe to refresh to the latest template) apart
 	// from "the general edited this" (leave it alone). Empty means unknown
 	// provenance (predates this tracking, or never written by vexillum).
-	AgentsMDHash string `json:"agents_md_hash,omitempty"`
-	ClaudeMDHash string `json:"claude_md_hash,omitempty"`
+	VexillumRuleHash string `json:"vexillum_rule_hash,omitempty"`
 }
 
 func hashContent(s string) string {
@@ -237,8 +299,11 @@ func hashContent(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func readLocalConfig(projectDir string) (localConfig, error) {
-	data, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
+// readLocalConfig reads config.json directly inside configDir - the
+// project's .vexillum/ for local scaffolds, or vexillumHome itself for the
+// global scaffold (see runInitGlobal).
+func readLocalConfig(configDir string) (localConfig, error) {
+	data, err := os.ReadFile(filepath.Join(configDir, "config.json"))
 	if err != nil {
 		return localConfig{}, err
 	}
@@ -249,33 +314,53 @@ func readLocalConfig(projectDir string) (localConfig, error) {
 	return cfg, nil
 }
 
-// recordScaffoldHashes updates the stored content hash for AGENTS.md and/or
-// CLAUDE.md in .vexillum/config.json, preserving the rest of the config.
-func recordScaffoldHashes(projectDir string, updateAgents, updateClaude bool) error {
-	cfg, err := readLocalConfig(projectDir)
+// recordScaffoldHash updates the stored content hash for
+// .claude/rules/vexillum.md in configDir/config.json, preserving the rest
+// of the config.
+func recordScaffoldHash(configDir string, updated bool) error {
+	if !updated {
+		return nil
+	}
+	cfg, err := readLocalConfig(configDir)
 	if err != nil {
 		return err
 	}
-	if updateAgents {
-		cfg.AgentsMDHash = hashContent(productAgentsMD)
-	}
-	if updateClaude {
-		cfg.ClaudeMDHash = hashContent(productClaudeMD)
-	}
+	cfg.VexillumRuleHash = hashContent(productVexillumRule)
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(filepath.Join(projectDir, ".vexillum", "config.json"), data, 0o644)
+	return os.WriteFile(filepath.Join(configDir, "config.json"), data, 0o644)
 }
 
 // Init runs the "vexillum init" command.
 func Init(args []string) int {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(initUsage)
-		return 0
+	global := false
+	for _, a := range args {
+		switch a {
+		case "-h", "--help":
+			fmt.Print(initUsage)
+			return 0
+		case "--global":
+			global = true
+		default:
+			fmt.Fprintf(os.Stderr, "vexillum: unknown init flag %q\n", a)
+			fmt.Fprint(os.Stderr, initUsage)
+			return 1
+		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "vexillum: cannot determine home directory: %v\n", err)
+		return 1
+	}
+	vexillumHome := filepath.Join(home, ".vexillum")
+
+	if global {
+		return runInitGlobal(vexillumHome, home, os.Stdout, os.Stderr)
 	}
 
 	cwd, err := os.Getwd()
@@ -284,13 +369,7 @@ func Init(args []string) int {
 		return 1
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "vexillum: cannot determine home directory: %v\n", err)
-		return 1
-	}
-
-	return runInit(cwd, filepath.Join(home, ".vexillum"), os.Stdout, os.Stderr)
+	return runInit(cwd, vexillumHome, os.Stdout, os.Stderr)
 }
 
 func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
@@ -314,26 +393,24 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Created %s\n", vexillumHome)
 	}
 
+	configDir := filepath.Join(projectDir, ".vexillum")
 	alreadyInitialized := projectAlreadyInitialized(projectDir)
 	if !alreadyInitialized {
-		if err := writeLocalConfig(projectDir); err != nil {
+		if err := writeLocalConfig(configDir); err != nil {
 			fmt.Fprintf(stderr, "vexillum: cannot write .vexillum/config.json: %v\n", err)
 			return 1
 		}
 		fmt.Fprintln(stdout, "Created .vexillum/config.json")
 	}
 
-	agentsCreated, err := writeFileIfMissing(projectDir, "AGENTS.md", productAgentsMD)
-	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: cannot write AGENTS.md: %v\n", err)
+	ruleDir := filepath.Join(projectDir, ".claude", "rules")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
 		return 1
 	}
-
-	// Claude Code auto-loads CLAUDE.md, not a bare AGENTS.md - without
-	// this, the commander never actually reads AGENTS.md's instructions.
-	claudeCreated, err := writeFileIfMissing(projectDir, "CLAUDE.md", productClaudeMD)
+	ruleCreated, err := writeFileIfMissing(ruleDir, "vexillum.md", productVexillumRule)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: cannot write CLAUDE.md: %v\n", err)
+		fmt.Fprintf(stderr, "vexillum: cannot write .claude/rules/vexillum.md: %v\n", err)
 		return 1
 	}
 
@@ -349,20 +426,15 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 	}
 
 	if alreadyInitialized {
-		if !agentsCreated && !claudeCreated && !hookAdded {
+		if !ruleCreated && !hookAdded {
 			fmt.Fprintln(stdout, "Project already initialized (found .vexillum/config.json). Nothing to do.")
 			return 0
 		}
 		// Healing an older init that predates one of these: the scaffold
 		// itself isn't new, but restore what's missing.
-		if agentsCreated {
-			fmt.Fprintln(stdout, "Created missing AGENTS.md")
-		}
-		if claudeCreated {
-			fmt.Fprintln(stdout, "Created missing CLAUDE.md")
-		}
-		if agentsCreated || claudeCreated {
-			if err := recordScaffoldHashes(projectDir, agentsCreated, claudeCreated); err != nil {
+		if ruleCreated {
+			fmt.Fprintln(stdout, "Created missing .claude/rules/vexillum.md")
+			if err := recordScaffoldHash(configDir, ruleCreated); err != nil {
 				fmt.Fprintf(stderr, "vexillum: warning: could not record scaffold hash: %v\n", err)
 			}
 		}
@@ -370,24 +442,83 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	if agentsCreated {
-		fmt.Fprintln(stdout, "Created AGENTS.md")
+	if ruleCreated {
+		fmt.Fprintln(stdout, "Created .claude/rules/vexillum.md")
 	} else {
-		fmt.Fprintln(stdout, "AGENTS.md already exists, left untouched")
+		fmt.Fprintln(stdout, ".claude/rules/vexillum.md already exists, left untouched")
 	}
-	if claudeCreated {
-		fmt.Fprintln(stdout, "Created CLAUDE.md")
-	} else {
-		fmt.Fprintln(stdout, "CLAUDE.md already exists, left untouched")
-	}
-	if agentsCreated || claudeCreated {
-		if err := recordScaffoldHashes(projectDir, agentsCreated, claudeCreated); err != nil {
-			fmt.Fprintf(stderr, "vexillum: warning: could not record scaffold hash: %v\n", err)
-		}
+	if err := recordScaffoldHash(configDir, ruleCreated); err != nil {
+		fmt.Fprintf(stderr, "vexillum: warning: could not record scaffold hash: %v\n", err)
 	}
 
 	fmt.Fprintln(stdout, "vexillum initialized.")
 	return 0
+}
+
+// runInitGlobal scaffolds the commander rules once for every project on
+// this machine (~/.claude/rules/vexillum.md) instead of the current
+// project - opt-in via 'vexillum init --global'. Applies to every Claude
+// Code session on this machine, not just vexillum projects; see initUsage
+// for why this isn't the default.
+func runInitGlobal(vexillumHome, home string, stdout, stderr io.Writer) int {
+	created, err := ensureDir(vexillumHome)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", vexillumHome, err)
+		return 1
+	}
+	if created {
+		fmt.Fprintf(stdout, "Created %s\n", vexillumHome)
+	}
+
+	alreadyInitialized := globalAlreadyInitialized(vexillumHome)
+	if !alreadyInitialized {
+		if err := writeLocalConfig(vexillumHome); err != nil {
+			fmt.Fprintf(stderr, "vexillum: cannot write %s: %v\n", filepath.Join(vexillumHome, "config.json"), err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Created %s\n", filepath.Join(vexillumHome, "config.json"))
+	}
+
+	ruleDir := filepath.Join(home, ".claude", "rules")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
+		return 1
+	}
+	ruleCreated, err := writeFileIfMissing(ruleDir, "vexillum.md", productVexillumRule)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot write %s: %v\n", filepath.Join(ruleDir, "vexillum.md"), err)
+		return 1
+	}
+
+	if alreadyInitialized {
+		if !ruleCreated {
+			fmt.Fprintln(stdout, "Already initialized globally (found "+filepath.Join(vexillumHome, "config.json")+"). Nothing to do.")
+			return 0
+		}
+		fmt.Fprintln(stdout, "Created missing ~/.claude/rules/vexillum.md")
+		if err := recordScaffoldHash(vexillumHome, ruleCreated); err != nil {
+			fmt.Fprintf(stderr, "vexillum: warning: could not record scaffold hash: %v\n", err)
+		}
+		fmt.Fprintln(stdout, "Already initialized globally; restored the missing piece above.")
+		return 0
+	}
+
+	if ruleCreated {
+		fmt.Fprintln(stdout, "Created ~/.claude/rules/vexillum.md")
+	} else {
+		fmt.Fprintln(stdout, "~/.claude/rules/vexillum.md already exists, left untouched")
+	}
+	if err := recordScaffoldHash(vexillumHome, ruleCreated); err != nil {
+		fmt.Fprintf(stderr, "vexillum: warning: could not record scaffold hash: %v\n", err)
+	}
+
+	fmt.Fprintln(stdout, "vexillum initialized globally - this applies to every Claude Code session on this machine.")
+	return 0
+}
+
+func globalAlreadyInitialized(vexillumHome string) bool {
+	_, err := os.Stat(filepath.Join(vexillumHome, "config.json"))
+	return err == nil
 }
 
 const (
@@ -553,9 +684,11 @@ func projectAlreadyInitialized(projectDir string) bool {
 	return err == nil
 }
 
-func writeLocalConfig(projectDir string) error {
-	dir := filepath.Join(projectDir, ".vexillum")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+// writeLocalConfig creates a fresh config.json directly inside configDir -
+// the project's .vexillum/ for local scaffolds, or vexillumHome itself for
+// the global scaffold (see runInitGlobal).
+func writeLocalConfig(configDir string) error {
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return err
 	}
 
@@ -566,7 +699,7 @@ func writeLocalConfig(projectDir string) error {
 	}
 	data = append(data, '\n')
 
-	return os.WriteFile(filepath.Join(dir, "config.json"), data, 0o644)
+	return os.WriteFile(filepath.Join(configDir, "config.json"), data, 0o644)
 }
 
 func writeFileIfMissing(projectDir, name, content string) (created bool, err error) {
