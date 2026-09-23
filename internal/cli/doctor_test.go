@@ -68,7 +68,7 @@ func initializedProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	initGitRepo(t, dir)
-	if err := writeLocalConfig(dir); err != nil {
+	if err := writeLocalConfig(filepath.Join(dir, ".vexillum")); err != nil {
 		t.Fatalf("writing local config: %v", err)
 	}
 	return dir
