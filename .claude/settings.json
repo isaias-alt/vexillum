@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "asyncRewake": true,
+            "command": "vexillum sentinel await",
+            "timeout": 3600,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
