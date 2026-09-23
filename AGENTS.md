@@ -6,11 +6,9 @@ Este archivo gobierna cómo un agente de código (Claude Code) trabaja en el rep
 
 Orquestador de agentes de código por CLI, escrito en Go. Le hablás a un agente coordinador (commander) y despacha subagentes (soldiers) en paralelo, cada uno aislado en un git worktree (camp), que devuelven un PR (mission) o un reporte (scout). Un componente de supervisión (sentinel) vigila a los soldiers y despierta al commander solo cuando hace falta. Estado y config en `~/.vexillum/`.
 
-Documentos de referencia del proyecto: el PRD v1 (qué se construye, por capas), el ADR (decisiones de arquitectura y por qué), y los casos de prueba. Leelos antes de proponer cambios de rumbo.
-
 ## Reglas de arquitectura que no se relitigan
 
-Están fundamentadas en el ADR. No las cambies ni propongas alternativas sin que el general lo pida explícitamente; si algo parece que las contradice, consultá el ADR primero.
+No las cambies ni propongas alternativas sin que el general lo pida explícitamente.
 
 - **Lenguaje: Go.** No sugieras reescribir en otro lenguaje.
 - **Distribución: binario por brew/curl**, multiplataforma. No introduzcas dependencias de runtime (Node, Python) en el camino de instalación.
