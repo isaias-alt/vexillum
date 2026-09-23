@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -195,7 +196,11 @@ func TestRunLandAndRunRelease(t *testing.T) {
 	task.CampBranch = c.Branch
 	task.HerdrTabID = "w1:t1"
 	task.Status = state.StatusDone
-	if err := state.Save(home, task); err != nil {
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 

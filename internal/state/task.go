@@ -1,8 +1,10 @@
 // Package state models a task (mission or scout) as a struct serializable
-// to JSON, and reads/writes it to ~/.vexillum/tasks/. No workers yet: tasks
-// are created and inspected by hand. This is the base for restart-proofing
-// in later layers, where each task's state on disk is what a restarted
-// vexillum reconciles against.
+// to JSON, and reads/writes it to <project root>/tasks/ - the caller
+// resolves that project root (see internal/project) before calling in;
+// this package only ever sees the root it's handed, not vexillumHome
+// directly. This is the base for restart-proofing in later layers, where
+// each task's state on disk is what a restarted vexillum reconciles
+// against.
 package state
 
 import (
@@ -140,23 +142,23 @@ func newID() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func tasksDir(vexillumHome string) string {
-	return filepath.Join(vexillumHome, "tasks")
+func tasksDir(projectRoot string) string {
+	return filepath.Join(projectRoot, "tasks")
 }
 
-func taskPath(vexillumHome, id string) string {
-	return filepath.Join(tasksDir(vexillumHome), id+".json")
+func taskPath(projectRoot, id string) string {
+	return filepath.Join(tasksDir(projectRoot), id+".json")
 }
 
-// Save persists t to ~/.vexillum/tasks/<id>.json atomically: it writes to a
-// temp file in the same directory and renames it into place, so a reader
-// never observes a partially written file.
-func Save(vexillumHome string, t Task) error {
-	dir := tasksDir(vexillumHome)
+// Save persists t to <project root>/tasks/<id>.json atomically: it writes
+// to a temp file in the same directory and renames it into place, so a
+// reader never observes a partially written file.
+func Save(projectRoot string, t Task) error {
+	dir := tasksDir(projectRoot)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating tasks directory: %w", err)
 	}
-	if err := atomicfile.WriteJSON(taskPath(vexillumHome, t.ID), t); err != nil {
+	if err := atomicfile.WriteJSON(taskPath(projectRoot, t.ID), t); err != nil {
 		return fmt.Errorf("saving task %s: %w", t.ID, err)
 	}
 	return nil
@@ -165,8 +167,8 @@ func Save(vexillumHome string, t Task) error {
 // Load reads and decodes the task with the given id. A corrupt or
 // incomplete file, or one with an unsupported schema version, produces a
 // clear error instead of a panic or garbage data.
-func Load(vexillumHome, id string) (Task, error) {
-	path := taskPath(vexillumHome, id)
+func Load(projectRoot, id string) (Task, error) {
+	path := taskPath(projectRoot, id)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Task{}, fmt.Errorf("reading task %s: %w", id, err)
@@ -188,12 +190,12 @@ func decodeTask(path string, data []byte) (Task, error) {
 	return t, nil
 }
 
-// List returns every task found in ~/.vexillum/tasks/, sorted by ID. An
-// empty or missing tasks directory yields an empty list, not an error. If
-// any task file is corrupt, List fails with an error naming that file
+// List returns every task found in <project root>/tasks/, sorted by ID.
+// An empty or missing tasks directory yields an empty list, not an error.
+// If any task file is corrupt, List fails with an error naming that file
 // rather than silently skipping it or returning a partial list.
-func List(vexillumHome string) ([]Task, error) {
-	dir := tasksDir(vexillumHome)
+func List(projectRoot string) ([]Task, error) {
+	dir := tasksDir(projectRoot)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {

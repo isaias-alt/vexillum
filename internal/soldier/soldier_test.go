@@ -6,13 +6,25 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
+const fakeCampProjectDir = "/fake/project"
+
 func fakeCamp(t *testing.T) camp.Camp {
 	t.Helper()
-	return camp.Camp{Path: t.TempDir(), Slot: 1, Branch: "vexillum/test"}
+	return camp.Camp{ProjectDir: fakeCampProjectDir, Path: t.TempDir(), Slot: 1, Branch: "vexillum/test"}
+}
+
+func fakeCampProjectRoot(t *testing.T, vexillumHome string) string {
+	t.Helper()
+	root, err := project.Root(vexillumHome, fakeCampProjectDir)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	return root
 }
 
 func newTask(t *testing.T) state.Task {
@@ -50,7 +62,7 @@ func TestRun_Success(t *testing.T) {
 		t.Errorf("expected camp assignment to be recorded on the task, got %+v", got)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(fakeCampProjectRoot(t, home), task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -120,10 +132,11 @@ func TestRun_WriteAheadRunningState(t *testing.T) {
 		}
 	}()
 
+	projectRoot := fakeCampProjectRoot(t, home)
 	deadline := time.Now().Add(2 * time.Second)
 	sawRunning := false
 	for time.Now().Before(deadline) {
-		got, err := state.Load(home, task.ID)
+		got, err := state.Load(projectRoot, task.ID)
 		if err == nil && got.Status == state.StatusRunning {
 			sawRunning = true
 			break
@@ -136,7 +149,7 @@ func TestRun_WriteAheadRunningState(t *testing.T) {
 		t.Fatal("expected to observe the task persisted as running while the process was in flight")
 	}
 
-	final, err := state.Load(home, task.ID)
+	final, err := state.Load(projectRoot, task.ID)
 	if err != nil {
 		t.Fatalf("Load after completion: %v", err)
 	}

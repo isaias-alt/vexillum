@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 )
 
@@ -20,10 +23,18 @@ Usage:
   vexillum sentinel await   Block until a wake arrives, or time out (for the
                              async Stop hook - see 'vexillum init')
 
-The sentinel polls every tracked "running" task's live herdr status.
-When one settles (done or blocked), it persists the change and records a
-durable wake. "drain" checks once, instantly: {"decision":"block",...}
-if something's already pending, {} otherwise. "await" is what the async
+The sentinel polls every tracked "running" task's live herdr status,
+across every project it's ever seen (one sentinel process per machine -
+see internal/sentinel.Tick). When one settles (done or blocked), it
+persists the change and records a durable wake, scoped to that task's own
+project. "drain"/"await" resolve which project to act on from the
+current directory (git toplevel, namespaced the same way "vexillum
+dispatch" namespaces a project's camps) - not a repo, or a toplevel
+that's itself a vexillum-managed camp, means nothing to drain here, so
+both are silent no-ops rather than an error.
+
+"drain" checks once, instantly: {"decision":"block",...} if something's
+already pending for that project, {} otherwise. "await" is what the async
 Stop hook actually calls - it blocks (re-checking every few seconds)
 until a wake shows up or it times out, so the commander gets woken even
 if its turn already ended before a soldier settled, not just when a wake
@@ -78,17 +89,14 @@ func Sentinel(args []string) int {
 		return 0
 	}
 
+	if mode == "drain" || mode == "await" {
+		return runSentinelDrainOrAwait(mode)
+	}
+
 	_, vexillumHome, err := resolveDirs()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "vexillum:", err)
 		return 1
-	}
-
-	if mode == "drain" {
-		return runSentinelDrain(vexillumHome, os.Stdout, os.Stderr)
-	}
-	if mode == "await" {
-		return runSentinelAwaitGuarded(vexillumHome, sentinelAwaitMaxWait, sentinelAwaitPollInterval, os.Stderr, os.Getenv("HERDR_WORKSPACE_ID"))
 	}
 
 	release, err := sentinel.AcquireLock(vexillumHome)
@@ -103,8 +111,99 @@ func Sentinel(args []string) int {
 	return 0
 }
 
-func runSentinelDrain(vexillumHome string, stdout, stderr io.Writer) int {
-	wakes, err := sentinel.Drain(vexillumHome)
+// runSentinelDrainOrAwait resolves which project "drain"/"await" should
+// act on from the current directory (see resolveDrainTarget) and
+// dispatches to the matching helper. An unresolvable project - cwd isn't
+// in a git repository, or its toplevel is itself a vexillum-managed camp -
+// is a silent no-op for both, not an error: drain prints the same "{}" it
+// would for a project with nothing pending, and await exits 0 immediately,
+// the same as it does outside a herdr-managed pane.
+func runSentinelDrainOrAwait(mode string) int {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum: cannot determine home directory:", err)
+		return 1
+	}
+	vexillumHome := filepath.Join(home, ".vexillum")
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		return 1
+	}
+
+	projectRoot, err := resolveDrainTarget(cwd, vexillumHome)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		return 1
+	}
+
+	if mode == "drain" {
+		if projectRoot == "" {
+			fmt.Fprintln(os.Stdout, "{}")
+			return 0
+		}
+		return runSentinelDrain(projectRoot, os.Stdout, os.Stderr)
+	}
+
+	if projectRoot == "" {
+		return 0
+	}
+	return runSentinelAwaitGuarded(projectRoot, sentinelAwaitMaxWait, sentinelAwaitPollInterval, os.Stderr, os.Getenv("HERDR_WORKSPACE_ID"))
+}
+
+// resolveDrainTarget finds the project "drain"/"await" should act on,
+// from cwd: the git repository containing it, namespaced under
+// vexillumHome the same way camp.Acquire already keys a project's camps
+// (see internal/project.Root). Returns "" (not an error) when cwd isn't
+// inside a git repository, or when its toplevel is itself a
+// vexillum-managed camp (a soldier's own worktree, checked out under
+// vexillumHome) - both are "nothing to drain here" cases, not failures: a
+// soldier's own Stop hook firing from inside its own camp has nothing to
+// drain for itself, same as a stray shell that isn't in a project at all.
+//
+// The camp check compares against an EvalSymlinks'd copy of vexillumHome,
+// not vexillumHome as given: "git rev-parse --show-toplevel" resolves
+// symlinks when it walks up to find toplevel, so on a machine where
+// vexillumHome's own path involves one (e.g. a temp-dir-rooted
+// vexillumHome under macOS's symlinked /var, as every test here uses),
+// comparing the resolved toplevel against an unresolved vexillumHome
+// would silently fail to recognize a camp as being under it - caught
+// live by TestResolveDrainTarget_InsideACampIsANoOp before this
+// normalization was added.
+func resolveDrainTarget(cwd, vexillumHome string) (string, error) {
+	toplevel, err := gitToplevel(cwd)
+	if err != nil {
+		return "", nil
+	}
+
+	resolvedHome := vexillumHome
+	if resolved, err := filepath.EvalSymlinks(vexillumHome); err == nil {
+		resolvedHome = resolved
+	}
+	if refuseInsideVexillumHome(toplevel, resolvedHome) != nil {
+		return "", nil
+	}
+	return project.Root(vexillumHome, toplevel)
+}
+
+// gitToplevel runs "git rev-parse --show-toplevel" in dir, returning the
+// absolute root of the git repository containing it. Any failure (not a
+// repository, git not installed, ...) is reported as a plain error -
+// resolveDrainTarget treats every such failure the same way: nothing to
+// drain here.
+func gitToplevel(dir string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --show-toplevel (in %s): %w", dir, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
+	wakes, err := sentinel.Drain(projectRoot)
 	if err != nil {
 		fmt.Fprintln(stderr, "vexillum:", err)
 		return 1
@@ -148,11 +247,11 @@ func runSentinelDrain(vexillumHome string, stdout, stderr io.Writer) int {
 // workspaceID means exactly that - exit 0 immediately, the same "let
 // the turn end quietly" result runSentinelAwait itself returns on a
 // real timeout, just without waiting first.
-func runSentinelAwaitGuarded(vexillumHome string, maxWait, pollInterval time.Duration, stderr io.Writer, workspaceID string) int {
+func runSentinelAwaitGuarded(projectRoot string, maxWait, pollInterval time.Duration, stderr io.Writer, workspaceID string) int {
 	if workspaceID == "" {
 		return 0
 	}
-	return runSentinelAwait(vexillumHome, maxWait, pollInterval, stderr)
+	return runSentinelAwait(projectRoot, maxWait, pollInterval, stderr)
 }
 
 // runSentinelAwait is what the async Stop hook actually invokes
@@ -166,10 +265,10 @@ func runSentinelAwaitGuarded(vexillumHome string, maxWait, pollInterval time.Dur
 // "Stop hook feedback" with no new user prompt - exit 2 + stderr is the
 // block signal here, not runSentinelDrain's JSON on stdout, matching
 // that verified mechanism exactly.
-func runSentinelAwait(vexillumHome string, maxWait, pollInterval time.Duration, stderr io.Writer) int {
+func runSentinelAwait(projectRoot string, maxWait, pollInterval time.Duration, stderr io.Writer) int {
 	deadline := time.Now().Add(maxWait)
 	for {
-		wakes, err := sentinel.Drain(vexillumHome)
+		wakes, err := sentinel.Drain(projectRoot)
 		if err == nil && len(wakes) > 0 {
 			fmt.Fprintln(stderr, wakeReason(wakes))
 			return 2

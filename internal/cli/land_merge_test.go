@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -30,7 +31,7 @@ const healthyPRView = `case "$1 $2" in
   "pr merge") echo "merged" ;;
 esac`
 
-func shippedTask(t *testing.T, home string) state.Task {
+func shippedTask(t *testing.T, projectRoot string) state.Task {
 	t.Helper()
 	task, err := state.New(state.KindMission, "do a thing")
 	if err != nil {
@@ -38,7 +39,7 @@ func shippedTask(t *testing.T, home string) state.Task {
 	}
 	task.Status = state.StatusShipped
 	task.CampBranch = "vexillum/abc123"
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 	return task
@@ -152,13 +153,17 @@ func TestMergeShippedPR_RefusesWithoutGh(t *testing.T) {
 // fast-forward the camp - it never even resolves a camp (this task's
 // CampSlot is left at its zero value, which would fail camp.Resolve).
 func TestRunLand_ShippedTaskMergesPR(t *testing.T) {
-	project := t.TempDir()
+	projectDir := t.TempDir()
 	home := t.TempDir()
-	task := shippedTask(t, home)
+	projectRoot, err := project.Root(home, projectDir)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	task := shippedTask(t, projectRoot)
 	t.Setenv("PATH", ghStub(t, healthyPRView))
 
 	var out bytes.Buffer
-	code := runLand(project, home, task.ID, &out, &out)
+	code := runLand(projectDir, home, task.ID, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())

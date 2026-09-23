@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -53,7 +54,11 @@ func interruptedTestTask(t *testing.T, project, home string) state.Task {
 	task.Status = state.StatusInterrupted
 	task.AgentNotFoundSince = time.Now().UTC().Add(-time.Hour)
 	task.Output = "[vexillum] this soldier's herdr agent disappeared"
-	if err := state.Save(home, task); err != nil {
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 	return task
@@ -71,7 +76,11 @@ func TestRunRedispatch_RefusesNonInterrupted(t *testing.T) {
 		t.Fatalf("state.New: %v", err)
 	}
 	task.Status = state.StatusDone
-	if err := state.Save(home, task); err != nil {
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -85,7 +94,7 @@ func TestRunRedispatch_RefusesNonInterrupted(t *testing.T) {
 		t.Errorf("expected the error to name why it refused, got: %s", out.String())
 	}
 
-	reloaded, err := state.Load(home, task.ID)
+	reloaded, err := state.Load(projectRoot, task.ID)
 	if err != nil {
 		t.Fatalf("state.Load: %v", err)
 	}
@@ -116,7 +125,11 @@ func TestRunRedispatch_Success(t *testing.T) {
 		t.Errorf("expected output to name the redispatch count, got: %s", out.String())
 	}
 
-	reloaded, err := state.Load(home, task.ID)
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	reloaded, err := state.Load(projectRoot, task.ID)
 	if err != nil {
 		t.Fatalf("state.Load: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -61,7 +62,11 @@ func doneMissionTask(t *testing.T, project, home string) state.Task {
 	task.CampPath = c.Path
 	task.CampBranch = c.Branch
 	task.Status = state.StatusDone
-	if err := state.Save(home, task); err != nil {
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 	return task
@@ -97,7 +102,11 @@ func TestRunShip_RecordsShippedStatus(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
 
-	reloaded, err := state.Load(home, task.ID)
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	reloaded, err := state.Load(projectRoot, task.ID)
 	if err != nil {
 		t.Fatalf("state.Load: %v", err)
 	}
@@ -113,7 +122,11 @@ func TestRunShip_AllowsReshippingAShippedTask(t *testing.T) {
 	home := t.TempDir()
 	task := doneMissionTask(t, project, home)
 	task.Status = state.StatusShipped
-	if err := state.Save(home, task); err != nil {
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -138,7 +151,11 @@ func TestRunShip_RefusesNotDone(t *testing.T) {
 		t.Fatalf("state.New: %v", err)
 	}
 	task.Status = state.StatusRunning
-	if err := state.Save(home, task); err != nil {
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -163,7 +180,11 @@ func TestRunShip_RefusesScout(t *testing.T) {
 		t.Fatalf("state.New: %v", err)
 	}
 	task.Status = state.StatusDone
-	if err := state.Save(home, task); err != nil {
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 

@@ -7,9 +7,26 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
+
+// testCampProjectDir is the fake project directory every test camp.Camp
+// literal below carries as ProjectDir - RunInHerdr resolves a task's
+// project root from it (internal/project.Root), so tests that load the
+// task back afterward need the exact same resolution, not the bare
+// vexillumHome the old flat layout used.
+const testCampProjectDir = "/fake/project"
+
+func testProjectRoot(t *testing.T, vexillumHome string) string {
+	t.Helper()
+	root, err := project.Root(vexillumHome, testCampProjectDir)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	return root
+}
 
 // fakeHerdr implements herdr.Client for tests, so soldier's orchestration
 // (status mapping, the trust-dialog retry, task persistence) can be
@@ -111,7 +128,7 @@ func newMissionTask(t *testing.T) state.Task {
 func TestRunInHerdr_Success(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:        "w1:t2",
@@ -148,7 +165,7 @@ func TestRunInHerdr_Success(t *testing.T) {
 		t.Errorf("expected the pane to carry %q (PRD v2, B.3), got %v", wantEnv, client.createTabEnv)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -163,14 +180,14 @@ func TestRunInHerdr_Success(t *testing.T) {
 func TestRunInHerdr_WriteAheadRunningState(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
 	// AgentStart is the first herdr call after CreateTab+Save, so by the
 	// time it's invoked the running state must already be on disk.
 	var sawRunning bool
-	checkingClient := &checkingHerdr{fakeHerdr: client, home: home, taskID: task.ID, sawRunning: &sawRunning}
+	checkingClient := &checkingHerdr{fakeHerdr: client, projectRoot: testProjectRoot(t, home), taskID: task.ID, sawRunning: &sawRunning}
 
 	if _, err := soldier.RunInHerdr(home, "w1", task, c, checkingClient); err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
@@ -182,13 +199,13 @@ func TestRunInHerdr_WriteAheadRunningState(t *testing.T) {
 
 type checkingHerdr struct {
 	*fakeHerdr
-	home       string
-	taskID     string
-	sawRunning *bool
+	projectRoot string
+	taskID      string
+	sawRunning  *bool
 }
 
 func (c *checkingHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error {
-	got, err := state.Load(c.home, c.taskID)
+	got, err := state.Load(c.projectRoot, c.taskID)
 	if err == nil && got.Status == state.StatusRunning && got.HerdrPaneID == paneID {
 		*c.sawRunning = true
 	}
@@ -201,7 +218,7 @@ func (c *checkingHerdr) AgentStart(name, kind, paneID string, agentArgs ...strin
 func TestRunInHerdr_Blocked(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "blocked"}
 
@@ -222,7 +239,7 @@ func TestRunInHerdr_Blocked(t *testing.T) {
 func TestRunInHerdr_TimeoutHandsOffToSentinel(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:     "w1:t2",
@@ -238,7 +255,7 @@ func TestRunInHerdr_TimeoutHandsOffToSentinel(t *testing.T) {
 		t.Errorf("expected status running, got %s", got.Status)
 	}
 
-	persisted, loadErr := state.Load(home, task.ID)
+	persisted, loadErr := state.Load(testProjectRoot(t, home), task.ID)
 	if loadErr != nil {
 		t.Fatalf("state.Load: %v", loadErr)
 	}
@@ -252,7 +269,7 @@ func TestRunInHerdr_TimeoutHandsOffToSentinel(t *testing.T) {
 func TestRunInHerdr_NonTimeoutPromptErrorFails(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:     "w1:t2",
@@ -276,7 +293,7 @@ func TestRunInHerdr_NonTimeoutPromptErrorFails(t *testing.T) {
 func TestRunInHerdr_NotRunningFailsWithClearMessage(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:     "w1:t2",
@@ -302,7 +319,7 @@ func TestRunInHerdr_NotRunningFailsWithClearMessage(t *testing.T) {
 func TestRunInHerdr_RetriesPaneBusy(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:        "w1:t2",
@@ -328,7 +345,7 @@ func TestRunInHerdr_RetriesPaneBusy(t *testing.T) {
 func TestRunInHerdr_GivesUpOnPersistentPaneBusy(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:        "w1:t2",
@@ -354,7 +371,7 @@ func TestRunInHerdr_GivesUpOnPersistentPaneBusy(t *testing.T) {
 func TestRunInHerdr_RetriesStalledPrompt(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:                 "w1:t2",
@@ -380,7 +397,7 @@ func TestRunInHerdr_RetriesStalledPrompt(t *testing.T) {
 func TestRunInHerdr_GivesUpOnPersistentlyStalledPrompt(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:                 "w1:t2",
@@ -405,7 +422,7 @@ func TestRunInHerdr_GivesUpOnPersistentlyStalledPrompt(t *testing.T) {
 func TestRunInHerdr_FallsBackOnNameCollision(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:        "w1:t2",
@@ -436,7 +453,7 @@ func TestRunInHerdr_FallsBackOnNameCollision(t *testing.T) {
 		t.Errorf("expected AgentPrompt to be called with the disambiguated name %q, got %v", got.HerdrAgentName, client.promptNames)
 	}
 
-	persisted, err := state.Load(home, task.ID)
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -458,7 +475,7 @@ func TestRunInHerdr_DisambiguatedNameStaysWithinLengthLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state.New: %v", err)
 	}
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:        "w1:t2",
@@ -485,7 +502,7 @@ func TestRunInHerdr_DisambiguatedNameStaysWithinLengthLimit(t *testing.T) {
 func TestRunInHerdr_DismissesTrustDialog(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:        "w1:t2",
@@ -516,7 +533,7 @@ func TestRunInHerdr_DismissesTrustDialog(t *testing.T) {
 func TestRunInHerdr_UnrecognizedStartupBlockFails(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{
 		tabID:      "w1:t2",
@@ -543,7 +560,7 @@ func TestRunInHerdr_UnrecognizedStartupBlockFails(t *testing.T) {
 func TestRunInHerdr_CreateTabFails(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
-	c := camp.Camp{Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
 
 	client := &fakeHerdr{createTabErr: &herdr.APIError{Code: "not_found", Message: "workspace not found"}}
 
@@ -552,7 +569,7 @@ func TestRunInHerdr_CreateTabFails(t *testing.T) {
 		t.Fatal("expected an error when the herdr tab can't be created")
 	}
 
-	if _, loadErr := state.Load(home, task.ID); loadErr == nil {
+	if _, loadErr := state.Load(testProjectRoot(t, home), task.ID); loadErr == nil {
 		t.Error("expected no task state to be persisted when the tab was never created")
 	}
 }

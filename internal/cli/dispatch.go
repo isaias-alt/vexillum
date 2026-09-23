@@ -11,6 +11,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -233,7 +234,13 @@ func Land(args []string) int {
 }
 
 func runLand(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) int {
-	task, err := state.Load(vexillumHome, taskID)
+	projectRoot, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
+	task, err := state.Load(projectRoot, taskID)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
 		return 1
@@ -284,7 +291,13 @@ func Release(args []string) int {
 }
 
 func runRelease(projectDir, vexillumHome, homeDir, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
-	task, err := state.Load(vexillumHome, taskID)
+	projectRoot, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
+	task, err := state.Load(projectRoot, taskID)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
 		return 1

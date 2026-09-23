@@ -8,8 +8,6 @@
 package camp
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +19,7 @@ import (
 	"syscall"
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
+	"github.com/isaias-alt/vexillum/internal/project"
 )
 
 // poolSchemaVersion is the pool state file's schema version.
@@ -56,7 +55,11 @@ func Acquire(projectDir, vexillumHome, taskID string) (Camp, error) {
 		return Camp{}, fmt.Errorf("resolving project path: %w", err)
 	}
 	repoName := filepath.Base(absProject)
-	poolRoot := filepath.Join(vexillumHome, fmt.Sprintf("%s-%s", repoName, shortHash(absProject)))
+	projectRoot, err := project.Root(vexillumHome, absProject)
+	if err != nil {
+		return Camp{}, err
+	}
+	poolRoot := filepath.Join(projectRoot, "camps")
 
 	if err := os.MkdirAll(poolRoot, 0o755); err != nil {
 		return Camp{}, fmt.Errorf("creating camp pool directory: %w", err)
@@ -142,7 +145,11 @@ func Resolve(projectDir, vexillumHome string, slot int) (Camp, error) {
 		return Camp{}, fmt.Errorf("resolving project path: %w", err)
 	}
 	repoName := filepath.Base(absProject)
-	poolRoot := filepath.Join(vexillumHome, fmt.Sprintf("%s-%s", repoName, shortHash(absProject)))
+	projectRoot, err := project.Root(vexillumHome, absProject)
+	if err != nil {
+		return Camp{}, err
+	}
+	poolRoot := filepath.Join(projectRoot, "camps")
 
 	pool, err := loadPool(poolRoot)
 	if err != nil {
@@ -341,11 +348,6 @@ func Discard(c Camp, taskID string) error {
 	pool.Slots[idx].LeasedBy = ""
 	pool.Slots[idx].Branch = ""
 	return savePool(c.PoolRoot, pool)
-}
-
-func shortHash(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])[:8]
 }
 
 func poolStatePath(poolRoot string) string {

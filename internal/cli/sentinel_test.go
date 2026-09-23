@@ -2,10 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -48,13 +51,21 @@ func TestSentinelMode(t *testing.T) {
 	}
 }
 
+// projectRoot mirrors internal/sentinel's own test helper: a namespaced
+// project root under vexillumHome, without needing a real project
+// directory - runSentinelDrain/runSentinelAwait/sentinel.Tick only care
+// that it's a plain root to read tasks/wakes from.
+func projectRoot(vexillumHome, name string) string {
+	return filepath.Join(vexillumHome, "projects", name)
+}
+
 // No pending wakes -> the empty hook JSON, so a Stop hook lets the turn
 // end normally.
 func TestRunSentinelDrain_NoWakes(t *testing.T) {
-	home := t.TempDir()
+	proj := projectRoot(t.TempDir(), "proj1")
 
 	var out bytes.Buffer
-	if code := runSentinelDrain(home, &out, &out); code != 0 {
+	if code := runSentinelDrain(proj, &out, &out); code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
 	if strings.TrimSpace(out.String()) != "{}" {
@@ -67,6 +78,7 @@ func TestRunSentinelDrain_NoWakes(t *testing.T) {
 // stopping.
 func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
 
 	task, err := state.New(state.KindMission, "do the thing")
 	if err != nil {
@@ -78,7 +90,7 @@ func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 	// test exercises a real transition rather than the grace period
 	// itself (see internal/sentinel.TestTick_SkipsTasksWithinSettleGracePeriod).
 	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -90,7 +102,7 @@ func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if code := runSentinelDrain(home, &out, &out); code != 0 {
+	if code := runSentinelDrain(proj, &out, &out); code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
 	got := out.String()
@@ -108,6 +120,7 @@ func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 // hook uses (verified live against a real Claude Code session).
 func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
 	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
 
 	task, err := state.New(state.KindMission, "do the thing")
 	if err != nil {
@@ -116,7 +129,7 @@ func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = "vx-do-the-thing"
 	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 	client := &fakeHerdr{promptStatus: "done"}
@@ -125,7 +138,7 @@ func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	code := runSentinelAwait(home, time.Hour, time.Millisecond, &stderr)
+	code := runSentinelAwait(proj, time.Hour, time.Millisecond, &stderr)
 	if code != 2 {
 		t.Fatalf("expected exit 2, got %d: %s", code, stderr.String())
 	}
@@ -138,10 +151,10 @@ func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
 // elapses - the async hook lets the turn end quietly, same as
 // runSentinelDrain's {} for the instant-check case.
 func TestRunSentinelAwait_TimesOutWithNothingPending(t *testing.T) {
-	home := t.TempDir()
+	proj := projectRoot(t.TempDir(), "proj1")
 
 	var stderr bytes.Buffer
-	code := runSentinelAwait(home, 20*time.Millisecond, 5*time.Millisecond, &stderr)
+	code := runSentinelAwait(proj, 20*time.Millisecond, 5*time.Millisecond, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0 on timeout, got %d: %s", code, stderr.String())
 	}
@@ -154,6 +167,7 @@ func TestRunSentinelAwait_TimesOutWithNothingPending(t *testing.T) {
 // found before maxWait elapses - not just on the very first check.
 func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
 
 	task, err := state.New(state.KindMission, "do the thing")
 	if err != nil {
@@ -162,7 +176,7 @@ func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = "vx-do-the-thing"
 	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 
@@ -173,7 +187,7 @@ func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 	}()
 
 	var stderr bytes.Buffer
-	code := runSentinelAwait(home, time.Second, 5*time.Millisecond, &stderr)
+	code := runSentinelAwait(proj, time.Second, 5*time.Millisecond, &stderr)
 	if code != 2 {
 		t.Fatalf("expected exit 2 once the wake appeared, got %d: %s", code, stderr.String())
 	}
@@ -192,6 +206,7 @@ func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 // is that this invocation isn't the one meant to receive it.
 func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
 
 	task, err := state.New(state.KindMission, "do the thing")
 	if err != nil {
@@ -200,7 +215,7 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = "vx-do-the-thing"
 	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 	client := &fakeHerdr{promptStatus: "done"}
@@ -210,7 +225,7 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 
 	start := time.Now()
 	var stderr bytes.Buffer
-	code := runSentinelAwaitGuarded(home, time.Hour, 5*time.Millisecond, &stderr, "")
+	code := runSentinelAwaitGuarded(proj, time.Hour, 5*time.Millisecond, &stderr, "")
 	elapsed := time.Since(start)
 
 	if code != 0 {
@@ -229,6 +244,7 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 // still found and still blocks the turn.
 func TestRunSentinelAwaitGuarded_WithWorkspaceFindsWake(t *testing.T) {
 	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
 
 	task, err := state.New(state.KindMission, "do the thing")
 	if err != nil {
@@ -237,7 +253,7 @@ func TestRunSentinelAwaitGuarded_WithWorkspaceFindsWake(t *testing.T) {
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = "vx-do-the-thing"
 	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(home, task); err != nil {
+	if err := state.Save(proj, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
 	client := &fakeHerdr{promptStatus: "done"}
@@ -246,11 +262,171 @@ func TestRunSentinelAwaitGuarded_WithWorkspaceFindsWake(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	code := runSentinelAwaitGuarded(home, time.Hour, time.Millisecond, &stderr, "ws-123")
+	code := runSentinelAwaitGuarded(proj, time.Hour, time.Millisecond, &stderr, "ws-123")
 	if code != 2 {
 		t.Fatalf("expected exit 2 with a workspace id set, got %d: %s", code, stderr.String())
 	}
 	if !strings.Contains(stderr.String(), task.ID) {
 		t.Errorf("expected the reason to name the task id, got: %s", stderr.String())
+	}
+}
+
+// C1-09: outside any git repository, resolveDrainTarget has nothing to
+// resolve - a silent no-op ("", nil), not an error.
+func TestResolveDrainTarget_NotARepo(t *testing.T) {
+	vexillumHome := t.TempDir()
+	notARepo := t.TempDir()
+
+	got, err := resolveDrainTarget(notARepo, vexillumHome)
+	if err != nil {
+		t.Fatalf("resolveDrainTarget: %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected no project root outside a git repo, got %q", got)
+	}
+}
+
+// C1-10: a real project's root resolves to the same project root
+// internal/project.Root (and so camp.Acquire) would compute for it -
+// this is what keeps "vexillum dispatch" and "vexillum sentinel drain"
+// agreeing on the same project.
+func TestResolveDrainTarget_RealProject(t *testing.T) {
+	vexillumHome := t.TempDir()
+	proj := initDispatchTestProject(t)
+
+	got, err := resolveDrainTarget(proj, vexillumHome)
+	if err != nil {
+		t.Fatalf("resolveDrainTarget: %v", err)
+	}
+	if got == "" {
+		t.Fatal("expected a resolved project root for a real project")
+	}
+
+	c, err := camp.Acquire(proj, vexillumHome, "task-1")
+	if err != nil {
+		t.Fatalf("camp.Acquire: %v", err)
+	}
+	// camp.Acquire's PoolRoot is <project root>/camps - its parent is
+	// exactly the project root resolveDrainTarget should have resolved.
+	wantRoot := filepath.Dir(c.PoolRoot)
+	if got != wantRoot {
+		t.Errorf("resolveDrainTarget(%q) = %q, want the same project root camp.Acquire uses (%q)", proj, got, wantRoot)
+	}
+}
+
+// C1-11: resolveDrainTarget works from a subdirectory of the project too,
+// not just its root - "git rev-parse --show-toplevel" walks up to find
+// it, unlike the plain os.Getwd() dispatch/land/release/redispatch/ship
+// use (which require running from the project root itself).
+func TestResolveDrainTarget_FromSubdirectory(t *testing.T) {
+	vexillumHome := t.TempDir()
+	proj := initDispatchTestProject(t)
+	subdir := filepath.Join(proj, "sub")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatalf("mkdir subdir: %v", err)
+	}
+
+	fromRoot, err := resolveDrainTarget(proj, vexillumHome)
+	if err != nil {
+		t.Fatalf("resolveDrainTarget(root): %v", err)
+	}
+	fromSub, err := resolveDrainTarget(subdir, vexillumHome)
+	if err != nil {
+		t.Fatalf("resolveDrainTarget(subdir): %v", err)
+	}
+	if fromRoot == "" || fromRoot != fromSub {
+		t.Errorf("expected the same project root from the project's root (%q) and a subdirectory (%q)", fromRoot, fromSub)
+	}
+}
+
+// C1-12: a camp's own worktree - a soldier's cwd - resolves to no
+// project at all, not the project it belongs to. A soldier's own Stop
+// hook has nothing to drain for itself; only the commander, running from
+// the real project root, should ever drain.
+func TestResolveDrainTarget_InsideACampIsANoOp(t *testing.T) {
+	vexillumHome := t.TempDir()
+	proj := initDispatchTestProject(t)
+
+	c, err := camp.Acquire(proj, vexillumHome, "task-1")
+	if err != nil {
+		t.Fatalf("camp.Acquire: %v", err)
+	}
+
+	got, err := resolveDrainTarget(c.Path, vexillumHome)
+	if err != nil {
+		t.Fatalf("resolveDrainTarget: %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected no project root from inside a camp, got %q", got)
+	}
+}
+
+// C1-13: end-to-end - a wake genuinely pending for a project is left
+// completely untouched by a drain invoked from inside one of that
+// project's own camps (a soldier's Stop hook firing from its own
+// worktree). Verifies both halves: resolveDrainTarget's no-op AND that
+// runSentinelDrainOrAwait, wired the same way the real "vexillum
+// sentinel drain" command is, never calls into sentinel.Drain for the
+// project's real wakes when invoked this way.
+func TestDrainFromCamp_DoesNotDrainProjectWakes(t *testing.T) {
+	vexillumHome := t.TempDir()
+	proj := initDispatchTestProject(t)
+
+	c, err := camp.Acquire(proj, vexillumHome, "task-1")
+	if err != nil {
+		t.Fatalf("camp.Acquire: %v", err)
+	}
+
+	// A real pending wake for the project - what a commander's own drain
+	// would need to surface.
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = "vx-do-the-thing"
+	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
+
+	projRoot, err := resolveDrainTarget(proj, vexillumHome)
+	if err != nil {
+		t.Fatalf("resolveDrainTarget(project root): %v", err)
+	}
+	if projRoot == "" {
+		t.Fatal("expected a resolved project root for the real project")
+	}
+	if err := state.Save(projRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	client := &fakeHerdr{promptStatus: "done"}
+	if _, err := sentinel.Tick(vexillumHome, client); err != nil {
+		t.Fatalf("sentinel.Tick: %v", err)
+	}
+
+	wakeFile := filepath.Join(projRoot, "wakes", task.ID+".json")
+	if _, err := os.Stat(wakeFile); err != nil {
+		t.Fatalf("expected a real pending wake before the camp drain attempt: %v", err)
+	}
+
+	// Now resolve as if drain had been invoked with cwd inside the
+	// soldier's own camp - the scenario the Stop hook actually hits.
+	campProjectRoot, err := resolveDrainTarget(c.Path, vexillumHome)
+	if err != nil {
+		t.Fatalf("resolveDrainTarget(camp): %v", err)
+	}
+	if campProjectRoot != "" {
+		t.Fatalf("expected no project resolved from inside the camp, got %q", campProjectRoot)
+	}
+
+	// The project's real wake must still be sitting there, completely
+	// untouched.
+	if _, err := os.Stat(wakeFile); err != nil {
+		t.Errorf("expected the project's pending wake to survive a drain attempt from inside its own camp, but: %v", err)
+	}
+	pending, err := sentinel.Drain(projRoot)
+	if err != nil {
+		t.Fatalf("Drain(project root): %v", err)
+	}
+	if len(pending) != 1 || pending[0].TaskID != task.ID {
+		t.Errorf("expected the project's wake to still be pending after the camp drain attempt, got %+v", pending)
 	}
 }
