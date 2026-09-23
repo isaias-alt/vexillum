@@ -7,27 +7,32 @@ import (
 	"path/filepath"
 )
 
-const upgradeUsage = `Refresh an already-initialized project's vexillum scaffold (AGENTS.md,
-CLAUDE.md, the sentinel Stop hook) to match this binary's latest version,
-without deleting and re-running 'vexillum init' from scratch.
+const upgradeUsage = `Refresh an already-initialized project's vexillum scaffold
+(.claude/rules/vexillum.md, the sentinel Stop hook) to match this binary's
+latest version, without deleting and re-running 'vexillum init' from
+scratch.
 
 Usage:
-  vexillum upgrade [--force]
+  vexillum upgrade [--force] [--global]
 
-By default, AGENTS.md/CLAUDE.md are only refreshed when vexillum can tell
-they weren't hand-edited since it last wrote them (tracked by a stored
+By default, .claude/rules/vexillum.md is only refreshed when vexillum can
+tell it wasn't hand-edited since it last wrote it (tracked by a stored
 content hash) - anything else is left untouched and reported instead.
 
---force overwrites AGENTS.md/CLAUDE.md to the latest template
+--force overwrites .claude/rules/vexillum.md to the latest template
 regardless, including a project from before this hash tracking existed
 whose content vexillum can't otherwise vouch for. Only pass it once
-you've confirmed there's nothing local worth keeping in those files -
-it discards it.
+you've confirmed there's nothing local worth keeping in that file - it
+discards it.
+
+--global refreshes the global scaffold (~/.claude/rules/vexillum.md,
+written by 'vexillum init --global') instead of the current project's.
 `
 
 // Upgrade runs the "vexillum upgrade" command.
 func Upgrade(args []string) int {
 	force := false
+	global := false
 	for _, a := range args {
 		switch a {
 		case "-h", "--help":
@@ -35,11 +40,24 @@ func Upgrade(args []string) int {
 			return 0
 		case "--force":
 			force = true
+		case "--global":
+			global = true
 		default:
 			fmt.Fprintf(os.Stderr, "vexillum: unknown upgrade flag %q\n", a)
 			fmt.Fprint(os.Stderr, upgradeUsage)
 			return 1
 		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "vexillum: cannot determine home directory: %v\n", err)
+		return 1
+	}
+	vexillumHome := filepath.Join(home, ".vexillum")
+
+	if global {
+		return runUpgradeGlobal(vexillumHome, home, force, os.Stdout, os.Stderr)
 	}
 
 	cwd, err := os.Getwd()
@@ -48,13 +66,7 @@ func Upgrade(args []string) int {
 		return 1
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "vexillum: cannot determine home directory: %v\n", err)
-		return 1
-	}
-
-	return runUpgrade(cwd, filepath.Join(home, ".vexillum"), force, os.Stdout, os.Stderr)
+	return runUpgrade(cwd, vexillumHome, force, os.Stdout, os.Stderr)
 }
 
 func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.Writer) int {
@@ -74,32 +86,30 @@ func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.W
 		return 1
 	}
 
-	cfg, err := readLocalConfig(projectDir)
+	configDir := filepath.Join(projectDir, ".vexillum")
+	cfg, err := readLocalConfig(configDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot read .vexillum/config.json: %v\n", err)
 		return 1
 	}
 
-	agentsResult, err := upgradeScaffoldFile(projectDir, "AGENTS.md", productAgentsMD, cfg.AgentsMDHash, force)
-	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: cannot upgrade AGENTS.md: %v\n", err)
+	ruleDir := filepath.Join(projectDir, ".claude", "rules")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
 		return 1
 	}
-	claudeResult, err := upgradeScaffoldFile(projectDir, "CLAUDE.md", productClaudeMD, cfg.ClaudeMDHash, force)
+	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: cannot upgrade CLAUDE.md: %v\n", err)
+		fmt.Fprintf(stderr, "vexillum: cannot upgrade .claude/rules/vexillum.md: %v\n", err)
 		return 1
 	}
 
-	if agentsResult.changed || claudeResult.changed {
-		if err := recordScaffoldHashes(projectDir, agentsResult.changed, claudeResult.changed); err != nil {
-			fmt.Fprintf(stderr, "vexillum: cannot update .vexillum/config.json: %v\n", err)
-			return 1
-		}
+	if err := recordScaffoldHash(configDir, ruleResult.changed); err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot update .vexillum/config.json: %v\n", err)
+		return 1
 	}
 
-	fmt.Fprintf(stdout, "AGENTS.md: %s\n", agentsResult.status)
-	fmt.Fprintf(stdout, "CLAUDE.md: %s\n", claudeResult.status)
+	fmt.Fprintf(stdout, ".claude/rules/vexillum.md: %s\n", ruleResult.status)
 
 	hookAdded, hookErr := ensureSentinelHook(projectDir)
 	if hookErr != nil {
@@ -111,6 +121,49 @@ func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.W
 	}
 
 	fmt.Fprintln(stdout, "vexillum upgrade complete.")
+	return 0
+}
+
+// runUpgradeGlobal refreshes the global scaffold (~/.claude/rules/vexillum.md,
+// written by 'vexillum init --global') instead of a project's - same
+// hash-based drift detection and --force escape hatch as runUpgrade, just
+// against vexillumHome/config.json instead of a project's .vexillum/.
+func runUpgradeGlobal(vexillumHome, home string, force bool, stdout, stderr io.Writer) int {
+	if !globalAlreadyInitialized(vexillumHome) {
+		fmt.Fprintf(stderr, "vexillum: global scaffold not initialized (no %s)\n", filepath.Join(vexillumHome, "config.json"))
+		fmt.Fprintln(stderr, "run 'vexillum init --global' first.")
+		return 1
+	}
+
+	if _, err := ensureDir(vexillumHome); err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", vexillumHome, err)
+		return 1
+	}
+
+	cfg, err := readLocalConfig(vexillumHome)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot read %s: %v\n", filepath.Join(vexillumHome, "config.json"), err)
+		return 1
+	}
+
+	ruleDir := filepath.Join(home, ".claude", "rules")
+	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
+		return 1
+	}
+	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot upgrade ~/.claude/rules/vexillum.md: %v\n", err)
+		return 1
+	}
+
+	if err := recordScaffoldHash(vexillumHome, ruleResult.changed); err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot update %s: %v\n", filepath.Join(vexillumHome, "config.json"), err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "~/.claude/rules/vexillum.md: %s\n", ruleResult.status)
+	fmt.Fprintln(stdout, "vexillum upgrade complete (global).")
 	return 0
 }
 

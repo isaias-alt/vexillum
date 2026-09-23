@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "lavish": {
+      "source": "kunchenguid/lavish-axi",
+      "sourceType": "github",
+      "skillPath": "skills/lavish/SKILL.md",
+      "computedHash": "3a4d15d8c797b2eb929e2af91155538b677a9fdfd6f5245de45bea2683d65910"
+    }
+  }
+}

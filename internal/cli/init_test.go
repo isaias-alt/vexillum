@@ -28,7 +28,9 @@ func mustStat(t *testing.T, path string) os.FileInfo {
 }
 
 // L1-01: init in a clean project creates ~/.vexillum/, the local scaffold
-// and AGENTS.md, and reports what it did, exit 0.
+// and .claude/rules/vexillum.md, and reports what it did, exit 0. Never
+// touches AGENTS.md/CLAUDE.md - vexillum no longer writes or depends on
+// either.
 func TestInit_CleanProject(t *testing.T) {
 	projectDir := t.TempDir()
 	initGitRepo(t, projectDir)
@@ -42,15 +44,21 @@ func TestInit_CleanProject(t *testing.T) {
 	}
 	mustStat(t, vexillumHome)
 	mustStat(t, filepath.Join(projectDir, ".vexillum", "config.json"))
-	mustStat(t, filepath.Join(projectDir, "AGENTS.md"))
-	mustStat(t, filepath.Join(projectDir, "CLAUDE.md"))
+	mustStat(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
 
-	claudeMD, err := os.ReadFile(filepath.Join(projectDir, "CLAUDE.md"))
+	rule, err := os.ReadFile(filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
 	if err != nil {
-		t.Fatalf("reading CLAUDE.md: %v", err)
+		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
 	}
-	if string(claudeMD) != "@AGENTS.md\n" {
-		t.Errorf("expected CLAUDE.md to import AGENTS.md, got %q", claudeMD)
+	if string(rule) != productVexillumRule {
+		t.Error("expected .claude/rules/vexillum.md to match the product template")
+	}
+
+	if _, err := os.Stat(filepath.Join(projectDir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Error("expected init to never write AGENTS.md")
+	}
+	if _, err := os.Stat(filepath.Join(projectDir, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Error("expected init to never write CLAUDE.md")
 	}
 
 	if out := stdout.String(); out == "" {
@@ -58,11 +66,11 @@ func TestInit_CleanProject(t *testing.T) {
 	}
 }
 
-// Claude Code auto-loads CLAUDE.md, not a bare AGENTS.md, so a project
-// initialized before this shim existed never had its AGENTS.md actually
-// read. Re-running init on such a project heals the gap: it creates the
-// missing CLAUDE.md without touching AGENTS.md or config.json.
-func TestInit_HealsMissingClaudeMD(t *testing.T) {
+// A project already initialized (has .vexillum/config.json) but missing
+// .claude/rules/vexillum.md - e.g. deleted by hand, or initialized by an
+// older vexillum before this file existed - gets it healed back without
+// touching config.json's other fields.
+func TestInit_HealsMissingRuleFile(t *testing.T) {
 	projectDir := t.TempDir()
 	initGitRepo(t, projectDir)
 	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
@@ -72,13 +80,9 @@ func TestInit_HealsMissingClaudeMD(t *testing.T) {
 		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
 	}
 
-	claudePath := filepath.Join(projectDir, "CLAUDE.md")
-	if err := os.Remove(claudePath); err != nil {
-		t.Fatalf("removing CLAUDE.md to simulate a pre-fix project: %v", err)
-	}
-	agentsBefore, err := os.ReadFile(filepath.Join(projectDir, "AGENTS.md"))
-	if err != nil {
-		t.Fatalf("reading AGENTS.md: %v", err)
+	rulePath := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
+	if err := os.Remove(rulePath); err != nil {
+		t.Fatalf("removing .claude/rules/vexillum.md to simulate a healed gap: %v", err)
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -87,13 +91,9 @@ func TestInit_HealsMissingClaudeMD(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
 
-	mustStat(t, claudePath)
-	agentsAfter, err := os.ReadFile(filepath.Join(projectDir, "AGENTS.md"))
-	if err != nil {
-		t.Fatalf("reading AGENTS.md after healing: %v", err)
-	}
-	if !bytes.Equal(agentsBefore, agentsAfter) {
-		t.Error("AGENTS.md changed while only CLAUDE.md should have been healed")
+	rule := mustStat(t, rulePath)
+	if rule.Size() == 0 {
+		t.Error("expected the healed rule file to have content")
 	}
 }
 
@@ -109,9 +109,10 @@ func TestInit_Idempotent(t *testing.T) {
 		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
 	}
 
-	agentsBefore, err := os.ReadFile(filepath.Join(projectDir, "AGENTS.md"))
+	rulePath := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
+	ruleBefore, err := os.ReadFile(rulePath)
 	if err != nil {
-		t.Fatalf("reading AGENTS.md: %v", err)
+		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
 	}
 	configBefore, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
 	if err != nil {
@@ -127,12 +128,12 @@ func TestInit_Idempotent(t *testing.T) {
 		t.Error("expected output informing the project was already initialized")
 	}
 
-	agentsAfter, err := os.ReadFile(filepath.Join(projectDir, "AGENTS.md"))
+	ruleAfter, err := os.ReadFile(rulePath)
 	if err != nil {
-		t.Fatalf("reading AGENTS.md after second run: %v", err)
+		t.Fatalf("reading .claude/rules/vexillum.md after second run: %v", err)
 	}
-	if !bytes.Equal(agentsBefore, agentsAfter) {
-		t.Error("AGENTS.md changed on second init run")
+	if !bytes.Equal(ruleBefore, ruleAfter) {
+		t.Error(".claude/rules/vexillum.md changed on second init run")
 	}
 
 	configAfter, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
@@ -144,9 +145,9 @@ func TestInit_Idempotent(t *testing.T) {
 	}
 }
 
-// L1-03: hand-edited AGENTS.md is never silently overwritten by a later
-// init run.
-func TestInit_DoesNotOverwriteEditedAgentsMD(t *testing.T) {
+// L1-03: a hand-edited .claude/rules/vexillum.md is never silently
+// overwritten by a later init run.
+func TestInit_DoesNotOverwriteEditedRuleFile(t *testing.T) {
 	projectDir := t.TempDir()
 	initGitRepo(t, projectDir)
 	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
@@ -156,10 +157,10 @@ func TestInit_DoesNotOverwriteEditedAgentsMD(t *testing.T) {
 		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
 	}
 
-	agentsPath := filepath.Join(projectDir, "AGENTS.md")
+	rulePath := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
 	customContent := []byte("# My custom commander instructions\n")
-	if err := os.WriteFile(agentsPath, customContent, 0o644); err != nil {
-		t.Fatalf("writing custom AGENTS.md: %v", err)
+	if err := os.WriteFile(rulePath, customContent, 0o644); err != nil {
+		t.Fatalf("writing custom rule file: %v", err)
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -168,12 +169,12 @@ func TestInit_DoesNotOverwriteEditedAgentsMD(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
 
-	got, err := os.ReadFile(agentsPath)
+	got, err := os.ReadFile(rulePath)
 	if err != nil {
-		t.Fatalf("reading AGENTS.md: %v", err)
+		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
 	}
 	if !bytes.Equal(got, customContent) {
-		t.Errorf("AGENTS.md was overwritten: got %q, want %q", got, customContent)
+		t.Errorf(".claude/rules/vexillum.md was overwritten: got %q, want %q", got, customContent)
 	}
 }
 
@@ -518,5 +519,113 @@ func TestInit_RefusesInsideVexillumHome(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(campPath, ".vexillum")); !os.IsNotExist(err) {
 		t.Error("expected no scaffold to be written inside the camp")
+	}
+}
+
+// vexillum init --global scaffolds ~/.claude/rules/vexillum.md once for
+// the whole machine, tracked in vexillumHome/config.json - not tied to any
+// project, and not required to be a git repo.
+func TestInitGlobal_CleanMachine(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	home := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	code := runInitGlobal(vexillumHome, home, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	mustStat(t, vexillumHome)
+	mustStat(t, filepath.Join(vexillumHome, "config.json"))
+	rule, err := os.ReadFile(filepath.Join(home, ".claude", "rules", "vexillum.md"))
+	if err != nil {
+		t.Fatalf("reading ~/.claude/rules/vexillum.md: %v", err)
+	}
+	if string(rule) != productVexillumRule {
+		t.Error("expected the global rule file to match the product template")
+	}
+}
+
+// A second global init run is a no-op: nothing changes once the scaffold
+// is already current.
+func TestInitGlobal_Idempotent(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	home := t.TempDir()
+
+	var buf bytes.Buffer
+	if code := runInitGlobal(vexillumHome, home, &buf, &buf); code != 0 {
+		t.Fatalf("first global init failed: exit %d: %s", code, buf.String())
+	}
+
+	rulePath := filepath.Join(home, ".claude", "rules", "vexillum.md")
+	ruleBefore, err := os.ReadFile(rulePath)
+	if err != nil {
+		t.Fatalf("reading rule file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runInitGlobal(vexillumHome, home, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0 on second run, got %d (stderr: %s)", code, stderr.String())
+	}
+	if stdout.String() == "" {
+		t.Error("expected output informing the machine was already initialized")
+	}
+
+	ruleAfter, err := os.ReadFile(rulePath)
+	if err != nil {
+		t.Fatalf("reading rule file after second run: %v", err)
+	}
+	if !bytes.Equal(ruleBefore, ruleAfter) {
+		t.Error("global rule file changed on second init run")
+	}
+}
+
+// A hand-edited global rule file is never silently overwritten, same
+// guarantee as the local scaffold.
+func TestInitGlobal_DoesNotOverwriteEditedRuleFile(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	home := t.TempDir()
+
+	var buf bytes.Buffer
+	if code := runInitGlobal(vexillumHome, home, &buf, &buf); code != 0 {
+		t.Fatalf("first global init failed: exit %d: %s", code, buf.String())
+	}
+
+	rulePath := filepath.Join(home, ".claude", "rules", "vexillum.md")
+	customContent := []byte("# My custom global commander instructions\n")
+	if err := os.WriteFile(rulePath, customContent, 0o644); err != nil {
+		t.Fatalf("writing custom global rule file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runInitGlobal(vexillumHome, home, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	got, err := os.ReadFile(rulePath)
+	if err != nil {
+		t.Fatalf("reading global rule file: %v", err)
+	}
+	if !bytes.Equal(got, customContent) {
+		t.Errorf("global rule file was overwritten: got %q, want %q", got, customContent)
+	}
+}
+
+// vexillum init --global never writes a project-shaped .vexillum/ scaffold
+// under home - it's a different artifact at a different path, not a
+// project init in disguise.
+func TestInitGlobal_DoesNotWriteProjectScaffold(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	home := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	if code := runInitGlobal(vexillumHome, home, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+
+	if _, err := os.Stat(filepath.Join(home, ".vexillum")); !os.IsNotExist(err) {
+		t.Error("expected global init not to write a project-shaped .vexillum/ under home")
 	}
 }
