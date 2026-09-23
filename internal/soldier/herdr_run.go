@@ -163,17 +163,19 @@ const (
 
 // ReleaseInHerdr releases c back to the camp pool (camp.Release - never a
 // dirty or unlanded camp, never the wrong owner) and, only once that
-// succeeds, closes the soldier's herdr tab. Closing happens at the same
-// moment as the worktree return, not when the soldier's turn merely
-// finishes: matches firstmate's own teardown ("committed work must be
-// landed before the worktree is returned... cleanup closes only the
-// exact recorded task pane", docs/herdr-backend.md). If camp.Release
-// refuses, the pane stays open too - there's still something worth
-// looking at.
-func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
+// succeeds, stops any orphaned chrome-devtools-axi browser bridge the
+// soldier left running (PRD v2, B.3) and closes the soldier's herdr tab.
+// Both happen at the same moment as the worktree return, not when the
+// soldier's turn merely finishes: matches firstmate's own teardown
+// ("committed work must be landed before the worktree is returned...
+// cleanup closes only the exact recorded task pane", docs/herdr-backend.md).
+// If camp.Release refuses, neither the browser nor the pane is touched -
+// there's still something worth looking at.
+func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir string) error {
 	if err := camp.Release(c, task.ID); err != nil {
 		return err
 	}
+	stopOrphanBrowser(task.ID, homeDir)
 	if task.HerdrTabID == "" {
 		return nil
 	}
@@ -192,11 +194,6 @@ func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
 // TabClose error here is reported but never blocks the caller from
 // proceeding to re-dispatch - there's nothing left to clean up on
 // herdr's side either way.
-//
-// This is the seam PRD v2's B.3 (chrome-devtools-axi) extends later: a
-// soldier-with-browser's live browser process would also need killing
-// here when that camp's soldier dies mid-task. Not built yet - no
-// browser-tracking state exists on Task today.
 func DiscardInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir string) error {
 	if err := camp.Discard(c, task.ID); err != nil {
 		return err

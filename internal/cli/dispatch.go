@@ -274,10 +274,16 @@ func Release(args []string) int {
 		return 1
 	}
 
-	return runRelease(projectDir, vexillumHome, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vexillum: cannot determine home directory:", err)
+		return 1
+	}
+
+	return runRelease(projectDir, vexillumHome, homeDir, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
 }
 
-func runRelease(projectDir, vexillumHome, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
+func runRelease(projectDir, vexillumHome, homeDir, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
 	task, err := state.Load(vexillumHome, taskID)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
@@ -290,7 +296,7 @@ func runRelease(projectDir, vexillumHome, taskID string, client herdr.Client, st
 		return 1
 	}
 
-	if err := soldier.ReleaseInHerdr(task, c, client); err != nil {
+	if err := soldier.ReleaseInHerdr(task, c, client, homeDir); err != nil {
 		fmt.Fprintf(stderr, "vexillum: release refused: %v\n", err)
 		return 1
 	}

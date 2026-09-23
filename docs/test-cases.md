@@ -500,6 +500,23 @@ Precondición: `~/.chrome-devtools-axi/sessions/vx-<task-id>/bridge.pid` existe 
 Acción: `DiscardInHerdr` (vía `redispatch`).
 Esperado: se invoca `npx -y chrome-devtools-axi stop` con `CHROME_DEVTOOLS_AXI_SESSION=vx-<task-id>` en el entorno - scoped exactamente a la sesión de esa tarea, best-effort (un fallo acá no bloquea el redispatch, mismo criterio que ya rige para `TabClose`).
 
+**Bug encontrado y arreglado (sin caso de prueba previo que lo cubriera)**: `ReleaseInHerdr` (el camino no destructivo, `vexillum release`) llamaba a `camp.Release` y a `TabClose`, pero nunca a `stopOrphanBrowser` - a diferencia de `DiscardInHerdr`, que sí lo hacía. Un soldier con browser que terminaba bien (camp limpio y aterrizado, release normal) dejaba el bridge de chrome-devtools-axi vivo indefinidamente; solo un soldier que terminaba mal (redispatch tras `interrupted`) tenía su browser limpiado. B3-06/B3-07 cubren el camino que faltaba.
+
+**B3-06 - `ReleaseInHerdr` stopea el browser huérfano del soldier**
+Precondición: camp limpio y aterrizado; `~/.chrome-devtools-axi/sessions/vx-<task-id>/bridge.pid` existe.
+Acción: `ReleaseInHerdr` (vía `vexillum release`), solo después de que `camp.Release` haya tenido éxito.
+Esperado: se invoca `npx -y chrome-devtools-axi stop` con `CHROME_DEVTOOLS_AXI_SESSION=vx-<task-id>` en el entorno, antes de `TabClose` - mismo scoping y criterio best-effort que B3-05.
+
+**B3-07 - `ReleaseInHerdr` no invoca nada si nunca hubo un bridge**
+Precondición: camp limpio y aterrizado; `~/.chrome-devtools-axi/sessions/vx-<task-id>/bridge.pid` no existe.
+Acción: `ReleaseInHerdr` (vía `vexillum release`).
+Esperado: cero invocaciones de `npx`. Caso común: la mayoría de las missions no usan browser.
+
+**B3-08 - un `camp.Release` rechazado no toca el browser ni el pane**
+Precondición: camp sucio (rechaza `camp.Release`); `~/.chrome-devtools-axi/sessions/vx-<task-id>/bridge.pid` existe.
+Acción: `ReleaseInHerdr` (vía `vexillum release`).
+Esperado: `ReleaseInHerdr` devuelve el error de `camp.Release` sin invocar `npx` ni `TabClose` - ni el browser ni el pane se tocan cuando el camp mismo no se puede devolver al pool.
+
 **Alcance de B.3, según el PRD**: sin browser por defecto en ninguna mission - el soldier decide usarlo, vexillum solo le da el namespacing gratis vía el env var. Nada de lógica de scraping/automatización en el binario Go.
 
 **Diferido a la tanda de pruebas en vivo**: confirmar con un browser real que `chrome-devtools-axi stop` efectivamente mata el proceso (los tests de arriba verifican que se invoca correctamente el comando correcto con el env correcto, no que un browser real muere - eso requiere el AXI instalado y un soldier real usándolo).
