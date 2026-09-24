@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/herdr"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -22,11 +23,15 @@ type fakeHerdr struct {
 	promptStatus  string
 	readOutput    string
 	tabCloseErr   error
+	createTabErr  error
 
 	lastAgentArgs []string
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
+	if f.createTabErr != nil {
+		return "", "", f.createTabErr
+	}
 	return f.tabID, f.paneID, nil
 }
 func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error {
@@ -197,6 +202,54 @@ func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
 	want := []string{"--dangerously-skip-permissions", "--model", "haiku", "--effort", "low"}
 	if !slices.Equal(client.lastAgentArgs, want) {
 		t.Errorf("got agent args %v, want %v", client.lastAgentArgs, want)
+	}
+}
+
+// Regression test for the camp-slot leak: if CreateTab fails after
+// camp.Acquire already durably leased a pool slot to the task, the task
+// must still be loadable (with that camp slot recorded) and releasable -
+// not permanently stranded with a leased slot no task file references.
+func TestRunDispatch_CreateTabFails_TaskIsRecoverable(t *testing.T) {
+	project := initDispatchTestProject(t)
+	if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
+		t.Fatalf("writing local config: %v", err)
+	}
+	home := t.TempDir()
+
+	client := &fakeHerdr{createTabErr: &herdr.APIError{Code: "not_found", Message: "workspace not found"}}
+
+	var out bytes.Buffer
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", client, &out, &out)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit when CreateTab fails, got 0: %s", out.String())
+	}
+
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	tasks, err := state.List(projectRoot)
+	if err != nil {
+		t.Fatalf("state.List: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected exactly 1 persisted task after the failed dispatch, got %d", len(tasks))
+	}
+	task := tasks[0]
+	if task.Status != state.StatusFailed {
+		t.Errorf("expected the stranded task to be marked Failed, got %s", task.Status)
+	}
+	if task.CampSlot == 0 {
+		t.Fatal("expected the task to record the camp slot camp.Acquire already leased it")
+	}
+
+	// The pool slot camp.Acquire leased to this task must now be
+	// releasable - previously this was permanently stuck, since both
+	// release and redispatch require state.Load to succeed first, and no
+	// task file existed for it at all.
+	out.Reset()
+	if code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out); code != 0 {
+		t.Fatalf("expected the stranded task's camp to be releasable, got exit %d: %s", code, out.String())
 	}
 }
 

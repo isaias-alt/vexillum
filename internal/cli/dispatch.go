@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
@@ -222,13 +223,47 @@ func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind stat
 // (internal/cli.runRedispatch) go through once task is ready to run, kept
 // in one place so the two commands can't drift out of step with each
 // other.
+//
+// task is persisted with its camp fields set the moment camp.Acquire
+// returns, not left to soldier.RunInHerdr's own first save (which only
+// happens after a successful CreateTab). camp.Acquire durably leases a
+// pool slot to task.ID in pool.json; if that lease succeeds but CreateTab
+// then fails, RunInHerdr returns before saving anything of its own -
+// without this earlier save, that would leave a pool slot permanently
+// leased to a task ID no task file on disk ever references (unrecoverable,
+// since both 'vexillum release' and 'vexillum redispatch' require
+// state.Load - and, to resolve the right camp, a populated CampSlot - to
+// succeed first). Saving the camp fields here, before RunInHerdr is even
+// called, means a CreateTab failure still leaves a loadable task that
+// already knows which slot it owns; the fallback save below then marks it
+// Failed so it can be released normally (the worktree has no commits yet,
+// so camp.Release's landed-check passes trivially). Re-dispatch
+// (runRedispatch) already saves task in its own reset state before
+// calling this, but with zeroed camp fields (it hasn't acquired a fresh
+// camp yet at that point) - this save is what records the new camp it
+// gets here, same as a fresh dispatch.
 func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task state.Task, client herdr.Client, stdout, stderr io.Writer) int {
+	projectRoot, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: resolving project root: %v\n", err)
+		return 1
+	}
+
 	c, err := camp.Acquire(projectDir, vexillumHome, task.ID)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: acquiring camp: %v\n", err)
 		return 1
 	}
 	fmt.Fprintf(stdout, "task_id=%s kind=%s camp_slot=%d camp_branch=%s\n", task.ID, task.Kind, c.Slot, c.Branch)
+
+	task.CampSlot = c.Slot
+	task.CampPath = c.Path
+	task.CampBranch = c.Branch
+	task.UpdatedAt = time.Now().UTC()
+	if err := state.Save(projectRoot, task); err != nil {
+		fmt.Fprintf(stderr, "vexillum: persisting acquired camp: %v\n", err)
+		return 1
+	}
 
 	result, runErr := soldier.RunInHerdr(vexillumHome, workspaceID, task, c, client)
 	fmt.Fprintf(stdout, "status=%s\n", result.Status)
@@ -244,6 +279,21 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 	}
 
 	if runErr != nil {
+		if result.Status != state.StatusFailed {
+			// RunInHerdr hit an error before reaching any of its own save
+			// points (e.g. CreateTab failed) - result still carries
+			// whatever status it was handed. Force it to Failed and
+			// persist so this task is left in a normal, releasable state
+			// instead of stuck Pending/Running with a camp slot nothing
+			// else can find its way back to.
+			result.Status = state.StatusFailed
+			result.Output = runErr.Error()
+			result.UpdatedAt = time.Now().UTC()
+			if saveErr := state.Save(projectRoot, result); saveErr != nil {
+				fmt.Fprintf(stderr, "vexillum: persisting failed state (after: %v): %v\n", runErr, saveErr)
+				return 1
+			}
+		}
 		fmt.Fprintf(stderr, "vexillum: %v\n", runErr)
 		return 1
 	}

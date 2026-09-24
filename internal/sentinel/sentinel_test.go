@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -696,6 +697,50 @@ func TestAcquireLock_RefusesSecondWhileHeld(t *testing.T) {
 		t.Fatalf("AcquireLock after release: %v", err)
 	}
 	release2()
+}
+
+// Regression test for the read-then-write race: many goroutines racing
+// AcquireLock against the same fresh home must yield exactly one winner,
+// never more - the atomic O_EXCL claim in AcquireLock must not degrade
+// back into a check-then-write race under concurrency.
+func TestAcquireLock_ConcurrentCallsYieldExactlyOneWinner(t *testing.T) {
+	home := t.TempDir()
+
+	const n = 50
+	var wg sync.WaitGroup
+	results := make(chan func(), n)
+	errs := make(chan error, n)
+
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			release, err := sentinel.AcquireLock(home)
+			if err != nil {
+				errs <- err
+				return
+			}
+			results <- release
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	var winners []func()
+	for release := range results {
+		winners = append(winners, release)
+	}
+	if len(winners) != 1 {
+		t.Fatalf("expected exactly 1 winner among %d concurrent AcquireLock calls, got %d", n, len(winners))
+	}
+	if len(errs) != n-1 {
+		t.Fatalf("expected %d refusals, got %d", n-1, len(errs))
+	}
+	winners[0]()
 }
 
 // A lock file left behind by a process that's no longer running (a

@@ -22,6 +22,7 @@ package sentinel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -313,22 +314,84 @@ func lockPath(vexillumHome string) string {
 // vexillum should never end up with two sentinels racing to reconcile
 // the same tasks. Call the returned release func (e.g. via defer) to
 // release the lock on clean shutdown.
+//
+// The claim itself is atomic, not a read-then-write: two processes racing
+// AcquireLock at the same instant can't both observe "no live lock" and
+// both write the pid file (see claimLock). The loser inspects whatever
+// pid won and either reports it as already running (if alive) or, if the
+// pid file is stale (unparseable, or its pid is dead - e.g. a sentinel
+// that crashed instead of releasing cleanly), removes it and retries.
 func AcquireLock(vexillumHome string) (release func(), err error) {
-	path := lockPath(vexillumHome)
-
-	if data, readErr := os.ReadFile(path); readErr == nil {
-		if pid, convErr := strconv.Atoi(strings.TrimSpace(string(data))); convErr == nil && processAlive(pid) {
-			return nil, fmt.Errorf("a sentinel is already running (pid %d) for %s - not starting a second one", pid, vexillumHome)
-		}
-	}
-
 	if err := os.MkdirAll(vexillumHome, 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
-		return nil, err
+	path := lockPath(vexillumHome)
+
+	for {
+		claimed, err := claimLock(vexillumHome, path)
+		if err != nil {
+			return nil, err
+		}
+		if claimed {
+			return func() { _ = os.Remove(path) }, nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
+				// Removed between our failed claim and this read - someone
+				// else reclaimed a stale lock. Retry our own claim.
+				continue
+			}
+			return nil, readErr
+		}
+		if pid, convErr := strconv.Atoi(strings.TrimSpace(string(data))); convErr == nil && processAlive(pid) {
+			return nil, fmt.Errorf("a sentinel is already running (pid %d) for %s - not starting a second one", pid, vexillumHome)
+		}
+		// Stale lock (unparseable contents, or a pid that's no longer
+		// alive because its sentinel crashed without releasing) - reclaim
+		// it and retry the atomic claim.
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("removing stale sentinel lock: %w", err)
+		}
 	}
-	return func() { _ = os.Remove(path) }, nil
+}
+
+// claimLock attempts to atomically publish path as this process's lock
+// file, containing its pid. It reports claimed=false (no error) if path
+// already exists, so the caller can decide whether that's a live sentinel
+// or a stale lock to reclaim.
+//
+// A plain O_CREATE|O_EXCL open followed by a separate write would leave a
+// window where path exists but is still empty - a concurrent reader in
+// that window would see unparseable content and could mistake a lock
+// that's mid-claim for a stale one. To avoid that, the pid is written in
+// full to a temp file first, then published via a hard link: link(2)
+// atomically fails with EEXIST if path already exists, and otherwise path
+// never appears with anything but its full, already-written content.
+func claimLock(vexillumHome, path string) (claimed bool, err error) {
+	tmp, err := os.CreateTemp(vexillumHome, "sentinel.pid.tmp-*")
+	if err != nil {
+		return false, err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	if _, err := tmp.WriteString(strconv.Itoa(os.Getpid())); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+
+	if err := os.Link(tmpPath, path); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // IsRunning reports whether a sentinel process is currently alive for
