@@ -83,6 +83,13 @@ var knownAXIs = []axiSkill{
 	{Name: "quota-axi", Repo: "kunchenguid/quota-axi", Global: true},
 	{Name: "lavish", Repo: "kunchenguid/lavish-axi", Global: false},
 	{Name: "chrome-devtools-axi", Repo: "kunchenguid/chrome-devtools-axi", Global: true},
+	// muster isn't a third-party AXI - it ships in this repo
+	// (skills/muster/SKILL.md) and reads this project's own
+	// `vexillum status --json`, so it's project-local like lavish, not
+	// global. Listed here anyway because the install/detection mechanism
+	// ("npx skills add", .claude/skills/<name>/SKILL.md) is identical and
+	// this is where the general already looks for on-demand skill status.
+	{Name: "muster", Repo: "isaias-alt/vexillum", Global: false},
 }
 
 func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
@@ -134,7 +141,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	}
 
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "AXIs (on-demand, installed as Agent Skills - not required):")
+	fmt.Fprintln(out, "AXIs and first-party skills (on-demand, installed as Agent Skills - not required):")
 	for _, a := range knownAXIs {
 		fmt.Fprintln(out, axiStatusLine(a, projectDir, homeDir))
 	}

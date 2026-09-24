@@ -558,6 +558,47 @@ func TestDoctor_GitHubCLIInstalled(t *testing.T) {
 	}
 }
 
+// muster installed at project level - it's a first-party skill (ships in
+// this repo, skills/muster/SKILL.md), not a third-party AXI, but is
+// detected and installed exactly the same way as one.
+func TestDoctor_MusterInstalled(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+	writeSkillFile(t, projectDir, "muster")
+	vexillumHome := t.TempDir()
+	homeDir := t.TempDir()
+
+	var out bytes.Buffer
+	runDoctor(projectDir, vexillumHome, homeDir, &out)
+
+	if !bytes.Contains(out.Bytes(), []byte("[installed] muster")) {
+		t.Errorf("expected muster reported installed, got:\n%s", out.String())
+	}
+}
+
+// muster not installed - project-local install hint, same shape as
+// lavish's (no "-g"), pointing at this repo instead of a third-party one.
+func TestDoctor_MusterNotInstalled(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+	vexillumHome := t.TempDir()
+	homeDir := t.TempDir()
+
+	var out bytes.Buffer
+	code := runDoctor(projectDir, vexillumHome, homeDir, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 (muster status never affects the exit code), got %d\noutput:\n%s", code, out.String())
+	}
+	want := "[not installed] muster - install with: npx skills add isaias-alt/vexillum --skill muster"
+	if !bytes.Contains(out.Bytes(), []byte(want)) {
+		t.Errorf("expected exact install hint, got:\n%s", out.String())
+	}
+	if bytes.Contains(out.Bytes(), []byte("muster -g")) {
+		t.Errorf("expected no -g flag for muster's install hint, got:\n%s", out.String())
+	}
+}
+
 // snapshotTree returns a string describing every entry under dir (relative
 // path, size, mode, mod time), so two snapshots can be compared for any
 // change doctor might have made.
