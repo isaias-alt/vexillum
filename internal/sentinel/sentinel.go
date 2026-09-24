@@ -35,6 +35,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -50,6 +51,20 @@ type Wake struct {
 	OldStatus  state.Status `json:"old_status"`
 	NewStatus  state.Status `json:"new_status"`
 	DetectedAt time.Time    `json:"detected_at"`
+
+	// ReportPath is set when this wake settles a scout task to Done and
+	// its report file (internal/report) already exists at that exact
+	// moment - no new detection channel, this is just tickProject
+	// checking for it within the same poll that already reads the
+	// task's live herdr status (PRD asked for report detection to ride
+	// the existing tick, not add one). A commander draining this wake
+	// can go straight to the polished report instead of the raw
+	// transcript in Output. Empty for a mission (which never has a
+	// report - see internal/report's package doc) or for a scout whose
+	// write hadn't landed by this exact tick: that's not an error, just
+	// a race this field doesn't try to resolve - internal/cli.runRelease
+	// makes its own live check before ever gating on one.
+	ReportPath string `json:"report_path,omitempty"`
 }
 
 func wakesDir(projectRoot string) string {
@@ -188,7 +203,11 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 		if err := state.Save(projectRoot, task); err != nil {
 			return woke, fmt.Errorf("persisting task %s: %w", task.ID, err)
 		}
-		if err := recordWake(projectRoot, task, old, newStatus); err != nil {
+		reportPath := ""
+		if newStatus == state.StatusDone && task.Kind == state.KindScout && report.Exists(projectRoot, task.HerdrAgentName) {
+			reportPath = report.Path(projectRoot, task.HerdrAgentName)
+		}
+		if err := recordWake(projectRoot, task, old, newStatus, reportPath); err != nil {
 			return woke, fmt.Errorf("recording wake for task %s: %w", task.ID, err)
 		}
 		woke++
@@ -223,13 +242,13 @@ func handleAgentNotFound(projectRoot string, task state.Task) (interrupted bool,
 	if err := state.Save(projectRoot, task); err != nil {
 		return false, fmt.Errorf("persisting interrupted task %s: %w", task.ID, err)
 	}
-	if err := recordWake(projectRoot, task, old, state.StatusInterrupted); err != nil {
+	if err := recordWake(projectRoot, task, old, state.StatusInterrupted, ""); err != nil {
 		return false, fmt.Errorf("recording wake for interrupted task %s: %w", task.ID, err)
 	}
 	return true, nil
 }
 
-func recordWake(projectRoot string, task state.Task, old, newStatus state.Status) error {
+func recordWake(projectRoot string, task state.Task, old, newStatus state.Status, reportPath string) error {
 	dir := wakesDir(projectRoot)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -240,6 +259,7 @@ func recordWake(projectRoot string, task state.Task, old, newStatus state.Status
 		OldStatus:  old,
 		NewStatus:  newStatus,
 		DetectedAt: time.Now().UTC(),
+		ReportPath: reportPath,
 	}
 	return atomicfile.WriteJSON(wakePath(projectRoot, task.ID), w)
 }

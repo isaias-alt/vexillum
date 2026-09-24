@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -66,6 +67,145 @@ func newRunningTask(t *testing.T, projectRoot, agentName string) state.Task {
 		t.Fatalf("state.Save: %v", err)
 	}
 	return task
+}
+
+// newRunningScoutTask mirrors newRunningTask but for a scout - the only
+// kind that ever gets a report detected (internal/report's package doc).
+func newRunningScoutTask(t *testing.T, projectRoot, agentName string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindScout, "look into it")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = agentName
+	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+// A scout task that settles to done, with its report file already
+// written by the time Tick checks, gets that report path recorded on the
+// wake - the sentinel's "detection", riding the existing tick rather than
+// a new channel.
+func TestTick_RecordsReportPathWhenScoutSettlesWithReport(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	newRunningScoutTask(t, proj, "vx-look-into-it")
+
+	if err := os.MkdirAll(report.Dir(proj), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(report.Path(proj, "vx-look-into-it"), []byte("# findings\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-look-into-it": "done"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 {
+		t.Fatalf("expected 1 wake, got %d", len(wakes))
+	}
+	want := report.Path(proj, "vx-look-into-it")
+	if wakes[0].ReportPath != want {
+		t.Errorf("expected wake.ReportPath = %q, got %q", want, wakes[0].ReportPath)
+	}
+}
+
+// A scout task that settles to done without ever writing a report leaves
+// the wake's ReportPath empty - Tick doesn't invent a path for a report
+// that was never actually written.
+func TestTick_NoReportPathWhenScoutNeverWroteOne(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	newRunningScoutTask(t, proj, "vx-look-into-it")
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-look-into-it": "done"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 {
+		t.Fatalf("expected 1 wake, got %d", len(wakes))
+	}
+	if wakes[0].ReportPath != "" {
+		t.Errorf("expected an empty ReportPath, got %q", wakes[0].ReportPath)
+	}
+}
+
+// A mission that settles to done never gets a ReportPath, even if a file
+// happens to sit at the path a scout of the same agent name would have
+// used - missions never have a report (internal/report's package doc).
+func TestTick_NoReportPathForMission(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	newRunningTask(t, proj, "vx-do-the-thing")
+
+	if err := os.MkdirAll(report.Dir(proj), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(report.Path(proj, "vx-do-the-thing"), []byte("# not a scout\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "done"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 {
+		t.Fatalf("expected 1 wake, got %d", len(wakes))
+	}
+	if wakes[0].ReportPath != "" {
+		t.Errorf("expected an empty ReportPath for a mission, got %q", wakes[0].ReportPath)
+	}
+}
+
+// A scout that settles to blocked (not done) never gets a ReportPath even
+// with a report file already present - only a real Done settlement counts.
+func TestTick_NoReportPathWhenScoutSettlesBlocked(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	newRunningScoutTask(t, proj, "vx-look-into-it")
+
+	if err := os.MkdirAll(report.Dir(proj), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(report.Path(proj, "vx-look-into-it"), []byte("# partial\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-look-into-it": "blocked"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 {
+		t.Fatalf("expected 1 wake, got %d", len(wakes))
+	}
+	if wakes[0].ReportPath != "" {
+		t.Errorf("expected an empty ReportPath for a blocked scout, got %q", wakes[0].ReportPath)
+	}
 }
 
 // A running task whose live herdr status settled to done gets its
