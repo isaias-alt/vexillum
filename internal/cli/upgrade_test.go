@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/scaffold"
 )
 
 // vexillum upgrade refuses to run against a project that was never
@@ -48,7 +50,7 @@ func TestUpgrade_RefreshesUntouchedScaffold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
 	}
-	if string(rule) != productVexillumRule {
+	if string(rule) != scaffold.VexillumCommanderRules {
 		t.Error("expected .claude/rules/vexillum.md to match the latest template after upgrade")
 	}
 }
@@ -254,7 +256,7 @@ func TestUpgrade_ForceOverwritesHandEditedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
 	}
-	if string(got) != productVexillumRule {
+	if string(got) != scaffold.VexillumCommanderRules {
 		t.Error("expected --force to overwrite the rule file with the latest template")
 	}
 	if !bytes.Contains(stdout.Bytes(), []byte("discarded")) {
@@ -294,7 +296,7 @@ func TestUpgrade_ForceCoversUnknownProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
 	}
-	if string(got) != productVexillumRule {
+	if string(got) != scaffold.VexillumCommanderRules {
 		t.Error("expected --force to overwrite the rule file even without a stored hash")
 	}
 }
@@ -357,7 +359,7 @@ func TestUpgradeGlobal_RefreshesUntouchedScaffold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading ~/.claude/rules/vexillum.md: %v", err)
 	}
-	if string(rule) != productVexillumRule {
+	if string(rule) != scaffold.VexillumCommanderRules {
 		t.Error("expected the global rule file to match the latest template after upgrade")
 	}
 }
@@ -420,7 +422,7 @@ func TestUpgradeGlobal_ForceOverwritesHandEditedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading global rule file: %v", err)
 	}
-	if string(got) != productVexillumRule {
+	if string(got) != scaffold.VexillumCommanderRules {
 		t.Error("expected --force to overwrite the global rule file with the latest template")
 	}
 }

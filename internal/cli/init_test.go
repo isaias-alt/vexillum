@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/scaffold"
 )
 
 func initGitRepo(t *testing.T, dir string) {
@@ -50,7 +52,7 @@ func TestInit_CleanProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
 	}
-	if string(rule) != productVexillumRule {
+	if string(rule) != scaffold.VexillumCommanderRules {
 		t.Error("expected .claude/rules/vexillum.md to match the product template")
 	}
 
@@ -541,7 +543,7 @@ func TestInitGlobal_CleanMachine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading ~/.claude/rules/vexillum.md: %v", err)
 	}
-	if string(rule) != productVexillumRule {
+	if string(rule) != scaffold.VexillumCommanderRules {
 		t.Error("expected the global rule file to match the product template")
 	}
 }

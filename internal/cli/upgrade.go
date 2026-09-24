@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/isaias-alt/vexillum/internal/scaffold"
 )
 
 const upgradeUsage = `Refresh an already-initialized project's vexillum scaffold
@@ -98,7 +100,7 @@ func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.W
 		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
 		return 1
 	}
-	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
+	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", scaffold.VexillumCommanderRules, cfg.VexillumRuleHash, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot upgrade .claude/rules/vexillum.md: %v\n", err)
 		return 1
@@ -151,7 +153,7 @@ func runUpgradeGlobal(vexillumHome, home string, force bool, stdout, stderr io.W
 		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
 		return 1
 	}
-	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
+	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", scaffold.VexillumCommanderRules, cfg.VexillumRuleHash, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot upgrade ~/.claude/rules/vexillum.md: %v\n", err)
 		return 1
