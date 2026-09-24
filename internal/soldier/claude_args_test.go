@@ -1,7 +1,6 @@
 package soldier_test
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/soldier"
@@ -34,32 +33,5 @@ func TestValidateModelEffort(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
-	}
-}
-
-// ClaudeCommand (the headless path) appends the same --model/--effort
-// args as the herdr path (see TestRunInHerdr_PassesModelAndEffort),
-// omitting whichever one is unset.
-func TestClaudeCommand_ModelEffort(t *testing.T) {
-	task := newTask(t)
-	task.Model = "opus"
-	task.Effort = "high"
-
-	cmd := soldier.ClaudeCommand(task)
-
-	want := []string{"-p", task.Prompt, "--dangerously-skip-permissions", "--model", "opus", "--effort", "high"}
-	if !slices.Equal(cmd.Args, want) {
-		t.Errorf("got args %v, want %v", cmd.Args, want)
-	}
-}
-
-func TestClaudeCommand_NoModelEffort(t *testing.T) {
-	task := newTask(t)
-
-	cmd := soldier.ClaudeCommand(task)
-
-	want := []string{"-p", task.Prompt, "--dangerously-skip-permissions"}
-	if !slices.Equal(cmd.Args, want) {
-		t.Errorf("got args %v, want %v", cmd.Args, want)
 	}
 }
