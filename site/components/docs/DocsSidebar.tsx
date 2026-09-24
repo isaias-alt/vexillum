@@ -12,6 +12,10 @@ const NAV = [
     ],
   },
   {
+    heading: "how it behaves",
+    links: [{ href: "/docs/features", label: "Features" }],
+  },
+  {
     heading: "reference",
     links: [{ href: "/docs/commands", label: "Commands" }],
   },
