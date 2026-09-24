@@ -11,6 +11,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -248,7 +249,162 @@ func TestRunLandAndRunRelease(t *testing.T) {
 
 	client := &fakeHerdr{}
 	out.Reset()
-	if code := runRelease(project, home, t.TempDir(), task.ID, client, &out, &out); code != 0 {
+	if code := runRelease(project, home, t.TempDir(), task.ID, false, client, &out, &out); code != 0 {
 		t.Fatalf("runRelease: expected exit 0, got %d: %s", code, out.String())
+	}
+}
+
+// newReleaseTestScoutTask creates a fresh camp (clean, trivially "landed"
+// since it carries no commits of its own yet) for a scout task and
+// persists it - the shape a scout ready to release has, minus its report.
+func newReleaseTestScoutTask(t *testing.T, project, home string) (state.Task, string) {
+	t.Helper()
+	task, err := state.New(state.KindScout, "look into it")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	c, err := camp.Acquire(project, home, task.ID)
+	if err != nil {
+		t.Fatalf("camp.Acquire: %v", err)
+	}
+	task.CampSlot = c.Slot
+	task.CampPath = c.Path
+	task.CampBranch = c.Branch
+	task.HerdrAgentName = "vx-look-into-it"
+	task.Status = state.StatusDone
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task, projectRoot
+}
+
+// The report gate (docs/ decisions, point 5): a scout with no report file
+// is refused, analogous to firstmate's own teardown refusal for a task
+// missing report.md.
+func TestRunRelease_RefusesScoutWithoutReport(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task, projectRoot := newReleaseTestScoutTask(t, project, home)
+
+	var out bytes.Buffer
+	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+
+	if code == 0 {
+		t.Fatal("expected a non-zero exit for a scout with no report")
+	}
+	wantPath := report.Path(projectRoot, task.HerdrAgentName)
+	if !strings.Contains(out.String(), wantPath) {
+		t.Errorf("expected the refusal to name the missing report path %q, got: %s", wantPath, out.String())
+	}
+}
+
+// A scout whose report exists releases normally, no --force needed.
+func TestRunRelease_ScoutWithReportSucceeds(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task, projectRoot := newReleaseTestScoutTask(t, project, home)
+
+	if err := os.MkdirAll(report.Dir(projectRoot), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(report.Path(projectRoot, task.HerdrAgentName), []byte("# findings\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var out bytes.Buffer
+	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 for a scout with a report, got %d: %s", code, out.String())
+	}
+}
+
+// --force skips the report check for a scout with no report - the
+// explicit, logged escape hatch, never a silent default.
+func TestRunRelease_ForceSkipsReportGate(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task, _ := newReleaseTestScoutTask(t, project, home)
+
+	var out bytes.Buffer
+	code := runRelease(project, home, t.TempDir(), task.ID, true, &fakeHerdr{}, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 with --force despite the missing report, got %d: %s", code, out.String())
+	}
+}
+
+// A mission is never gated on a report, even with --force absent -
+// missions don't have one, optional or otherwise (confirmed against
+// firstmate: report.md is exclusive to worker/scout tasks).
+func TestRunRelease_MissionNeverRequiresReport(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+
+	task, err := state.New(state.KindMission, "do a thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	c, err := camp.Acquire(project, home, task.ID)
+	if err != nil {
+		t.Fatalf("camp.Acquire: %v", err)
+	}
+	task.CampSlot = c.Slot
+	task.CampPath = c.Path
+	task.CampBranch = c.Branch
+	task.HerdrAgentName = "vx-do-a-thing"
+	task.Status = state.StatusDone
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	var out bytes.Buffer
+	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 for a mission with no report, got %d: %s", code, out.String())
+	}
+}
+
+// vexillum release <task-id> --force parses regardless of flag/arg order.
+func TestParseReleaseArgs(t *testing.T) {
+	cases := []struct {
+		name       string
+		args       []string
+		wantTaskID string
+		wantForce  bool
+		wantErr    bool
+	}{
+		{"task id only", []string{"abc123"}, "abc123", false, false},
+		{"force after id", []string{"abc123", "--force"}, "abc123", true, false},
+		{"force before id", []string{"--force", "abc123"}, "abc123", true, false},
+		{"missing task id", []string{"--force"}, "", false, true},
+		{"no args", []string{}, "", false, true},
+		{"two positional args", []string{"abc123", "def456"}, "", false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			taskID, force, err := parseReleaseArgs(c.args)
+			if c.wantErr {
+				if err == nil {
+					t.Fatal("expected an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if taskID != c.wantTaskID || force != c.wantForce {
+				t.Errorf("got taskID=%q force=%v, want taskID=%q force=%v", taskID, force, c.wantTaskID, c.wantForce)
+			}
+		})
 	}
 }

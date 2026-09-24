@@ -9,6 +9,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -86,6 +87,23 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 		}
 		if err := soldier.DiscardInHerdr(task, c, client, homeDir); err != nil {
 			fmt.Fprintf(stderr, "vexillum: discarding old camp: %v\n", err)
+			return 1
+		}
+	}
+
+	// The fresh run below reuses this task's original, unchanged prompt
+	// (task.Prompt never gets its report instructions written back onto
+	// it - see internal/soldier.RunInHerdr), so its candidate agent name
+	// (internal/soldier.herdrAgentName, a slug of that same prompt) will
+	// very likely come out identical to the dead soldier's. Any report
+	// the dead soldier left behind at that exact path must be cleared
+	// before relaunching - otherwise it could be mistaken for the new
+	// attempt's own report (e.g. by 'vexillum release' gating on mere
+	// existence) even if the new soldier never gets around to writing
+	// one itself.
+	if task.HerdrAgentName != "" {
+		if err := report.Remove(projectRoot, task.HerdrAgentName); err != nil {
+			fmt.Fprintf(stderr, "vexillum: %v\n", err)
 			return 1
 		}
 	}

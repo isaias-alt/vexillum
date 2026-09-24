@@ -9,6 +9,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -123,6 +124,15 @@ func newMissionTask(t *testing.T) state.Task {
 	return task
 }
 
+func newScoutTask(t *testing.T, prompt string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindScout, prompt)
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	return task
+}
+
 // L4-01: a clean run creates the tab, starts the agent, prompts it, and
 // persists the task as done with the herdr identifiers and transcript
 // recorded.
@@ -194,6 +204,99 @@ func TestRunInHerdr_PassesModelAndEffort(t *testing.T) {
 	want := []string{"--dangerously-skip-permissions", "--model", "haiku", "--effort", "low"}
 	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], want) {
 		t.Errorf("expected the soldier to start with %v, got %v", want, client.startArgs)
+	}
+}
+
+// A scout's submitted prompt is the original prompt plus instructions
+// pointing at its own report file (internal/report.Path) - a mission's
+// is not, since a mission never has a report to write (internal/report's
+// package doc).
+func TestRunInHerdr_ScoutPromptIncludesReportInstructions(t *testing.T) {
+	home := t.TempDir()
+	task := newScoutTask(t, "look into it")
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+
+	wantPath := report.Path(testProjectRoot(t, home), got.HerdrAgentName)
+	if len(client.promptCalls) != 1 {
+		t.Fatalf("expected exactly one prompt submission, got %d", len(client.promptCalls))
+	}
+	if !strings.Contains(client.promptCalls[0], wantPath) {
+		t.Errorf("expected the submitted prompt to reference the report path %q, got: %s", wantPath, client.promptCalls[0])
+	}
+	if !strings.HasPrefix(client.promptCalls[0], task.Prompt) {
+		t.Errorf("expected the report instructions to be appended after the original prompt, got: %s", client.promptCalls[0])
+	}
+
+	// task.Prompt itself is never mutated - 'vexillum redispatch' reuses
+	// it verbatim, and must not accumulate a copy of the suffix on every
+	// re-dispatch.
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Prompt != "look into it" {
+		t.Errorf("expected the persisted prompt to stay untouched, got %q", persisted.Prompt)
+	}
+}
+
+// A mission's submitted prompt is exactly its original prompt - no report
+// instructions appended, since a mission never has one.
+func TestRunInHerdr_MissionPromptHasNoReportInstructions(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+
+	if len(client.promptCalls) != 1 || client.promptCalls[0] != task.Prompt {
+		t.Errorf("expected the mission's prompt to be submitted unmodified, got %v", client.promptCalls)
+	}
+}
+
+// Two scouts dispatched close enough to collide on the same candidate
+// agent name (same as TestRunInHerdr_FallsBackOnNameCollision) end up with
+// distinct report paths too, since the report is named after whichever
+// agent name actually ended up live - the disambiguated one, not the
+// colliding candidate. This is what actually keeps two concurrent scouts'
+// reports from colliding in the flat reports/ directory.
+func TestRunInHerdr_ScoutReportPathUsesDisambiguatedName(t *testing.T) {
+	home := t.TempDir()
+	task := newScoutTask(t, "do the thing")
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:        "w1:t2",
+		paneID:       "w1:p2",
+		startErr:     &herdr.APIError{Code: "agent_name_taken", Message: "agent name vx-do-the-thing is already used"},
+		promptStatus: "done",
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.HerdrAgentName == "vx-do-the-thing" {
+		t.Fatal("expected a disambiguated agent name, not the colliding candidate")
+	}
+
+	wantPath := report.Path(testProjectRoot(t, home), got.HerdrAgentName)
+	collidingPath := report.Path(testProjectRoot(t, home), "vx-do-the-thing")
+	if !strings.Contains(client.promptCalls[0], wantPath) {
+		t.Errorf("expected the prompt to reference the disambiguated report path %q, got: %s", wantPath, client.promptCalls[0])
+	}
+	if strings.Contains(client.promptCalls[0], collidingPath) {
+		t.Errorf("expected the prompt to NOT reference the colliding candidate's report path %q", collidingPath)
 	}
 }
 

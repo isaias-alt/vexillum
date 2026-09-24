@@ -12,6 +12,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -62,6 +63,77 @@ func interruptedTestTask(t *testing.T, project, home string) state.Task {
 		t.Fatalf("state.Save: %v", err)
 	}
 	return task
+}
+
+// interruptedTestScoutTask mirrors interruptedTestTask but for a scout -
+// the only kind that ever has a report to clean up on redispatch (see
+// internal/report's package doc).
+func interruptedTestScoutTask(t *testing.T, project, home string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindScout, "look into it")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	c, err := camp.Acquire(project, home, task.ID)
+	if err != nil {
+		t.Fatalf("camp.Acquire: %v", err)
+	}
+
+	task.CampSlot = c.Slot
+	task.CampPath = c.Path
+	task.CampBranch = c.Branch
+	task.HerdrWorkspaceID = "w1"
+	task.HerdrTabID = "w1:t1"
+	task.HerdrPaneID = "w1:p1"
+	task.HerdrAgentName = "vx-look-into-it"
+	task.Status = state.StatusInterrupted
+	task.AgentNotFoundSince = time.Now().UTC().Add(-time.Hour)
+	task.Output = "[vexillum] this soldier's herdr agent disappeared"
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+// A2-06 (this mission): redispatching an interrupted scout deletes its
+// dead attempt's leftover report before relaunching - the fresh run
+// reuses the same, unchanged prompt, so its candidate agent name will
+// very likely be identical, and a stale report sitting at that exact
+// path could otherwise be mistaken for the new attempt's own.
+func TestRunRedispatch_CleansUpStaleReport(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	homeDir := t.TempDir()
+
+	task := interruptedTestScoutTask(t, project, home)
+
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := os.MkdirAll(report.Dir(projectRoot), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	staleReport := report.Path(projectRoot, task.HerdrAgentName)
+	if err := os.WriteFile(staleReport, []byte("# stale findings from the dead soldier\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
+
+	var out bytes.Buffer
+	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	if _, err := os.Stat(staleReport); !os.IsNotExist(err) {
+		t.Errorf("expected the stale report to be removed before relaunching, stat error: %v", err)
+	}
 }
 
 // A2-03: redispatch refuses a task that isn't interrupted, without

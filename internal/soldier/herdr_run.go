@@ -8,6 +8,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -126,7 +127,20 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	// only self-reports for genuinely trivial prompts; anything real is
 	// handed off to the sentinel, which already polls every Running task
 	// (see internal/sentinel.Tick).
-	status, err := promptWithStalledRetry(client, agentName, task.Prompt, quickSettleTimeoutMS)
+	promptText := task.Prompt
+	if task.Kind == state.KindScout {
+		// Only a scout gets told to write a report - a mission's
+		// deliverable is the PR/merge itself, never a report.md (see
+		// internal/report's package doc; confirmed against firstmate,
+		// where report.md is exclusive to worker tasks, never optional
+		// for a ship). The instruction is appended to what's actually
+		// submitted, not stored back onto task.Prompt: task.Prompt stays
+		// the general's original ask, since 'vexillum redispatch' reuses
+		// it verbatim and would otherwise accumulate a new copy of this
+		// suffix on every re-dispatch.
+		promptText += scoutReportInstructions(report.Path(projectRoot, task.HerdrAgentName))
+	}
+	status, err := promptWithStalledRetry(client, agentName, promptText, quickSettleTimeoutMS)
 	if err != nil {
 		if herdr.IsTimeout(err) {
 			// Not a failure: the soldier is still working past the quick
@@ -214,6 +228,18 @@ func DiscardInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir s
 	// re-dispatch that called this.
 	_ = client.TabClose(task.HerdrTabID)
 	return nil
+}
+
+// scoutReportInstructions tells a scout soldier where to write its final
+// report - the deliverable 'vexillum release' gates on for a scout (see
+// internal/report, internal/cli.runRelease). reportPath is already
+// resolved from the soldier's own (possibly disambiguated) agent name, so
+// the soldier never has to compute or guess it.
+func scoutReportInstructions(reportPath string) string {
+	return "\n\n---\n\nBefore you finish, write your final report as a single Markdown file at:\n\n  " +
+		reportPath +
+		"\n\nCreate any missing parent directories yourself. This report is your deliverable: " +
+		"'vexillum release' will refuse to release your camp without it."
 }
 
 // herdrAgentName builds a readable candidate name for the soldier's
