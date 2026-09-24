@@ -49,17 +49,22 @@ const (
 // RunInHerdr returns successfully - internal/sentinel's polling is what
 // detects and records its eventual settlement, not this function.
 //
-// The soldier runs with --dangerously-skip-permissions: the camp's git
-// worktree isolation bounds the blast radius to that disposable
-// worktree, and nothing it does reaches the project's real history until
-// a human explicitly approves landing it (camp.Land) - that approval
-// gate is the actual safety control, not a permission prompt mid-task.
-// Stopping to ask about every tool call would mean going to each
-// soldier's pane individually to unblock it, which defeats having one
-// commander as the single point of contact. A soldier can still end up
-// StatusBlocked if Claude Code asks a genuine clarifying question
-// (herdr's "blocked" also covers that, not just permission prompts) -
-// just far less often now.
+// The soldier runs with --dangerously-skip-permissions: it has full host
+// access under the invoking OS user - there is no container, chroot, or
+// other OS-level sandbox. The camp's git worktree isolation only bounds
+// where a soldier's commits can land, not what its process can read,
+// write, or exfiltrate elsewhere on the machine (credentials, SSH keys,
+// a sibling project's .env, etc.). The real safety control is the
+// landing approval step (camp.Land): nothing a soldier does reaches the
+// project's real history until a human explicitly approves it - not a
+// permission prompt mid-task. Stopping to ask about every tool call
+// would mean going to each soldier's pane individually to unblock it,
+// which defeats having one commander as the single point of contact. A
+// soldier can still end up StatusBlocked if Claude Code asks a genuine
+// clarifying question (herdr's "blocked" also covers that, not just
+// permission prompts) - just far less often now. Never dispatch a
+// soldier against a prompt, repository, or machine where reading
+// sensitive host state would be a problem.
 //
 // workspaceID is the herdr workspace to create the soldier's tab in -
 // normally the caller's own $HERDR_WORKSPACE_ID, since vexillum expects

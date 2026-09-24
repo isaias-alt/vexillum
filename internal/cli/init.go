@@ -125,11 +125,18 @@ This creates an isolated camp (git worktree, own branch) and starts a
 real, interactive Claude Code session inside a herdr pane in the current
 workspace (requires ` + "`$HERDR_WORKSPACE_ID`" + `, set automatically when you're
 running inside a herdr-managed pane), with ` + "`--dangerously-skip-permissions`" + `.
-That's deliberate: the camp's worktree isolation bounds what the soldier
-can affect, and the real safety control is the landing approval below -
-nothing a soldier does reaches this project's real history until you
-explicitly approve landing it. A soldier can still come back blocked if
-Claude Code asks a genuine clarifying question, just rarely.
+That's deliberate, but be clear-eyed about what it means: a soldier has
+full host access under the invoking OS user - there is no container,
+chroot, or other OS-level sandbox. The camp's worktree isolation only
+bounds where a soldier's commits can land, not what its process can
+read, write, or exfiltrate elsewhere on the machine (credentials, SSH
+keys, a sibling project's ` + "`.env`" + `, etc.). The real safety control is the
+landing approval below - nothing a soldier does reaches this project's
+real history until you explicitly approve landing it. Never dispatch a
+soldier against a prompt, repository, or machine where reading
+credentials or other sensitive host state would be a problem. A soldier
+can still come back blocked if Claude Code asks a genuine clarifying
+question, just rarely.
 
 **It returns quickly, not when the soldier finishes.** It only waits out
 a short probe (a handful of seconds) to catch trivial prompts that settle

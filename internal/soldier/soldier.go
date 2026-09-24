@@ -25,10 +25,16 @@ type CommandSpec struct {
 // ClaudeCommand builds the production CommandSpec that runs task's prompt
 // through the real Claude Code CLI, unattended, inside the camp.
 //
-// It runs with --dangerously-skip-permissions: the camp's git worktree
-// isolation is what makes that acceptable here, since a soldier can only
-// ever affect its own disposable worktree, not the project's own working
-// tree or anything outside it.
+// It runs with --dangerously-skip-permissions: a soldier has full host
+// access under the invoking OS user - there is no container, chroot, or
+// other OS-level sandbox. The camp's git worktree isolation only bounds
+// where a soldier's commits can land, not what its process can read,
+// write, or exfiltrate elsewhere on the machine (credentials, SSH keys,
+// a sibling project's .env, etc.). The real safety control is the
+// landing approval step (camp.Land / vexillum land): nothing a soldier
+// does reaches the project's real history until a human explicitly
+// approves it. Never dispatch a soldier against a prompt, repository, or
+// machine where reading sensitive host state would be a problem.
 func ClaudeCommand(task state.Task) CommandSpec {
 	args := []string{"-p", task.Prompt, "--dangerously-skip-permissions"}
 	args = append(args, claudeModelEffortArgs(task)...)
