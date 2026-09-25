@@ -30,5 +30,25 @@ jobs:
             exit 1
           fi
 
-      - name: Test
-        run: go test ./... -race
+      - name: Test (with coverage profiling)
+        run: go test ./... -race -covermode=atomic -coverprofile=coverage.out -coverpkg=./...
+
+      - name: Coverage report and minimum-threshold gate
+        run: |
+          go tool cover -func=coverage.out | tee coverage.txt
+
+          total="$(grep '^total:' coverage.txt | awk '{print $3}' | tr -d '%')"
+          threshold=55
+
+          {
+            echo "### Test coverage"
+            echo
+            echo "Total: **${total}%** (minimum required: ${threshold}%)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Total coverage: ${total}% (minimum required: ${threshold}%)"
+
+          if awk -v t="$total" -v th="$threshold" 'BEGIN { exit !(t < th) }'; then
+            echo "Coverage ${total}% is below the minimum threshold of ${threshold}%."
+            exit 1
+          fi
