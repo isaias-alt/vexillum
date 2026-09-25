@@ -8,6 +8,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/soldier"
@@ -106,6 +107,14 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 			fmt.Fprintf(stderr, "vexillum: %v\n", err)
 			return 1
 		}
+		// Same reasoning as report.Remove above: a leftover pause file
+		// from the dead soldier's previous life would sit at the exact
+		// path the freshly re-dispatched soldier is about to be told to
+		// write to, and could be mistaken for its own declaration.
+		if err := pause.Remove(projectRoot, task.HerdrAgentName); err != nil {
+			fmt.Fprintf(stderr, "vexillum: %v\n", err)
+			return 1
+		}
 	}
 
 	task.Redispatches++
@@ -113,6 +122,7 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 	task.CampSlot = 0
 	task.CampPath = ""
 	task.CampBranch = ""
+	task.CampBase = ""
 	task.HerdrWorkspaceID = ""
 	task.HerdrTabID = ""
 	task.HerdrPaneID = ""

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +13,64 @@ import (
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
+
+func runGitT(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
+
+// newSettledMissionCamp builds a standalone git worktree (not through
+// internal/camp - these tests only need internal/sentinel to see a real
+// commit ahead of base, never a full camp.Acquire) whose branch already
+// has a commit ahead of its base ("main") - internal/sentinel's own
+// strong completion signal for a mission (internal/camp.HasNewCommits).
+func newSettledMissionCamp(t *testing.T) (campPath, base string) {
+	t.Helper()
+	dir := t.TempDir()
+	runGitT(t, dir, "init", "-q")
+	runGitT(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatalf("writing README: %v", err)
+	}
+	runGitT(t, dir, "add", "README.md")
+	runGitT(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "initial commit")
+	runGitT(t, dir, "checkout", "-q", "-b", "vexillum/task")
+	if err := os.WriteFile(filepath.Join(dir, "output.txt"), []byte("done\n"), 0o644); err != nil {
+		t.Fatalf("writing output: %v", err)
+	}
+	runGitT(t, dir, "add", "output.txt")
+	runGitT(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "soldier's work")
+	return dir, "main"
+}
+
+// newSettledMissionTask persists a Running mission task whose camp
+// already carries a real commit ahead of base - internal/sentinel's
+// strong completion signal for a mission - so a sentinel.Tick against it
+// with a "done" live status actually settles it, the same way a
+// genuinely finished soldier's would (internal/sentinel now refuses to
+// trust a bare idle status alone - see internal/pause's package doc).
+// Backdated past sentinel.Tick's settle-race grace period.
+func newSettledMissionTask(t *testing.T, projectRoot string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = "vx-do-the-thing"
+	task.CampPath, task.CampBase = newSettledMissionCamp(t)
+	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
 
 // sentinelMode classifies the three recognized forms and rejects anything
 // else - an unrecognized subcommand must not silently fall through to
@@ -80,19 +139,11 @@ func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 
-	task, err := state.New(state.KindMission, "do the thing")
-	if err != nil {
-		t.Fatalf("state.New: %v", err)
-	}
-	task.Status = state.StatusRunning
-	task.HerdrAgentName = "vx-do-the-thing"
-	// Backdated past sentinel.Tick's settle-race grace period, so this
-	// test exercises a real transition rather than the grace period
-	// itself (see internal/sentinel.TestTick_SkipsTasksWithinSettleGracePeriod).
-	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(proj, task); err != nil {
-		t.Fatalf("state.Save: %v", err)
-	}
+	// Backdated past sentinel.Tick's settle-race grace period (and camp
+	// already settled), so this test exercises a real transition rather
+	// than the grace period itself (see
+	// internal/sentinel.TestTick_SkipsTasksWithinSettleGracePeriod).
+	task := newSettledMissionTask(t, proj)
 
 	// A real sentinel tick is what would have recorded this wake, so
 	// exercise it the same way rather than writing the wake file by hand.
@@ -122,16 +173,7 @@ func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 
-	task, err := state.New(state.KindMission, "do the thing")
-	if err != nil {
-		t.Fatalf("state.New: %v", err)
-	}
-	task.Status = state.StatusRunning
-	task.HerdrAgentName = "vx-do-the-thing"
-	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(proj, task); err != nil {
-		t.Fatalf("state.Save: %v", err)
-	}
+	task := newSettledMissionTask(t, proj)
 	client := &fakeHerdr{promptStatus: "done"}
 	if _, err := sentinel.Tick(home, client); err != nil {
 		t.Fatalf("sentinel.Tick: %v", err)
@@ -169,16 +211,7 @@ func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 
-	task, err := state.New(state.KindMission, "do the thing")
-	if err != nil {
-		t.Fatalf("state.New: %v", err)
-	}
-	task.Status = state.StatusRunning
-	task.HerdrAgentName = "vx-do-the-thing"
-	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(proj, task); err != nil {
-		t.Fatalf("state.Save: %v", err)
-	}
+	task := newSettledMissionTask(t, proj)
 
 	client := &fakeHerdr{promptStatus: "done"}
 	go func() {
@@ -208,16 +241,7 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 
-	task, err := state.New(state.KindMission, "do the thing")
-	if err != nil {
-		t.Fatalf("state.New: %v", err)
-	}
-	task.Status = state.StatusRunning
-	task.HerdrAgentName = "vx-do-the-thing"
-	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(proj, task); err != nil {
-		t.Fatalf("state.Save: %v", err)
-	}
+	newSettledMissionTask(t, proj)
 	client := &fakeHerdr{promptStatus: "done"}
 	if _, err := sentinel.Tick(home, client); err != nil {
 		t.Fatalf("sentinel.Tick: %v", err)
@@ -246,16 +270,7 @@ func TestRunSentinelAwaitGuarded_WithWorkspaceFindsWake(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 
-	task, err := state.New(state.KindMission, "do the thing")
-	if err != nil {
-		t.Fatalf("state.New: %v", err)
-	}
-	task.Status = state.StatusRunning
-	task.HerdrAgentName = "vx-do-the-thing"
-	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-	if err := state.Save(proj, task); err != nil {
-		t.Fatalf("state.Save: %v", err)
-	}
+	task := newSettledMissionTask(t, proj)
 	client := &fakeHerdr{promptStatus: "done"}
 	if _, err := sentinel.Tick(home, client); err != nil {
 		t.Fatalf("sentinel.Tick: %v", err)
@@ -377,16 +392,6 @@ func TestDrainFromCamp_DoesNotDrainProjectWakes(t *testing.T) {
 		t.Fatalf("camp.Acquire: %v", err)
 	}
 
-	// A real pending wake for the project - what a commander's own drain
-	// would need to surface.
-	task, err := state.New(state.KindMission, "do the thing")
-	if err != nil {
-		t.Fatalf("state.New: %v", err)
-	}
-	task.Status = state.StatusRunning
-	task.HerdrAgentName = "vx-do-the-thing"
-	task.UpdatedAt = task.UpdatedAt.Add(-1 * time.Minute)
-
 	projRoot, err := resolveDrainTarget(proj, vexillumHome)
 	if err != nil {
 		t.Fatalf("resolveDrainTarget(project root): %v", err)
@@ -394,9 +399,10 @@ func TestDrainFromCamp_DoesNotDrainProjectWakes(t *testing.T) {
 	if projRoot == "" {
 		t.Fatal("expected a resolved project root for the real project")
 	}
-	if err := state.Save(projRoot, task); err != nil {
-		t.Fatalf("state.Save: %v", err)
-	}
+
+	// A real pending wake for the project - what a commander's own drain
+	// would need to surface.
+	task := newSettledMissionTask(t, projRoot)
 	client := &fakeHerdr{promptStatus: "done"}
 	if _, err := sentinel.Tick(vexillumHome, client); err != nil {
 		t.Fatalf("sentinel.Tick: %v", err)

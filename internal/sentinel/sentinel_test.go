@@ -2,12 +2,15 @@ package sentinel_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -50,10 +53,66 @@ func projectRoot(vexillumHome, name string) string {
 	return filepath.Join(vexillumHome, "projects", name)
 }
 
+func runGitT(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return string(out)
+}
+
+func writeAndCommit(t *testing.T, dir, name, content, message string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", name, err)
+	}
+	runGitT(t, dir, "add", name)
+	runGitT(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", message)
+}
+
+// newCommittedMissionCamp builds a standalone git "camp" (not through
+// internal/camp - the sentinel only ever reads a git worktree by path, it
+// never acquires one) whose branch already has a real commit ahead of its
+// base ("main") - the strong completion signal internal/camp.HasNewCommits
+// looks for. Used by tests where the mission genuinely finished.
+func newCommittedMissionCamp(t *testing.T) (campPath, base string) {
+	t.Helper()
+	dir := t.TempDir()
+	runGitT(t, dir, "init", "-q")
+	runGitT(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+	writeAndCommit(t, dir, "README.md", "hi\n", "initial commit")
+	runGitT(t, dir, "checkout", "-q", "-b", "vexillum/task")
+	writeAndCommit(t, dir, "output.txt", "soldier's work\n", "soldier's work")
+	return dir, "main"
+}
+
+// newEmptyMissionCamp is newCommittedMissionCamp's counterpart: a real git
+// worktree whose branch has never diverged from its base - no strong
+// completion signal at all. Used by tests where the mission hasn't
+// actually delivered anything yet.
+func newEmptyMissionCamp(t *testing.T) (campPath, base string) {
+	t.Helper()
+	dir := t.TempDir()
+	runGitT(t, dir, "init", "-q")
+	runGitT(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+	writeAndCommit(t, dir, "README.md", "hi\n", "initial commit")
+	runGitT(t, dir, "checkout", "-q", "-b", "vexillum/task")
+	return dir, "main"
+}
+
 // newRunningTask backdates UpdatedAt well past Tick's settle-race grace
 // period, so tests exercising a real transition aren't accidentally
 // testing the grace period instead - see
-// TestTick_SkipsTasksWithinSettleGracePeriod for that.
+// TestTick_SkipsTasksWithinSettleGracePeriod for that. Its camp already
+// carries a real commit ahead of base (newCommittedMissionCamp), since
+// most tests using this helper exist to exercise wake/transition
+// mechanics, not internal/sentinel's own strong-completion-signal gate
+// (which has its own dedicated tests) - without a real signal, every one
+// of those tests would get stuck in the ambiguous-idle path instead of
+// ever settling.
 func newRunningTask(t *testing.T, projectRoot, agentName string) state.Task {
 	t.Helper()
 	task, err := state.New(state.KindMission, "do the thing")
@@ -62,6 +121,7 @@ func newRunningTask(t *testing.T, projectRoot, agentName string) state.Task {
 	}
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = agentName
+	task.CampPath, task.CampBase = newCommittedMissionCamp(t)
 	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
@@ -120,28 +180,36 @@ func TestTick_RecordsReportPathWhenScoutSettlesWithReport(t *testing.T) {
 	}
 }
 
-// A scout task that settles to done without ever writing a report leaves
-// the wake's ReportPath empty - Tick doesn't invent a path for a report
-// that was never actually written.
-func TestTick_NoReportPathWhenScoutNeverWroteOne(t *testing.T) {
+// A scout task that goes idle without ever writing a report is not
+// trusted as done - no report means no strong completion signal, so the
+// sentinel treats the idle turn as ambiguous (internal/pause's package
+// doc) rather than inventing a settle for it. The first observation just
+// records the ambiguity, with no wake yet - see
+// TestTick_IdleWithoutSignalOrPausePastConfirmWindowBecomesUnconfirmed
+// for what happens if this persists.
+func TestTick_ScoutWithoutReportIsNotMarkedDoneImmediately(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
-	newRunningScoutTask(t, proj, "vx-look-into-it")
+	task := newRunningScoutTask(t, proj, "vx-look-into-it")
 
 	client := &fakeHerdr{statuses: map[string]string{"vx-look-into-it": "done"}}
-	if _, err := sentinel.Tick(home, client); err != nil {
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
 		t.Fatalf("Tick: %v", err)
 	}
+	if woke != 0 {
+		t.Errorf("expected no wake on the first idle-without-report observation, got %d", woke)
+	}
 
-	wakes, err := sentinel.Drain(proj)
+	persisted, err := state.Load(proj, task.ID)
 	if err != nil {
-		t.Fatalf("Drain: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
-	if len(wakes) != 1 {
-		t.Fatalf("expected 1 wake, got %d", len(wakes))
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running, got %s", persisted.Status)
 	}
-	if wakes[0].ReportPath != "" {
-		t.Errorf("expected an empty ReportPath, got %q", wakes[0].ReportPath)
+	if persisted.IdleUnconfirmedSince.IsZero() {
+		t.Error("expected IdleUnconfirmedSince to be recorded")
 	}
 }
 
@@ -613,6 +681,270 @@ func TestTick_RecoveringFromNotFoundClearsTheMark(t *testing.T) {
 	}
 	if persisted.Status != state.StatusRunning {
 		t.Errorf("expected status to remain running, got %s", persisted.Status)
+	}
+}
+
+// newRunningMissionTaskWithCamp mirrors newRunningTask but lets the
+// caller control the camp's completion signal directly (campPath/base),
+// for tests exercising internal/sentinel's own strong-signal and
+// declared-pause logic rather than plain wake/transition mechanics.
+func newRunningMissionTaskWithCamp(t *testing.T, projectRoot, agentName, campPath, base string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindMission, "do the thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusRunning
+	task.HerdrAgentName = agentName
+	task.CampPath = campPath
+	task.CampBase = base
+	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+func writePauseFile(t *testing.T, proj, agentName, content string) {
+	t.Helper()
+	if err := os.MkdirAll(pause.Dir(proj), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(pause.Path(proj, agentName), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+// The motivating bug, scenario (a): a mission that declared a pause
+// before going idle (a background job it started, still in flight) is
+// never marked done just because its turn went idle - internal/pause's
+// whole reason for existing.
+func TestTick_DeclaredPauseKeepsMissionRunning(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	writePauseFile(t, proj, "vx-do-the-thing", "paused: waiting on my own e2e validation run\nuntil: the run finishes\n")
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected no wake while a declared pause is active, got %d", woke)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running while paused, got %s", persisted.Status)
+	}
+}
+
+// Scenario (b): a mission that genuinely finished - a real commit ahead
+// of its camp's base - is marked done as soon as its turn goes idle, same
+// as before this package required corroboration.
+func TestTick_MissionWithNewCommitSettlesDone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "done"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("expected 1 wake, got %d", woke)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusDone {
+		t.Errorf("expected status done, got %s", persisted.Status)
+	}
+}
+
+// Scenario (c), first observation: a mission that goes idle with no
+// declared pause and no commit ahead of base is not marked done - the
+// sentinel records the ambiguity instead, mirroring
+// TestTick_FirstNotFoundJustMarksIt.
+func TestTick_IdleWithoutSignalOrPauseFirstObservationStaysRunning(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected no wake on the first ambiguous-idle observation, got %d", woke)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running, got %s", persisted.Status)
+	}
+	if persisted.IdleUnconfirmedSince.IsZero() {
+		t.Error("expected IdleUnconfirmedSince to be recorded")
+	}
+}
+
+// A second ambiguous-idle observation still within the confirm window
+// doesn't mark the task unconfirmed yet either - mirrors
+// TestTick_NotFoundWithinConfirmWindowDoesNotInterrupt.
+func TestTick_IdleWithoutSignalOrPauseWithinConfirmWindowStaysRunning(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-5 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected no wake within the confirm window, got %d", woke)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running within the confirm window, got %s", persisted.Status)
+	}
+}
+
+// Scenario (c), confirmed: once the ambiguity has held true past the
+// confirm window, the task is marked unconfirmed (never done) and a wake
+// is recorded - the actual fix for the motivating bug: an idle turn with
+// no proof either way no longer gets a free pass to "done". Mirrors
+// TestTick_NotFoundPastConfirmWindowInterruptsTask.
+func TestTick_IdleWithoutSignalOrPausePastConfirmWindowBecomesUnconfirmed(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-31 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("expected 1 wake once the confirm window elapses, got %d", woke)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusUnconfirmed {
+		t.Errorf("expected status unconfirmed, got %s", persisted.Status)
+	}
+	if persisted.Status == state.StatusDone {
+		t.Error("an unproven idle turn must never be marked done")
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 || wakes[0].TaskID != task.ID || wakes[0].NewStatus != state.StatusUnconfirmed {
+		t.Errorf("expected one drained wake for %s -> unconfirmed, got %+v", task.ID, wakes)
+	}
+}
+
+// A declared pause written after the ambiguity was first observed still
+// rescues the task: the mark is cleared and the turn is treated as a
+// known wait on the very next tick, instead of racing toward unconfirmed -
+// a soldier can legitimately declare its pause a little after its turn
+// actually goes idle (the same kind of landing race internal/report's own
+// doc comment calls out for a report file).
+func TestTick_LatePauseClearsIdleUnconfirmedMark(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-5 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	writePauseFile(t, proj, "vx-do-the-thing", "paused: waiting on my own e2e validation run\n")
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !persisted.IdleUnconfirmedSince.IsZero() {
+		t.Error("expected IdleUnconfirmedSince to be cleared once a declared pause is found")
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected status to remain running, got %s", persisted.Status)
+	}
+}
+
+// A pause file older than pause.ValidityWindow is no longer trusted - the
+// ambiguous-idle handling takes over as if no pause had ever been
+// declared, so a soldier that got genuinely stuck after a stale pause
+// still eventually surfaces to the commander.
+func TestTick_StalePauseDoesNotBlockUnconfirmedEscalation(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-31 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	writePauseFile(t, proj, "vx-do-the-thing", "paused: waiting on my own e2e validation run\n")
+	stale := time.Now().Add(-pause.ValidityWindow - time.Minute)
+	if err := os.Chtimes(pause.Path(proj, "vx-do-the-thing"), stale, stale); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("expected the stale pause to be ignored and the task escalated, got %d wakes", woke)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusUnconfirmed {
+		t.Errorf("expected status unconfirmed, got %s", persisted.Status)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/pause"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -133,6 +134,42 @@ func TestRunRedispatch_CleansUpStaleReport(t *testing.T) {
 	}
 	if _, err := os.Stat(staleReport); !os.IsNotExist(err) {
 		t.Errorf("expected the stale report to be removed before relaunching, stat error: %v", err)
+	}
+}
+
+// Same reasoning as TestRunRedispatch_CleansUpStaleReport, applied to a
+// dead soldier's leftover declared pause: a stale pause file at the fresh
+// run's likely-identical candidate agent name must not be mistaken for
+// the new attempt's own declaration.
+func TestRunRedispatch_CleansUpStalePause(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	homeDir := t.TempDir()
+
+	task := interruptedTestTask(t, project, home)
+
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := os.MkdirAll(pause.Dir(projectRoot), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	stalePause := pause.Path(projectRoot, task.HerdrAgentName)
+	if err := os.WriteFile(stalePause, []byte("paused: waiting on a background job that's now dead\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
+
+	var out bytes.Buffer
+	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	if _, err := os.Stat(stalePause); !os.IsNotExist(err) {
+		t.Errorf("expected the stale pause to be removed before relaunching, stat error: %v", err)
 	}
 }
 

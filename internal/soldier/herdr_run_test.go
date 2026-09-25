@@ -8,6 +8,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/soldier"
@@ -165,7 +166,7 @@ func TestRunInHerdr_Success(t *testing.T) {
 	if got.Output != "soldier transcript" {
 		t.Errorf("expected transcript captured, got %q", got.Output)
 	}
-	if len(client.promptCalls) != 1 || client.promptCalls[0] != task.Prompt {
+	if len(client.promptCalls) != 1 || !strings.HasPrefix(client.promptCalls[0], task.Prompt) {
 		t.Errorf("expected the task's prompt to be submitted once, got %v", client.promptCalls)
 	}
 	wantBaseArgs := []string{"--dangerously-skip-permissions", "--prompt-suggestions", "false"}
@@ -183,6 +184,35 @@ func TestRunInHerdr_Success(t *testing.T) {
 	}
 	if persisted.Status != state.StatusDone {
 		t.Errorf("expected persisted status done, got %s", persisted.Status)
+	}
+}
+
+// The camp's Base is persisted onto the task (CampBase) alongside its
+// other camp identifiers - internal/sentinel needs it (with CampPath) to
+// ask internal/camp.HasNewCommits whether a mission actually produced a
+// commit, since the sentinel never has the project's own checkout
+// directory to resolve it another way.
+func TestRunInHerdr_PersistsCampBase(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID, Base: "main"}
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.CampBase != "main" {
+		t.Errorf("expected CampBase to be persisted from the camp, got %q", got.CampBase)
+	}
+
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.CampBase != "main" {
+		t.Errorf("expected the persisted task to carry CampBase, got %q", persisted.CampBase)
 	}
 }
 
@@ -247,8 +277,9 @@ func TestRunInHerdr_ScoutPromptIncludesReportInstructions(t *testing.T) {
 	}
 }
 
-// A mission's submitted prompt is exactly its original prompt - no report
-// instructions appended, since a mission never has one.
+// A mission's submitted prompt carries no report instructions - a mission
+// never has one - but does carry the pause-declaration instructions every
+// soldier gets, appended after the (untouched) original prompt.
 func TestRunInHerdr_MissionPromptHasNoReportInstructions(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
@@ -256,12 +287,57 @@ func TestRunInHerdr_MissionPromptHasNoReportInstructions(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 
-	if len(client.promptCalls) != 1 || client.promptCalls[0] != task.Prompt {
-		t.Errorf("expected the mission's prompt to be submitted unmodified, got %v", client.promptCalls)
+	if len(client.promptCalls) != 1 {
+		t.Fatalf("expected exactly one prompt submission, got %d", len(client.promptCalls))
+	}
+	if !strings.HasPrefix(client.promptCalls[0], task.Prompt) {
+		t.Errorf("expected the original prompt untouched at the start, got: %s", client.promptCalls[0])
+	}
+	if strings.Contains(client.promptCalls[0], report.Path(testProjectRoot(t, home), got.HerdrAgentName, got.ID)) {
+		t.Errorf("expected no report path referenced in a mission's prompt, got: %s", client.promptCalls[0])
+	}
+	wantPausePath := pause.Path(testProjectRoot(t, home), got.HerdrAgentName)
+	if !strings.Contains(client.promptCalls[0], wantPausePath) {
+		t.Errorf("expected the pause path %q referenced in a mission's prompt, got: %s", wantPausePath, client.promptCalls[0])
+	}
+}
+
+// Every soldier - mission or scout - gets the pause-declaration
+// instructions pointing at its own pause file (internal/pause.Path), not
+// just scouts (which additionally get the report instructions).
+func TestRunInHerdr_PromptIncludesPauseInstructions(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		task func(t *testing.T) state.Task
+	}{
+		{"mission", newMissionTask},
+		{"scout", func(t *testing.T) state.Task { return newScoutTask(t, "look into it") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			task := tc.task(t)
+			c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+			client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+			got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+			if err != nil {
+				t.Fatalf("RunInHerdr: %v", err)
+			}
+
+			wantPath := pause.Path(testProjectRoot(t, home), got.HerdrAgentName)
+			if len(client.promptCalls) != 1 {
+				t.Fatalf("expected exactly one prompt submission, got %d", len(client.promptCalls))
+			}
+			if !strings.Contains(client.promptCalls[0], wantPath) {
+				t.Errorf("expected the submitted prompt to reference the pause path %q, got: %s", wantPath, client.promptCalls[0])
+			}
+		})
 	}
 }
 

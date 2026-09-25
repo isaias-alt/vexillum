@@ -65,6 +65,26 @@ const (
 	// rebase before merging), and release can no longer rely on a plain
 	// ancestor check once GitHub squashes or rebases the merge.
 	StatusShipped Status = "shipped"
+	// StatusUnconfirmed marks a Running task whose herdr agent went idle
+	// (live status "idle"/"done") without a strong completion signal -
+	// internal/report's file for a scout, internal/camp.HasNewCommits for
+	// a mission - and without a currently valid declared pause
+	// (internal/pause). internal/sentinel.Tick sets this once that's held
+	// true for its own confirm window, mirroring exactly how
+	// StatusInterrupted only fires once a genuine agent disappearance is
+	// confirmed rather than trusting a single observation.
+	//
+	// Distinct from StatusDone: idle alone was never proof of anything,
+	// only proof that the turn stopped responding - see internal/pause's
+	// package doc. Distinct from StatusFailed: nothing here says the
+	// soldier did anything wrong, just that vexillum can't yet tell
+	// success from a soldier that's quietly stuck. Distinct from
+	// StatusInterrupted: the herdr agent is still there and reachable,
+	// just unexplained - a human needs to look (at the camp, or the pane
+	// itself), the same as an Interrupted task, but there's nothing left
+	// for the sentinel to keep polling for on its own once this fires
+	// (matches Interrupted's own resting-state precedent).
+	StatusUnconfirmed Status = "unconfirmed"
 )
 
 // Task is a mission or scout, serialized to JSON in ~/.vexillum/tasks/.
@@ -82,6 +102,17 @@ type Task struct {
 	CampSlot   int    `json:"camp_slot,omitempty"`
 	CampPath   string `json:"camp_path,omitempty"`
 	CampBranch string `json:"camp_branch,omitempty"`
+
+	// CampBase is the branch CampBranch was forked from (camp.Camp.Base
+	// at the moment this task's camp was acquired) - internal/sentinel
+	// uses it with camp.HasNewCommits to ask "did this mission actually
+	// produce a commit" without needing the project's own checkout
+	// directory, which the sentinel never has (see camp.Camp.Base's own
+	// doc comment). Purely additive, same reasoning as AgentNotFoundSince
+	// below: an older task file without it just decodes to "", which
+	// already means exactly "no base recorded, can't verify" to the
+	// completion check - no SchemaVersion bump needed.
+	CampBase string `json:"camp_base,omitempty"`
 
 	// Soldier run result. ExitCode applies only to a headless run
 	// (internal/soldier.Run); a run in a real herdr pane
@@ -106,6 +137,14 @@ type Task struct {
 	// zero value, which already means exactly "never observed missing",
 	// so this does not need a SchemaVersion bump.
 	AgentNotFoundSince time.Time `json:"agent_not_found_since,omitzero"`
+
+	// IdleUnconfirmedSince marks when internal/sentinel.Tick first
+	// observed this task's live herdr status as idle/done with neither a
+	// strong completion signal nor a currently valid declared pause
+	// (internal/pause) - zero means never. Same purely-additive reasoning
+	// as AgentNotFoundSince: an older task file without it decodes to the
+	// zero value, which already means "never observed ambiguous".
+	IdleUnconfirmedSince time.Time `json:"idle_unconfirmed_since,omitzero"`
 
 	// Redispatches counts how many times this task has been re-dispatched
 	// after going Interrupted (PRD v2, A.2) - zero means never. Re-dispatch

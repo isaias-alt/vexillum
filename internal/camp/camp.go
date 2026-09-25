@@ -33,11 +33,22 @@ type Camp struct {
 	Path       string `json:"path"`
 	Branch     string `json:"branch"`
 	Slot       int    `json:"slot"`
+
+	// Base is the branch this camp was forked from at Acquire time (the
+	// project's own current branch back then) - internal/soldier persists
+	// it onto the task (state.Task.CampBase) so internal/sentinel can
+	// later ask HasNewCommits whether the mission actually produced
+	// anything, without needing the project's own checkout directory
+	// (which the sentinel, sweeping every project generically, never has -
+	// only the camp worktree path itself, see internal/project's package
+	// doc on Key being a one-way hash).
+	Base string `json:"base"`
 }
 
 type poolSlot struct {
 	Number   int    `json:"number"`
 	Branch   string `json:"branch"`
+	Base     string `json:"base,omitempty"`      // the branch Branch was forked from - see Camp.Base
 	LeasedBy string `json:"leased_by,omitempty"` // task id; empty means idle
 }
 
@@ -115,10 +126,11 @@ func Acquire(projectDir, vexillumHome, taskID string) (Camp, error) {
 
 		slot.LeasedBy = taskID
 		slot.Branch = branch
+		slot.Base = base
 		if err := savePool(poolRoot, pool); err != nil {
 			return Camp{}, err
 		}
-		return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: branch, Slot: slot.Number}, nil
+		return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: branch, Slot: slot.Number, Base: base}, nil
 	}
 
 	number := len(pool.Slots) + 1
@@ -127,12 +139,12 @@ func Acquire(projectDir, vexillumHome, taskID string) (Camp, error) {
 		return Camp{}, fmt.Errorf("creating camp worktree: %w", err)
 	}
 
-	pool.Slots = append(pool.Slots, poolSlot{Number: number, Branch: branch, LeasedBy: taskID})
+	pool.Slots = append(pool.Slots, poolSlot{Number: number, Branch: branch, Base: base, LeasedBy: taskID})
 	if err := savePool(poolRoot, pool); err != nil {
 		return Camp{}, err
 	}
 
-	return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: branch, Slot: number}, nil
+	return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: branch, Slot: number, Base: base}, nil
 }
 
 // Resolve reconstructs the Camp for an already-acquired slot from the
@@ -158,7 +170,7 @@ func Resolve(projectDir, vexillumHome string, slot int) (Camp, error) {
 	for _, s := range pool.Slots {
 		if s.Number == slot {
 			worktreePath := filepath.Join(poolRoot, strconv.Itoa(slot), repoName)
-			return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: s.Branch, Slot: slot}, nil
+			return Camp{ProjectDir: absProject, PoolRoot: poolRoot, Path: worktreePath, Branch: s.Branch, Slot: slot, Base: s.Base}, nil
 		}
 	}
 	return Camp{}, fmt.Errorf("camp slot %d not found in pool state for %s", slot, absProject)
@@ -347,7 +359,33 @@ func Discard(c Camp, taskID string) error {
 
 	pool.Slots[idx].LeasedBy = ""
 	pool.Slots[idx].Branch = ""
+	pool.Slots[idx].Base = ""
 	return savePool(c.PoolRoot, pool)
+}
+
+// HasNewCommits reports whether campPath's current HEAD contains at least
+// one commit not already on base - a mission's hard completion proof,
+// mirroring internal/report's file-based proof for a scout (internal/
+// sentinel uses this as the strong signal it requires before ever
+// trusting an idle turn as "done" for a mission). base is resolved from
+// within campPath itself, not the project's own checkout directory: a
+// git worktree shares every branch/ref with the rest of its repository,
+// so this works from the camp alone, which is all the sentinel - sweeping
+// every project generically - ever has for a task (see Camp.Base's own
+// doc comment). A base ref that can't be resolved (moved, deleted, or the
+// camp worktree itself gone) is reported as an error - the caller
+// decides how to treat "can't tell", the same way internal/report.Exists
+// never guesses either.
+func HasNewCommits(campPath, base string) (bool, error) {
+	out, err := runGit(campPath, "rev-list", "--count", base+"..HEAD")
+	if err != nil {
+		return false, fmt.Errorf("counting commits ahead of %s in %s: %w", base, campPath, err)
+	}
+	count, convErr := strconv.Atoi(strings.TrimSpace(out))
+	if convErr != nil {
+		return false, fmt.Errorf("parsing commit count %q from %s: %w", out, campPath, convErr)
+	}
+	return count > 0, nil
 }
 
 func poolStatePath(poolRoot string) string {

@@ -33,7 +33,9 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
+	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/soldier"
@@ -189,30 +191,193 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 			continue
 		}
 
-		old := task.Status
-		task.Status = newStatus
-		task.UpdatedAt = time.Now().UTC()
-		// Every transition reaching here settles a Running task into a
-		// terminal one (MapAgentStatus never re-maps live status back to
-		// Running once it's left it) - capture its final transcript now,
-		// since dispatch's own quick-settle probe usually returned long
-		// before this point.
-		if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
-			task.Output = output
+		// Every transition reaching here settles a Running task out of
+		// Running (MapAgentStatus never re-maps live status back to
+		// Running once it's left it, and task.Status is Running for
+		// every task that reaches this point - see the loop's own guard
+		// above). A Done transition needs corroboration first: idle only
+		// ever means the turn stopped responding, never why - see
+		// settleIdleTask and internal/pause's package doc.
+		if newStatus != state.StatusDone {
+			if err := settleTransition(projectRoot, task, newStatus, client); err != nil {
+				return woke, err
+			}
+			woke++
+			continue
 		}
-		if err := state.Save(projectRoot, task); err != nil {
-			return woke, fmt.Errorf("persisting task %s: %w", task.ID, err)
+
+		settled, err := settleIdleTask(projectRoot, task, client)
+		if err != nil {
+			return woke, err
 		}
-		reportPath := ""
-		if newStatus == state.StatusDone && task.Kind == state.KindScout && report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
-			reportPath = report.Path(projectRoot, task.HerdrAgentName, task.ID)
+		if settled {
+			woke++
 		}
-		if err := recordWake(projectRoot, task, old, newStatus, reportPath); err != nil {
-			return woke, fmt.Errorf("recording wake for task %s: %w", task.ID, err)
-		}
-		woke++
 	}
 	return woke, nil
+}
+
+// settleTransition persists task's straightforward transition out of
+// Running - blocked or failed, the only two live statuses MapAgentStatus
+// can produce here besides Done (see tickProject's own guard reasoning) -
+// and records a wake for it. Captures the final transcript now, since
+// dispatch's own quick-settle probe usually returned long before this
+// point.
+func settleTransition(projectRoot string, task state.Task, newStatus state.Status, client herdr.Client) error {
+	old := task.Status
+	task.Status = newStatus
+	task.UpdatedAt = time.Now().UTC()
+	task.IdleUnconfirmedSince = time.Time{}
+	if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
+		task.Output = output
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		return fmt.Errorf("persisting task %s: %w", task.ID, err)
+	}
+	if err := recordWake(projectRoot, task, old, newStatus, ""); err != nil {
+		return fmt.Errorf("recording wake for task %s: %w", task.ID, err)
+	}
+	return nil
+}
+
+// settleIdleTask handles a Running task whose live herdr status just
+// mapped to Done (idle or done). It never trusts that alone - "idle"
+// only ever means the turn stopped responding, never why (internal/pause's
+// package doc):
+//
+//  1. A strong completion signal - a scout's internal/report file, or a
+//     mission's own commit ahead of its camp's base (hasCompletionSignal) -
+//     settles the task Done, same as before this package read either
+//     signal.
+//  2. Otherwise, a currently valid declared pause (internal/pause.Active)
+//     means the soldier is deliberately waiting on something of its own:
+//     the task stays Running, rechecked next tick, no wake recorded.
+//  3. Otherwise the idle turn is unexplained - handleIdleUnconfirmed takes
+//     over, mirroring handleAgentNotFound's own confirm-window pattern
+//     instead of trusting it as done.
+//
+// Returns whether it settled the task (and so recorded a wake).
+func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (bool, error) {
+	strong, reportPath, err := hasCompletionSignal(projectRoot, task)
+	if err != nil {
+		return false, err
+	}
+	if strong {
+		return true, settleDone(projectRoot, task, reportPath, client)
+	}
+
+	_, active, err := pause.Active(projectRoot, task.HerdrAgentName, time.Now())
+	if err != nil {
+		return false, fmt.Errorf("checking declared pause for task %s: %w", task.ID, err)
+	}
+	if active {
+		if !task.IdleUnconfirmedSince.IsZero() {
+			task.IdleUnconfirmedSince = time.Time{}
+			if err := state.Save(projectRoot, task); err != nil {
+				return false, fmt.Errorf("clearing idle-unconfirmed mark for task %s: %w", task.ID, err)
+			}
+		}
+		return false, nil
+	}
+
+	return handleIdleUnconfirmed(projectRoot, task)
+}
+
+// hasCompletionSignal reports whether task already has hard proof of
+// completion: a scout's internal/report file, or a mission's own commit
+// ahead of its camp's base (internal/camp.HasNewCommits). A mission
+// missing CampPath/CampBase (a task dispatched before this field existed,
+// or one whose camp acquisition never completed) or a camp.HasNewCommits
+// error (base ref moved, camp worktree gone) reports no signal rather
+// than guessing - a single unreadable camp must never stop the sentinel
+// from reconciling every other task (tickProject's own per-task
+// isolation), and "can't prove it" is treated the same as "not proven".
+func hasCompletionSignal(projectRoot string, task state.Task) (bool, string, error) {
+	switch task.Kind {
+	case state.KindScout:
+		if report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
+			return true, report.Path(projectRoot, task.HerdrAgentName, task.ID), nil
+		}
+		return false, "", nil
+	case state.KindMission:
+		if task.CampPath == "" || task.CampBase == "" {
+			return false, "", nil
+		}
+		has, err := camp.HasNewCommits(task.CampPath, task.CampBase)
+		if err != nil {
+			return false, "", nil
+		}
+		return has, "", nil
+	default:
+		return false, "", nil
+	}
+}
+
+// settleDone persists task's corroborated Done transition and records a
+// wake for it - exactly what tickProject did unconditionally before this
+// package required corroboration first.
+func settleDone(projectRoot string, task state.Task, reportPath string, client herdr.Client) error {
+	old := task.Status
+	task.Status = state.StatusDone
+	task.UpdatedAt = time.Now().UTC()
+	task.IdleUnconfirmedSince = time.Time{}
+	if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
+		task.Output = output
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		return fmt.Errorf("persisting task %s: %w", task.ID, err)
+	}
+	if err := recordWake(projectRoot, task, old, state.StatusDone, reportPath); err != nil {
+		return fmt.Errorf("recording wake for task %s: %w", task.ID, err)
+	}
+	return nil
+}
+
+// idleUnconfirmedConfirmWindow mirrors notFoundConfirmWindow's own
+// reasoning, applied to a different ambiguity: an idle turn with no
+// completion signal and no declared pause could just be a brand-new
+// settle whose report/commit hasn't landed on disk yet (the same kind of
+// race internal/report's own doc comment already calls out), not a
+// genuinely stuck soldier. Waiting this long before treating it as
+// suspicious avoids flagging every ordinary settle as unconfirmed.
+const idleUnconfirmedConfirmWindow = 30 * time.Second
+
+// handleIdleUnconfirmed records the first time task's turn was observed
+// idle with neither a completion signal nor a valid declared pause, and
+// marks it StatusUnconfirmed once that's held true for
+// idleUnconfirmedConfirmWindow - mirrors handleAgentNotFound exactly,
+// applied to a different kind of ambiguity (an agent that's still there,
+// just unexplained, instead of one that's genuinely gone). Returns
+// whether it settled the task (and so recorded a wake) on this call.
+func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
+	if task.IdleUnconfirmedSince.IsZero() {
+		task.IdleUnconfirmedSince = time.Now().UTC()
+		if err := state.Save(projectRoot, task); err != nil {
+			return false, fmt.Errorf("recording idle-unconfirmed mark for task %s: %w", task.ID, err)
+		}
+		return false, nil
+	}
+
+	if time.Since(task.IdleUnconfirmedSince) < idleUnconfirmedConfirmWindow {
+		return false, nil
+	}
+
+	old := task.Status
+	task.Status = state.StatusUnconfirmed
+	task.UpdatedAt = time.Now().UTC()
+	if task.Output != "" {
+		task.Output += "\n\n"
+	}
+	task.Output += "[vexillum] this soldier's turn went idle with no completion signal (no report for a scout, " +
+		"no new commit for a mission) and no declared pause (internal/pause) - marked unconfirmed, not done. " +
+		"Check its camp/pane before assuming either way."
+	if err := state.Save(projectRoot, task); err != nil {
+		return false, fmt.Errorf("persisting unconfirmed task %s: %w", task.ID, err)
+	}
+	if err := recordWake(projectRoot, task, old, state.StatusUnconfirmed, ""); err != nil {
+		return false, fmt.Errorf("recording wake for unconfirmed task %s: %w", task.ID, err)
+	}
+	return true, nil
 }
 
 // handleAgentNotFound records the first time task's agent was observed
