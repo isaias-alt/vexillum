@@ -33,6 +33,7 @@ vexillum doctor      # check the health of the vexillum environment
 vexillum dispatch    # dispatch a soldier (mission or scout) into an isolated camp
 vexillum redispatch  # re-dispatch an interrupted task from its original prompt
 vexillum status      # report the current project's fleet of tasks (read-only)
+vexillum decide      # answer a blocked task's open question so it can continue
 vexillum land        # land a finished mission's work into the base branch
 vexillum ship        # push a finished mission through the no-mistakes gate for a real PR
 vexillum release     # release a soldier's camp back to the pool
