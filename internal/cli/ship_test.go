@@ -72,6 +72,20 @@ func doneMissionTask(t *testing.T, project, home string) state.Task {
 	return task
 }
 
+// A malformed task id must never reach state.Load/camp.Resolve's
+// filepath.Join calls - runShip rejects it up front.
+func TestRunShip_RejectsInvalidTaskID(t *testing.T) {
+	var out bytes.Buffer
+	code := runShip("/does/not/matter", "/does/not/matter", "../../etc/passwd", &out, &out)
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit for an invalid task id")
+	}
+	if !strings.Contains(out.String(), "invalid task id") {
+		t.Errorf("expected the error to name the invalid task id, got: %s", out.String())
+	}
+}
+
 // B4-04: shipping a done mission in a gated project pushes its camp branch
 // to the "no-mistakes" remote.
 func TestRunShip_Success(t *testing.T) {

@@ -63,6 +63,11 @@ func Redispatch(args []string) int {
 }
 
 func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
+	if err := state.ValidateID(taskID); err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
 	projectRoot, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
 		fmt.Fprintln(stderr, "vexillum:", err)

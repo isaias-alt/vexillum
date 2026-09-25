@@ -173,6 +173,20 @@ func TestRunRedispatch_CleansUpStalePause(t *testing.T) {
 	}
 }
 
+// A malformed task id must never reach state.Load/camp.Resolve's
+// filepath.Join calls - runRedispatch rejects it up front.
+func TestRunRedispatch_RejectsInvalidTaskID(t *testing.T) {
+	var out bytes.Buffer
+	code := runRedispatch("/does/not/matter", "/does/not/matter", "/does/not/matter", "w1", "../../etc/passwd", &fakeHerdr{}, &out, &out)
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit for an invalid task id")
+	}
+	if !strings.Contains(out.String(), "invalid task id") {
+		t.Errorf("expected the error to name the invalid task id, got: %s", out.String())
+	}
+}
+
 // A2-03: redispatch refuses a task that isn't interrupted, without
 // touching its camp.
 func TestRunRedispatch_RefusesNonInterrupted(t *testing.T) {

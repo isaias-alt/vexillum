@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"time"
 
@@ -188,6 +189,26 @@ func newID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// idPattern is the fixed shape newID produces: 16 lowercase hex
+// characters (8 random bytes), and the only shape ValidateID accepts.
+var idPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+// ValidateID reports an error if id does not match the fixed format
+// vexillum generates task IDs in. A task id that reaches this package
+// from outside vexillum's own state (a CLI argument such as `vexillum
+// land <task-id>`) is used to build a filesystem path (see taskPath) -
+// every command that accepts a task id as external input must call
+// ValidateID on it before that id touches the filesystem in any way, so
+// that something like "../other-project" or a path separator is
+// rejected with a clear error instead of silently escaping the intended
+// directory.
+func ValidateID(id string) error {
+	if !idPattern.MatchString(id) {
+		return fmt.Errorf("invalid task id %q: expected 16 lowercase hex characters", id)
+	}
+	return nil
 }
 
 func tasksDir(projectRoot string) string {

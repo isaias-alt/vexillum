@@ -381,6 +381,33 @@ func runGitOutput(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// A malformed task id (here, a path traversal attempt) must never reach
+// state.Load/camp.Resolve's filepath.Join calls - it is rejected up
+// front, before runLand touches the filesystem at all.
+func TestRunLand_RejectsInvalidTaskID(t *testing.T) {
+	var out bytes.Buffer
+	code := runLand("/does/not/matter", "/does/not/matter", "/does/not/matter", "../../etc/passwd", &fakeHerdr{}, &out, &out)
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit for an invalid task id")
+	}
+	if !strings.Contains(out.String(), "invalid task id") {
+		t.Errorf("expected the error to name the invalid task id, got: %s", out.String())
+	}
+}
+
+func TestRunRelease_RejectsInvalidTaskID(t *testing.T) {
+	var out bytes.Buffer
+	code := runRelease("/does/not/matter", "/does/not/matter", "/does/not/matter", "../../etc/passwd", false, &fakeHerdr{}, &out, &out)
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit for an invalid task id")
+	}
+	if !strings.Contains(out.String(), "invalid task id") {
+		t.Errorf("expected the error to name the invalid task id, got: %s", out.String())
+	}
+}
+
 // newReleaseTestScoutTask creates a fresh camp (clean, trivially "landed"
 // since it carries no commits of its own yet) for a scout task and
 // persists it - the shape a scout ready to release has, minus its report.
