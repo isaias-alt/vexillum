@@ -204,8 +204,8 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 			return woke, fmt.Errorf("persisting task %s: %w", task.ID, err)
 		}
 		reportPath := ""
-		if newStatus == state.StatusDone && task.Kind == state.KindScout && report.Exists(projectRoot, task.HerdrAgentName) {
-			reportPath = report.Path(projectRoot, task.HerdrAgentName)
+		if newStatus == state.StatusDone && task.Kind == state.KindScout && report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
+			reportPath = report.Path(projectRoot, task.HerdrAgentName, task.ID)
 		}
 		if err := recordWake(projectRoot, task, old, newStatus, reportPath); err != nil {
 			return woke, fmt.Errorf("recording wake for task %s: %w", task.ID, err)

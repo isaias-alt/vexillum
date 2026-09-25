@@ -296,7 +296,7 @@ func TestRunRelease_RefusesScoutWithoutReport(t *testing.T) {
 	if code == 0 {
 		t.Fatal("expected a non-zero exit for a scout with no report")
 	}
-	wantPath := report.Path(projectRoot, task.HerdrAgentName)
+	wantPath := report.Path(projectRoot, task.HerdrAgentName, task.ID)
 	if !strings.Contains(out.String(), wantPath) {
 		t.Errorf("expected the refusal to name the missing report path %q, got: %s", wantPath, out.String())
 	}
@@ -311,7 +311,7 @@ func TestRunRelease_ScoutWithReportSucceeds(t *testing.T) {
 	if err := os.MkdirAll(report.Dir(projectRoot), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(report.Path(projectRoot, task.HerdrAgentName), []byte("# findings\n"), 0o644); err != nil {
+	if err := os.WriteFile(report.Path(projectRoot, task.HerdrAgentName, task.ID), []byte("# findings\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 

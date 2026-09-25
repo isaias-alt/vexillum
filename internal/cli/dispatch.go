@@ -366,8 +366,8 @@ func runRelease(projectDir, vexillumHome, homeDir, taskID string, force bool, cl
 	// scout. --force is the explicit, logged escape hatch, mirroring
 	// firstmate's own teardown gate ("REFUSED: scout task $ID has no
 	// report ... use --force after explicit discard approval").
-	if task.Kind == state.KindScout && !force && !report.Exists(projectRoot, task.HerdrAgentName) {
-		fmt.Fprintf(stderr, "vexillum: release refused: scout task %s has no report at %s\n", taskID, report.Path(projectRoot, task.HerdrAgentName))
+	if task.Kind == state.KindScout && !force && !report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
+		fmt.Fprintf(stderr, "vexillum: release refused: scout task %s has no report at %s\n", taskID, report.Path(projectRoot, task.HerdrAgentName, task.ID))
 		fmt.Fprintln(stderr, "vexillum: the report is the work product - have the soldier write it, or pass --force to release anyway")
 		return 1
 	}
