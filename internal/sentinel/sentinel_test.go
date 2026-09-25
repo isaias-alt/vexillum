@@ -701,7 +701,7 @@ func TestAcquireLock_RefusesSecondWhileHeld(t *testing.T) {
 
 // Regression test for the read-then-write race: many goroutines racing
 // AcquireLock against the same fresh home must yield exactly one winner,
-// never more - the atomic O_EXCL claim in AcquireLock must not degrade
+// never more - the atomic link-based claim in claimLock must not degrade
 // back into a check-then-write race under concurrency.
 func TestAcquireLock_ConcurrentCallsYieldExactlyOneWinner(t *testing.T) {
 	home := t.TempDir()
