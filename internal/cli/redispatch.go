@@ -134,6 +134,7 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 	task.HerdrAgentName = ""
 	task.Output = ""
 	task.ExitCode = nil
+	task.Decision = nil
 	// Clearing this is not cosmetic: a stale mark left over from the
 	// previous life of this task would let sentinel.Tick's
 	// notFoundConfirmWindow (already elapsed, since it's what got this

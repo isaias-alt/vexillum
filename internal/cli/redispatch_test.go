@@ -278,6 +278,47 @@ func TestRunRedispatch_Success(t *testing.T) {
 	}
 }
 
+// Redispatching a task that carries a stale Decision from its previous,
+// now-superseded blocked life must clear it - otherwise 'vexillum status
+// --json' would keep reporting a moot question on a task that isn't
+// blocked anymore (and may already be finished by the time anyone looks).
+func TestRunRedispatch_ClearsStaleDecision(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	homeDir := t.TempDir()
+
+	task := interruptedTestTask(t, project, home)
+	task.Decision = &state.Decision{
+		Question: "Which database should I use?",
+		Options:  []string{"Postgres", "SQLite"},
+		AskedAt:  time.Now().UTC().Add(-time.Hour),
+	}
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
+
+	var out bytes.Buffer
+	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+
+	reloaded, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if reloaded.Decision != nil {
+		t.Errorf("expected the stale Decision to be cleared on redispatch, got %+v", reloaded.Decision)
+	}
+}
+
 // A2-05: a TabClose failure on the old, already-dead pane never blocks the
 // redispatch - there's nothing left on herdr's side to clean up either
 // way.

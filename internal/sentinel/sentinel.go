@@ -231,6 +231,9 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 	if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
 		task.Output = output
 	}
+	if newStatus == state.StatusBlocked {
+		task.Decision = soldier.ExtractDecision(task.Output)
+	}
 	if err := state.Save(projectRoot, task); err != nil {
 		return fmt.Errorf("persisting task %s: %w", task.ID, err)
 	}

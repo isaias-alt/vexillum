@@ -196,6 +196,28 @@ func TestStatus_PlainText_ListsTasks(t *testing.T) {
 	}
 }
 
+// Without --json, a blocked task's open question is surfaced on its own
+// line - not just the word "blocked" - so it mirrors the durable decision
+// vexillum status --json already carries in the task's "decision" field.
+func TestStatus_PlainText_ShowsBlockedQuestion(t *testing.T) {
+	projectDir, vexillumHome, projectRoot := statusProject(t)
+
+	saveTask(t, projectRoot, func(task *state.Task) {
+		task.Status = state.StatusBlocked
+		task.Decision = &state.Decision{Question: "Which auth library should I use?"}
+	})
+
+	var out, errOut bytes.Buffer
+	code := runStatus(projectDir, vexillumHome, false, &out, &errOut)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d\nstderr: %s", code, errOut.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("Which auth library should I use?")) {
+		t.Errorf("expected the open question surfaced in plain-text output, got:\n%s", out.String())
+	}
+}
+
 // A corrupt task file is surfaced as an error, not silently dropped or
 // papered over - the same posture state.List itself takes.
 func TestStatus_CorruptTaskFileIsAnError(t *testing.T) {

@@ -181,9 +181,83 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	}
 
 	task.Status = corroboratedStatus(projectRoot, task, status)
+	if task.Status == state.StatusBlocked {
+		task.Decision = ExtractDecision(task.Output)
+	}
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting final state: %w", err)
+	}
+	return task, nil
+}
+
+// AnswerBlocked delivers answer to a blocked task's still-open herdr pane -
+// reusing the exact same client.AgentPrompt submission path RunInHerdr uses
+// for a task's original prompt - records it against task.Decision, and
+// updates task's status from whatever the soldier does next. The caller
+// (internal/cli.Decide) is responsible for confirming task is actually
+// StatusBlocked before calling in; this only ever touches the live pane and
+// persists the result.
+//
+// Mirrors RunInHerdr's own quick-settle probe: a fast idle/done/blocked
+// settlement is reflected immediately, otherwise the task is left Running
+// for the sentinel to pick up the eventual settle - exactly as if this were
+// a fresh prompt submission, because functionally it is one.
+//
+// If the pane itself is gone (herdr's agent_not_running - the task was
+// actually Interrupted, not Blocked, and vexillum just hadn't observed that
+// yet), AnswerBlocked marks the task Interrupted itself rather than leaving
+// it stranded as Blocked forever: internal/sentinel never polls a Blocked
+// task, so nothing else would ever catch this. The caller should point the
+// general at 'vexillum redispatch' instead.
+func AnswerBlocked(projectRoot string, task state.Task, answer string, client herdr.Client) (state.Task, error) {
+	status, err := promptWithStalledRetry(client, task.HerdrAgentName, answer, quickSettleTimeoutMS)
+	if err != nil {
+		if herdr.IsNotRunning(err) {
+			task.Status = state.StatusInterrupted
+			task.UpdatedAt = time.Now().UTC()
+			if task.Output != "" {
+				task.Output += "\n\n"
+			}
+			task.Output += "[vexillum] this soldier's herdr pane was already gone by the time its answer could be delivered - marked interrupted. Use 'vexillum redispatch' instead."
+			if saveErr := state.Save(projectRoot, task); saveErr != nil {
+				return task, fmt.Errorf("persisting interrupted task (after: %v): %w", err, saveErr)
+			}
+			return task, fmt.Errorf("the soldier's herdr pane is gone (not something vexillum did) - marked interrupted, use 'vexillum redispatch' instead: %w", err)
+		}
+		if !herdr.IsTimeout(err) {
+			return task, fmt.Errorf("delivering answer to soldier: %w", err)
+		}
+		// Timeout: still working past the quick-settle probe - the normal
+		// case for real work, same as a fresh dispatch's own probe. err
+		// stays set so the status branch below leaves this task Running.
+	}
+
+	if output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines); readErr == nil {
+		task.Output = output
+	}
+
+	if task.Decision != nil {
+		task.Decision.Answer = answer
+		task.Decision.AnsweredAt = time.Now().UTC()
+	}
+
+	if err == nil {
+		task.Status = MapAgentStatus(status)
+		if task.Status == state.StatusBlocked {
+			// Settled straight back into another question - extract it
+			// the same way a fresh block does, so the general sees the
+			// new question, not the one they just answered.
+			if d := ExtractDecision(task.Output); d != nil {
+				task.Decision = d
+			}
+		}
+	} else {
+		task.Status = state.StatusRunning
+	}
+	task.UpdatedAt = time.Now().UTC()
+	if err := state.Save(projectRoot, task); err != nil {
+		return task, fmt.Errorf("persisting answered task: %w", err)
 	}
 	return task, nil
 }
