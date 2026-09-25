@@ -64,6 +64,20 @@ const (
 	claudeSkipPermissionsArg = "--dangerously-skip-permissions"
 )
 
+// claudeHerdrExtraArgs are the fixed claude CLI args every soldier's
+// interactive herdr session starts with (HerdrExtraArgs), on top of
+// claudeSkipPermissionsArg. Claude Code CLI's prompt-suggestions feature
+// can leave a suggested completion sitting in the pane's input box after
+// a soldier's turn ends - text nobody typed or submitted, easy for the
+// commander to mistake for something the soldier itself left behind.
+// It's disabled the same way firstmate disables it for its own workers
+// (CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false), just via the equivalent
+// CLI flag instead of an env var. This only applies to a soldier's own
+// interactive session - never the commander's, which the general starts
+// directly, not vexillum; and never the headless Command path, which has
+// no pane input box for a suggestion to sit in.
+var claudeHerdrExtraArgs = []string{claudeSkipPermissionsArg, "--prompt-suggestions", "false"}
+
 // claudeAllowedModels and claudeAllowedEfforts are the values vexillum
 // accepts for a soldier's --model/--effort flags, straight from `claude
 // --help` on the supported Claude Code CLI version. vexillum never
@@ -128,7 +142,7 @@ func (ClaudeHarness) HerdrAgentKind() string {
 }
 
 func (ClaudeHarness) HerdrExtraArgs() []string {
-	return []string{claudeSkipPermissionsArg}
+	return append([]string{}, claudeHerdrExtraArgs...)
 }
 
 // ValidateModelEffort checks model and effort against defaultHarness's
