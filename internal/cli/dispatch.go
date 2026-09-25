@@ -28,10 +28,14 @@ model and effort" section for how to choose.
 
 Runs a real, interactive Claude Code session in a herdr pane, inside a
 fresh git worktree isolated from this project's own working tree, with
---dangerously-skip-permissions (the worktree isolation bounds the blast
-radius; nothing reaches the project's real history until 'vexillum land'
-is explicitly approved). Requires HERDR_WORKSPACE_ID - run this from
-inside a herdr-managed pane.
+--dangerously-skip-permissions: the soldier has full host access under
+the invoking OS user (no container, chroot, or other sandbox) - the
+worktree only bounds where its commits land, not what it can read,
+write, or exfiltrate elsewhere on the machine. Nothing reaches the
+project's real history until 'vexillum land' is explicitly approved;
+never dispatch against a prompt, repository, or machine where reading
+sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID -
+run this from inside a herdr-managed pane.
 
 Returns quickly: it only waits out a short quick-settle probe, not the
 soldier's whole task. A trivial prompt may finish within that window and

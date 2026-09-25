@@ -25,7 +25,7 @@ the current project.
 // .claude/rules/vexillum.md. It lives in internal/scaffold since
 // "vexillum upgrade" (upgrade.go) needs it too; kept as a package-level
 // name here for this package's own tests.
-const productVexillumRule = scaffold.Template
+var productVexillumRule = scaffold.VexillumCommanderRules
 
 const (
 	sentinelHookCommand       = scaffold.SentinelHookCommand

@@ -6,6 +6,8 @@ Este archivo gobierna cómo un agente de código (Claude Code) trabaja en el rep
 
 Orquestador de agentes de código por CLI, escrito en Go. Le hablás a un agente coordinador (commander) y despacha subagentes (soldiers) en paralelo, cada uno aislado en un git worktree (camp), que devuelven un PR (mission) o un reporte (scout). Un componente de supervisión (sentinel) vigila a los soldiers y despierta al commander solo cuando hace falta. Estado y config en `~/.vexillum/`.
 
+Este repositorio no es solo el binario Go: también contiene `site/`, una app Next.js separada (marketing/docs, con su propio `package.json` y `pnpm-lock.yaml`) gobernada por `site/AGENTS.md`, y `skills/muster/`, un skill de Claude Code first-party que se distribuye dentro de este repo y que `vexillum doctor` reporta como instalado o no (ver `skills/muster/SKILL.md`). Las reglas de este archivo, en particular la sección siguiente, son sobre el binario Go; no aplican a esos dos.
+
 ## Reglas de arquitectura que no se relitigan
 
 No las cambies ni propongas alternativas sin que el general lo pida explícitamente.

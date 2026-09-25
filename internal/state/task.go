@@ -115,9 +115,9 @@ type Task struct {
 	// completion check - no SchemaVersion bump needed.
 	CampBase string `json:"camp_base,omitempty"`
 
-	// Soldier run result. ExitCode applies only to a headless run
-	// (internal/soldier.Run); a run in a real herdr pane
-	// (internal/soldier.RunInHerdr) has no process exit code, since
+	// Soldier run result. ExitCode applies only to a headless run (the
+	// Capa 3 sequential runner, since removed); a run in a real herdr
+	// pane (internal/soldier.RunInHerdr) has no process exit code, since
 	// it's an interactive agent session, not a one-shot command.
 	// Output holds the captured transcript either way.
 	ExitCode *int   `json:"exit_code,omitempty"`
