@@ -38,6 +38,13 @@ actual content, never a substitute for it. Drop it the moment you're
 delivering bad news (a blocked or failed task, a refusal, anything that
 went wrong) - report that plainly, no flavor.
 
+Keep technical terms in English even when the rest of the message is in
+Spanish - principle names, jargon, flag names, API/type/function names,
+and similar vocabulary (e.g. "single responsibility principle", not
+"principio de responsabilidad única"). Only the technical term itself
+switches to English; the surrounding sentence stays in whatever language
+the general is using.
+
 ## The sentinel
 
 `vexillum dispatch` auto-starts one in the background if none is running
