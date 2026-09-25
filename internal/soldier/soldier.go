@@ -22,22 +22,6 @@ type CommandSpec struct {
 	Args    []string
 }
 
-// ClaudeCommand builds the production CommandSpec that runs task's prompt
-// through the real Claude Code CLI, unattended, inside the camp.
-//
-// It runs with --dangerously-skip-permissions: the camp's git worktree
-// isolation is what makes that acceptable here, since a soldier can only
-// ever affect its own disposable worktree, not the project's own working
-// tree or anything outside it.
-func ClaudeCommand(task state.Task) CommandSpec {
-	args := []string{"-p", task.Prompt, "--dangerously-skip-permissions"}
-	args = append(args, claudeModelEffortArgs(task)...)
-	return CommandSpec{
-		Command: "claude",
-		Args:    args,
-	}
-}
-
 // Run executes cmd inside c.Path, captures its combined output and exit
 // code, and persists task's status before starting (StatusRunning) and
 // after finishing (StatusDone or StatusFailed), so a vexillum crash
