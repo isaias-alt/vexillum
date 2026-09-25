@@ -13,9 +13,6 @@ import (
 )
 
 const (
-	herdrAgentKind = "claude"
-	herdrAgentArg  = "--dangerously-skip-permissions"
-
 	// quickSettleTimeoutMS bounds a short probe, not the soldier's real
 	// work budget: "did this settle fast" (a trivial prompt), not "wait
 	// for it to finish". A real task almost always outlives this and
@@ -90,7 +87,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		return task, fmt.Errorf("persisting running state: %w", err)
 	}
 
-	agentName, err = startAgent(client, agentName, task.ID, paneID, claudeModelEffortArgs(task))
+	agentName, err = startAgent(client, agentName, task.ID, paneID, defaultHarness.ModelEffortArgs(task))
 	if err != nil {
 		return failHerdrTask(projectRoot, task, err)
 	}
@@ -409,8 +406,8 @@ func disambiguatedName(candidateName, taskID string) string {
 }
 
 func startAgentOnce(client herdr.Client, name, paneID string, extraArgs []string) error {
-	args := append([]string{herdrAgentArg}, extraArgs...)
-	err := client.AgentStart(name, herdrAgentKind, paneID, args...)
+	args := append(defaultHarness.HerdrExtraArgs(), extraArgs...)
+	err := client.AgentStart(name, defaultHarness.HerdrAgentKind(), paneID, args...)
 	if err == nil {
 		return nil
 	}
