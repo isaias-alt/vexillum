@@ -7,6 +7,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -77,6 +78,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	task.CampSlot = c.Slot
 	task.CampPath = c.Path
 	task.CampBranch = c.Branch
+	task.CampBase = c.Base
 	task.HerdrWorkspaceID = workspaceID
 	task.HerdrTabID = tabID
 	task.HerdrPaneID = paneID
@@ -137,6 +139,13 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		// suffix on every re-dispatch.
 		promptText += scoutReportInstructions(report.Path(projectRoot, task.HerdrAgentName, task.ID))
 	}
+	// Every soldier - mission or scout - gets the pause-declaration
+	// instructions, same reasoning as above about never mutating
+	// task.Prompt itself: background-and-pause is legitimate for either
+	// kind (internal/pause's package doc), and internal/sentinel refuses
+	// to trust an idle turn as done without either this or the kind's own
+	// strong completion signal.
+	promptText += pauseInstructions(pause.Path(projectRoot, task.HerdrAgentName))
 	status, err := promptWithStalledRetry(client, agentName, promptText, quickSettleTimeoutMS)
 	if err != nil {
 		if herdr.IsTimeout(err) {
@@ -237,6 +246,24 @@ func scoutReportInstructions(reportPath string) string {
 		reportPath +
 		"\n\nCreate any missing parent directories yourself. This report is your deliverable: " +
 		"'vexillum release' will refuse to release your camp without it."
+}
+
+// pauseInstructions tells a soldier (mission or scout) how to declare
+// that it's deliberately pausing its own turn to wait on something of its
+// own - a background job it started, a validation run still in flight -
+// instead of blocking on it with a polling loop. Without this, vexillum's
+// sentinel can't tell that apart from the turn simply being done: see
+// internal/pause's package doc for why that ambiguity matters and why a
+// file is what resolves it, never the turn's own prose.
+func pauseInstructions(pausePath string) string {
+	return "\n\n---\n\nIf you need to pause your own turn on purpose to wait for something of your own " +
+		"(a background job you started, a validation run still in flight) instead of polling for it, " +
+		"write that BEFORE you end your turn as a file at:\n\n  " +
+		pausePath +
+		"\n\nFirst line: \"paused: <why>\". Optional second line: \"until: <when you expect it to resolve>\".\n" +
+		"This is the only way vexillum knows you're deliberately waiting rather than finished - without it, " +
+		"an idle turn with no finished deliverable is treated as unconfirmed, not successful. Only use this " +
+		"for a real external wait, not an ordinary pause between steps."
 }
 
 // herdrAgentName builds a readable candidate name for the soldier's
