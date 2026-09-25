@@ -5,7 +5,17 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/soldier"
+	"github.com/isaias-alt/vexillum/internal/state"
 )
+
+func newTask(t *testing.T) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindMission, "say hello")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	return task
+}
 
 func TestValidateModelEffort(t *testing.T) {
 	cases := []struct {

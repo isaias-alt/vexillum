@@ -95,8 +95,8 @@ func TestRecordHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadConfig (after RecordHash): %v", err)
 	}
-	if cfg.VexillumRuleHash != hashContent(Template) {
-		t.Errorf("expected the recorded hash to match Template's own hash, got %q", cfg.VexillumRuleHash)
+	if cfg.VexillumRuleHash != hashContent(VexillumCommanderRules) {
+		t.Errorf("expected the recorded hash to match VexillumCommanderRules' own hash, got %q", cfg.VexillumRuleHash)
 	}
 }
 

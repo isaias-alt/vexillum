@@ -6,6 +6,12 @@ import (
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
+// CommandSpec is the process a Harness builds to run a soldier's prompt.
+type CommandSpec struct {
+	Command string
+	Args    []string
+}
+
 // Harness abstracts the agent CLI vexillum drives to carry out a
 // soldier's prompt. It exists so a future harness beyond Claude Code
 // (Pi, deferred past v1 - AGENTS.md's "Harness único: Claude Code en la
@@ -58,9 +64,11 @@ type ClaudeHarness struct{}
 const (
 	claudeHerdrAgentKind = "claude"
 
-	// claudeSkipPermissionsArg is safe here specifically because the
-	// camp's git worktree isolation bounds what the soldier can affect -
-	// see Command's and RunInHerdr's own doc comments.
+	// claudeSkipPermissionsArg gives the soldier full host access under
+	// the invoking OS user - there is no container, chroot, or other
+	// OS-level sandbox bounding it. See Command's and RunInHerdr's own
+	// doc comments for what that actually means and what the real
+	// safety control is.
 	claudeSkipPermissionsArg = "--dangerously-skip-permissions"
 )
 
@@ -124,10 +132,16 @@ func (ClaudeHarness) ModelEffortArgs(task state.Task) []string {
 // Command builds the production CommandSpec that runs task's prompt
 // through the real Claude Code CLI, unattended, inside the camp.
 //
-// It runs with --dangerously-skip-permissions: the camp's git worktree
-// isolation is what makes that acceptable here, since a soldier can only
-// ever affect its own disposable worktree, not the project's own working
-// tree or anything outside it.
+// It runs with --dangerously-skip-permissions: a soldier has full host
+// access under the invoking OS user - there is no container, chroot, or
+// other OS-level sandbox. The camp's git worktree isolation only bounds
+// where a soldier's commits can land, not what its process can read,
+// write, or exfiltrate elsewhere on the machine (credentials, SSH keys,
+// a sibling project's .env, etc.). The real safety control is the
+// landing approval step (camp.Land / vexillum land): nothing a soldier
+// does reaches the project's real history until a human explicitly
+// approves it. Never dispatch a soldier against a prompt, repository, or
+// machine where reading sensitive host state would be a problem.
 func (h ClaudeHarness) Command(task state.Task) CommandSpec {
 	args := []string{"-p", task.Prompt, claudeSkipPermissionsArg}
 	args = append(args, h.ModelEffortArgs(task)...)
