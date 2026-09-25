@@ -24,6 +24,7 @@ type fakeHerdr struct {
 	tabCloseErr   error
 
 	lastAgentArgs []string
+	tabClosed     bool
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
@@ -40,7 +41,10 @@ func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error
 	return f.promptStatus, nil
 }
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error) { return f.readOutput, nil }
-func (f *fakeHerdr) TabClose(tabID string) error                      { return f.tabCloseErr }
+func (f *fakeHerdr) TabClose(tabID string) error {
+	f.tabClosed = true
+	return f.tabCloseErr
+}
 
 // refuseInsideVexillumHome catches running a project command from
 // inside a camp's own worktree - a real bug caught live: a commander
@@ -200,14 +204,11 @@ func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
 	}
 }
 
-// vexillum land / vexillum release resolve the camp from the task's
-// persisted slot and delegate to camp.Land / soldier.ReleaseInHerdr - the
-// safety logic itself is covered in internal/camp and internal/soldier;
-// this just checks the CLI wiring end to end.
-func TestRunLandAndRunRelease(t *testing.T) {
-	project := initDispatchTestProject(t)
-	home := t.TempDir()
-
+// landTestMission acquires a camp for a fresh mission task, commits one
+// change to it, and persists the task - the shape a mission ready to land
+// has. Returns the task and its camp.
+func landTestMission(t *testing.T, project, home string) (state.Task, camp.Camp) {
+	t.Helper()
 	task, err := state.New(state.KindMission, "do a thing")
 	if err != nil {
 		t.Fatalf("state.New: %v", err)
@@ -241,17 +242,143 @@ func TestRunLandAndRunRelease(t *testing.T) {
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
+	return task, c
+}
 
+// A successful land fast-forwards the base branch AND automatically
+// releases the mission's camp - the operator no longer chains a manual
+// 'vexillum release' afterward. Verified two ways: the herdr pane got
+// closed (soldier.ReleaseInHerdr's own side effect), and the pool slot
+// is no longer leased so a second 'vexillum release' on the same task has
+// nothing left to do.
+func TestRunLand_AutoReleasesCamp(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task, _ := landTestMission(t, project, home)
+
+	client := &fakeHerdr{}
 	var out bytes.Buffer
-	if code := runLand(project, home, task.ID, &out, &out); code != 0 {
+	if code := runLand(project, home, t.TempDir(), task.ID, client, &out, &out); code != 0 {
 		t.Fatalf("runLand: expected exit 0, got %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "landed:") || !strings.Contains(out.String(), "released:") {
+		t.Errorf("expected output to report both landing and releasing, got: %s", out.String())
+	}
+	if !client.tabClosed {
+		t.Error("expected land to close the soldier's herdr pane via the release path")
+	}
+
+	// The camp is already released - a second, independent release call
+	// for the same task must find nothing left to do.
+	out.Reset()
+	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+	if code == 0 {
+		t.Fatalf("expected a follow-up 'vexillum release' to fail, camp was already released; got exit 0: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "not leased") {
+		t.Errorf("expected the refusal to say the slot is no longer leased, got: %s", out.String())
+	}
+}
+
+// A land that's refused (dirty checkout, or a diverged branch) never
+// touches the camp: no automatic release runs, the pane is never closed,
+// and the camp remains leased and landable/releasable once the underlying
+// problem is fixed.
+func TestRunLand_RefusalLeavesCampUntouched(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task, _ := landTestMission(t, project, home)
+
+	// Make the project's own checkout dirty so camp.Land refuses before
+	// ever attempting the merge.
+	if err := os.WriteFile(filepath.Join(project, "dirty.txt"), []byte("uncommitted\n"), 0o644); err != nil {
+		t.Fatalf("writing dirty file: %v", err)
 	}
 
 	client := &fakeHerdr{}
-	out.Reset()
-	if code := runRelease(project, home, t.TempDir(), task.ID, false, client, &out, &out); code != 0 {
-		t.Fatalf("runRelease: expected exit 0, got %d: %s", code, out.String())
+	var out bytes.Buffer
+	code := runLand(project, home, t.TempDir(), task.ID, client, &out, &out)
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit for a refused land, got 0: %s", out.String())
 	}
+	if strings.Contains(out.String(), "released:") {
+		t.Errorf("a refused land must never report a release, got: %s", out.String())
+	}
+	if client.tabClosed {
+		t.Error("a refused land must never close the soldier's herdr pane")
+	}
+
+	// The camp is still leased and untouched: releasing it directly still
+	// refuses too, since the mission's commit never actually landed.
+	out.Reset()
+	code = runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+	if code == 0 {
+		t.Fatalf("expected release to still refuse an un-landed camp, got exit 0: %s", out.String())
+	}
+}
+
+// The rare case: the fast-forward merge itself succeeds, but the
+// automatic release that follows fails (here, because the soldier left
+// uncommitted junk in its own camp worktree - camp.Land only checks the
+// PROJECT checkout is clean, not the camp's). land must report both
+// outcomes plainly - the merge is not undone, and the failure is not
+// swallowed - and leave the camp for a manual 'vexillum release' to
+// retry.
+func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task, c := landTestMission(t, project, home)
+
+	if err := os.WriteFile(filepath.Join(c.Path, "leftover.txt"), []byte("oops\n"), 0o644); err != nil {
+		t.Fatalf("writing uncommitted leftover file in the camp: %v", err)
+	}
+
+	client := &fakeHerdr{}
+	var out bytes.Buffer
+	code := runLand(project, home, t.TempDir(), task.ID, client, &out, &out)
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit when the automatic release fails, got 0: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "landed:") {
+		t.Errorf("expected the merge success to still be reported, got: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "automatic release failed") {
+		t.Errorf("expected the release failure to be reported plainly, got: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "vexillum release "+task.ID) {
+		t.Errorf("expected land to point the operator at a manual 'vexillum release %s', got: %s", task.ID, out.String())
+	}
+	if client.tabClosed {
+		t.Error("a failed release must never close the herdr pane")
+	}
+
+	// Verify the merge genuinely landed despite the release failure.
+	head := runGitOutput(t, project, "rev-parse", "HEAD")
+	campHead := runGitOutput(t, c.Path, "rev-parse", "HEAD")
+	if head != campHead {
+		t.Errorf("expected the project checkout to have fast-forwarded to the camp's HEAD despite the release failure, got project=%s camp=%s", head, campHead)
+	}
+
+	// Clean up the leftover file and confirm a manual release now
+	// succeeds, proving the camp was left in a recoverable state.
+	if err := os.Remove(filepath.Join(c.Path, "leftover.txt")); err != nil {
+		t.Fatalf("removing leftover file: %v", err)
+	}
+	out.Reset()
+	if code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out); code != 0 {
+		t.Fatalf("expected the manual follow-up release to succeed once the camp is clean, got %d: %s", code, out.String())
+	}
+}
+
+func runGitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v (in %s): %v\n%s", args, dir, err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // newReleaseTestScoutTask creates a fresh camp (clean, trivially "landed"

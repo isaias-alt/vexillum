@@ -163,7 +163,7 @@ func TestRunLand_ShippedTaskMergesPR(t *testing.T) {
 	t.Setenv("PATH", ghStub(t, healthyPRView))
 
 	var out bytes.Buffer
-	code := runLand(projectDir, home, task.ID, &out, &out)
+	code := runLand(projectDir, home, t.TempDir(), task.ID, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
