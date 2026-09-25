@@ -79,6 +79,11 @@ func parseReleaseArgs(args []string) (taskID string, force bool, err error) {
 }
 
 func runRelease(projectDir, vexillumHome, homeDir, taskID string, force bool, client herdr.Client, stdout, stderr io.Writer) int {
+	if err := state.ValidateID(taskID); err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
 	projectRoot, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
 		fmt.Fprintln(stderr, "vexillum:", err)
