@@ -261,7 +261,17 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 	task.CampBranch = c.Branch
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
+		// The slot camp.Acquire just leased above is durable in pool.json
+		// regardless of whether this save succeeds - if it's left leased
+		// with no task file ever referencing it, that's the exact leak
+		// this function exists to prevent, just moved one step earlier.
+		// The worktree is still fresh (no commits, clean), so Release's
+		// landed-check passes trivially - give the slot back rather than
+		// stranding it.
 		fmt.Fprintf(stderr, "vexillum: persisting acquired camp: %v\n", err)
+		if releaseErr := camp.Release(c, task.ID); releaseErr != nil {
+			fmt.Fprintf(stderr, "vexillum: releasing camp slot %d after failed save: %v\n", c.Slot, releaseErr)
+		}
 		return 1
 	}
 
@@ -279,13 +289,18 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 	}
 
 	if runErr != nil {
-		if result.Status != state.StatusFailed {
-			// RunInHerdr hit an error before reaching any of its own save
-			// points (e.g. CreateTab failed) - result still carries
-			// whatever status it was handed. Force it to Failed and
+		if result.HerdrTabID == "" {
+			// RunInHerdr never got past CreateTab (the only failure path
+			// that leaves HerdrTabID unset - every other one, e.g.
+			// startAgent or the final save, sets it first) - so it never
+			// reached any of its own save points, and the only persisted
+			// state for this task is the one above. Force it to Failed and
 			// persist so this task is left in a normal, releasable state
-			// instead of stuck Pending/Running with a camp slot nothing
-			// else can find its way back to.
+			// instead of stuck Pending with a camp slot nothing else can
+			// find its way back to. A later failure (after RunInHerdr's own
+			// saves already ran) is left as RunInHerdr recorded it - it
+			// already reflects the task's real outcome, and overwriting it
+			// here would discard that.
 			result.Status = state.StatusFailed
 			result.Output = runErr.Error()
 			result.UpdatedAt = time.Now().UTC()

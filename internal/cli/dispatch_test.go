@@ -205,6 +205,140 @@ func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
 	}
 }
 
+// chmodBeforePromptHerdr wraps fakeHerdr to make dir (the project's tasks
+// directory) read-only right as the prompt is submitted - after
+// RunInHerdr's own early saves (persisting running state, persisting
+// pre-prompt state) have already succeeded normally, but before its
+// final save (herdr_run.go, right after AgentPrompt returns). Used to
+// reproduce a final save failing after a real outcome was already
+// computed, without touching the earlier saves the task under test
+// depends on succeeding.
+type chmodBeforePromptHerdr struct {
+	*fakeHerdr
+	dir string
+}
+
+func (c *chmodBeforePromptHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
+	if err := os.Chmod(c.dir, 0o555); err != nil {
+		return "", err
+	}
+	return c.fakeHerdr.AgentPrompt(name, text, timeoutMS)
+}
+
+// Regression test for a narrower bug the review step caught in the
+// camp-slot-leak fix itself: forcing a failed RunInHerdr result to
+// StatusFailed must only happen for the specific case it's meant for
+// (CreateTab failing before RunInHerdr ever saves anything of its own),
+// never for a task that reached a real outcome (Done) whose unrelated
+// final save happened to fail - overwriting that would discard the
+// soldier's actual result in favor of a fabricated Failed status.
+func TestRunDispatch_FinalSaveFails_DoesNotOverwriteRealOutcome(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, permission checks don't apply")
+	}
+
+	project := initDispatchTestProject(t)
+	if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
+		t.Fatalf("writing local config: %v", err)
+	}
+	home := t.TempDir()
+
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	tasksDir := filepath.Join(projectRoot, "tasks")
+	t.Cleanup(func() { _ = os.Chmod(tasksDir, 0o755) })
+
+	client := &chmodBeforePromptHerdr{
+		fakeHerdr: &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done", readOutput: "did the thing"},
+		dir:       tasksDir,
+	}
+
+	var out bytes.Buffer
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", client, &out, &out)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit when the final save fails, got 0: %s", out.String())
+	}
+	if err := os.Chmod(tasksDir, 0o755); err != nil {
+		t.Fatalf("restoring tasks dir permissions: %v", err)
+	}
+
+	tasks, err := state.List(projectRoot)
+	if err != nil {
+		t.Fatalf("state.List: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected exactly 1 persisted task, got %d", len(tasks))
+	}
+	if got := tasks[0].Status; got != state.StatusRunning {
+		t.Errorf("expected the task's last successfully persisted status (Running) to survive a failed final save, got %s - it must never be overwritten to Failed just because an unrelated later save failed", got)
+	}
+}
+
+// Regression test for a review finding on the camp-slot-leak fix itself:
+// the state.Save call it adds right after camp.Acquire can itself fail,
+// and if that leaves the just-leased slot durably marked leased in
+// pool.json with no task file ever written, the exact bug this fix exists
+// to close just reappears one step earlier. Verifies the slot is instead
+// given back to the pool: a dispatch that hits this failure must not
+// leave the pool's first slot permanently unavailable to the very next
+// dispatch.
+func TestRunDispatch_PersistingAcquiredCampFails_SlotIsReleased(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, permission checks don't apply")
+	}
+
+	project := initDispatchTestProject(t)
+	if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
+		t.Fatalf("writing local config: %v", err)
+	}
+	home := t.TempDir()
+
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	tasksDir := filepath.Join(projectRoot, "tasks")
+	if err := os.MkdirAll(tasksDir, 0o755); err != nil {
+		t.Fatalf("pre-creating tasks dir: %v", err)
+	}
+	if err := os.Chmod(tasksDir, 0o555); err != nil {
+		t.Fatalf("chmod tasks dir read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(tasksDir, 0o755) })
+
+	var setupOut bytes.Buffer
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", &fakeHerdr{}, &setupOut, &setupOut)
+	if code == 0 {
+		t.Fatal("expected non-zero exit when persisting the acquired camp fails")
+	}
+
+	if err := os.Chmod(tasksDir, 0o755); err != nil {
+		t.Fatalf("restoring tasks dir permissions: %v", err)
+	}
+
+	tasks, err := state.List(projectRoot)
+	if err != nil {
+		t.Fatalf("state.List: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Fatalf("expected no task file to exist (the save that would have written it failed), got %d", len(tasks))
+	}
+
+	// If slot 1 leaked (left leased with no task to ever release it), this
+	// second, otherwise-ordinary dispatch would be forced onto a fresh
+	// slot 2 instead of reusing it.
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done", readOutput: "did the thing"}
+	var out bytes.Buffer
+	if code := runDispatch(project, home, "w1", "do another thing", state.KindMission, "", "", client, &out, &out); code != 0 {
+		t.Fatalf("expected the follow-up dispatch to succeed, got exit %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "camp_slot=1 ") {
+		t.Errorf("expected the follow-up dispatch to reuse released slot 1, got: %s", out.String())
+	}
+}
+
 // Regression test for the camp-slot leak: if CreateTab fails after
 // camp.Acquire already durably leased a pool slot to the task, the task
 // must still be loadable (with that camp slot recorded) and releasable -
