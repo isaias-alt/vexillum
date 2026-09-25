@@ -33,11 +33,10 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
-	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
-	"github.com/isaias-alt/vexillum/internal/report"
+	"github.com/isaias-alt/vexillum/internal/settle"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -246,7 +245,7 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 // package doc):
 //
 //  1. A strong completion signal - a scout's internal/report file, or a
-//     mission's own commit ahead of its camp's base (hasCompletionSignal) -
+//     mission's own commit ahead of its camp's base (settle.HasCompletionSignal) -
 //     settles the task Done, same as before this package read either
 //     signal.
 //  2. Otherwise, a currently valid declared pause (internal/pause.Active)
@@ -258,7 +257,7 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 //
 // Returns whether it settled the task (and so recorded a wake).
 func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (bool, error) {
-	strong, reportPath, err := hasCompletionSignal(projectRoot, task)
+	strong, reportPath, err := settle.HasCompletionSignal(projectRoot, task)
 	if err != nil {
 		return false, err
 	}
@@ -281,36 +280,6 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	}
 
 	return handleIdleUnconfirmed(projectRoot, task)
-}
-
-// hasCompletionSignal reports whether task already has hard proof of
-// completion: a scout's internal/report file, or a mission's own commit
-// ahead of its camp's base (internal/camp.HasNewCommits). A mission
-// missing CampPath/CampBase (a task dispatched before this field existed,
-// or one whose camp acquisition never completed) or a camp.HasNewCommits
-// error (base ref moved, camp worktree gone) reports no signal rather
-// than guessing - a single unreadable camp must never stop the sentinel
-// from reconciling every other task (tickProject's own per-task
-// isolation), and "can't prove it" is treated the same as "not proven".
-func hasCompletionSignal(projectRoot string, task state.Task) (bool, string, error) {
-	switch task.Kind {
-	case state.KindScout:
-		if report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
-			return true, report.Path(projectRoot, task.HerdrAgentName, task.ID), nil
-		}
-		return false, "", nil
-	case state.KindMission:
-		if task.CampPath == "" || task.CampBase == "" {
-			return false, "", nil
-		}
-		has, err := camp.HasNewCommits(task.CampPath, task.CampBase)
-		if err != nil {
-			return false, "", nil
-		}
-		return has, "", nil
-	default:
-		return false, "", nil
-	}
 }
 
 // settleDone persists task's corroborated Done transition and records a

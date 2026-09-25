@@ -10,6 +10,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
+	"github.com/isaias-alt/vexillum/internal/settle"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -174,7 +175,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		task.Output = output
 	}
 
-	task.Status = MapAgentStatus(status)
+	task.Status = corroboratedStatus(projectRoot, task, status)
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
 		return task, fmt.Errorf("persisting final state: %w", err)
@@ -330,6 +331,40 @@ func MapAgentStatus(status string) state.Status {
 	default:
 		return state.StatusFailed
 	}
+}
+
+// corroboratedStatus maps liveStatus the same way MapAgentStatus does,
+// but never trusts an apparent Done on its own - idle only ever means the
+// turn stopped responding, never why (internal/pause's package doc).
+// Mirrors internal/sentinel's own settleIdleTask, via the shared
+// internal/settle.HasCompletionSignal: a scout's report file or a
+// mission's own commit ahead of its camp's base settles Done as before;
+// otherwise a currently valid declared pause (internal/pause.Active)
+// means the soldier is deliberately waiting on something of its own, not
+// finished - StatusUnconfirmed, the same verdict the sentinel's own
+// polling loop would reach for this task on its next tick, reached here
+// instead so dispatch's own quick-settle can't race ahead of it and
+// record a false Done first (the bug: a soldier with a valid pause file
+// and no new commits used to be written Done straight out of dispatch,
+// before the sentinel ever got a chance to check). A mapped
+// Blocked/Running/Failed needs no corroboration and is returned
+// untouched, so the common case (a real completion, or real ongoing
+// work) stays exactly as fast as before this existed.
+func corroboratedStatus(projectRoot string, task state.Task, liveStatus string) state.Status {
+	mapped := MapAgentStatus(liveStatus)
+	if mapped != state.StatusDone {
+		return mapped
+	}
+
+	if strong, _, err := settle.HasCompletionSignal(projectRoot, task); err == nil && strong {
+		return state.StatusDone
+	}
+
+	if _, active, err := pause.Active(projectRoot, task.HerdrAgentName, time.Now()); err == nil && active {
+		return state.StatusUnconfirmed
+	}
+
+	return state.StatusDone
 }
 
 func failHerdrTask(projectRoot string, task state.Task, cause error) (state.Task, error) {

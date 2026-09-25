@@ -2,6 +2,8 @@ package soldier_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -774,5 +776,109 @@ func TestRunInHerdr_CreateTabFails(t *testing.T) {
 
 	if _, loadErr := state.Load(testProjectRoot(t, home), task.ID); loadErr == nil {
 		t.Error("expected no task state to be persisted when the tab was never created")
+	}
+}
+
+func writeAndCommit(t *testing.T, dir, name, content, message string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", name, err)
+	}
+	runGitT(t, dir, "add", name)
+	runGitT(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", message)
+}
+
+// newEmptyMissionCamp builds a standalone git "camp" (RunInHerdr only ever
+// reads a git worktree by the path/base it's given, it never acquires one
+// itself) whose branch carries no commit ahead of its base ("main") - the
+// same "no completion signal" shape internal/sentinel's own tests use
+// (newEmptyMissionCamp there), mirrored here so this package's quick-settle
+// corroboration test exercises the real internal/camp.HasNewCommits path
+// instead of faking it via an empty CampBase.
+func newEmptyMissionCamp(t *testing.T) (campPath, base string) {
+	t.Helper()
+	dir := t.TempDir()
+	runGitT(t, dir, "init", "-q")
+	runGitT(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+	writeAndCommit(t, dir, "README.md", "hi\n", "initial commit")
+	runGitT(t, dir, "checkout", "-q", "-b", "vexillum/task")
+	return dir, "main"
+}
+
+func writePauseFile(t *testing.T, proj, agentName, content string) {
+	t.Helper()
+	if err := os.MkdirAll(pause.Dir(proj), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(pause.Path(proj, agentName), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+// The motivating E2E bug, reproduced exactly: a soldier that declares a
+// real, currently valid pause (internal/pause) before its turn goes idle,
+// with no new commit in its camp, must not be recorded as Done straight
+// out of dispatch's own quick-settle probe. Before this test existed,
+// RunInHerdr wrote task.Status = MapAgentStatus(status) unconditionally -
+// it never consulted internal/pause or internal/camp.HasNewCommits at
+// all, so it settled this exact case Done and won the race against
+// internal/sentinel's own polling loop, which would have refused to. Both
+// paths now share the same corroboration (internal/settle,
+// internal/pause.Active), reached here instead of on the sentinel's next
+// tick.
+func TestRunInHerdr_DeclaredPauseNeverSettlesDoneFromQuickSettle(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	campPath, base := newEmptyMissionCamp(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: campPath, Slot: 1, Branch: "vexillum/" + task.ID, Base: base}
+
+	proj := testProjectRoot(t, home)
+	writePauseFile(t, proj, "vx-do-the-thing", "paused: waiting on my own e2e validation run\nuntil: the run finishes\n")
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "idle"}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status == state.StatusDone {
+		t.Fatalf("expected the declared pause (with no new commits) to block a Done settle, got status %s", got.Status)
+	}
+	if got.Status != state.StatusUnconfirmed {
+		t.Errorf("expected status unconfirmed (the same verdict internal/sentinel's own corroboration would reach), got %s", got.Status)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusUnconfirmed {
+		t.Errorf("expected persisted status unconfirmed, got %s", persisted.Status)
+	}
+}
+
+// The normal completion case must stay fast and unaffected: a mission
+// with a real commit ahead of its camp's base settles Done from the
+// quick-settle probe exactly as before, regardless of whether a pause
+// file also happens to exist (a soldier can legitimately declare a pause
+// earlier in its own turn and still go on to finish for real).
+func TestRunInHerdr_RealCompletionStillSettlesDoneFromQuickSettle(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	campPath, base := newEmptyMissionCamp(t)
+	writeAndCommit(t, campPath, "output.txt", "soldier's work\n", "soldier's work")
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: campPath, Slot: 1, Branch: "vexillum/" + task.ID, Base: base}
+
+	proj := testProjectRoot(t, home)
+	writePauseFile(t, proj, "vx-do-the-thing", "paused: an earlier wait, already resolved\n")
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected a real completion (new commit ahead of base) to still settle done, got %s", got.Status)
 	}
 }
