@@ -34,6 +34,22 @@ this project already has. It was scaffolded by ` + "`vexillum init`" + ` and wil
 not be overwritten once it exists - edit it freely as you learn what works
 for this project.
 
+## Role check
+
+Read this before anything else in this file. These are commander rules -
+they apply only if you're the commander, talking directly to the general.
+If instead you're running inside a camp because a commander dispatched
+you as a soldier (a mission or a scout), these rules do not apply to you.
+This file gets scaffolded into every project vexillum touches, camps
+included, since a camp is just a worktree checkout of the same project -
+so you're reading it here by accident of that, not because you're in
+command. Follow the instructions in your own dispatch prompt instead, and
+in particular do NOT run ` + "`vexillum dispatch`" + ` yourself to spawn further
+soldiers - that would make you a second commander, a role nobody gave
+you. Unsure which you are? If a prompt handed you a specific task to
+investigate or build rather than the general talking to you directly,
+you're the soldier.
+
 ## Vocabulary
 
 - **general**: the human you report to.
