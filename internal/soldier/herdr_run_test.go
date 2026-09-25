@@ -168,8 +168,9 @@ func TestRunInHerdr_Success(t *testing.T) {
 	if len(client.promptCalls) != 1 || client.promptCalls[0] != task.Prompt {
 		t.Errorf("expected the task's prompt to be submitted once, got %v", client.promptCalls)
 	}
-	if len(client.startArgs) != 1 || len(client.startArgs[0]) != 1 || client.startArgs[0][0] != "--dangerously-skip-permissions" {
-		t.Errorf("expected the soldier to start with --dangerously-skip-permissions, got %v", client.startArgs)
+	wantBaseArgs := []string{"--dangerously-skip-permissions", "--prompt-suggestions", "false"}
+	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], wantBaseArgs) {
+		t.Errorf("expected the soldier to start with %v, got %v", wantBaseArgs, client.startArgs)
 	}
 	wantEnv := "CHROME_DEVTOOLS_AXI_SESSION=vx-" + task.ID
 	if len(client.createTabEnv) != 1 || len(client.createTabEnv[0]) != 1 || client.createTabEnv[0][0] != wantEnv {
@@ -201,7 +202,7 @@ func TestRunInHerdr_PassesModelAndEffort(t *testing.T) {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 
-	want := []string{"--dangerously-skip-permissions", "--model", "haiku", "--effort", "low"}
+	want := []string{"--dangerously-skip-permissions", "--prompt-suggestions", "false", "--model", "haiku", "--effort", "low"}
 	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], want) {
 		t.Errorf("expected the soldier to start with %v, got %v", want, client.startArgs)
 	}

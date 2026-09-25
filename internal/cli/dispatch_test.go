@@ -194,7 +194,7 @@ func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
-	want := []string{"--dangerously-skip-permissions", "--model", "haiku", "--effort", "low"}
+	want := []string{"--dangerously-skip-permissions", "--prompt-suggestions", "false", "--model", "haiku", "--effort", "low"}
 	if !slices.Equal(client.lastAgentArgs, want) {
 		t.Errorf("got agent args %v, want %v", client.lastAgentArgs, want)
 	}
