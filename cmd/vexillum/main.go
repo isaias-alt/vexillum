@@ -18,6 +18,7 @@ Commands:
   doctor      Report on the health of the vexillum environment
   dispatch    Dispatch a soldier (mission or scout) into an isolated camp
   redispatch  Re-dispatch an interrupted task from its original prompt
+  decide      Answer a blocked task's open question so it can continue
   status      Report the current project's fleet of tasks (read-only)
   land        Land a finished mission's work into the base branch
   ship        Push a finished mission through the no-mistakes gate for a real PR
@@ -60,6 +61,8 @@ func run(args []string) int {
 		return cli.Dispatch(args[1:])
 	case "redispatch":
 		return cli.Redispatch(args[1:])
+	case "decide":
+		return cli.Decide(args[1:])
 	case "status":
 		return cli.Status(args[1:])
 	case "land":

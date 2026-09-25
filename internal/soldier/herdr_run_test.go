@@ -357,6 +357,61 @@ func TestRunInHerdr_Blocked(t *testing.T) {
 	}
 }
 
+// L4-03 (durable decision): a soldier that settles blocked gets a
+// structured Decision extracted from its transcript and persisted right
+// alongside its status - not just a bare "blocked" with the question
+// buried in Output's free-text prose.
+func TestRunInHerdr_BlockedExtractsDecision(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID: "w1:t2", paneID: "w1:p2", promptStatus: "blocked",
+		readOutput: "Which database should this use?\n\n1. Postgres\n2. SQLite\n",
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Decision == nil {
+		t.Fatal("expected a decision to be extracted for a blocked task")
+	}
+	if got.Decision.Question != "Which database should this use?" {
+		t.Errorf("Decision.Question = %q", got.Decision.Question)
+	}
+	if len(got.Decision.Options) != 2 {
+		t.Errorf("Decision.Options = %v, want 2 options", got.Decision.Options)
+	}
+
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Decision == nil || persisted.Decision.Question != got.Decision.Question {
+		t.Errorf("expected the decision to be persisted, got %+v", persisted.Decision)
+	}
+}
+
+// A soldier that settles anywhere other than blocked (done, here) never
+// gets a Decision attached - only a genuine block carries one.
+func TestRunInHerdr_DoneHasNoDecision(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done", readOutput: "all done"}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Decision != nil {
+		t.Errorf("expected no decision for a done task, got %+v", got.Decision)
+	}
+}
+
 // A soldier still working past the quick-settle probe (the normal case
 // for real work) is left Running, not treated as a failure - the whole
 // point of the redesign that fixed the sentinel's race condition
@@ -697,5 +752,140 @@ func TestRunInHerdr_CreateTabFails(t *testing.T) {
 
 	if _, loadErr := state.Load(testProjectRoot(t, home), task.ID); loadErr == nil {
 		t.Error("expected no task state to be persisted when the tab was never created")
+	}
+}
+
+// newBlockedTask persists a task already in StatusBlocked with a real
+// decision attached - the shape internal/cli.Decide hands AnswerBlocked in
+// the real flow, after loading it fresh off disk.
+func newBlockedTask(t *testing.T, projectRoot, agentName string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindMission, "refactor the auth module")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.HerdrAgentName = agentName
+	task.Status = state.StatusBlocked
+	task.Output = "Which auth library should I use?\n\n1. Auth0\n2. Keycloak\n"
+	task.Decision = soldier.ExtractDecision(task.Output)
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+// AnswerBlocked delivers the answer to the soldier's pane, records it
+// against the decision, and reflects a fast settle immediately.
+func TestAnswerBlocked_DeliversAndSettles(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+
+	client := &fakeHerdr{promptStatus: "done", readOutput: "used Auth0, done"}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "Use Auth0", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected status done, got %s", got.Status)
+	}
+	if got.Decision == nil || got.Decision.Answer != "Use Auth0" {
+		t.Errorf("expected the answer recorded on the decision, got %+v", got.Decision)
+	}
+	if got.Decision.AnsweredAt.IsZero() {
+		t.Error("expected AnsweredAt to be set")
+	}
+	if len(client.promptCalls) != 1 || client.promptCalls[0] != "Use Auth0" || client.promptNames[0] != task.HerdrAgentName {
+		t.Errorf("expected the answer delivered to the soldier's own pane, got calls=%v names=%v", client.promptCalls, client.promptNames)
+	}
+
+	persisted, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusDone || persisted.Decision.Answer != "Use Auth0" {
+		t.Errorf("expected the answered task persisted, got %+v", persisted)
+	}
+}
+
+// A soldier still working past the quick-settle probe after its answer is
+// left Running, same as a fresh dispatch - the sentinel picks up the
+// eventual settle.
+func TestAnswerBlocked_StillWorkingLeftRunning(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+
+	client := &fakeHerdr{promptErr: &herdr.APIError{Code: "timeout", Message: "no settle observed"}}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "Use Auth0", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Errorf("expected status running, got %s", got.Status)
+	}
+	if got.Decision == nil || got.Decision.Answer != "Use Auth0" {
+		t.Errorf("expected the answer still recorded even while running, got %+v", got.Decision)
+	}
+}
+
+// If the soldier immediately asks another question, AnswerBlocked replaces
+// the decision with the new one rather than leaving the just-answered
+// question in place.
+func TestAnswerBlocked_ReblocksWithNewDecision(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+
+	client := &fakeHerdr{
+		promptStatus: "blocked",
+		readOutput:   "Should the auth0 tenant be single or multi-region?\n\n1. Single\n2. Multi\n",
+	}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "Use Auth0", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if got.Status != state.StatusBlocked {
+		t.Errorf("expected status blocked, got %s", got.Status)
+	}
+	if got.Decision == nil || got.Decision.Question != "Should the auth0 tenant be single or multi-region?" {
+		t.Errorf("expected the new question, got %+v", got.Decision)
+	}
+	if got.Decision.Answer != "" {
+		t.Errorf("expected the fresh decision to carry no answer yet, got %+v", got.Decision)
+	}
+}
+
+// If the pane is actually gone by the time the answer is delivered,
+// AnswerBlocked marks the task Interrupted itself (internal/sentinel never
+// polls a Blocked task, so nothing else would ever catch this) and returns
+// a clear error pointing at redispatch.
+func TestAnswerBlocked_PaneGoneMarksInterrupted(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+
+	client := &fakeHerdr{promptErr: &herdr.APIError{Code: "agent_not_running", Message: "pane closed"}}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "Use Auth0", client)
+	if err == nil {
+		t.Fatal("expected an error when the pane is gone")
+	}
+	if !strings.Contains(err.Error(), "redispatch") {
+		t.Errorf("expected the error to point at redispatch, got: %v", err)
+	}
+	if got.Status != state.StatusInterrupted {
+		t.Errorf("expected status interrupted, got %s", got.Status)
+	}
+
+	persisted, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusInterrupted {
+		t.Errorf("expected the interrupted status persisted, got %s", persisted.Status)
 	}
 }

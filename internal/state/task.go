@@ -122,6 +122,33 @@ type Task struct {
 	// additive, no SchemaVersion bump needed.
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+
+	// Decision is the structured, durable record of what this task is (or
+	// most recently was) blocked on - see internal/soldier.ExtractDecision,
+	// which builds one from the soldier's transcript every time Status
+	// settles to StatusBlocked (RunInHerdr and internal/sentinel.tickProject
+	// are the only two places that happens). It's set alongside Status, in
+	// the same Save call, so it's exactly as restart-proof as the rest of
+	// Task: read back from disk on a fresh state.Load, never reconstructed
+	// from a live herdr pane or re-parsed out of Output's free-text
+	// transcript. vexillum decide (internal/cli.Decide,
+	// internal/soldier.AnswerBlocked) fills Answer/AnsweredAt and flips
+	// Status back to Running. Nil until the task has gone Blocked at least
+	// once; a task that never blocks never carries one. Purely additive,
+	// no SchemaVersion bump needed.
+	Decision *Decision `json:"decision,omitempty"`
+}
+
+// Decision is the actual question a soldier asked when its task went
+// StatusBlocked - not just the raw transcript prose it lives in - plus any
+// options it offered and, once answered, the answer given and when. See
+// Task.Decision's doc comment for how it's kept durable.
+type Decision struct {
+	Question   string    `json:"question"`
+	Options    []string  `json:"options,omitempty"`
+	AskedAt    time.Time `json:"asked_at"`
+	Answer     string    `json:"answer,omitempty"`
+	AnsweredAt time.Time `json:"answered_at,omitzero"`
 }
 
 // New creates a Task of the given kind with a fresh unique ID, in

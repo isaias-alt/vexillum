@@ -20,10 +20,13 @@ import (
 type fakeHerdr struct {
 	tabID, paneID string
 	promptStatus  string
+	promptErr     error
 	readOutput    string
 	tabCloseErr   error
 
 	lastAgentArgs []string
+	promptCalls   []string
+	promptNames   []string
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
@@ -37,6 +40,11 @@ func (f *fakeHerdr) AgentSendKeys(name string, keys ...string) error { return ni
 func (f *fakeHerdr) AgentReady(name string) (bool, error)            { return true, nil }
 func (f *fakeHerdr) AgentStatus(name string) (string, error)         { return f.promptStatus, nil }
 func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
+	f.promptCalls = append(f.promptCalls, text)
+	f.promptNames = append(f.promptNames, name)
+	if f.promptErr != nil {
+		return "", f.promptErr
+	}
 	return f.promptStatus, nil
 }
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error) { return f.readOutput, nil }

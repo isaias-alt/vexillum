@@ -200,6 +200,9 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 		if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
 			task.Output = output
 		}
+		if newStatus == state.StatusBlocked {
+			task.Decision = soldier.ExtractDecision(task.Output)
+		}
 		if err := state.Save(projectRoot, task); err != nil {
 			return woke, fmt.Errorf("persisting task %s: %w", task.ID, err)
 		}

@@ -269,6 +269,39 @@ func TestTick_CapturesOutputOnTransition(t *testing.T) {
 	}
 }
 
+// A task that settles Blocked gets a structured Decision extracted from
+// its transcript in the same tick, persisted right alongside the status
+// change - so the open question survives even if the herdr pane is lost
+// before anyone reads the raw transcript.
+func TestTick_ExtractsDecisionOnBlockedTransition(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+
+	client := &fakeHerdr{
+		statuses:   map[string]string{"vx-do-the-thing": "blocked"},
+		readOutput: "Which cloud provider should this deploy to?\n\n1. AWS\n2. GCP\n",
+	}
+
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Decision == nil {
+		t.Fatal("expected a decision to be extracted for the blocked task")
+	}
+	if persisted.Decision.Question != "Which cloud provider should this deploy to?" {
+		t.Errorf("Decision.Question = %q", persisted.Decision.Question)
+	}
+	if len(persisted.Decision.Options) != 2 {
+		t.Errorf("Decision.Options = %v, want 2 options", persisted.Decision.Options)
+	}
+}
+
 // A just-submitted task (UpdatedAt still fresh) is never acted on, even
 // if its live status already reads as settled - the exact race caught
 // live: the sentinel auto-starts right alongside dispatch, and herdr can

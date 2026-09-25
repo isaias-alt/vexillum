@@ -44,7 +44,11 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 1. Run `vexillum status --json`.
 2. Group every task into four sections, using these headings verbatim so the
    board's shape stays stable run to run:
-   - **Needs attention** - status `blocked`, `interrupted`, or `failed`.
+   - **Needs attention** - status `blocked`, `interrupted`, or `failed`. A
+     `blocked` task carries its open question in its `decision` field
+     (`question`, and `options` if the soldier offered any) - show that
+     question on the board itself, not just the word "blocked". Once
+     answered (`vexillum decide`), `decision.answer` is also set.
    - **In flight** - status `pending` or `running`.
    - **Finished** - status `done` (a mission ready to land, or a scout with
      its report ready - vexillum doesn't record whether a `done` mission has
