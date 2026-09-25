@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/isaias-alt/vexillum/internal/scaffold"
 )
 
 const upgradeUsage = `Refresh an already-initialized project's vexillum scaffold
@@ -75,19 +77,19 @@ func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.W
 		return 1
 	}
 
-	if !projectAlreadyInitialized(projectDir) {
+	if !scaffold.ProjectInitialized(projectDir) {
 		fmt.Fprintln(stderr, "vexillum: project not initialized here (no .vexillum/config.json)")
 		fmt.Fprintln(stderr, "run 'vexillum init' first.")
 		return 1
 	}
 
-	if _, err := ensureDir(vexillumHome); err != nil {
+	if _, err := scaffold.EnsureDir(vexillumHome); err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", vexillumHome, err)
 		return 1
 	}
 
 	configDir := filepath.Join(projectDir, ".vexillum")
-	cfg, err := readLocalConfig(configDir)
+	cfg, err := scaffold.ReadConfig(configDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot read .vexillum/config.json: %v\n", err)
 		return 1
@@ -98,18 +100,18 @@ func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.W
 		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
 		return 1
 	}
-	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
+	ruleResult, err := scaffold.UpgradeFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot upgrade .claude/rules/vexillum.md: %v\n", err)
 		return 1
 	}
 
-	if err := recordScaffoldHash(configDir, ruleResult.changed); err != nil {
+	if err := scaffold.RecordHash(configDir, ruleResult.Changed); err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot update .vexillum/config.json: %v\n", err)
 		return 1
 	}
 
-	fmt.Fprintf(stdout, ".claude/rules/vexillum.md: %s\n", ruleResult.status)
+	fmt.Fprintf(stdout, ".claude/rules/vexillum.md: %s\n", ruleResult.Status)
 
 	hookAdded, hookErr := ensureSentinelHook(projectDir)
 	if hookErr != nil {
@@ -129,18 +131,18 @@ func runUpgrade(projectDir, vexillumHome string, force bool, stdout, stderr io.W
 // hash-based drift detection and --force escape hatch as runUpgrade, just
 // against vexillumHome/config.json instead of a project's .vexillum/.
 func runUpgradeGlobal(vexillumHome, home string, force bool, stdout, stderr io.Writer) int {
-	if !globalAlreadyInitialized(vexillumHome) {
+	if !scaffold.GlobalInitialized(vexillumHome) {
 		fmt.Fprintf(stderr, "vexillum: global scaffold not initialized (no %s)\n", filepath.Join(vexillumHome, "config.json"))
 		fmt.Fprintln(stderr, "run 'vexillum init --global' first.")
 		return 1
 	}
 
-	if _, err := ensureDir(vexillumHome); err != nil {
+	if _, err := scaffold.EnsureDir(vexillumHome); err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", vexillumHome, err)
 		return 1
 	}
 
-	cfg, err := readLocalConfig(vexillumHome)
+	cfg, err := scaffold.ReadConfig(vexillumHome)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot read %s: %v\n", filepath.Join(vexillumHome, "config.json"), err)
 		return 1
@@ -151,67 +153,18 @@ func runUpgradeGlobal(vexillumHome, home string, force bool, stdout, stderr io.W
 		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)
 		return 1
 	}
-	ruleResult, err := upgradeScaffoldFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
+	ruleResult, err := scaffold.UpgradeFile(ruleDir, "vexillum.md", productVexillumRule, cfg.VexillumRuleHash, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot upgrade ~/.claude/rules/vexillum.md: %v\n", err)
 		return 1
 	}
 
-	if err := recordScaffoldHash(vexillumHome, ruleResult.changed); err != nil {
+	if err := scaffold.RecordHash(vexillumHome, ruleResult.Changed); err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot update %s: %v\n", filepath.Join(vexillumHome, "config.json"), err)
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "~/.claude/rules/vexillum.md: %s\n", ruleResult.status)
+	fmt.Fprintf(stdout, "~/.claude/rules/vexillum.md: %s\n", ruleResult.Status)
 	fmt.Fprintln(stdout, "vexillum upgrade complete (global).")
 	return 0
-}
-
-type scaffoldResult struct {
-	changed bool
-	status  string
-}
-
-// upgradeScaffoldFile brings a single scaffold file up to date with the
-// given latest template content:
-//   - missing entirely: created fresh.
-//   - already matches latest: nothing to do.
-//   - matches the hash vexillum stored when it last wrote this file: safe
-//     to refresh, since nothing has touched it since.
-//   - anything else (no stored hash, or content diverged from that hash):
-//     the general may have edited it - left untouched and reported
-//     instead, unless force is set (see the --force flag's own doc in
-//     upgradeUsage), which overwrites regardless.
-func upgradeScaffoldFile(projectDir, name, latest, storedHash string, force bool) (scaffoldResult, error) {
-	path := filepath.Join(projectDir, name)
-
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		if writeErr := os.WriteFile(path, []byte(latest), 0o644); writeErr != nil {
-			return scaffoldResult{}, writeErr
-		}
-		return scaffoldResult{changed: true, status: "created (was missing)"}, nil
-	}
-	if err != nil {
-		return scaffoldResult{}, err
-	}
-
-	current := string(data)
-	if current == latest {
-		return scaffoldResult{status: "already up to date"}, nil
-	}
-
-	safeToRefresh := storedHash != "" && storedHash == hashContent(current)
-	if !safeToRefresh && !force {
-		return scaffoldResult{status: "has local changes, left untouched (compare manually, or rerun with --force to overwrite)"}, nil
-	}
-
-	if err := os.WriteFile(path, []byte(latest), 0o644); err != nil {
-		return scaffoldResult{}, err
-	}
-	status := "upgraded to the latest template"
-	if !safeToRefresh {
-		status = "force-upgraded to the latest template (local changes discarded)"
-	}
-	return scaffoldResult{changed: true, status: status}, nil
 }

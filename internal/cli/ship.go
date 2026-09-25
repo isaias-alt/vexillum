@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/doctorcheck"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -83,7 +84,7 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		return 1
 	}
 
-	if !noMistakesGateConfigured(projectDir) {
+	if !doctorcheck.GateConfigured(projectDir) {
 		if err := gateProject(projectDir, stdout, stderr); err != nil {
 			return 1
 		}
