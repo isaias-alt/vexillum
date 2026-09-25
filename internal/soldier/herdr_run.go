@@ -38,8 +38,8 @@ const (
 )
 
 // RunInHerdr runs task's prompt through a real, interactive Claude Code
-// session in a herdr pane inside c, instead of the headless one-shot Run
-// uses - the soldier is visible and attachable, not silent in the
+// session in a herdr pane inside c, instead of a headless one-shot
+// process - the soldier is visible and attachable, not silent in the
 // background.
 //
 // It returns quickly, not once the soldier's work is done: it submits
