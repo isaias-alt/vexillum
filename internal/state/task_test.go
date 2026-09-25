@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // L2-01: a new task is saved as a valid JSON file under
@@ -52,6 +54,64 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 				t.Errorf("round-trip mismatch:\n got:  %+v\n want: %+v", got, original)
 			}
 		})
+	}
+}
+
+// A blocked task's Decision - the structured question, options, and (once
+// answered) the answer - round-trips through Save/Load exactly, the same
+// restart-proof guarantee every other Task field already has. This is the
+// durable-decision feature's core guarantee: the question must survive
+// being read back from disk, not just an in-memory copy.
+func TestSaveLoad_RoundTripPreservesDecision(t *testing.T) {
+	home := t.TempDir()
+	original, err := New(KindMission, "pick a database")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	original.Status = StatusBlocked
+	original.Decision = &Decision{
+		Question:   "Which database should this use?",
+		Options:    []string{"Postgres", "ClickHouse"},
+		AskedAt:    time.Now().UTC().Truncate(time.Second),
+		Answer:     "Postgres",
+		AnsweredAt: time.Now().UTC().Truncate(time.Second),
+	}
+
+	if err := Save(home, original); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Load(home, original.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Decision == nil {
+		t.Fatal("expected the decision to survive the round trip, got nil")
+	}
+	if !reflect.DeepEqual(got.Decision, original.Decision) {
+		t.Errorf("decision round-trip mismatch:\n got:  %+v\n want: %+v", got.Decision, original.Decision)
+	}
+}
+
+// A task that never blocked round-trips with a nil Decision - no
+// structure is invented for a task that never had a question to record.
+func TestSaveLoad_RoundTripNilDecisionWhenNeverBlocked(t *testing.T) {
+	home := t.TempDir()
+	original, err := New(KindMission, "do a thing")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := Save(home, original); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Load(home, original.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Decision != nil {
+		t.Errorf("expected a nil decision, got %+v", got.Decision)
 	}
 }
 

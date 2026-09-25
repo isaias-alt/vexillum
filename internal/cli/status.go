@@ -36,6 +36,11 @@ itself reasons about, never a separate reinterpretation of it. Grouping,
 filtering, and judgment calls (what counts as "needs attention", what's
 in the current session, GitHub PR enrichment) are left to that consumer,
 not decided here.
+
+A task in status "blocked" carries its open question in its "decision"
+field (question, options, asked_at, and - once 'vexillum decide' has run -
+answer/answered_at) - not just the word "blocked". Without --json, a
+blocked task's question is also printed on its own indented line.
 `
 
 // statusSnapshot is the --json envelope: state.Task already carries its
@@ -127,6 +132,9 @@ func runStatus(projectDir, vexillumHome string, jsonOutput bool, stdout, stderr 
 	}
 	for _, t := range tasks {
 		fmt.Fprintf(stdout, "%s  %-7s %-11s %-24s %s\n", t.ID, t.Kind, t.Status, t.CampBranch, truncatePrompt(t.Prompt, 60))
+		if t.Status == state.StatusBlocked && t.Decision != nil {
+			fmt.Fprintf(stdout, "    -> %s\n", truncatePrompt(t.Decision.Question, 100))
+		}
 	}
 	return 0
 }
