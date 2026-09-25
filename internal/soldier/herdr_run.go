@@ -135,7 +135,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		// the general's original ask, since 'vexillum redispatch' reuses
 		// it verbatim and would otherwise accumulate a new copy of this
 		// suffix on every re-dispatch.
-		promptText += scoutReportInstructions(report.Path(projectRoot, task.HerdrAgentName))
+		promptText += scoutReportInstructions(report.Path(projectRoot, task.HerdrAgentName, task.ID))
 	}
 	status, err := promptWithStalledRetry(client, agentName, promptText, quickSettleTimeoutMS)
 	if err != nil {

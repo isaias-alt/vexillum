@@ -102,7 +102,7 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 	// existence) even if the new soldier never gets around to writing
 	// one itself.
 	if task.HerdrAgentName != "" {
-		if err := report.Remove(projectRoot, task.HerdrAgentName); err != nil {
+		if err := report.Remove(projectRoot, task.HerdrAgentName, task.ID); err != nil {
 			fmt.Fprintf(stderr, "vexillum: %v\n", err)
 			return 1
 		}

@@ -118,7 +118,7 @@ func TestRunRedispatch_CleansUpStaleReport(t *testing.T) {
 	if err := os.MkdirAll(report.Dir(projectRoot), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	staleReport := report.Path(projectRoot, task.HerdrAgentName)
+	staleReport := report.Path(projectRoot, task.HerdrAgentName, task.ID)
 	if err := os.WriteFile(staleReport, []byte("# stale findings from the dead soldier\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}

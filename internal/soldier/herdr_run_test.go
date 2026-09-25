@@ -223,7 +223,7 @@ func TestRunInHerdr_ScoutPromptIncludesReportInstructions(t *testing.T) {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 
-	wantPath := report.Path(testProjectRoot(t, home), got.HerdrAgentName)
+	wantPath := report.Path(testProjectRoot(t, home), got.HerdrAgentName, got.ID)
 	if len(client.promptCalls) != 1 {
 		t.Fatalf("expected exactly one prompt submission, got %d", len(client.promptCalls))
 	}
@@ -290,8 +290,8 @@ func TestRunInHerdr_ScoutReportPathUsesDisambiguatedName(t *testing.T) {
 		t.Fatal("expected a disambiguated agent name, not the colliding candidate")
 	}
 
-	wantPath := report.Path(testProjectRoot(t, home), got.HerdrAgentName)
-	collidingPath := report.Path(testProjectRoot(t, home), "vx-do-the-thing")
+	wantPath := report.Path(testProjectRoot(t, home), got.HerdrAgentName, got.ID)
+	collidingPath := report.Path(testProjectRoot(t, home), "vx-do-the-thing", got.ID)
 	if !strings.Contains(client.promptCalls[0], wantPath) {
 		t.Errorf("expected the prompt to reference the disambiguated report path %q, got: %s", wantPath, client.promptCalls[0])
 	}

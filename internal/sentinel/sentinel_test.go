@@ -93,12 +93,12 @@ func newRunningScoutTask(t *testing.T, projectRoot, agentName string) state.Task
 func TestTick_RecordsReportPathWhenScoutSettlesWithReport(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
-	newRunningScoutTask(t, proj, "vx-look-into-it")
+	task := newRunningScoutTask(t, proj, "vx-look-into-it")
 
 	if err := os.MkdirAll(report.Dir(proj), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(report.Path(proj, "vx-look-into-it"), []byte("# findings\n"), 0o644); err != nil {
+	if err := os.WriteFile(report.Path(proj, "vx-look-into-it", task.ID), []byte("# findings\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func TestTick_RecordsReportPathWhenScoutSettlesWithReport(t *testing.T) {
 	if len(wakes) != 1 {
 		t.Fatalf("expected 1 wake, got %d", len(wakes))
 	}
-	want := report.Path(proj, "vx-look-into-it")
+	want := report.Path(proj, "vx-look-into-it", task.ID)
 	if wakes[0].ReportPath != want {
 		t.Errorf("expected wake.ReportPath = %q, got %q", want, wakes[0].ReportPath)
 	}
@@ -151,12 +151,12 @@ func TestTick_NoReportPathWhenScoutNeverWroteOne(t *testing.T) {
 func TestTick_NoReportPathForMission(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
-	newRunningTask(t, proj, "vx-do-the-thing")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
 
 	if err := os.MkdirAll(report.Dir(proj), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(report.Path(proj, "vx-do-the-thing"), []byte("# not a scout\n"), 0o644); err != nil {
+	if err := os.WriteFile(report.Path(proj, "vx-do-the-thing", task.ID), []byte("# not a scout\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -182,12 +182,12 @@ func TestTick_NoReportPathForMission(t *testing.T) {
 func TestTick_NoReportPathWhenScoutSettlesBlocked(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
-	newRunningScoutTask(t, proj, "vx-look-into-it")
+	task := newRunningScoutTask(t, proj, "vx-look-into-it")
 
 	if err := os.MkdirAll(report.Dir(proj), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(report.Path(proj, "vx-look-into-it"), []byte("# partial\n"), 0o644); err != nil {
+	if err := os.WriteFile(report.Path(proj, "vx-look-into-it", task.ID), []byte("# partial\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
