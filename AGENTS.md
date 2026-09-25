@@ -37,3 +37,19 @@ Trabajá en la capa activa. No adelantes código de capas futuras salvo pedido e
 - La escritura de estado a disco es atómica desde la Capa 2 (escribir a temp + rename), aunque en esa capa se invoque a mano, porque la Capa 4 escribe en paralelo.
 - Tests con la librería estándar (`testing`). Cada capa se prueba antes de avanzar (ver casos de prueba).
 - Mantené el binario autosuficiente: sin dependencias de runtime externas más allá de las herramientas que orquesta (Claude Code, herdr, tmux), que se verifican con `doctor`, no se instalan.
+
+## Bitácoras y TODOs
+
+Las bitácoras de sesión (ver skill `binnacle`, local y gitignoreada en este
+repo) y los TODOs de trabajo pendiente no viven en el repo de vexillum -
+persisten en un repo privado aparte del general:
+`~/Desktop/Ideaverse/02-Areas/vexillum-cli/` (`binnacles/` y `todos/`).
+Después de escribir o actualizar un archivo ahí, commiteá y pusheá ese repo
+a mano (no confiar en su auto-sync periódico para esto) antes de dar la
+sesión por terminada.
+
+`todos/`: un archivo markdown por item, nombre `YYYYMMDD-tema-corto.md`, con
+una sección `## Estado` al final que dice si sigue abierto, parcial o
+resuelto. Los que se resuelven del todo se mueven a `todos/closed/` para no
+ensuciar la vista activa, sin perder el historial - los abiertos o
+parcialmente resueltos quedan sueltos en `todos/`.
