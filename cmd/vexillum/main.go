@@ -24,6 +24,7 @@ Commands:
   ship        Push a finished mission through vexillum's own checkpoint pipeline for a real PR
   release     Release a soldier's camp back to the pool
   sentinel    Watch dispatched soldiers and record status changes
+  review      Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards
 
 Flags:
   -h, --help      Show this help message
@@ -73,6 +74,8 @@ func run(args []string) int {
 		return cli.Release(args[1:])
 	case "sentinel":
 		return cli.Sentinel(args[1:])
+	case "review":
+		return cli.Review(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "vexillum: unknown command %q\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run 'vexillum --help' for a list of commands.")

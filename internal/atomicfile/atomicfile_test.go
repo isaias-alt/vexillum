@@ -133,6 +133,67 @@ func TestWriteJSON_CreateTempFailure_UnwritableDir(t *testing.T) {
 	}
 }
 
+func TestWrite_HappyPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "preview.png")
+
+	want := []byte{0x89, 0x50, 0x4e, 0x47, 0x00, 0x01}
+	if err := atomicfile.Write(path, want); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading written file: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("content = %v, want %v", got, want)
+	}
+
+	assertNoLeftoverTempFiles(t, dir)
+}
+
+// A pre-existing target file must survive a failed write completely
+// unchanged - Write never opens the target itself (only a temp file it
+// renames into place), so a failure before the rename step must leave the
+// target byte-for-byte as it was.
+func TestWrite_FailureNeverTouchesExistingTarget(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "preview.png")
+	original := []byte("original")
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatalf("seeding existing target: %v", err)
+	}
+
+	// os.Rename fails deterministically when the target is a non-empty
+	// directory, so force that path instead of the JSON marshal failure
+	// WriteJSON's equivalent test uses.
+	if err := os.RemoveAll(path); err != nil {
+		t.Fatalf("removing seeded file: %v", err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	sentinel := filepath.Join(path, "keep.txt")
+	if err := os.WriteFile(sentinel, original, 0o644); err != nil {
+		t.Fatalf("seeding target dir: %v", err)
+	}
+
+	if err := atomicfile.Write(path, []byte("new content")); err == nil {
+		t.Fatal("expected an error when the target path is occupied by a directory")
+	}
+
+	got, err := os.ReadFile(sentinel)
+	if err != nil {
+		t.Fatalf("target directory should be untouched, but reading it failed: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Errorf("target content changed to %q, want unchanged", got)
+	}
+
+	assertNoLeftoverTempFiles(t, dir)
+}
+
 // The final os.Rename failing (here: the target path is occupied by a
 // non-empty directory, so rename(2) fails deterministically on every
 // platform this project ships for) must still clean up the temp file and

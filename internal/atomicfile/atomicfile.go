@@ -14,13 +14,21 @@ import (
 // WriteJSON marshals v as indented JSON and writes it atomically to path.
 // The parent directory must already exist.
 func WriteJSON(path string, v any) error {
-	dir := filepath.Dir(path)
-
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding %s: %w", path, err)
 	}
 	data = append(data, '\n')
+	return Write(path, data)
+}
+
+// Write writes data atomically to path: to a temp file in the same
+// directory, then renamed into place, so a reader never observes a
+// partially written file. Unlike WriteJSON, data is written as-is - used
+// for non-JSON content (e.g. the whiteboard feedback PNG in
+// internal/review). The parent directory must already exist.
+func Write(path string, data []byte) error {
+	dir := filepath.Dir(path)
 
 	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
 	if err != nil {

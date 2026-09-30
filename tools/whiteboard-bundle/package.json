@@ -1,0 +1,17 @@
+{
+  "name": "whiteboard-bundle",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only build for vexillum review's whiteboard.js browser bundle. Never installed or run at vexillum's install path or runtime - see README.md.",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "@excalidraw/mermaid-to-excalidraw": "2.2.2",
+    "esbuild": "^0.28.0",
+    "mermaid": "11.12.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
