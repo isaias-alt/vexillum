@@ -1,0 +1,227 @@
+package cli
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/banner"
+)
+
+func writeBannerFixture(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "index.html")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+	return path
+}
+
+func TestParseBannerArgs(t *testing.T) {
+	t.Run("publish requires a file", func(t *testing.T) {
+		if _, err := parseBannerArgs(nil); err == nil {
+			t.Error("expected an error for no arguments")
+		}
+	})
+
+	t.Run("private and password are mutually exclusive", func(t *testing.T) {
+		if _, err := parseBannerArgs([]string{"a.html", "--private", "--password", "x"}); err == nil {
+			t.Error("expected an error")
+		}
+	})
+
+	t.Run("site requires update-key and vice versa", func(t *testing.T) {
+		if _, err := parseBannerArgs([]string{"a.html", "--site", "abc"}); err == nil {
+			t.Error("expected an error for --site without --update-key")
+		}
+		if _, err := parseBannerArgs([]string{"a.html", "--update-key", "k"}); err == nil {
+			t.Error("expected an error for --update-key without --site")
+		}
+	})
+
+	t.Run("unpublish requires site and update-key, no file", func(t *testing.T) {
+		if _, err := parseBannerArgs([]string{"--unpublish"}); err == nil {
+			t.Error("expected an error for --unpublish with no --site/--update-key")
+		}
+		if _, err := parseBannerArgs([]string{"a.html", "--unpublish", "--site", "abc", "--update-key", "k"}); err == nil {
+			t.Error("expected an error for --unpublish with a file")
+		}
+		if _, err := parseBannerArgs([]string{"--unpublish", "--site", "abc", "--update-key", "k", "--private"}); err == nil {
+			t.Error("expected an error for --unpublish combined with --private")
+		}
+		opts, err := parseBannerArgs([]string{"--unpublish", "--site", "abc", "--update-key", "k"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !opts.unpublish || opts.site != "abc" || opts.updateKey != "k" {
+			t.Errorf("unexpected parsed opts: %+v", opts)
+		}
+	})
+
+	t.Run("republish parses file plus site and update-key", func(t *testing.T) {
+		opts, err := parseBannerArgs([]string{"a.html", "--site", "abc", "--update-key", "k"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if opts.file != "a.html" || opts.site != "abc" || opts.updateKey != "k" {
+			t.Errorf("unexpected parsed opts: %+v", opts)
+		}
+	})
+
+	t.Run("unknown flag is rejected", func(t *testing.T) {
+		if _, err := parseBannerArgs([]string{"a.html", "--bogus"}); err == nil {
+			t.Error("expected an error for an unknown flag")
+		}
+	})
+}
+
+func TestRunBannerPublish(t *testing.T) {
+	var gotBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decoding request: %v", err)
+		}
+		json.NewEncoder(w).Encode(banner.Site{
+			URL:       "https://plans.example.com/abc123",
+			UpdateKey: "secret-key",
+			SiteID:    "abc123",
+			Status:    "published",
+		})
+	}))
+	defer srv.Close()
+
+	file := writeBannerFixture(t, `<html><body>hi</body></html>`)
+	opts := bannerArgs{file: file}
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+
+	var stdout, stderr bytes.Buffer
+	code := runBanner(opts, client, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d, stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "https://plans.example.com/abc123") {
+		t.Errorf("expected the published URL in stdout, got: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "secret-key") {
+		t.Errorf("expected the update_key in stdout, got: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "ONLY credential") {
+		t.Errorf("expected the update_key warning in stdout, got: %s", stdout.String())
+	}
+	if gotBody["password"] != "" {
+		t.Errorf("expected no password sent without --private/--password, got %q", gotBody["password"])
+	}
+}
+
+func TestRunBannerPublishPrivateShowsPasswordOnce(t *testing.T) {
+	var gotBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&gotBody)
+		json.NewEncoder(w).Encode(banner.Site{URL: "https://plans.example.com/abc123", UpdateKey: "k", SiteID: "abc123"})
+	}))
+	defer srv.Close()
+
+	file := writeBannerFixture(t, `<html></html>`)
+	opts := bannerArgs{file: file, private: true}
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+
+	var stdout, stderr bytes.Buffer
+	code := runBanner(opts, client, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, stderr: %s", stderr.String())
+	}
+	if gotBody["password"] == "" {
+		t.Error("expected a generated password to be sent to the backend")
+	}
+	if !strings.Contains(stdout.String(), gotBody["password"]) {
+		t.Errorf("expected the generated password to be printed, stdout: %s", stdout.String())
+	}
+}
+
+func TestRunBannerPublishAmbiguousFailureWarnsAboutLostKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	file := writeBannerFixture(t, `<html></html>`)
+	opts := bannerArgs{file: file}
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+
+	var stdout, stderr bytes.Buffer
+	code := runBanner(opts, client, &stdout, &stderr)
+	if code == 0 {
+		t.Fatal("expected a non-zero exit code")
+	}
+	if !strings.Contains(stderr.String(), "lost") {
+		t.Errorf("expected the lost-key warning in stderr, got: %s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Do not retry") {
+		t.Errorf("expected the do-not-retry warning in stderr, got: %s", stderr.String())
+	}
+}
+
+func TestRunBannerRepublish(t *testing.T) {
+	var gotPath, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		json.NewEncoder(w).Encode(banner.Site{URL: "https://plans.example.com/abc123", SiteID: "abc123"})
+	}))
+	defer srv.Close()
+
+	file := writeBannerFixture(t, `<html>new content</html>`)
+	opts := bannerArgs{file: file, site: "abc123", updateKey: "secret-key"}
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+
+	var stdout, stderr bytes.Buffer
+	code := runBanner(opts, client, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, stderr: %s", stderr.String())
+	}
+	if gotPath != "/v1/sites/abc123" {
+		t.Errorf("expected a PUT to /v1/sites/abc123, got %q", gotPath)
+	}
+	if gotAuth != "Bearer secret-key" {
+		t.Errorf("expected the update_key as bearer auth, got %q", gotAuth)
+	}
+	if !strings.Contains(stdout.String(), "republished") {
+		t.Errorf("expected a republished confirmation, got: %s", stdout.String())
+	}
+}
+
+func TestRunBannerUnpublish(t *testing.T) {
+	var gotBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&gotBody)
+		json.NewEncoder(w).Encode(banner.Site{SiteID: "abc123"})
+	}))
+	defer srv.Close()
+
+	opts := bannerArgs{site: "abc123", updateKey: "secret-key", unpublish: true}
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+
+	var stdout, stderr bytes.Buffer
+	code := runBanner(opts, client, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, stderr: %s", stderr.String())
+	}
+	if gotBody["html_content"] != banner.UnpublishPlaceholderHTML {
+		t.Errorf("expected the placeholder HTML to be sent, got: %q", gotBody["html_content"])
+	}
+	if gotBody["password"] == "" {
+		t.Error("expected a discard password to be sent")
+	}
+	if strings.Contains(stdout.String(), gotBody["password"]) {
+		t.Error("the discarded unpublish password must never be printed")
+	}
+	if !strings.Contains(stdout.String(), "still live") {
+		t.Errorf("expected the still-live caveat in stdout, got: %s", stdout.String())
+	}
+}

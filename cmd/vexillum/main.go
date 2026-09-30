@@ -25,6 +25,7 @@ Commands:
   release     Release a soldier's camp back to the pool
   sentinel    Watch dispatched soldiers and record status changes
   review      Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards
+  banner      Publish an HTML artifact to a public URL, or update one already published
 
 Flags:
   -h, --help      Show this help message
@@ -76,6 +77,8 @@ func run(args []string) int {
 		return cli.Sentinel(args[1:])
 	case "review":
 		return cli.Review(args[1:])
+	case "banner":
+		return cli.Banner(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "vexillum: unknown command %q\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run 'vexillum --help' for a list of commands.")
