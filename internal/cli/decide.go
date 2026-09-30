@@ -18,10 +18,13 @@ Usage:
   vexillum decide <task-id> <answer>
 
 Only a task in status "blocked" can be answered. Delivers <answer> to the
-soldier's still-open herdr pane - the same client.AgentPrompt mechanism
-dispatch/redispatch already use to submit a prompt - and records it against
-the task's structured decision (see 'vexillum status --json', field
-"decision"), not just as more prose in the transcript.
+soldier's still-open herdr pane and records it against the task's structured
+decision (see 'vexillum status --json', field "decision"), not just as more
+prose in the transcript. If the open question came from Claude Code's
+AskUserQuestion selector, <answer> (an option's exact text, or its 1-based
+rendered number) is delivered as a single key press - the same mechanism a
+human picking from that menu would use - unless it resolves to "Type
+something.", which falls back to plain text like every other decision.
 
 On a fast settle the task's status updates immediately: running if the
 soldier is still going, blocked again if it asks another question, done or

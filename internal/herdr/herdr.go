@@ -62,6 +62,24 @@ type Client interface {
 	// named agent's pane.
 	AgentRead(name string, lines int) (string, error)
 
+	// AgentReadVisible returns the named agent's pane exactly as
+	// currently rendered on screen ("--source visible --ansi"), ANSI
+	// codes intact - unlike AgentRead's scrollback-oriented
+	// recent-unwrapped text, this is the only source that can show an
+	// interactive overlay's actual layout (e.g. Claude Code's
+	// AskUserQuestion modal - see internal/soldier.ParseAskUserQuestionModal).
+	// Only meaningful right after a task settles StatusBlocked.
+	AgentReadVisible(name string) (string, error)
+
+	// AgentWait waits (up to timeoutMS) for the named agent to reach
+	// one of the given states (idle/working/blocked/done/unknown);
+	// nil/empty until matches herdr's own default (idle, done, or
+	// blocked, same as AgentPrompt's --wait). Used after AgentSendKeys,
+	// which itself doesn't wait for a settle (herdr's "agent send-keys"
+	// is fire-and-forget) - see internal/soldier.AnswerBlocked's
+	// digit-select path for a modal-shaped Decision.
+	AgentWait(name string, until []string, timeoutMS int) (status string, err error)
+
 	// TabClose closes the tab (and its pane). Only call this once the
 	// work it held is safely landed elsewhere - see
 	// internal/soldier.ReleaseInHerdr.
@@ -236,6 +254,32 @@ func (CLI) AgentRead(name string, lines int) (string, error) {
 		return string(out), fmt.Errorf("reading soldier transcript: %w", err)
 	}
 	return string(out), nil
+}
+
+// AgentReadVisible is, like AgentRead, read separately from run() -
+// plain rendered text (with ANSI codes, since --ansi is passed), not a
+// JSON envelope.
+func (CLI) AgentReadVisible(name string) (string, error) {
+	cmd := exec.Command("herdr", "agent", "read", name, "--source", "visible", "--ansi")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("reading soldier's visible pane: %w", err)
+	}
+	return string(out), nil
+}
+
+func (CLI) AgentWait(name string, until []string, timeoutMS int) (string, error) {
+	args := []string{"agent", "wait", name, "--timeout", strconv.Itoa(timeoutMS)}
+	for _, u := range until {
+		args = append(args, "--until", u)
+	}
+	result, err := run(args...)
+	if err != nil {
+		return "", err
+	}
+	agent, _ := result["agent"].(map[string]any)
+	status, _ := agent["agent_status"].(string)
+	return status, nil
 }
 
 func (CLI) TabClose(tabID string) error {

@@ -20,10 +20,14 @@ import (
 // fakeHerdr implements just enough of herdr.Client for these tests
 // (AgentStatus is all Tick uses); the rest are no-ops.
 type fakeHerdr struct {
-	statuses   map[string]string
-	err        error
-	errFor     map[string]error // per-name error, checked before the blanket err
-	readOutput string
+	statuses          map[string]string
+	err               error
+	errFor            map[string]error // per-name error, checked before the blanket err
+	readOutput        string
+	readVisibleOutput string
+	readVisibleErr    error
+	waitStatus        string
+	waitErr           error
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
@@ -43,7 +47,13 @@ func (f *fakeHerdr) AgentStatus(name string) (string, error) {
 }
 func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) { return "", nil }
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error)             { return f.readOutput, nil }
-func (f *fakeHerdr) TabClose(tabID string) error                                  { return nil }
+func (f *fakeHerdr) AgentReadVisible(name string) (string, error) {
+	return f.readVisibleOutput, f.readVisibleErr
+}
+func (f *fakeHerdr) AgentWait(name string, until []string, timeoutMS int) (string, error) {
+	return f.waitStatus, f.waitErr
+}
+func (f *fakeHerdr) TabClose(tabID string) error { return nil }
 
 // projectRoot returns a namespaced project root under vexillumHome, the
 // same shape internal/project.Root would produce (vexillumHome/projects/<key>),
@@ -1160,5 +1170,98 @@ func TestIsRunning_FalseForStaleLock(t *testing.T) {
 
 	if sentinel.IsRunning(home) {
 		t.Error("expected IsRunning to be false for a stale pid")
+	}
+}
+
+// askUserQuestionCapture is a minimal, ANSI-free stand-in for a real
+// --source visible --ansi capture of Claude Code's AskUserQuestion modal -
+// ParseAskUserQuestionModal's anchors (the header's "☐ " prefix, the rule
+// lines, the footer text) don't require color, so this is enough to
+// exercise the modal-parser path through Tick without duplicating
+// internal/soldier's own byte-exact capture fixture.
+const askUserQuestionCapture = "──────────────────────────────\n" +
+	" ☐ Cloud provider\n\n" +
+	"Which cloud provider should this deploy to?\n\n" +
+	"❯ 1. AWS\n    Amazon Web Services\n" +
+	"  2. GCP\n    Google Cloud\n" +
+	"  3. Type something.\n" +
+	"──────────────────────────────\n" +
+	"  4. Chat about this\n\n" +
+	"Enter to select · ↑/↓ to navigate · Esc to cancel\n"
+
+// A task that settles Blocked via herdr's own classifier tries the
+// AskUserQuestion modal parser first, against a fresh visible capture - a
+// real modal capture produces a modal-shaped Decision, not the prose
+// heuristic's.
+func TestTick_BlockedTransitionUsesModalParserWhenVisibleCaptureMatches(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+
+	client := &fakeHerdr{
+		statuses:          map[string]string{"vx-do-the-thing": "blocked"},
+		readOutput:        "Which cloud provider should this deploy to?\n\n1. AWS\n2. GCP\n",
+		readVisibleOutput: askUserQuestionCapture,
+	}
+
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Decision == nil || persisted.Decision.Kind != state.DecisionKindModal {
+		t.Fatalf("expected a modal-shaped decision, got %+v", persisted.Decision)
+	}
+	want := []string{"AWS", "GCP", "Type something.", "Chat about this"}
+	if len(persisted.Decision.Options) != len(want) {
+		t.Fatalf("Options = %v, want %v", persisted.Decision.Options, want)
+	}
+}
+
+// A mission that goes idle/done but left a needs-decision: line in its
+// fresh output is recorded Blocked, not Done - the only way a plain-prose
+// question (no AskUserQuestion tool call) can reach StatusBlocked at all,
+// since herdr's own classifier never catches it. Takes priority even over
+// an otherwise-strong completion signal, since the soldier explicitly
+// said it's still waiting on an answer.
+func TestTick_NeedsDecisionLineForcesBlockedInsteadOfDone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+
+	client := &fakeHerdr{
+		statuses:   map[string]string{"vx-do-the-thing": "done"},
+		readOutput: "I've looked into it.\n\nneeds-decision: should this use Postgres or SQLite?\n",
+	}
+
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("expected 1 wake, got %d", woke)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusBlocked {
+		t.Errorf("expected status blocked, got %s", persisted.Status)
+	}
+	if persisted.Decision == nil || persisted.Decision.Question != "should this use Postgres or SQLite?" {
+		t.Fatalf("expected the needs-decision question extracted, got %+v", persisted.Decision)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 || wakes[0].NewStatus != state.StatusBlocked {
+		t.Errorf("expected one drained wake for %s -> blocked, got %+v", task.ID, wakes)
 	}
 }

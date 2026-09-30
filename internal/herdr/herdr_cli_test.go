@@ -156,6 +156,88 @@ esac`))
 	}
 }
 
+// AgentReadVisible, like AgentRead, is plain text - but requests the
+// "visible"/"--ansi" source instead of the default recent-unwrapped
+// scrollback.
+func TestCLI_AgentReadVisible_PlainTextStdout(t *testing.T) {
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "agent read")
+    seen=0
+    for a in "$@"; do
+      if [ "$prev" = "--source" ] && [ "$a" = "visible" ]; then seen=1; fi
+      if [ "$a" = "--ansi" ]; then ansi=1; fi
+      prev="$a"
+    done
+    if [ "$seen" != "1" ] || [ "$ansi" != "1" ]; then
+      echo "wrong args: $@" >&2
+      exit 1
+    fi
+    printf '\x1b[38;2;74;165;240mSelected\x1b[0m\n'
+    ;;
+esac`))
+
+	out, err := (CLI{}).AgentReadVisible("soldier-1")
+	if err != nil {
+		t.Fatalf("AgentReadVisible: %v", err)
+	}
+	if !strings.Contains(out, "Selected") {
+		t.Errorf("expected the raw ANSI-intact capture returned, got %q", out)
+	}
+}
+
+func TestCLI_AgentReadVisible_ErrorIncludesOutput(t *testing.T) {
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "agent read") echo "agent not found" >&2; exit 1 ;;
+esac`))
+
+	out, err := (CLI{}).AgentReadVisible("ghost")
+	if err == nil {
+		t.Fatal("expected an error for a failing visible read")
+	}
+	if !strings.Contains(err.Error(), "reading soldier's visible pane") {
+		t.Errorf("expected error to name the operation, got: %v", err)
+	}
+	if !strings.Contains(out, "agent not found") {
+		t.Errorf("expected the combined output to be returned even on failure, got: %q", out)
+	}
+}
+
+func TestCLI_AgentWait_Success(t *testing.T) {
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "agent wait") echo '{"result":{"agent":{"agent_status":"blocked"}}}' ;;
+esac`))
+
+	status, err := (CLI{}).AgentWait("soldier-1", nil, 5000)
+	if err != nil {
+		t.Fatalf("AgentWait: %v", err)
+	}
+	if status != "blocked" {
+		t.Errorf("AgentWait = %q, want %q", status, "blocked")
+	}
+}
+
+// AgentWait passes each of until as its own --until flag, alongside the
+// caller's timeout.
+func TestCLI_AgentWait_PassesUntilFlags(t *testing.T) {
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "agent wait")
+    count=0
+    for a in "$@"; do
+      if [ "$a" = "--until" ]; then count=$((count+1)); fi
+    done
+    if [ "$count" != "2" ]; then
+      echo "expected 2 --until flags, got $count ($@)" >&2
+      exit 1
+    fi
+    echo '{"result":{"agent":{"agent_status":"idle"}}}'
+    ;;
+esac`))
+
+	if _, err := (CLI{}).AgentWait("soldier-1", []string{"idle", "blocked"}, 5000); err != nil {
+		t.Fatalf("AgentWait: %v", err)
+	}
+}
+
 func TestCLI_TabClose_Success(t *testing.T) {
 	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
   "tab close") echo '{"result":{}}' ;;

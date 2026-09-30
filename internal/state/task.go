@@ -184,12 +184,29 @@ type Task struct {
 // options it offered and, once answered, the answer given and when. See
 // Task.Decision's doc comment for how it's kept durable.
 type Decision struct {
-	Question   string    `json:"question"`
-	Options    []string  `json:"options,omitempty"`
-	AskedAt    time.Time `json:"asked_at"`
-	Answer     string    `json:"answer,omitempty"`
-	AnsweredAt time.Time `json:"answered_at,omitzero"`
+	Question   string       `json:"question"`
+	Options    []string     `json:"options,omitempty"`
+	AskedAt    time.Time    `json:"asked_at"`
+	Answer     string       `json:"answer,omitempty"`
+	AnsweredAt time.Time    `json:"answered_at,omitzero"`
+	Kind       DecisionKind `json:"kind,omitempty"`
 }
+
+// DecisionKind distinguishes how a Decision's shape needs to be answered
+// (internal/soldier.AnswerBlocked). DecisionKindModal came from Claude
+// Code's AskUserQuestion selector overlay (internal/soldier.ParseAskUserQuestionModal)
+// and is answered with a single raw key press - the option's rendered
+// number, per Options' own order - never arrow navigation. Everything
+// else (DecisionKindProse, including the zero value for an older or
+// unset Decision) is answered as plain text through the normal prompt
+// path, exactly as every Decision was answered before this field
+// existed.
+type DecisionKind string
+
+const (
+	DecisionKindProse DecisionKind = "prose"
+	DecisionKindModal DecisionKind = "modal"
+)
 
 // New creates a Task of the given kind with a fresh unique ID, in
 // StatusPending.

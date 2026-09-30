@@ -59,6 +59,12 @@ type fakeHerdr struct {
 	promptNames           []string
 	promptStalledForCalls int // AgentPrompt reports agent_prompt_stalled for this many calls before promptErr/promptStatus
 
+	readVisibleOutput string
+	readVisibleErr    error
+	waitStatus        string
+	waitErr           error
+	waitCalls         []string // agent name on each AgentWait call
+
 	tabCloseErr   error
 	tabCloseCalls []string
 }
@@ -111,6 +117,15 @@ func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error
 
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error) {
 	return f.readOutput, f.readErr
+}
+
+func (f *fakeHerdr) AgentReadVisible(name string) (string, error) {
+	return f.readVisibleOutput, f.readVisibleErr
+}
+
+func (f *fakeHerdr) AgentWait(name string, until []string, timeoutMS int) (string, error) {
+	f.waitCalls = append(f.waitCalls, name)
+	return f.waitStatus, f.waitErr
 }
 
 func (f *fakeHerdr) TabClose(tabID string) error {
@@ -1070,5 +1085,246 @@ func TestAnswerBlocked_PaneGoneMarksInterrupted(t *testing.T) {
 	}
 	if persisted.Status != state.StatusInterrupted {
 		t.Errorf("expected the interrupted status persisted, got %s", persisted.Status)
+	}
+}
+
+// newModalBlockedTask persists a task already in StatusBlocked with a
+// modal-shaped decision attached - the shape RunInHerdr/sentinel leave on
+// disk after ParseAskUserQuestionModal recognizes a real AskUserQuestion
+// capture. Options always end with the two Claude-Code-injected entries,
+// matching ParseAskUserQuestionModal's own contract.
+func newModalBlockedTask(t *testing.T, projectRoot, agentName string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindMission, "pick a database")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.HerdrAgentName = agentName
+	task.Status = state.StatusBlocked
+	task.Decision = &state.Decision{
+		Question: "Which database should this use?",
+		Options:  []string{"Postgres", "SQLite", "Type something.", "Chat about this"},
+		Kind:     state.DecisionKindModal,
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+// A modal-shaped Decision answered by its 1-based rendered index is
+// delivered as a single digit key (AgentSendKeys), not a plain-text
+// AgentPrompt submission - confirmed live to select and submit in one
+// step (durable decision record capture report, point 5).
+func TestAnswerBlocked_ModalDecision_AnswersByIndexWithDigitKey(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newModalBlockedTask(t, projectRoot, "vx-pick-a-database")
+
+	client := &fakeHerdr{waitStatus: "done", readOutput: "went with Postgres, done"}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "1", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if len(client.sendKeysCalls) != 1 || strings.Join(client.sendKeysCalls[0], ",") != "1" {
+		t.Errorf("expected a single digit key \"1\" sent, got %v", client.sendKeysCalls)
+	}
+	if len(client.promptCalls) != 0 {
+		t.Errorf("expected no plain-text prompt submission for a resolved modal answer, got %v", client.promptCalls)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected status done, got %s", got.Status)
+	}
+	if got.Decision == nil || got.Decision.Answer != "1" {
+		t.Errorf("expected the answer recorded on the decision, got %+v", got.Decision)
+	}
+}
+
+// The same modal Decision answered by the option's exact rendered text
+// (instead of its index) resolves to the same digit key.
+func TestAnswerBlocked_ModalDecision_AnswersByExactOptionText(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newModalBlockedTask(t, projectRoot, "vx-pick-a-database")
+
+	client := &fakeHerdr{waitStatus: "done", readOutput: "went with SQLite, done"}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "SQLite", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if len(client.sendKeysCalls) != 1 || strings.Join(client.sendKeysCalls[0], ",") != "2" {
+		t.Errorf("expected digit key \"2\" sent for the second rendered option, got %v", client.sendKeysCalls)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected status done, got %s", got.Status)
+	}
+}
+
+// An answer that resolves specifically to "Type something." (the
+// auto-injected freeform option) falls back to plain text submission -
+// selecting it just opens a real text field, it isn't a direct answer.
+func TestAnswerBlocked_ModalDecision_TypeSomethingFallsBackToText(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newModalBlockedTask(t, projectRoot, "vx-pick-a-database")
+
+	client := &fakeHerdr{promptStatus: "done", readOutput: "used a custom database, done"}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "Type something.", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if len(client.sendKeysCalls) != 0 {
+		t.Errorf("expected no digit key sent for Type something., got %v", client.sendKeysCalls)
+	}
+	if len(client.promptCalls) != 1 || client.promptCalls[0] != "Type something." {
+		t.Errorf("expected the answer delivered as plain text, got %v", client.promptCalls)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected status done, got %s", got.Status)
+	}
+}
+
+// An answer that doesn't confidently resolve to any rendered option falls
+// back to plain text submission rather than guessing at a key press.
+func TestAnswerBlocked_ModalDecision_UnresolvedAnswerFallsBackToText(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newModalBlockedTask(t, projectRoot, "vx-pick-a-database")
+
+	client := &fakeHerdr{promptStatus: "done", readOutput: "went with MySQL instead, done"}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "use MySQL instead", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if len(client.sendKeysCalls) != 0 {
+		t.Errorf("expected no digit key sent for an unresolved answer, got %v", client.sendKeysCalls)
+	}
+	if len(client.promptCalls) != 1 || client.promptCalls[0] != "use MySQL instead" {
+		t.Errorf("expected the answer delivered as plain text, got %v", client.promptCalls)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected status done, got %s", got.Status)
+	}
+}
+
+// RunInHerdr settling Blocked with a live "blocked" status tries the
+// AskUserQuestion modal parser first, against a fresh
+// --source visible --ansi capture - a real modal capture produces a
+// modal-shaped Decision, not the prose heuristic's.
+func TestRunInHerdr_BlockedUsesModalParserWhenVisibleCaptureMatches(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	capture := askUserQuestionCapture("File name", "Which database should this use?", []string{"Postgres", "SQLite"})
+	client := &fakeHerdr{
+		tabID: "w1:t2", paneID: "w1:p2", promptStatus: "blocked",
+		readOutput:        "Which database should this use?\n\n1. Postgres\n2. SQLite\n",
+		readVisibleOutput: capture,
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusBlocked {
+		t.Fatalf("expected status blocked, got %s", got.Status)
+	}
+	if got.Decision == nil || got.Decision.Kind != state.DecisionKindModal {
+		t.Fatalf("expected a modal-shaped decision, got %+v", got.Decision)
+	}
+	want := []string{"Postgres", "SQLite", "Type something.", "Chat about this"}
+	if len(got.Decision.Options) != len(want) {
+		t.Fatalf("Options = %v, want %v", got.Decision.Options, want)
+	}
+}
+
+// When the visible capture doesn't confidently look like the
+// AskUserQuestion modal (some other blocked shape), RunInHerdr falls
+// back to the general prose heuristic over the scrollback transcript -
+// exactly the pre-existing behavior.
+func TestRunInHerdr_BlockedFallsBackToProseWhenVisibleCaptureIsNotModal(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID: "w1:t2", paneID: "w1:p2", promptStatus: "blocked",
+		readOutput:        "Which database should this use?\n\n1. Postgres\n2. SQLite\n",
+		readVisibleOutput: "", // no recognizable modal footer
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Decision == nil || got.Decision.Kind != state.DecisionKindProse {
+		t.Fatalf("expected a prose-shaped decision, got %+v", got.Decision)
+	}
+	if got.Decision.Question != "Which database should this use?" {
+		t.Errorf("Question = %q", got.Decision.Question)
+	}
+}
+
+// A soldier that goes idle/done but left a needs-decision: line in its
+// output is recorded as Blocked, not Done - the only way a plain-prose
+// question (no AskUserQuestion tool call) can reach StatusBlocked at all,
+// since herdr's own classifier never catches it.
+func TestRunInHerdr_NeedsDecisionLineForcesBlocked(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	campPath, base := newEmptyMissionCamp(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: campPath, Slot: 1, Branch: "vexillum/" + task.ID, Base: base}
+
+	client := &fakeHerdr{
+		tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done",
+		readOutput: "I've looked into it.\n\nneeds-decision: should this use Postgres or SQLite?\n",
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusBlocked {
+		t.Fatalf("expected status blocked, got %s", got.Status)
+	}
+	if got.Decision == nil || got.Decision.Question != "should this use Postgres or SQLite?" {
+		t.Fatalf("expected the needs-decision question extracted, got %+v", got.Decision)
+	}
+	if got.Decision.Kind != state.DecisionKindProse {
+		t.Errorf("Kind = %q, want %q", got.Decision.Kind, state.DecisionKindProse)
+	}
+
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusBlocked {
+		t.Errorf("expected the persisted status blocked, got %s", persisted.Status)
+	}
+}
+
+// Every soldier's prompt carries the needs-decision instructions, the
+// same way it already carries the pause-declaration ones.
+func TestRunInHerdr_PromptIncludesNeedsDecisionInstructions(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+
+	if len(client.promptCalls) != 1 {
+		t.Fatalf("expected exactly one prompt submission, got %d", len(client.promptCalls))
+	}
+	if !strings.Contains(client.promptCalls[0], "needs-decision:") {
+		t.Errorf("expected the submitted prompt to reference the needs-decision: convention, got: %s", client.promptCalls[0])
 	}
 }

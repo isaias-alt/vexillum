@@ -2,6 +2,7 @@ package soldier
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,6 +153,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	// to trust an idle turn as done without either this or the kind's own
 	// strong completion signal.
 	promptText += pauseInstructions(pause.Path(projectRoot, task.HerdrAgentName))
+	promptText += needsDecisionInstructions()
 	status, err := promptWithStalledRetry(client, agentName, promptText, quickSettleTimeoutMS)
 	if err != nil {
 		if herdr.IsTimeout(err) {
@@ -182,7 +184,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 
 	task.Status = corroboratedStatus(projectRoot, task, status)
 	if task.Status == state.StatusBlocked {
-		task.Decision = ExtractDecision(task.Output)
+		task.Decision = blockedDecision(client, agentName, status, task.Output)
 	}
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
@@ -191,18 +193,45 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	return task, nil
 }
 
-// AnswerBlocked delivers answer to a blocked task's still-open herdr pane -
-// reusing the exact same client.AgentPrompt submission path RunInHerdr uses
-// for a task's original prompt - records it against task.Decision, and
-// updates task's status from whatever the soldier does next. The caller
-// (internal/cli.Decide) is responsible for confirming task is actually
-// StatusBlocked before calling in; this only ever touches the live pane and
-// persists the result.
+// blockedDecision picks the right extractor for a task that just settled
+// StatusBlocked, depending on why: liveStatus == "blocked" means herdr's
+// own classifier caught it (almost always Claude Code's AskUserQuestion
+// modal - see ResolveBlockedDecision); anything else means
+// corroboratedStatus escalated an apparently-idle/done turn to Blocked
+// because of a needs-decision: line (ExtractNeedsDecisionSignal) instead.
+// The final fallback is defensive only - corroboratedStatus should never
+// return StatusBlocked without one of the above being true - but a
+// genuinely blocked task must never end up with a nil Decision.
+func blockedDecision(client herdr.Client, agentName, liveStatus, output string) *state.Decision {
+	if MapAgentStatus(liveStatus) == state.StatusBlocked {
+		return ResolveBlockedDecision(client, agentName, output)
+	}
+	if d, found := ExtractNeedsDecisionSignal(output); found {
+		return d
+	}
+	return ExtractDecision(output)
+}
+
+// AnswerBlocked delivers answer to a blocked task's still-open herdr pane,
+// records it against task.Decision, and updates task's status from whatever
+// the soldier does next. The caller (internal/cli.Decide) is responsible
+// for confirming task is actually StatusBlocked before calling in; this
+// only ever touches the live pane and persists the result.
 //
-// Mirrors RunInHerdr's own quick-settle probe: a fast idle/done/blocked
-// settlement is reflected immediately, otherwise the task is left Running
-// for the sentinel to pick up the eventual settle - exactly as if this were
-// a fresh prompt submission, because functionally it is one.
+// A modal-shaped Decision (task.Decision.Kind == state.DecisionKindModal,
+// see ParseAskUserQuestionModal) is answered with a single raw key press -
+// the resolved option's rendered number, via client.AgentSendKeys - instead
+// of a plain-text prompt submission, unless answer resolves specifically to
+// the auto-injected "Type something." option (see resolveModalAnswer).
+// Every other Decision is answered exactly as before this existed: plain
+// text through the same client.AgentPrompt path RunInHerdr uses for a
+// task's original prompt.
+//
+// Mirrors RunInHerdr's own quick-settle probe either way: a fast
+// idle/done/blocked settlement is reflected immediately, otherwise the task
+// is left Running for the sentinel to pick up the eventual settle - exactly
+// as if this were a fresh prompt submission, because functionally it is
+// one.
 //
 // If the pane itself is gone (herdr's agent_not_running - the task was
 // actually Interrupted, not Blocked, and vexillum just hadn't observed that
@@ -211,9 +240,34 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 // task, so nothing else would ever catch this. The caller should point the
 // general at 'vexillum redispatch' instead.
 func AnswerBlocked(projectRoot string, task state.Task, answer string, client herdr.Client) (state.Task, error) {
+	if task.Decision != nil && task.Decision.Kind == state.DecisionKindModal {
+		if n, label, ok := resolveModalAnswer(task.Decision.Options, answer); ok && label != optionTypeSomething {
+			if err := client.AgentSendKeys(task.HerdrAgentName, strconv.Itoa(n)); err != nil {
+				return task, fmt.Errorf("selecting option %d on the soldier's pane: %w", n, err)
+			}
+			status, err := client.AgentWait(task.HerdrAgentName, nil, quickSettleTimeoutMS)
+			return finishAnswerBlocked(projectRoot, task, answer, status, err, client)
+		}
+		// Either the answer didn't confidently resolve to a rendered
+		// option, or it resolved to "Type something." - either way this
+		// falls through to plain text submission below, same as every
+		// prose-shaped Decision.
+	}
+
 	status, err := promptWithStalledRetry(client, task.HerdrAgentName, answer, quickSettleTimeoutMS)
-	if err != nil {
-		if herdr.IsNotRunning(err) {
+	return finishAnswerBlocked(projectRoot, task, answer, status, err, client)
+}
+
+// finishAnswerBlocked is AnswerBlocked's shared tail, once the answer has
+// actually been delivered - by AgentSendKeys+AgentWait for a modal-shaped
+// Decision's digit-select path, or by AgentPrompt (via
+// promptWithStalledRetry) for every other Decision. settleErr is whatever
+// that delivery's own settle-wait returned (an APIError from AgentWait or
+// AgentPrompt alike - both share the same settled-state error vocabulary,
+// see herdr.IsNotRunning's own doc comment).
+func finishAnswerBlocked(projectRoot string, task state.Task, answer, status string, settleErr error, client herdr.Client) (state.Task, error) {
+	if settleErr != nil {
+		if herdr.IsNotRunning(settleErr) {
 			task.Status = state.StatusInterrupted
 			task.UpdatedAt = time.Now().UTC()
 			if task.Output != "" {
@@ -221,16 +275,17 @@ func AnswerBlocked(projectRoot string, task state.Task, answer string, client he
 			}
 			task.Output += "[vexillum] this soldier's herdr pane was already gone by the time its answer could be delivered - marked interrupted. Use 'vexillum redispatch' instead."
 			if saveErr := state.Save(projectRoot, task); saveErr != nil {
-				return task, fmt.Errorf("persisting interrupted task (after: %v): %w", err, saveErr)
+				return task, fmt.Errorf("persisting interrupted task (after: %v): %w", settleErr, saveErr)
 			}
-			return task, fmt.Errorf("the soldier's herdr pane is gone (not something vexillum did) - marked interrupted, use 'vexillum redispatch' instead: %w", err)
+			return task, fmt.Errorf("the soldier's herdr pane is gone (not something vexillum did) - marked interrupted, use 'vexillum redispatch' instead: %w", settleErr)
 		}
-		if !herdr.IsTimeout(err) {
-			return task, fmt.Errorf("delivering answer to soldier: %w", err)
+		if !herdr.IsTimeout(settleErr) {
+			return task, fmt.Errorf("delivering answer to soldier: %w", settleErr)
 		}
 		// Timeout: still working past the quick-settle probe - the normal
-		// case for real work, same as a fresh dispatch's own probe. err
-		// stays set so the status branch below leaves this task Running.
+		// case for real work, same as a fresh dispatch's own probe.
+		// settleErr stays set so the status branch below leaves this task
+		// Running.
 	}
 
 	if output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines); readErr == nil {
@@ -242,13 +297,13 @@ func AnswerBlocked(projectRoot string, task state.Task, answer string, client he
 		task.Decision.AnsweredAt = time.Now().UTC()
 	}
 
-	if err == nil {
+	if settleErr == nil {
 		task.Status = MapAgentStatus(status)
 		if task.Status == state.StatusBlocked {
 			// Settled straight back into another question - extract it
 			// the same way a fresh block does, so the general sees the
 			// new question, not the one they just answered.
-			if d := ExtractDecision(task.Output); d != nil {
+			if d := ResolveBlockedDecision(client, task.HerdrAgentName, task.Output); d != nil {
 				task.Decision = d
 			}
 		}
@@ -346,6 +401,28 @@ func pauseInstructions(pausePath string) string {
 		"for a real external wait, not an ordinary pause between steps."
 }
 
+// needsDecisionInstructions tells a soldier (mission or scout) the one
+// reliable way to ask the general a genuine blocking question in plain
+// prose, instead of just ending its turn with a question a human happens
+// to read later. herdr's own blocked-classifier - the only thing that
+// can make vexillum's status machinery notice at all - reliably catches
+// Claude Code's AskUserQuestion tool, but never a question left as
+// ordinary prose (see the durable decision record's design report); this
+// is vexillum's own convention for that other case, adapted from
+// upstream-tool's "needs-decision:" status-line pattern (a structured,
+// grep-able signal, never inferred from free-form language - see
+// ExtractNeedsDecisionSignal, its consumer).
+func needsDecisionInstructions() string {
+	return "\n\n---\n\nIf you need a real decision or answer from the general before you can continue, and " +
+		"you are not using the AskUserQuestion tool for it, end your turn with a line in exactly this " +
+		"format (nothing else on that line):\n\n" +
+		"  needs-decision: <a one-line summary of the question and any options>\n\n" +
+		"This is the only way vexillum can tell a genuine open question apart from your turn simply " +
+		"ending - without it, ordinary prose ending in a question mark is never detected, and your task " +
+		"is recorded as done, not blocked. Only use this for something you truly cannot proceed without; " +
+		"do not use it for an ordinary status update."
+}
+
 // herdrAgentName builds a readable candidate name for the soldier's
 // agent (and tab label): "vx-<slug of the task's prompt>". It's only a
 // candidate: two prompts that produce the same slug can still collide if
@@ -433,6 +510,16 @@ func corroboratedStatus(projectRoot string, task state.Task, liveStatus string) 
 	mapped := MapAgentStatus(liveStatus)
 	if mapped != state.StatusDone {
 		return mapped
+	}
+
+	// A needs-decision: line (ExtractNeedsDecisionSignal) takes priority
+	// over everything else an apparently-idle turn could mean: the
+	// soldier explicitly said it's waiting on the general, which is the
+	// most authoritative signal available - more so than a completion
+	// signal or a declared pause, neither of which a soldier would also
+	// have reason to leave behind mid-question.
+	if _, found := ExtractNeedsDecisionSignal(task.Output); found {
+		return state.StatusBlocked
 	}
 
 	if strong, _, err := settle.HasCompletionSignal(projectRoot, task); err == nil && strong {

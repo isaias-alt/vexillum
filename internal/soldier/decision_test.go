@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/soldier"
+	"github.com/isaias-alt/vexillum/internal/state"
 )
 
 // A soldier asking a genuine clarifying question with numbered options is
@@ -109,5 +110,84 @@ func TestExtractDecision_OptionsOnlyFallsBackToOptionsAsQuestion(t *testing.T) {
 	}
 	if len(got.Options) != 0 {
 		t.Errorf("expected the fallback to consume the options into the question, got %v", got.Options)
+	}
+}
+
+// A prose-extracted Decision is tagged DecisionKindProse, so
+// AnswerBlocked knows to answer it as plain text, not a modal digit key.
+func TestExtractDecision_TaggedAsProseKind(t *testing.T) {
+	got := soldier.ExtractDecision("Which environment should this deploy to?\n\n1. Staging\n2. Prod\n")
+	if got == nil {
+		t.Fatal("expected a non-nil decision")
+	}
+	if got.Kind != state.DecisionKindProse {
+		t.Errorf("Kind = %q, want %q", got.Kind, state.DecisionKindProse)
+	}
+}
+
+// A soldier that follows needsDecisionInstructions and ends its turn with
+// a needs-decision: line produces a Decision from that line alone - the
+// only thing that can turn a plain-prose question into a real block
+// (herdr's own classifier never catches ordinary prose).
+func TestExtractNeedsDecisionSignal_MatchesLine(t *testing.T) {
+	transcript := "I looked into the migration path.\n\n" +
+		"needs-decision: should the migration run online or require downtime?\n"
+
+	got, found := soldier.ExtractNeedsDecisionSignal(transcript)
+	if !found {
+		t.Fatal("expected the needs-decision line to be found")
+	}
+	if got.Question != "should the migration run online or require downtime?" {
+		t.Errorf("Question = %q", got.Question)
+	}
+	if got.Kind != state.DecisionKindProse {
+		t.Errorf("Kind = %q, want %q", got.Kind, state.DecisionKindProse)
+	}
+	if got.AskedAt.IsZero() {
+		t.Error("expected AskedAt to be set")
+	}
+}
+
+// The match is case-insensitive on the verb, and tolerant of leading
+// whitespace - matching how a soldier's own shell/echo output might be
+// indented.
+func TestExtractNeedsDecisionSignal_CaseInsensitiveAndIndented(t *testing.T) {
+	transcript := "  Needs-Decision:   use Postgres or SQLite?  \n"
+
+	got, found := soldier.ExtractNeedsDecisionSignal(transcript)
+	if !found {
+		t.Fatal("expected the needs-decision line to be found")
+	}
+	if got.Question != "use Postgres or SQLite?" {
+		t.Errorf("Question = %q", got.Question)
+	}
+}
+
+// Several needs-decision lines in the transcript (e.g. an earlier one from
+// a previous turn) resolve to the last one - the most recent question is
+// what's actually still open.
+func TestExtractNeedsDecisionSignal_TakesTheLastMatch(t *testing.T) {
+	transcript := "needs-decision: an old question already resolved\n" +
+		"working on it...\n" +
+		"needs-decision: the current open question\n"
+
+	got, found := soldier.ExtractNeedsDecisionSignal(transcript)
+	if !found {
+		t.Fatal("expected a match")
+	}
+	if got.Question != "the current open question" {
+		t.Errorf("Question = %q, want the last match", got.Question)
+	}
+}
+
+// No needs-decision line at all (the common case - ordinary output, or a
+// soldier that used AskUserQuestion instead) reports no signal, never an
+// invented Decision.
+func TestExtractNeedsDecisionSignal_NoMatch(t *testing.T) {
+	if _, found := soldier.ExtractNeedsDecisionSignal("all done, opened PR #4\n"); found {
+		t.Error("expected no signal for ordinary output")
+	}
+	if _, found := soldier.ExtractNeedsDecisionSignal(""); found {
+		t.Error("expected no signal for an empty transcript")
 	}
 }

@@ -26,6 +26,11 @@ type fakeHerdr struct {
 	tabCloseErr   error
 	createTabErr  error
 
+	readVisibleOutput string
+	readVisibleErr    error
+	waitStatus        string
+	waitErr           error
+
 	lastAgentArgs []string
 	promptCalls   []string
 	promptNames   []string
@@ -54,6 +59,12 @@ func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error
 	return f.promptStatus, nil
 }
 func (f *fakeHerdr) AgentRead(name string, lines int) (string, error) { return f.readOutput, nil }
+func (f *fakeHerdr) AgentReadVisible(name string) (string, error) {
+	return f.readVisibleOutput, f.readVisibleErr
+}
+func (f *fakeHerdr) AgentWait(name string, until []string, timeoutMS int) (string, error) {
+	return f.waitStatus, f.waitErr
+}
 func (f *fakeHerdr) TabClose(tabID string) error {
 	f.tabClosed = true
 	return f.tabCloseErr

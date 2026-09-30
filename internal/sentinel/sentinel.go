@@ -232,7 +232,11 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 		task.Output = output
 	}
 	if newStatus == state.StatusBlocked {
-		task.Decision = soldier.ExtractDecision(task.Output)
+		// Reaching here means live == "blocked" (the only raw status
+		// MapAgentStatus maps to StatusBlocked) - herdr's own classifier
+		// caught it, almost always Claude Code's AskUserQuestion modal.
+		// See soldier.ResolveBlockedDecision.
+		task.Decision = soldier.ResolveBlockedDecision(client, task.HerdrAgentName, task.Output)
 	}
 	if err := state.Save(projectRoot, task); err != nil {
 		return fmt.Errorf("persisting task %s: %w", task.ID, err)
@@ -248,6 +252,13 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 // only ever means the turn stopped responding, never why (internal/pause's
 // package doc):
 //
+//  0. A needs-decision: line in the soldier's fresh output
+//     (soldier.ExtractNeedsDecisionSignal) takes priority over everything
+//     below: the soldier explicitly said it's waiting on the general - a
+//     plain-prose question, the one shape herdr's own classifier never
+//     catches on its own (see the durable decision record's design
+//     report) - so the task is forced Blocked instead of settling Done or
+//     falling through to the ambiguous-idle handling.
 //  1. A strong completion signal - a scout's internal/report file, or a
 //     mission's own commit ahead of its camp's base (settle.HasCompletionSignal) -
 //     settles the task Done, same as before this package read either
@@ -261,12 +272,19 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 //
 // Returns whether it settled the task (and so recorded a wake).
 func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (bool, error) {
+	output, readErr := client.AgentRead(task.HerdrAgentName, tickReadLines)
+	if readErr == nil {
+		if d, found := soldier.ExtractNeedsDecisionSignal(output); found {
+			return true, settleNeedsDecision(projectRoot, task, output, d)
+		}
+	}
+
 	strong, reportPath, err := settle.HasCompletionSignal(projectRoot, task)
 	if err != nil {
 		return false, err
 	}
 	if strong {
-		return true, settleDone(projectRoot, task, reportPath, client)
+		return true, settleDone(projectRoot, task, reportPath, output, readErr)
 	}
 
 	_, active, err := pause.Active(projectRoot, task.HerdrAgentName, time.Now())
@@ -286,15 +304,39 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	return handleIdleUnconfirmed(projectRoot, task)
 }
 
+// settleNeedsDecision persists task's transition from an apparently-idle
+// turn straight to StatusBlocked, because its fresh output actually
+// carries a needs-decision: line (soldier.ExtractNeedsDecisionSignal) -
+// the soldier is waiting on the general, not finished. output is
+// whatever settleIdleTask already read to find that line, so this never
+// re-reads it.
+func settleNeedsDecision(projectRoot string, task state.Task, output string, decision *state.Decision) error {
+	old := task.Status
+	task.Status = state.StatusBlocked
+	task.Output = output
+	task.Decision = decision
+	task.UpdatedAt = time.Now().UTC()
+	task.IdleUnconfirmedSince = time.Time{}
+	if err := state.Save(projectRoot, task); err != nil {
+		return fmt.Errorf("persisting task %s: %w", task.ID, err)
+	}
+	if err := recordWake(projectRoot, task, old, state.StatusBlocked, ""); err != nil {
+		return fmt.Errorf("recording wake for task %s: %w", task.ID, err)
+	}
+	return nil
+}
+
 // settleDone persists task's corroborated Done transition and records a
 // wake for it - exactly what tickProject did unconditionally before this
-// package required corroboration first.
-func settleDone(projectRoot string, task state.Task, reportPath string, client herdr.Client) error {
+// package required corroboration first. output/readErr are whatever
+// settleIdleTask already read while checking for a needs-decision line,
+// so this never issues a second AgentRead for the same tick.
+func settleDone(projectRoot string, task state.Task, reportPath, output string, readErr error) error {
 	old := task.Status
 	task.Status = state.StatusDone
 	task.UpdatedAt = time.Now().UTC()
 	task.IdleUnconfirmedSince = time.Time{}
-	if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
+	if readErr == nil {
 		task.Output = output
 	}
 	if err := state.Save(projectRoot, task); err != nil {

@@ -12,6 +12,17 @@ import (
 // "* foo", "1. foo", "2) foo") and captures its text.
 var optionLinePattern = regexp.MustCompile(`^\s*(?:[-*\x{2022}]|\d+[.):])\s+(.+?)\s*$`)
 
+// needsDecisionPattern matches the soldier-authored end-of-turn line
+// documented in needsDecisionInstructions: a strict, syntactic marker for
+// a plain-prose question that needs the general's answer, adapted from
+// upstream-tool's own "needs-decision:" status-line convention. Unlike
+// optionLinePattern (a fuzzy heuristic over arbitrary prose), this is the
+// only thing that can turn a plain-prose question into a genuine
+// StatusBlocked transition at all - herdr's own classifier never does,
+// only Claude Code's AskUserQuestion modal reliably reaches it (see the
+// durable decision record's design report).
+var needsDecisionPattern = regexp.MustCompile(`(?im)^\s*needs-decision:\s*(.+?)\s*$`)
+
 // ExtractDecision builds a state.Decision - the actual commander-facing
 // question, and any options offered alongside it - out of transcript, the
 // raw text captured at the moment a task's status settles to
@@ -67,8 +78,36 @@ func ExtractDecision(transcript string) *state.Decision {
 	return &state.Decision{
 		Question: strings.Join(question, " "),
 		Options:  options,
+		Kind:     state.DecisionKindProse,
 		AskedAt:  time.Now().UTC(),
 	}
+}
+
+// ExtractNeedsDecisionSignal reports whether transcript's soldier-authored
+// output contains a needs-decision: line (see needsDecisionInstructions)
+// and, if so, the Decision built from it. Unlike ExtractDecision (a fuzzy
+// heuristic over arbitrary prose), this is a strict syntactic match on an
+// exact, documented format - the only thing that can turn a plain-prose
+// question into a real StatusBlocked transition, since herdr's own
+// classifier never does for plain prose (see the durable decision
+// record's design report). Only the last matching line counts, in case an
+// earlier one sits in unrelated context further up the transcript (a past
+// turn, quoted text). Returns false, nil if no such line is present
+// anywhere - callers must never invent a Decision when there isn't one.
+func ExtractNeedsDecisionSignal(transcript string) (*state.Decision, bool) {
+	matches := needsDecisionPattern.FindAllStringSubmatch(transcript, -1)
+	if len(matches) == 0 {
+		return nil, false
+	}
+	question := strings.TrimSpace(matches[len(matches)-1][1])
+	if question == "" {
+		return nil, false
+	}
+	return &state.Decision{
+		Question: question,
+		Kind:     state.DecisionKindProse,
+		AskedAt:  time.Now().UTC(),
+	}, true
 }
 
 // paragraphStart walks lines backward from end (exclusive) to the start of
