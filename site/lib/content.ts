@@ -132,11 +132,11 @@ export const features = [
     prompt: "The pagination fix looks good, land it.",
   },
   {
-    term: "Ship through the review-tool gate",
+    term: "Ship through the checkpoint pipeline",
     cluster: "shipping",
     icon: "ShieldCheck",
     commands: ["ship"],
-    def: "ship pushes the mission's branch to a dedicated review-tool remote - self-configuring with review-tool init the first time. An isolated pipeline runs review, tests, lint, and docs, then opens the real PR itself once everything's green.",
+    def: "ship runs vexillum's own checkpoint pipeline against the mission's camp - lint, tests, a soldier-driven review of the diff, and a docs check, in order, synchronously - then pushes and opens the real PR itself once everything's green.",
     prompt:
       "This one touches the billing code, push it through the real gate - I want a proper reviewed PR, not a local merge.",
   },
@@ -145,7 +145,7 @@ export const features = [
     cluster: "environment",
     icon: "Stethoscope",
     commands: ["doctor"],
-    def: "doctor checks required tools (Claude Code, herdr) and optional ones tied to specific commands (review-tool, gh, tmux) - read-only, it verifies, never installs.",
+    def: "doctor checks required tools (Claude Code, herdr) and optional ones tied to specific commands (gh, tmux) - read-only, it verifies, never installs.",
     prompt:
       "Something feels off, can you check the environment's actually set up right before I dispatch anything else?",
   },

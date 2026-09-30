@@ -9,37 +9,36 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
-	"github.com/isaias-alt/vexillum/internal/doctorcheck"
+	"github.com/isaias-alt/vexillum/internal/checkpoint"
+	"github.com/isaias-alt/vexillum/internal/ghpr"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
-const shipUsage = `Ship a finished mission through the review-tool validation gate, opening
-a real PR.
+const shipUsage = `Ship a finished mission through vexillum's own checkpoint pipeline,
+opening a real pull request.
 
 Usage:
   vexillum ship <task-id>
 
-Requires the "review-tool" binary installed ('vexillum doctor' reports
-whether it is). If this project hasn't been gated yet, ship runs
-'review-tool init' itself the first time - no separate setup step for
-the general to remember; see docs/review-tool.md. Then it pushes the
-mission's camp branch to the "review-tool" remote, deterministically -
-no soldier or agent judgment decides whether or when this push happens,
-since it is the one vexillum action with a real, irreversible effect
-outside the machine.
+Runs, in order, inside the mission's own camp: lint, tests, a soldier-
+driven code review of the diff, and a docs check - stopping at the first
+step that fails and reporting it, without pushing or opening anything.
+Every step runs synchronously; "vexillum ship" doesn't return until the
+whole pipeline has settled, there's nothing external to track afterward.
 
-review-tool then runs its own review/test/lint/docs pipeline in an
-isolated worktree and opens the PR itself once every check is green.
-Track that pipeline with 'review-tool axi status' or the 'review-tool'
-TUI - vexillum does not supervise it.
+Once every step passes, pushes the mission's camp branch to the real
+remote ("origin") and opens the pull request itself with "gh pr create" -
+deterministically, no soldier or agent judgment decides whether or when
+this happens, since it's the one vexillum action with a real, irreversible
+effect outside the machine. Requires "gh" ('vexillum doctor' reports
+whether it's installed).
 
-A mission already shipped can be shipped again, to push follow-up
-commits onto the same open PR - only "done" and "shipped" are valid
-starting states. Once shipped, land the PR with 'vexillum land
-<task-id>' rather than 'vexillum land'-ing the camp locally; the camp's
-own branch is no longer the source of truth once review-tool may have
-applied fixes to it.
+A mission already shipped can be shipped again, to push follow-up commits
+onto the same open PR - only "done" and "shipped" are valid starting
+states; a re-ship still runs the full checkpoint pipeline first. Once
+shipped, land the PR with 'vexillum land <task-id>' rather than 'vexillum
+land'-ing the camp locally.
 `
 
 // Ship runs the "vexillum ship" command.
@@ -89,10 +88,9 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		return 1
 	}
 
-	if !doctorcheck.GateConfigured(projectDir) {
-		if err := gateProject(projectDir, stdout, stderr); err != nil {
-			return 1
-		}
+	if !ghpr.Installed() {
+		fmt.Fprintln(stderr, "vexillum: 'gh' is not installed - required to open a mission's pull request (https://cli.github.com)")
+		return 1
 	}
 
 	c, err := camp.Resolve(projectDir, vexillumHome, task.CampSlot)
@@ -101,48 +99,72 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		return 1
 	}
 
-	cmd := exec.Command("git", "push", "review-tool", c.Branch)
-	cmd.Dir = c.Path
-	out, pushErr := cmd.CombinedOutput()
-	if pushErr != nil {
-		fmt.Fprintf(stderr, "vexillum: pushing %s through the review-tool gate: %v\n%s\n", c.Branch, pushErr, strings.TrimSpace(string(out)))
+	result, err := checkpoint.Run(c.Path, task.CampBase)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: running the %s pipeline: %v\n", checkpoint.Name, err)
 		return 1
+	}
+	for _, sr := range result.Steps {
+		status := "ok"
+		if !sr.Passed {
+			status = "FAILED"
+		}
+		fmt.Fprintf(stdout, "[%s] %s\n", status, sr.Step)
+	}
+	if failed := result.FailedStep(); failed != nil {
+		fmt.Fprintf(stderr, "vexillum: %s failed at %s, refusing to push or open a pull request\n", checkpoint.Name, failed.Step)
+		if failed.Detail != "" {
+			fmt.Fprintln(stderr, failed.Detail)
+		}
+		return 1
+	}
+
+	pushCmd := exec.Command("git", "push", "origin", c.Branch)
+	pushCmd.Dir = c.Path
+	if out, err := pushCmd.CombinedOutput(); err != nil {
+		fmt.Fprintf(stderr, "vexillum: pushing %s to origin: %v\n%s\n", c.Branch, err, strings.TrimSpace(string(out)))
+		return 1
+	}
+
+	var prURL string
+	if task.Status == state.StatusShipped {
+		pr, err := ghpr.View(projectDir, c.Branch)
+		if err != nil {
+			fmt.Fprintf(stderr, "vexillum: pushed follow-up commits, but couldn't look up the existing pull request: %v\n", err)
+			return 1
+		}
+		prURL = pr.URL
+	} else {
+		prURL, err = ghpr.Create(projectDir, c.Branch, task.CampBase, shipPRTitle(task), shipPRBody(task))
+		if err != nil {
+			fmt.Fprintf(stderr, "vexillum: %v\n", err)
+			return 1
+		}
 	}
 
 	task.Status = state.StatusShipped
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
-		fmt.Fprintf(stderr, "vexillum: pushed %s, but failed to record shipped status: %v\n", c.Branch, err)
+		fmt.Fprintf(stderr, "vexillum: opened %s, but failed to record shipped status: %v\n", prURL, err)
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "pushed %s through the review-tool gate.\n", c.Branch)
-	fmt.Fprintln(stdout, "track its pipeline with 'review-tool axi status' or the 'review-tool' TUI - it opens the PR itself once every check passes.")
+	fmt.Fprintf(stdout, "%s passed, pushed %s, pull request: %s\n", checkpoint.Name, c.Branch, prURL)
 	return 0
 }
 
-// gateProject runs "review-tool init" for projectDir the first time
-// ship needs the gate and finds it isn't configured yet - lazily, on
-// first use, rather than as a "vexillum init" side effect: init stays
-// local-only and network-free (PRD v2, "Decisiones de integración de
-// AXIs" applies the same reasoning here even though review-tool isn't
-// technically an AXI), and nothing about the gate exists on disk until a
-// mission actually needs to ship. Fails clearly if "review-tool" isn't
-// installed at all, rather than a confusing exec error.
-func gateProject(projectDir string, stdout, stderr io.Writer) error {
-	if _, err := exec.LookPath("review-tool"); err != nil {
-		fmt.Fprintln(stderr, "vexillum: 'review-tool' is not installed - see docs/review-tool.md, or use 'vexillum land' for a local fast-forward instead")
-		return err
+// shipPRTitle derives a pull request title from task's prompt - its
+// first line, since a mission's prompt is often multiple paragraphs of
+// context the PR title has no room for.
+func shipPRTitle(task state.Task) string {
+	title := strings.TrimSpace(strings.SplitN(task.Prompt, "\n", 2)[0])
+	if title == "" {
+		title = "vexillum mission " + task.ID
 	}
+	return title
+}
 
-	fmt.Fprintln(stdout, "this project isn't gated yet - running 'review-tool init'...")
-	cmd := exec.Command("review-tool", "init")
-	cmd.Dir = projectDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: 'review-tool init' failed: %v\n%s\n", err, strings.TrimSpace(string(out)))
-		return err
-	}
-	fmt.Fprintln(stdout, "gate initialized.")
-	return nil
+// shipPRBody derives a pull request body from task's full prompt.
+func shipPRBody(task state.Task) string {
+	return fmt.Sprintf("%s\n\n---\nvexillum mission %s, verified by %s: lint, tests, review, and docs all passed.", task.Prompt, task.ID, checkpoint.Name)
 }

@@ -35,7 +35,7 @@ vexillum redispatch  # re-dispatch an interrupted task from its original prompt
 vexillum decide      # answer a blocked task's open question so it can continue
 vexillum status      # report the current project's fleet of tasks (read-only)
 vexillum land        # land a finished mission's work into the base branch
-vexillum ship        # push a finished mission through the review-tool gate for a real PR
+vexillum ship        # push a finished mission through vexillum's own checkpoint pipeline for a real PR
 vexillum release     # release a soldier's camp back to the pool
 vexillum sentinel    # watch dispatched soldiers and record status changes
 vexillum upgrade     # refresh an already-initialized project's scaffold

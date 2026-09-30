@@ -123,3 +123,48 @@ esac`))
 		t.Error("merge must never be attempted when checks are red")
 	}
 }
+
+func TestCreate_ReturnsTheNewPullRequestURL(t *testing.T) {
+	t.Setenv("PATH", ghStub(t, `case "$1 $2" in
+  "pr create") echo 'https://github.com/x/y/pull/7' ;;
+esac`))
+
+	url, err := Create(t.TempDir(), "vexillum/abc123", "main", "a title", "a body")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if url != "https://github.com/x/y/pull/7" {
+		t.Errorf("expected the new PR URL back, got %q", url)
+	}
+}
+
+// gh pr create sometimes prints informational lines before the URL (e.g.
+// a note about an existing draft it reused) - only the last line is the
+// URL.
+func TestCreate_TakesTheLastLineWhenGhPrintsExtraOutput(t *testing.T) {
+	t.Setenv("PATH", ghStub(t, `case "$1 $2" in
+  "pr create") printf 'Some note from gh\nhttps://github.com/x/y/pull/7\n' ;;
+esac`))
+
+	url, err := Create(t.TempDir(), "vexillum/abc123", "", "a title", "a body")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if url != "https://github.com/x/y/pull/7" {
+		t.Errorf("expected only the last line as the URL, got %q", url)
+	}
+}
+
+func TestCreate_ReportsFailure(t *testing.T) {
+	t.Setenv("PATH", ghStub(t, `case "$1 $2" in
+  "pr create") echo "a pull request for branch vexillum/abc123 already exists" >&2; exit 1 ;;
+esac`))
+
+	_, err := Create(t.TempDir(), "vexillum/abc123", "", "a title", "a body")
+	if err == nil {
+		t.Fatal("expected an error when gh pr create fails")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected gh's own error output surfaced, got: %v", err)
+	}
+}

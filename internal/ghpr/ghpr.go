@@ -1,13 +1,14 @@
-// Package ghpr merges a shipped mission's real GitHub pull request - the
-// vexillum-side replacement for "vexillum land" once a mission has gone
-// through the review-tool gate: the PR, not the project's own camp, is
-// the source of truth (review-tool may have applied auto-fix commits, or
-// rebased, in its own isolated worktree that the camp never sees). It
-// verifies live, right before merging, that the pull request is open,
-// not a draft, mergeable, and every check is green - binding the merge
-// to the exact head it just verified via --match-head-commit, so a push
-// landing between that read and the merge fails the merge instead of
-// landing something nothing checked.
+// Package ghpr handles a shipped mission's real GitHub pull request end
+// to end via the "gh" CLI: opening it (Create, once "vexillum ship" has
+// pushed a mission's branch through internal/checkpoint's own validation
+// pipeline) and later merging it (MergeShipped, "vexillum land" on a
+// shipped task) - the PR, not the project's own camp, is the source of
+// truth once a mission has shipped, so land verifies live, right before
+// merging, that the pull request is open, not a draft, mergeable, and
+// every check is green - binding the merge to the exact head it just
+// verified via --match-head-commit, so a push landing between that read
+// and the merge fails the merge instead of landing something nothing
+// checked.
 //
 // A scoped-down version of what github.com/upstream's
 // fm-pr-merge.sh does for the same problem: no away-authority or
@@ -58,6 +59,40 @@ func View(projectDir, branch string) (PullRequest, error) {
 		return PullRequest{}, fmt.Errorf("parsing gh pr view output: %w", err)
 	}
 	return pr, nil
+}
+
+// Create opens a new pull request for branch via "gh pr create", once a
+// mission has passed vexillum's own checkpoint pipeline
+// (internal/checkpoint) - the vexillum-side replacement for review-tool'
+// own auto-open-PR step, now that the push target is the real remote
+// directly rather than a gate remote that opened the PR on vexillum's
+// behalf. base may be empty, letting gh fall back to the repository's
+// default branch. Returns the new pull request's URL.
+func Create(projectDir, branch, base, title, body string) (url string, err error) {
+	args := []string{"pr", "create", "--head", branch, "--title", title, "--body", body}
+	if base != "" {
+		args = append(args, "--base", base)
+	}
+	cmd := exec.Command("gh", args...)
+	cmd.Dir = projectDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("creating a pull request for %s: %w\n%s", branch, err, strings.TrimSpace(string(out)))
+	}
+	return lastLine(string(out)), nil
+}
+
+// lastLine returns the last non-empty line of s - "gh pr create" prints
+// the new pull request's URL as its final line of stdout, sometimes
+// preceded by informational lines (e.g. a note about an existing draft).
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 // MergeShipped looks up the pull request associated with branch, refuses

@@ -39,21 +39,6 @@ func TestBinary_MissingOptional(t *testing.T) {
 	}
 }
 
-func TestGateConfigured_FalseWithoutRemote(t *testing.T) {
-	dir := t.TempDir()
-	if GateConfigured(dir) {
-		t.Error("expected GateConfigured=false for a directory with no git remotes at all")
-	}
-}
-
-func Testreview-tool_NotInstalled(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	result := review-tool(t.TempDir())
-	if result.OK {
-		t.Error("expected OK=false when review-tool isn't on PATH")
-	}
-}
-
 func TestVexillumHome(t *testing.T) {
 	dir := t.TempDir()
 	result := VexillumHome(dir)

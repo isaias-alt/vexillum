@@ -1,11 +1,10 @@
 // Package doctorcheck implements the individual environment checks
-// "vexillum doctor" reports on - required and optional binaries, the
-// review-tool gate, herdr's version, the project's own scaffold - plus
-// the catalog of AXIs and first-party skills doctor lists
-// informationally. Each check is a pure function returning a Result (or,
-// for the AXI catalog, a status line); "vexillum doctor" itself only
-// composes and prints them, and never affects the exit code beyond what
-// Result.Required/OK say.
+// "vexillum doctor" reports on - required and optional binaries, herdr's
+// version, the project's own scaffold - plus the catalog of AXIs and
+// first-party skills doctor lists informationally. Each check is a pure
+// function returning a Result (or, for the AXI catalog, a status line);
+// "vexillum doctor" itself only composes and prints them, and never
+// affects the exit code beyond what Result.Required/OK say.
 package doctorcheck
 
 import (
@@ -84,48 +83,18 @@ func Binary(label, binaryName string, required bool) Result {
 	return Result{Name: label, OK: true, Required: required}
 }
 
-// review-tool reports whether the "review-tool" binary is installed and,
-// if so, whether this project has been gated (PRD v2, B.4): a real,
-// standalone CLI (github.com/upstream, installed via
-// curl, not an "npx skills add" AXI) that puts a local git remote in
-// front of the real one - "git push review-tool <branch>" runs its own
-// review/test/lint/docs pipeline and opens the PR itself once every
-// check passes. Optional and purely informational, like the AXIs: a
-// project that never ships through the gate doesn't need it, and never
-// running "review-tool init" is not an error.
-func review-tool(projectDir string) Result {
-	const name = "review-tool"
-
-	if _, err := exec.LookPath("review-tool"); err != nil {
-		return Result{Name: name, Detail: "not found in PATH (optional - only needed for 'vexillum ship', see docs/review-tool.md)"}
-	}
-	if !GateConfigured(projectDir) {
-		return Result{Name: name, Detail: "installed, but this project hasn't run 'review-tool init' yet - 'vexillum ship' will do this automatically the first time"}
-	}
-	return Result{Name: name, OK: true, Detail: "installed and this project is gated"}
-}
-
 // GitHubCLI reports whether the "gh" binary is installed - the official
-// GitHub CLI, called directly by "vexillum land" to merge a shipped
-// mission's real PR (see internal/ghpr), not the separate "gh-tool"
-// agent-facing AXI. Optional and purely informational: a project that
-// never ships through the review-tool gate never needs it, same posture
-// as the review-tool check above.
+// GitHub CLI, called directly by "vexillum ship" (internal/ghpr.Create)
+// to open a mission's pull request once its checkpoint pipeline passes,
+// and by "vexillum land" (internal/ghpr.MergeShipped) to later merge it -
+// not the separate "gh-tool" agent-facing AXI. Optional and purely
+// informational: a project that never ships never needs it.
 func GitHubCLI() Result {
 	const name = "GitHub CLI (gh)"
 	if _, err := exec.LookPath("gh"); err != nil {
-		return Result{Name: name, Detail: "not found in PATH (optional - only needed for 'vexillum land' on a shipped mission)"}
+		return Result{Name: name, Detail: "not found in PATH (optional - only needed for 'vexillum ship'/'vexillum land' on a shipped mission)"}
 	}
 	return Result{Name: name, OK: true}
-}
-
-// GateConfigured reports whether projectDir already has the
-// "review-tool" git remote that "review-tool init" creates - the signal
-// "vexillum ship" depends on being there before it can push through it.
-func GateConfigured(projectDir string) bool {
-	cmd := exec.Command("git", "remote", "get-url", "review-tool")
-	cmd.Dir = projectDir
-	return cmd.Run() == nil
 }
 
 // HerdrVersion anchors the implicit assumption internal/herdr's

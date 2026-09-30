@@ -44,7 +44,6 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.Binary("herdr", "herdr", true),
 		doctorcheck.HerdrVersion(),
 		doctorcheck.Binary("tmux", "tmux", false),
-		doctorcheck.review-tool(projectDir),
 		doctorcheck.GitHubCLI(),
 		doctorcheck.VexillumHome(vexillumHome),
 		doctorcheck.ProjectInitialized(projectDir),

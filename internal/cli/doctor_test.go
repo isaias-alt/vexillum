@@ -458,71 +458,8 @@ func TestDoctor_ChromeDevtoolsNotInstalled(t *testing.T) {
 	}
 }
 
-// addGitRemote adds a git remote to dir - used to simulate a project that
-// already ran "review-tool init" (which creates a "review-tool" remote)
-// without needing the real review-tool binary.
-func addGitRemote(t *testing.T, dir, name, url string) {
-	t.Helper()
-	cmd := exec.Command("git", "remote", "add", name, url)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git remote add: %v\n%s", err, out)
-	}
-}
-
-// B4-01: review-tool not installed at all.
-func TestDoctor_review-toolNotInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if !bytes.Contains(out.Bytes(), []byte("[missing] review-tool - not found in PATH")) {
-		t.Errorf("expected review-tool reported not found, got:\n%s", out.String())
-	}
-}
-
-// B4-02: review-tool installed, but this project never ran "review-tool
-// init" (no "review-tool" git remote yet).
-func TestDoctor_review-toolInstalledButNotGated(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux", "review-tool"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if !bytes.Contains(out.Bytes(), []byte("[missing] review-tool - installed, but this project hasn't run 'review-tool init'")) {
-		t.Errorf("expected review-tool reported installed-but-not-gated, got:\n%s", out.String())
-	}
-}
-
-// B4-03: review-tool installed and this project is gated (has the
-// "review-tool" remote) - ok, and never affects the exit code either way.
-func TestDoctor_review-toolGated(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux", "review-tool"))
-	projectDir := initializedProject(t)
-	addGitRemote(t, projectDir, "review-tool", "/tmp/fake-review-tool-gate.git")
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	code := runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d\noutput:\n%s", code, out.String())
-	}
-	if !bytes.Contains(out.Bytes(), []byte("[ok] review-tool - installed and this project is gated")) {
-		t.Errorf("expected review-tool reported gated and ok, got:\n%s", out.String())
-	}
-}
-
 // gh not installed is reported, informational only - it never affects
-// the exit code, same posture as review-tool above.
+// the exit code.
 func TestDoctor_GitHubCLINotInstalled(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir := initializedProject(t)

@@ -234,19 +234,16 @@ func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 // The Stop hook itself is registered in .claude/settings.json, which
 // ensureSentinelHook writes into the project directory and which git
 // then tracks like any other file - so it travels into every checkout
-// of the repo, including a worktree a completely different tool creates
-// for its own purposes. A third-party tool that runs its own headless
-// Claude Code turn there - review-tool' review/test/lint steps, which
-// each shell out to "claude -p ..." inside an isolated run worktree
-// checked out from a vexillum-initialized repo, is the case that
-// surfaced this - inherits the hook too, with no HERDR_WORKSPACE_ID in
-// its environment (review-tool' daemon isn't a herdr pane). Without this
-// guard, that unrelated turn would sit blocked in runSentinelAwait for
-// up to maxWait: the sentinel has no task tracking an invocation it
-// never dispatched, so a wake for it can never arrive. An empty
-// workspaceID means exactly that - exit 0 immediately, the same "let
-// the turn end quietly" result runSentinelAwait itself returns on a
-// real timeout, just without waiting first.
+// of the repo, including a mission's own camp. A headless Claude Code
+// turn run there outside a herdr pane - internal/checkpoint's review
+// step, which shells out to "claude -p ..." directly from "vexillum
+// ship", is the case that surfaced this - inherits the hook too, with no
+// HERDR_WORKSPACE_ID in its environment. Without this guard, that turn
+// would sit blocked in runSentinelAwait for up to maxWait: the sentinel
+// has no task tracking an invocation it never dispatched, so a wake for
+// it can never arrive. An empty workspaceID means exactly that - exit 0
+// immediately, the same "let the turn end quietly" result runSentinelAwait
+// itself returns on a real timeout, just without waiting first.
 func runSentinelAwaitGuarded(projectRoot string, maxWait, pollInterval time.Duration, stderr io.Writer, workspaceID string) int {
 	if workspaceID == "" {
 		return 0

@@ -32,15 +32,14 @@ release then fails, land reports both outcomes plainly - the merge is
 NOT undone - and leaves the camp for 'vexillum release <task-id>' to
 retry by hand.
 
-For a task already shipped through the review-tool gate ('vexillum
-ship'), this instead merges the real pull request on GitHub - the camp's
-own branch is no longer the source of truth once review-tool may have
-applied fixes to it in its own isolated worktree. Requires "gh". Refuses
-unless the pull request is open, not a draft, mergeable, and every check
-is green; the merge is bound to the exact head just verified. This path
-never auto-releases: the branch is still in flight until the general
-merges the real PR, and review-tool' isolated worktree is a different
-camp than this one.
+For a task already shipped through vexillum's own checkpoint pipeline
+('vexillum ship'), this instead merges the real pull request on GitHub -
+the PR, not the camp's own branch, is the source of truth once the
+general (or CI, or a reviewer) may have pushed further commits directly
+to it on GitHub. Requires "gh". Refuses unless the pull request is open,
+not a draft, mergeable, and every check is green; the merge is bound to
+the exact head just verified. This path never auto-releases: the branch
+is still in flight until the general merges the real PR.
 `
 
 // Land runs the "vexillum land" command.
@@ -122,11 +121,10 @@ func runLand(projectDir, vexillumHome, homeDir, taskID string, client herdr.Clie
 
 // mergeShippedPR merges a shipped mission's real PR on GitHub - the
 // vexillum-side replacement for a fast-forward land once a mission has
-// gone through the review-tool gate (see internal/ghpr for the
-// verification and merge itself). Unlike a local fast-forward, this never
-// auto-releases the camp: the branch is still in flight until the general
-// merges the real PR, and review-tool' isolated worktree is a different
-// camp than this one.
+// gone through vexillum's own checkpoint pipeline (see internal/ghpr for
+// the verification and merge itself). Unlike a local fast-forward, this
+// never auto-releases the camp: the branch is still in flight until the
+// general merges the real PR.
 func mergeShippedPR(projectDir string, task state.Task, stdout, stderr io.Writer) int {
 	if !ghpr.Installed() {
 		fmt.Fprintln(stderr, "vexillum: 'gh' is not installed - required to merge a shipped mission's PR (https://cli.github.com)")

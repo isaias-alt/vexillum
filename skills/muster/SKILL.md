@@ -53,12 +53,13 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    - **Finished** - status `done` (a mission ready to land, or a scout with
      its report ready - vexillum doesn't record whether a `done` mission has
      actually been landed yet, so don't claim it has or hasn't).
-   - **Shipped** - status `shipped` (pushed through the review-tool gate; the
-     real PR may be open, merged, or closed - see pr mode for live state).
+   - **Shipped** - status `shipped` (pushed through vexillum's own checkpoint
+     pipeline; the real PR may be open, merged, or closed - see pr mode for
+     live state).
    Within each section, keep the order `vexillum status --json` already
    returns tasks in (most recently updated first).
 3. **pr mode only** - narrow to missions with a real PR. The only status
-   vexillum ever pushes a real branch through the review-tool gate for is
+   vexillum ever pushes a real branch through its checkpoint pipeline for is
    `shipped`, so start from that section. For each shipped task, look up its
    live PR the same way `vexillum land` itself does - by camp branch, not a
    stored PR number, since vexillum never stores one:

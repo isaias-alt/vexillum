@@ -15,7 +15,7 @@ import (
 // these tests exercise CLI's own argument construction, JSON field
 // extraction, and error decoding without a real herdr install or a real
 // Claude Code session - the same technique internal/cli's land_merge_test.go
-// and ship_test.go already use for "gh" and "review-tool".
+// and ship_test.go already use for "gh" and "claude".
 func herdrStub(t *testing.T, script string) string {
 	t.Helper()
 	dir := t.TempDir()

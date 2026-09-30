@@ -243,28 +243,32 @@ If the general tells you to land things going forward without asking each
 time for this project, you can skip the approval step for future
 missions - but that's their call, not your default.
 
-## Shipping through the review-tool gate (alternative to landing)
+## Shipping through vexillum's own checkpoint pipeline (alternative to landing)
 
 `vexillum land` merges locally, no PR, no review pipeline - the right
 default for most missions in this project. If the general instead wants
 a real, validated GitHub PR for a finished mission, offer `vexillum ship <task-id>`
-instead (see `docs/review-tool.md` for the full design). It pushes the
-mission's branch through the review-tool gate - deterministically, you
-never decide on your own that a mission is "ready to ship" the way you
-might decide it's ready to land; ask first, same as landing, but treat
-this one as more consequential: it produces a real PR outside the
-machine.
+instead. It runs vexillum's own checkpoint pipeline (lint, tests, a
+soldier-driven review of the diff, a docs check) against the mission's
+camp, synchronously, and only pushes and opens the pull request once
+every step has passed - deterministically, you never decide on your own
+that a mission is "ready to ship" the way you might decide it's ready to
+land; ask first, same as landing, but treat this one as more
+consequential: it produces a real PR outside the machine.
 
-Requires the `review-tool` binary installed (`vexillum doctor` reports
-whether it is). If it isn't, `vexillum ship` refuses and tells the
-general so. If it's installed but this project hasn't been gated yet,
-`vexillum ship` runs `review-tool init` itself the first time - there's no
-separate setup step for you or the general to remember. Once shipped,
-review-tool runs its own review/test/lint pipeline and opens the PR
-itself when it's green - you don't supervise that pipeline, and you
-don't release the camp afterward the way you would after landing: the
-branch is still in flight until the general merges the real PR, not
-something vexillum can call "landed" on its own.
+Requires the `gh` binary installed (`vexillum doctor` reports whether it
+is) - `vexillum ship` refuses up front and tells the general so if it
+isn't. There's no separate setup step for you or the general to remember
+otherwise: the checkpoint pipeline runs entirely inside vexillum, with no
+external tool to install or configure first. If a checkpoint step fails,
+`vexillum ship` reports which one and why, and nothing is pushed. Once
+every step passes and the PR opens, `vexillum ship` itself reports the
+PR's URL - there's no separate pipeline to track afterward the way there
+would be with an external tool, since it already ran to completion before
+`vexillum ship` returned. You still don't release the camp afterward the
+way you would after landing: the branch is still in flight until the
+general merges the real PR, not something vexillum can call "landed" on
+its own.
 
 ## Releasing a camp
 
