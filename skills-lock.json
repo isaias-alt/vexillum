@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/forum/SKILL.md",
       "computedHash": "3a4d15d8c797b2eb929e2af91155538b677a9fdfd6f5245de45bea2683d65910"
+    },
+    "muster": {
+      "source": "isaias-alt/vexillum",
+      "sourceType": "github",
+      "skillPath": "skills/muster/SKILL.md",
+      "computedHash": "fe9d571a1ac2e82ea542dd8c1757cfa46ef7bc47b97c3effdfc60b65abd1bc50"
     }
   }
 }
