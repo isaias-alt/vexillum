@@ -153,6 +153,11 @@
     renderLog(snap.transcript || []);
     renderQueue(snap.queued || [], ended);
 
+    $("annotateBtn").disabled = ended;
+    if (ended) {
+      closeCard();
+      hideOffer();
+    }
     $("input").disabled = ended;
     $("queueBtn").disabled = ended;
     updateButtons();
@@ -194,6 +199,7 @@
       } else {
         // The reviewer's own words are never parsed, only shown.
         item.append(el("p", "msg-text", message.text));
+        if (message.selector) item.append(el("span", "msg-where", message.selector));
       }
       log.append(item);
     }
@@ -218,8 +224,8 @@
       if (prompt.tag && prompt.tag !== "feedback" && prompt.tag !== "message") text.append(el("span", "queued-tag", prompt.tag));
       text.append(document.createTextNode(prompt.prompt));
       body.append(text);
-      const where = prompt.text || prompt.selector;
-      if (where) body.append(el("span", "queued-where", where));
+      if (prompt.text) body.append(el("span", "queued-quote", prompt.text));
+      if (prompt.selector) body.append(el("span", "queued-where", prompt.selector));
       item.append(body);
       const remove = el("button", "queued-remove", "×");
       remove.type = "button";
@@ -326,6 +332,191 @@
       reply = { type: "forum:rpc-result", id: message.id, ok: false, error: String((error && error.message) || error) };
     }
     event.source.postMessage(reply, "*");
+  });
+
+  // ------------------------------------------------------------ annotation
+
+  // The artifact side (hover outline, element and text capture) lives in
+  // forum-sdk.js inside the sandboxed iframe and only reports what the user
+  // clicked or selected. The note card and the request that queues it live
+  // here, so the token never leaves this page and the chrome cannot annotate
+  // itself: nothing outside the iframe's document is ever reported.
+
+  let annotateMode = false;
+  let card = null; // {kind: "element" | "selection", ctx, rect}
+  let offer = null; // {ctx, rect}
+
+  const clipText = (value, max) => String(value === null || value === undefined ? "" : value).slice(0, max);
+  const isRect = (rect) => rect && ["x", "y", "w", "h"].every((key) => Number.isFinite(rect[key]));
+
+  // cleanContext trusts nothing the artifact sent: strings are bounded and
+  // the tag must look like a tag, because this ends up in a prompt for the agent.
+  function cleanContext(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const tag = /^[a-z][a-z0-9-]{0,31}$/i.test(raw.tag) ? raw.tag.toLowerCase() : "element";
+    const ctx = { tag, selector: clipText(raw.selector, 512), text: clipText(raw.text, 500) };
+    if (raw.target && typeof raw.target === "object") {
+      const target = JSON.stringify(raw.target);
+      if (target.length <= 8000) ctx.target = raw.target;
+    }
+    return ctx;
+  }
+
+  // buildAnnotationPrompt is the body queued for one annotation: the reviewer's
+  // note, plus what it is about (tag, selector, text) for the agent to locate.
+  function buildAnnotationPrompt(ctx, note) {
+    const body = { prompt: note, tag: ctx.tag, selector: ctx.selector, text: ctx.text };
+    if (ctx.target) body.target = ctx.target;
+    return body;
+  }
+
+  function toFrame(message) {
+    if (frame.contentWindow) frame.contentWindow.postMessage(message, "*");
+  }
+
+  function setMode(on) {
+    annotateMode = on && !(snapshot && snapshot.status === "ended");
+    $("annotateBtn").setAttribute("aria-pressed", String(annotateMode));
+    toFrame({ type: "forum:mode", on: annotateMode });
+    if (!annotateMode && card && card.kind === "element") closeCard();
+  }
+
+  // place puts a floating node under (or, with no room, over) the anchor rect
+  // reported by the artifact, translated into this page's coordinates.
+  function place(node, rect) {
+    if (!rect) return;
+    const box = frame.getBoundingClientRect();
+    const margin = 8;
+    const width = node.offsetWidth;
+    const height = node.offsetHeight;
+    let left = box.left + rect.x;
+    let top = box.top + rect.y + rect.h + margin;
+    if (top + height > window.innerHeight - margin) top = Math.max(margin, box.top + rect.y - height - margin);
+    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
+    node.style.left = left + "px";
+    node.style.top = top + "px";
+  }
+
+  function hideOffer() {
+    offer = null;
+    $("annotOffer").hidden = true;
+  }
+
+  function showOffer(ctx, rect) {
+    offer = { ctx, rect };
+    const node = $("annotOffer");
+    node.hidden = false;
+    place(node, rect);
+  }
+
+  function openCard(kind, ctx, rect) {
+    hideOffer();
+    card = { kind, ctx, rect };
+    $("annotHeading").textContent = kind === "selection" ? "Annotate text" : "Annotate <" + ctx.tag + ">";
+    const context = $("annotContext");
+    context.replaceChildren();
+    if (ctx.text) context.append(el("p", "annot-quote", ctx.text));
+    if (ctx.selector) context.append(el("span", "annot-where", ctx.selector));
+    $("annotInput").value = "";
+    $("annotAdd").disabled = true;
+    const node = $("annotCard");
+    node.hidden = false;
+    place(node, rect);
+    toFrame({ type: "forum:hold", kind });
+    $("annotInput").focus();
+  }
+
+  function closeCard() {
+    if (!card) return;
+    card = null;
+    $("annotCard").hidden = true;
+    toFrame({ type: "forum:hold", kind: null });
+  }
+
+  async function submitCard() {
+    const note = $("annotInput").value.trim();
+    if (!card || !note) return;
+    const add = $("annotAdd");
+    add.disabled = true;
+    const queued = await run(() => api("POST", "/queue", buildAnnotationPrompt(card.ctx, note)));
+    if (queued) closeCard();
+    else add.disabled = $("annotInput").value.trim() === "";
+  }
+
+  $("annotateBtn").addEventListener("click", () => setMode(!annotateMode));
+  $("annotOfferBtn").addEventListener("click", () => offer && openCard("selection", offer.ctx, offer.rect));
+  // Pressing the action must not steal the artifact's text selection.
+  $("annotOfferBtn").addEventListener("mousedown", (event) => event.preventDefault());
+  $("annotCancel").addEventListener("click", closeCard);
+  $("annotInput").addEventListener("input", () => ($("annotAdd").disabled = $("annotInput").value.trim() === ""));
+  $("annotCard").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitCard();
+  });
+  $("annotInput").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    submitCard();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "i") {
+      event.preventDefault();
+      setMode(!annotateMode);
+    } else if (event.key === "Escape") {
+      if (card) closeCard();
+      else hideOffer();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (card) place($("annotCard"), card.rect);
+    if (offer) place($("annotOffer"), offer.rect);
+  });
+
+  frame.addEventListener("load", () => toFrame({ type: "forum:mode", on: annotateMode }));
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== frame.contentWindow) return;
+    const message = event.data;
+    if (!message || typeof message.type !== "string") return;
+    const ended = snapshot && snapshot.status === "ended";
+    const ctx = cleanContext(message.context);
+    const rect = isRect(message.rect) ? message.rect : null;
+    switch (message.type) {
+      case "forum:ready":
+        toFrame({ type: "forum:mode", on: annotateMode });
+        break;
+      case "forum:toggle-mode":
+        setMode(!annotateMode);
+        break;
+      case "forum:annotate":
+        if (ctx && annotateMode && !ended) openCard("element", ctx, rect);
+        break;
+      case "forum:selection":
+        if (!ctx || ended) break;
+        if (annotateMode) openCard("selection", ctx, rect);
+        else if (!card) showOffer(ctx, rect);
+        break;
+      case "forum:selection-clear":
+        hideOffer();
+        break;
+      case "forum:rect":
+        if (rect && card) {
+          card.rect = rect;
+          place($("annotCard"), rect);
+        }
+        if (rect && offer) {
+          offer.rect = rect;
+          place($("annotOffer"), rect);
+        }
+        break;
+      case "forum:escape":
+        if (card) closeCard();
+        else hideOffer();
+        break;
+    }
   });
 
   // -------------------------------------------------------------- markdown

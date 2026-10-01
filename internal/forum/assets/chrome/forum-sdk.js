@@ -8,9 +8,12 @@
 // THIRD-PARTY-NOTICES.md at the vexillum repo root.
 //
 // Native controls (radios, checkboxes, inputs, selects, buttons, forms) are
-// never touched: this script installs no click, change or submit handler, so
-// a decision form behaves exactly as the artifact authored it and calls
-// window.forum.queuePrompt itself on submit.
+// never touched outside annotation mode: the handlers below do nothing until
+// the user switches that mode on, so a decision form behaves exactly as the
+// artifact authored it and calls window.forum.queuePrompt itself on submit. In annotation mode the artifact
+// side (hover outline, element and text capture) lives here; the floating
+// note card and every request to the server live in the chrome, which owns
+// the session token (see forum-chrome.js, "annotation").
 (function () {
   "use strict";
   if (window.forum) return;
@@ -53,21 +56,51 @@
     return value === null || value === undefined ? "" : String(value);
   }
 
+  const STABLE_ATTRS = ["data-forum-question", "data-testid", "data-test", "data-cy", "name"];
+
+  function attrSelector(node) {
+    for (const name of STABLE_ATTRS) {
+      const value = node.getAttribute(name);
+      if (value && value.length <= 80 && !/[\r\n]/.test(value)) return { name, value, css: "[" + name + '="' + value.replace(/["\\]/g, "\\$&") + '"]' };
+    }
+    return null;
+  }
+
+  function isUnique(selector, node) {
+    try {
+      const found = document.querySelectorAll(selector);
+      return found.length === 1 && found[0] === node;
+    } catch {
+      return false;
+    }
+  }
+
+  // A CSS selector for node that matches it and nothing else: a document-unique
+  // id when there is one, else a path of tag, stable attribute (data-testid,
+  // name, ...) and :nth-of-type segments, grown upward only until it is unique.
   function selectorOf(node) {
-    if (!node || !node.tagName) return "";
+    if (!node || node.nodeType !== 1 || !node.tagName) return "";
     const parts = [];
-    for (let current = node; current && current.nodeType === 1 && parts.length < 5; current = current.parentElement) {
-      let part = current.tagName.toLowerCase();
-      if (current.id) {
-        parts.unshift(part + "#" + CSS.escape(current.id));
+    for (let current = node; current && current.nodeType === 1; current = current.parentElement) {
+      const tag = current.tagName.toLowerCase();
+      const id = current.getAttribute("id");
+      // getElementById would return the first of several equal ids, so ask for a match of exactly this node.
+      if (id && isUnique(tag + "#" + CSS.escape(id), current)) {
+        parts.unshift(tag + "#" + CSS.escape(id));
         break;
       }
+      const stable = attrSelector(current);
+      let part = tag + (stable ? stable.css : "");
       const parent = current.parentElement;
       if (parent) {
-        const same = [...parent.children].filter((child) => child.tagName === current.tagName);
-        if (same.length > 1) part += ":nth-of-type(" + (same.indexOf(current) + 1) + ")";
+        const alike = [...parent.children].filter((child) => child.tagName === current.tagName && (!stable || child.getAttribute(stable.name) === stable.value));
+        if (alike.length > 1) {
+          const sameTag = [...parent.children].filter((child) => child.tagName === current.tagName);
+          part += ":nth-of-type(" + (sameTag.indexOf(current) + 1) + ")";
+        }
       }
       parts.unshift(part);
+      if (tag === "body" || tag === "html" || isUnique(parts.join(" > "), node)) break;
     }
     return parts.join(" > ");
   }
@@ -141,10 +174,246 @@
     return rpc("send");
   }
 
+  // ------------------------------------------------------------ annotation
+
+  // Ring colors: the two --fr-selection (tyrian) values of the design system,
+  // dark (light theme) and light (dark theme). Drawn as a double ring so an
+  // annotation reads on any artifact background, light or dark.
+  const INK = "#5B2A5E";
+  const HALO = "#B695B8";
+  const FILL = "rgba(91, 42, 94, 0.16)";
+  const CONTROLS = "button,input,select,textarea,option,optgroup,label,summary,a[href],[contenteditable]:not([contenteditable='false'])";
+
+  let mode = false; // annotation mode, owned by the chrome
+  let hoverEl = null;
+  let held = null; // what is outlined while a note card is open: {el} or {range}
+  let lastEl = null; // the element last clicked in annotation mode
+  let pendingSelection = null; // {context, range} of the last reported text selection
+  let overlay = null;
+  let frame = 0;
+
+  function post(type, payload) {
+    if (window.parent !== window) window.parent.postMessage(Object.assign({ type }, payload), "*");
+  }
+
+  function elementOf(node) {
+    return node && node.nodeType === 1 ? node : node && node.parentElement;
+  }
+
+  function isForumUi(node) {
+    const el = elementOf(node);
+    return !!(el && el.closest && el.closest("[data-forum-ui]"));
+  }
+
+  function rectOf(rect) {
+    return { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+  }
+
+  function elementContext(node) {
+    return { tag: node.tagName.toLowerCase(), selector: selectorOf(node), text: textOf(node) };
+  }
+
+  // The prompt context of a text selection: the selected text and the selector
+  // of the element that contains it. null when there is nothing to annotate.
+  function selectionContext(selection) {
+    if (!selection || selection.rangeCount === 0) return null;
+    const range = selection.getRangeAt(0);
+    const text = str(selection.toString()).trim().replace(/\s+/g, " ");
+    if (range.collapsed || !text) return null;
+    const container = elementOf(range.commonAncestorContainer);
+    if (!container || isForumUi(container)) return null;
+    const selector = selectorOf(container);
+    const context = { tag: "text", selector, text: text.slice(0, 500) };
+    // The prompt's text field is capped; a longer selection keeps its full text in target.
+    if (text.length > 500) context.target = { type: "text-range", selector, text: text.slice(0, 2000) };
+    return { context, range };
+  }
+
+  function overlayRoot() {
+    if (!overlay || !overlay.isConnected) {
+      overlay = document.createElement("div");
+      overlay.setAttribute("data-forum-ui", "annotation");
+      overlay.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none";
+      document.documentElement.appendChild(overlay);
+    }
+    return overlay;
+  }
+
+  function drawBox(rect, shadow, fill) {
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const box = document.createElement("div");
+    box.style.cssText =
+      "position:fixed;box-sizing:border-box;pointer-events:none;border-radius:2px;left:" + rect.left + "px;top:" + rect.top + "px;width:" + rect.width + "px;height:" + rect.height + "px;box-shadow:" + shadow + (fill ? ";background:" + FILL : "");
+    overlayRoot().appendChild(box);
+  }
+
+  function render() {
+    frame = 0;
+    if (overlay) overlay.replaceChildren();
+    if (mode && hoverEl && hoverEl.isConnected && !(held && held.el === hoverEl)) drawBox(hoverEl.getBoundingClientRect(), "0 0 0 1px " + HALO + ",0 0 0 3px " + INK, false);
+    if (held && held.el && held.el.isConnected) drawBox(held.el.getBoundingClientRect(), "0 0 0 2px " + HALO + ",0 0 0 4px " + INK, true);
+    if (held && held.range) for (const rect of held.range.getClientRects()) drawBox(rect, "0 0 0 1px " + HALO + ",0 0 0 2px " + INK, true);
+  }
+
+  function schedule() {
+    if (!frame) frame = window.requestAnimationFrame(render);
+  }
+
+  function anchorRect() {
+    if (held && held.el) return held.el.isConnected ? rectOf(held.el.getBoundingClientRect()) : null;
+    const range = (held && held.range) || (pendingSelection && pendingSelection.range);
+    return range ? rectOf(range.getBoundingClientRect()) : null;
+  }
+
+  // Scrolling or resizing moves what the chrome's card and selection action
+  // are anchored to, so tell it where the anchor is now.
+  function reportMoved() {
+    schedule();
+    if (held || pendingSelection) post("forum:rect", { rect: anchorRect() });
+  }
+
+  function checkSelection() {
+    const found = selectionContext(window.getSelection());
+    if (!found) {
+      if (pendingSelection) {
+        pendingSelection = null;
+        post("forum:selection-clear");
+      }
+      return;
+    }
+    pendingSelection = found;
+    post("forum:selection", { context: found.context, rect: rectOf(found.range.getBoundingClientRect()) });
+  }
+
+  // In annotation mode a click annotates instead of acting, so none of the
+  // events that would fire the control under the pointer reach the artifact.
+  const SWALLOWED = ["pointerdown", "mousedown", "pointerup", "dblclick", "auxclick", "submit"];
+  let ignoreClick = false;
+  let pointerDown = false;
+
+  for (const type of SWALLOWED) {
+    document.addEventListener(
+      type,
+      (event) => {
+        if (type === "pointerdown" || type === "mousedown") pointerDown = true;
+        if (!mode || isForumUi(event.target)) return;
+        event.stopPropagation();
+        if (type === "submit") event.preventDefault();
+        // A press on a control would focus it, open its popup or start a drag; keep
+        // that off, but never on plain content so text can still be selected.
+        if (type === "mousedown" && elementOf(event.target) && elementOf(event.target).closest(CONTROLS)) event.preventDefault();
+      },
+      true,
+    );
+  }
+
+  document.addEventListener(
+    "mouseup",
+    (event) => {
+      pointerDown = false;
+      window.setTimeout(checkSelection, 0);
+      if (!mode || isForumUi(event.target)) return;
+      event.stopPropagation();
+      // A drag that selected text ends in a click on the common ancestor: that click is not an element annotation.
+      const selected = selectionContext(window.getSelection());
+      if (selected) ignoreClick = true;
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (!mode || isForumUi(event.target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (ignoreClick) {
+        ignoreClick = false;
+        return;
+      }
+      const el = elementOf(event.target);
+      if (!el || !el.tagName) return;
+      lastEl = el;
+      held = { el };
+      hoverEl = null;
+      schedule();
+      post("forum:annotate", { context: elementContext(el), rect: rectOf(el.getBoundingClientRect()) });
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "mouseover",
+    (event) => {
+      if (!mode || isForumUi(event.target)) return;
+      hoverEl = elementOf(event.target);
+      schedule();
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "mouseout",
+    (event) => {
+      if (event.relatedTarget) return;
+      hoverEl = null;
+      schedule();
+    },
+    true,
+  );
+
+  document.addEventListener("keyup", (event) => {
+    if (event.key === "Shift" || event.shiftKey || event.key.startsWith("Arrow")) window.setTimeout(checkSelection, 0);
+  });
+
+  document.addEventListener("selectionchange", () => {
+    if (pointerDown || !pendingSelection) return;
+    window.setTimeout(() => {
+      if (!selectionContext(window.getSelection())) checkSelection();
+    }, 0);
+  });
+
+  // Capture phase so the shortcut works wherever focus is inside the artifact.
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && str(event.key).toLowerCase() === "i") {
+        event.preventDefault();
+        post("forum:toggle-mode");
+      } else if (event.key === "Escape" && (held || pendingSelection)) {
+        post("forum:escape");
+      }
+    },
+    true,
+  );
+
+  window.addEventListener("scroll", reportMoved, { capture: true, passive: true });
+  window.addEventListener("resize", reportMoved);
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const message = event.data;
+    if (!message || typeof message.type !== "string") return;
+    if (message.type === "forum:mode") {
+      mode = !!message.on;
+      if (!mode) hoverEl = null;
+      schedule();
+    } else if (message.type === "forum:hold") {
+      if (message.kind === "element" && lastEl) held = { el: lastEl };
+      else if (message.kind === "selection" && pendingSelection) held = { range: pendingSelection.range };
+      else held = null;
+      schedule();
+    }
+  });
+
+  post("forum:ready");
+
   window.forum = Object.freeze({
     queuePrompt,
     sendQueuedPrompts,
     // Internal: used by the whiteboard embed to reach the server through the chrome.
     __rpc: rpc,
+    // Internal: the pure DOM helpers, exposed for tests.
+    __dom: { selectorOf, textOf, elementContext, selectionContext },
   });
 })();
