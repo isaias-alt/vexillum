@@ -41,6 +41,13 @@
      gutter sits outside it. */
   --site-max: 1280px;
   --site-gutter: 16px;
+  --site-header-height: 56px;
+
+  /* Widths inside the container, by what the content is: reading text and
+     transcripts, lists and tables, then the full column. */
+  --content-narrow: 720px;
+  --content-wide: 960px;
+  --content-max: var(--site-max);
 }
 @media (min-width: 640px) {
   :root {
@@ -84,10 +91,6 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
-  /* The in-page brand mark is gold in both themes (the favicon is lapis); the lapis
-     accent is for the UI only. */
-  --color-brand: #bf9455;
-
   --color-bg: var(--fr-bg);
   --color-surface: var(--fr-surface);
   --color-sunken: var(--fr-surface-sunken);
@@ -234,6 +237,7 @@ body {
    outer columns absorb the rest; bound it to the shared column. */
 #nd-notebook-layout {
   --fd-layout-width: calc(var(--site-max) + 2 * var(--site-gutter));
+  --fd-header-height: var(--site-header-height);
 }
 @media (min-width: 1280px) {
   #nd-notebook-layout {
@@ -407,4 +411,17 @@ pre .line {
   width: 16px;
   height: 16px;
   stroke-width: 1.75;
+}
+
+/* The id selectors above beat Fumadocs' responsive hide utilities, so the
+   breakpoint split between the two toggles is restated here. */
+@media (min-width: 768px) {
+  #nd-subnav button[aria-controls="nd-sidebar-mobile"] {
+    display: none;
+  }
+}
+@media (max-width: 767.98px) {
+  #nd-subnav button[aria-controls="nd-sidebar"] {
+    display: none;
+  }
 }

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { JsonLd } from "@/components/JsonLd";
 import { landingOgImagePath, pageMetadata, softwareApplicationLd } from "@/lib/seo";
-import { SiteNav } from "@/components/SiteNav";
+import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { InstallCommand } from "@/components/InstallCommand";
 import { MinuteSteps } from "@/components/MinuteSteps";
@@ -65,7 +65,7 @@ export default async function Home({
   return (
     <>
       <JsonLd data={softwareApplicationLd(lang as Lang, t.meta.description)} />
-      <SiteNav lang={lang as Lang} />
+      <Navbar lang={lang as Lang} />
 
       <main>
         {/* hero */}
@@ -106,11 +106,13 @@ export default async function Home({
               {t.minute.motto}
             </p>
           </div>
-          <MinuteSteps
-            steps={t.minute.steps}
-            docsLabel={t.minute.docsLink}
-            docsRoot={`${prefix}/docs`}
-          />
+          <div className="mx-auto max-w-(--content-wide)">
+            <MinuteSteps
+              steps={t.minute.steps}
+              docsLabel={t.minute.docsLink}
+              docsRoot={`${prefix}/docs`}
+            />
+          </div>
         </section>
 
         {/* vocabulary */}
@@ -122,6 +124,7 @@ export default async function Home({
                 {t.vocab.title}
               </h2>
             </div>
+            <div className="mx-auto max-w-(--content-wide)">
             {t.vocab.items.map((item) => (
               <div
                 key={item.term}
@@ -133,6 +136,7 @@ export default async function Home({
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </section>
 
@@ -150,7 +154,7 @@ export default async function Home({
             </div>
             <DispatchTranscript
               t={t.dispatching}
-              className="mx-auto max-w-[720px]"
+              className="mx-auto max-w-(--content-narrow)"
             />
           </div>
         </section>

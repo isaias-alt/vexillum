@@ -2,9 +2,6 @@ import { uiTranslations } from "fumadocs-ui/i18n";
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 import { i18n, type Lang } from "@/lib/i18n";
 import { GITHUB_URL } from "@/lib/site";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { LangToggle } from "@/components/LangToggle";
-import { LogoMark } from "@/components/Logo";
 
 // UI strings of Fumadocs' own chrome (search, toc, pagination, ...). The
 // Spanish pack keeps technical words in English, per the docs style rules.
@@ -50,29 +47,10 @@ export function baseOptions(lang: Lang): BaseLayoutProps {
   const prefix = lang === i18n.defaultLanguage ? "" : `/${lang}`;
   return {
     githubUrl: GITHUB_URL,
-    nav: {
-      url: `${prefix}/`,
-      title: (
-        <>
-          <LogoMark className="h-[18px] w-[18px] shrink-0 text-brand" />
-          <span className="text-[13.5px] font-normal text-text">vexillum</span>
-          <span className="ml-1 text-[11px] font-normal text-text-muted">
-            docs
-          </span>
-        </>
-      ),
-    },
-    slots: {
-      themeSwitch: ThemeToggle,
-      languageSelect: false,
-    },
-    // The language selector sits in the navbar, next to the theme button.
-    links: [
-      {
-        type: "custom",
-        on: "nav",
-        children: <LangToggle lang={lang} />,
-      },
-    ],
+    // The header itself is the shared Navbar (components/DocsHeader.tsx,
+    // set as the layout's header slot); Fumadocs' own nav is not rendered.
+    nav: { url: `${prefix}/` },
+    // The switches live in the navbar only, not repeated in the sidebar.
+    slots: { themeSwitch: false, languageSelect: false },
   };
 }
