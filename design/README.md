@@ -120,7 +120,7 @@ tertiary accent).
 
 | In the export | Shipped as | Notes |
 |---|---|---|
-| `forum-tokens.css` (the `--fr-*` tokens) | `site/app/globals.css` | Names and values copied verbatim; only the theme wiring differs: **dark is the default** and is the `.dark` class set by next-themes, light is the base `:root`. The tokens are mapped onto Tailwind colors and onto Fumadocs' `--color-fd-*` so its components use the brand. |
+| `forum-tokens.css` (the `--fr-*` tokens) | `site/app/globals.css` | Names and values copied verbatim; only the theme wiring differs: **dark is the default** and is the `data-theme="dark"` attribute set by an inline script, light is the base `:root`. The tokens are mapped onto Tailwind colors and onto Fumadocs' `--color-fd-*` so its components use the brand. |
 | `Vexillum Landing.dc.html` | `site/app/[lang]/(home)/page.tsx` and `site/components/` | The "minute with vexillum" steps use the real `vexillum` commands (the export's `vx` is not a binary). |
 | `Vexillum Docs.dc.html` | Fumadocs notebook layout, re-themed in `site/app/globals.css` | Top bar, 244px sidebar with small-caps groups, content, "on this page". Fumadocs UI was kept (search dialog, mobile drawer, language switch) and re-themed rather than rebuilt on its headless core. |
 | `assets/vexillum-mark.svg` | `site/components/Logo.tsx`, `site/app/icon.svg` | currentColor mark. |

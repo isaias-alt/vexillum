@@ -9,8 +9,8 @@
    Design tokens. Names and values are copied verbatim from
    design/forum-tokens.css (the "Marmol y Lapislazuli" identity the docs and
    landing designs are built on). Only the theme wiring differs: dark is the
-   brand default and is the `.dark` class set by next-themes (see
-   app/[lang]/layout.tsx), light is the base `:root`. See design/README.md.
+   brand default and is the `data-theme="dark"` attribute set by the
+   head script (components/ThemeScript.tsx), light is the base `:root`. See design/README.md.
    ------------------------------------------------------------------------ */
 :root {
   --fr-radius-sm: 4px;
@@ -37,7 +37,7 @@
   --fr-bronze-soft: rgba(156, 122, 63, 0.14);
 }
 
-.dark {
+:root[data-theme="dark"] {
   --fr-bg: #15171a;
   --fr-surface: #1c1f24;
   --fr-surface-sunken: #20242a;
@@ -57,6 +57,10 @@
   --fr-bronze: #c9a15a;
   --fr-bronze-soft: rgba(201, 161, 90, 0.18);
 }
+
+/* Tailwind's dark: variant (used by Fumadocs' code blocks) follows the site's
+   own switch instead of the OS setting. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
   --color-bg: var(--fr-bg);
@@ -118,7 +122,7 @@ html {
   min-width: 320px;
   color-scheme: light;
 }
-html.dark {
+html[data-theme="dark"] {
   color-scheme: dark;
 }
 

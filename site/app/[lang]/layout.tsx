@@ -6,6 +6,8 @@ import { i18n } from "@/lib/i18n";
 import { translations } from "@/lib/layout.shared";
 import { SITE_URL } from "@/lib/site";
 import { dictionary } from "@/lib/strings";
+import { ThemeScript } from "@/components/ThemeScript";
+import { ThemeSync } from "@/components/ThemeSync";
 import StaticSearchDialog from "@/components/SearchDialog";
 import "../globals.css";
 
@@ -60,8 +62,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-screen flex-col bg-bg font-mono text-text antialiased">
+        <ThemeScript />
+        <ThemeSync />
         <RootProvider
-          theme={{ defaultTheme: "dark", enableSystem: false, attribute: "class" }}
+          theme={{ enabled: false }}
           i18n={i18nProvider(translations, lang)}
           search={{ SearchDialog: StaticSearchDialog }}
         >
