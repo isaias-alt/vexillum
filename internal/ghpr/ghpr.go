@@ -82,6 +82,22 @@ func Create(projectDir, branch, base, title, body string) (url string, err error
 	return lastLine(string(out)), nil
 }
 
+// ReviewNotesSection renders the tribunal review's non-blocking (info)
+// findings as a markdown section to append to a pull request body: a blank
+// line, a heading and one bullet per note. Empty when there are none, so a
+// clean review leaves the body untouched.
+func ReviewNotesSection(notes []string) string {
+	if len(notes) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\n## Review notes\n\nNon-blocking findings from the adversarial review:\n\n")
+	for _, n := range notes {
+		b.WriteString("- " + n + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 // lastLine returns the last non-empty line of s - "gh pr create" prints
 // the new pull request's URL as its final line of stdout, sometimes
 // preceded by informational lines (e.g. a note about an existing draft).

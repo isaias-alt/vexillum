@@ -2,15 +2,18 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
+	"github.com/isaias-alt/vexillum/internal/tribunal"
 )
 
 // shipTestProject is initDispatchTestProject plus a real "origin" remote
@@ -77,7 +80,7 @@ func doneMissionTask(t *testing.T, project, home string) state.Task {
 // filepath.Join calls - runShip rejects it up front.
 func TestRunShip_RejectsInvalidTaskID(t *testing.T) {
 	var out bytes.Buffer
-	code := runShip("/does/not/matter", "/does/not/matter", "../../etc/passwd", &out, &out)
+	code := runShip("/does/not/matter", "/does/not/matter", "../../etc/passwd", tribunal.Options{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an invalid task id")
@@ -160,7 +163,7 @@ func TestRunShip_Success(t *testing.T) {
 	t.Setenv("PATH", shipToolsPath(t, passingReview, ghCreatesNewPR))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, &out, &out)
+	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -182,7 +185,7 @@ func TestRunShip_RecordsShippedStatus(t *testing.T) {
 	t.Setenv("PATH", shipToolsPath(t, passingReview, ghCreatesNewPR))
 
 	var out bytes.Buffer
-	if code := runShip(project, home, task.ID, &out, &out); code != 0 {
+	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
 
@@ -220,7 +223,7 @@ func TestRunShip_AllowsReshippingAShippedTask(t *testing.T) {
 esac`))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, &out, &out)
+	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 reshipping an already-shipped task, got %d: %s", code, out.String())
@@ -252,7 +255,7 @@ func TestRunShip_RefusesNotDone(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, &out, &out)
+	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for a task that isn't done")
@@ -281,7 +284,7 @@ func TestRunShip_RefusesScout(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, &out, &out)
+	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for a scout")
@@ -300,7 +303,7 @@ func TestRunShip_RefusesWhenGhNotInstalled(t *testing.T) {
 	t.Setenv("PATH", gitOnlyPath(t))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, &out, &out)
+	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit when gh isn't installed")
@@ -320,7 +323,7 @@ func TestRunShip_RefusesWhenTribunalFails(t *testing.T) {
 esac`))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, &out, &out)
+	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit when a tribunal step fails")
@@ -342,5 +345,173 @@ esac`))
 	}
 	if reloaded.Status == state.StatusShipped {
 		t.Error("expected the task to stay unshipped after a failed tribunal")
+	}
+}
+
+const reviewWithFindings = `{"findings": [%s], "reviewed_paths": ["change.txt"], "risk_level": "low", "risk_rationale": "tiny"}`
+
+func reviewFinding(severity, action string) string {
+	return `{"file": "change.txt", "line": 1, "severity": "` + severity + `", "action": "` + action +
+		`", "description": "SOMETHING_WRONG", "failure_scenario": "input X yields Y", "sibling_sites": []}`
+}
+
+// assertNoShipSideEffects checks a refused ship neither pushed nor opened a
+// PR nor recorded the task as shipped.
+func assertNoShipSideEffects(t *testing.T, project, home string, task state.Task, output string) {
+	t.Helper()
+	if strings.Contains(output, "pushed ") || strings.Contains(output, "PR CREATE SHOULD NOT HAVE BEEN CALLED") {
+		t.Errorf("expected no push and no pull request, got: %s", output)
+	}
+	cmd := exec.Command("git", "ls-remote", "origin")
+	cmd.Dir = project
+	if out, err := cmd.CombinedOutput(); err != nil || strings.Contains(string(out), task.CampBranch) {
+		t.Errorf("expected the branch to stay off origin (err=%v): %s", err, out)
+	}
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	reloaded, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if reloaded.Status == state.StatusShipped {
+		t.Error("expected the task to stay unshipped")
+	}
+}
+
+const ghMustNotCreate = `case "$1 $2" in
+  "pr create") echo "PR CREATE SHOULD NOT HAVE BEEN CALLED" >&2; exit 1 ;;
+esac`
+
+// Any error or warning finding blocks the ship, and the findings are
+// printed - no push, no PR.
+func TestRunShip_BlockingFindingsRefuseAndArePrinted(t *testing.T) {
+	for _, tc := range []struct{ severity, action string }{{"error", "auto-fix"}, {"warning", "auto-fix"}, {"warning", "ask-user"}} {
+		t.Run(tc.severity+"/"+tc.action, func(t *testing.T) {
+			project := shipTestProject(t)
+			home := t.TempDir()
+			task := doneMissionTask(t, project, home)
+			t.Setenv("PATH", shipToolsPath(t, fmt.Sprintf(reviewWithFindings, reviewFinding(tc.severity, tc.action)), ghMustNotCreate))
+
+			var out bytes.Buffer
+			code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+
+			if code != 1 {
+				t.Fatalf("expected exit 1, got %d: %s", code, out.String())
+			}
+			for _, want := range []string{"[FAILED] review", "SOMETHING_WRONG", "change.txt:1", "scenario: input X yields Y", "refusing to push"} {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("expected output to contain %q, got: %s", want, out.String())
+				}
+			}
+			assertNoShipSideEffects(t, project, home, task, out.String())
+		})
+	}
+}
+
+// Info findings do not block; they are printed and ride the PR body.
+func TestRunShip_InfoFindingsPassAndGoToThePRBody(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	bodyFile := filepath.Join(t.TempDir(), "gh-args")
+	t.Setenv("PATH", shipToolsPath(t, fmt.Sprintf(reviewWithFindings, reviewFinding("info", "no-op")), `case "$1 $2" in
+  "pr create") printf '%s\n' "$@" > '`+bodyFile+`'; echo "https://github.com/x/y/pull/1" ;;
+esac`))
+
+	var out bytes.Buffer
+	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 with only info findings, got %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "SOMETHING_WRONG") {
+		t.Errorf("expected the info finding in the output, got: %s", out.String())
+	}
+	args, err := os.ReadFile(bodyFile)
+	if err != nil {
+		t.Fatalf("reading the captured gh args: %v", err)
+	}
+	for _, want := range []string{"## Review notes", "- `change.txt:1` - SOMETHING_WRONG", "do a thing"} {
+		if !strings.Contains(string(args), want) {
+			t.Errorf("expected the PR body to contain %q, got: %s", want, args)
+		}
+	}
+}
+
+// A clean review leaves the PR body without a notes section.
+func TestRunShip_CleanReviewAddsNoNotesToThePRBody(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	bodyFile := filepath.Join(t.TempDir(), "gh-args")
+	t.Setenv("PATH", shipToolsPath(t, passingReview, `case "$1 $2" in
+  "pr create") printf '%s\n' "$@" > '`+bodyFile+`'; echo "https://github.com/x/y/pull/1" ;;
+esac`))
+
+	var out bytes.Buffer
+	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	args, _ := os.ReadFile(bodyFile)
+	if strings.Contains(string(args), "Review notes") {
+		t.Errorf("expected no review notes section, got: %s", args)
+	}
+}
+
+// With --fix, ask-user findings are never auto-fixed and a fixer that
+// changes nothing cannot loop: both still refuse without pushing.
+func TestRunShip_FixLoopStillRefusesWithoutPushOrPR(t *testing.T) {
+	for name, finding := range map[string]string{
+		"ask-user never fixed":  reviewFinding("warning", "ask-user"),
+		"fixer changed nothing": reviewFinding("error", "auto-fix"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			project := shipTestProject(t)
+			home := t.TempDir()
+			task := doneMissionTask(t, project, home)
+			t.Setenv("PATH", shipToolsPath(t, fmt.Sprintf(reviewWithFindings, finding), ghMustNotCreate))
+
+			var out bytes.Buffer
+			code := runShip(project, home, task.ID, tribunal.Options{Fix: true}, &out, &out)
+
+			if code != 1 {
+				t.Fatalf("expected exit 1, got %d: %s", code, out.String())
+			}
+			assertNoShipSideEffects(t, project, home, task, out.String())
+		})
+	}
+}
+
+func TestParseShipArgs(t *testing.T) {
+	id, opts, err := parseShipArgs([]string{"--fix", "abc", "--max-rounds", "3", "--timeout=30m"})
+	if err != nil {
+		t.Fatalf("parseShipArgs: %v", err)
+	}
+	if id != "abc" || !opts.Fix || opts.MaxFixRounds != 3 || opts.Timeout != 30*time.Minute {
+		t.Errorf("unexpected parse: %q %+v", id, opts)
+	}
+
+	id, opts, err = parseShipArgs([]string{"abc"})
+	if err != nil || id != "abc" || opts.Fix || opts.MaxFixRounds != 0 || opts.Timeout != 0 {
+		t.Errorf("expected plain defaults, got %q %+v %v", id, opts, err)
+	}
+
+	for name, args := range map[string][]string{
+		"no id":                 {"--fix"},
+		"unknown flag":          {"abc", "--nope"},
+		"two ids":               {"abc", "def"},
+		"max-rounds w/o fix":    {"abc", "--max-rounds", "2"},
+		"max-rounds zero":       {"abc", "--fix", "--max-rounds", "0"},
+		"max-rounds not number": {"abc", "--fix", "--max-rounds", "x"},
+		"max-rounds missing":    {"abc", "--fix", "--max-rounds"},
+		"bad timeout":           {"abc", "--timeout", "soon"},
+		"negative timeout":      {"abc", "--timeout", "-5m"},
+		"fix with value":        {"abc", "--fix=yes"},
+	} {
+		if _, _, err := parseShipArgs(args); err == nil {
+			t.Errorf("%s: expected an error for %v", name, args)
+		}
 	}
 }

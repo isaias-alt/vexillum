@@ -168,3 +168,14 @@ esac`))
 		t.Errorf("expected gh's own error output surfaced, got: %v", err)
 	}
 }
+
+func TestReviewNotesSection(t *testing.T) {
+	if got := ReviewNotesSection(nil); got != "" {
+		t.Errorf("expected no section for no notes, got %q", got)
+	}
+	got := ReviewNotesSection([]string{"`a.go:1` - first", "`b.go:2` - second"})
+	want := "\n\n## Review notes\n\nNon-blocking findings from the adversarial review:\n\n- `a.go:1` - first\n- `b.go:2` - second"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
