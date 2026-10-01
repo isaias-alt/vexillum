@@ -11,7 +11,7 @@ export function Footer({ lang }: { lang: Lang }) {
     <footer className="mt-auto border-t border-border text-[11.5px] text-text-muted">
       <div className="site-container flex flex-wrap items-center justify-between gap-3 py-5">
       <div className="flex items-center gap-2.5">
-        <LogoMark className="h-3.5 w-3.5 text-brand" />
+        <LogoMark className="h-3.5 w-3.5" />
         <span>vexillum &middot; {t.license}</span>
       </div>
       <div className="flex gap-[18px]">
