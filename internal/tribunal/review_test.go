@@ -1,4 +1,4 @@
-package checkpoint
+package tribunal
 
 import "testing"
 
@@ -54,7 +54,7 @@ func TestParseVerdict_UsesTheLastVerdictLine(t *testing.T) {
 }
 
 func TestRunReview_NoChangesSkipsWithoutInvokingClaude(t *testing.T) {
-	dir := newCheckpointRepo(t)
+	dir := newTribunalRepo(t)
 	// git-only PATH, no claude stub: if runReview tried to invoke claude
 	// here, it would fail with "executable file not found".
 	t.Setenv("PATH", gitOnlyPath(t))
@@ -69,7 +69,7 @@ func TestRunReview_NoChangesSkipsWithoutInvokingClaude(t *testing.T) {
 }
 
 func TestRunReview_PassVerdict(t *testing.T) {
-	dir := newCheckpointRepo(t)
+	dir := newTribunalRepo(t)
 	commitFile(t, dir, "change.txt", "hi\n")
 	t.Setenv("PATH", fakeClaude(t, "reviewed, no issues.\n"+VerdictPrefix+" PASS"))
 
@@ -83,7 +83,7 @@ func TestRunReview_PassVerdict(t *testing.T) {
 }
 
 func TestRunReview_FailVerdictBlocks(t *testing.T) {
-	dir := newCheckpointRepo(t)
+	dir := newTribunalRepo(t)
 	commitFile(t, dir, "change.txt", "hi\n")
 	t.Setenv("PATH", fakeClaude(t, "found a bug.\n"+VerdictPrefix+" FAIL: off-by-one in the loop"))
 

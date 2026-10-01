@@ -1,7 +1,7 @@
-package checkpoint
+package tribunal
 
 // runLint and runTests autodetect which command to run from the project
-// markers already sitting in campPath - no per-project checkpoint config
+// markers already sitting in campPath - no per-project tribunal config
 // to set up first (same "no separate setup step" posture the general
 // asked for when review-tool' own gating moved from "vexillum init" to
 // lazy-on-first-ship; here there's simply nothing left to configure).

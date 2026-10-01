@@ -235,7 +235,7 @@ func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 // ensureSentinelHook writes into the project directory and which git
 // then tracks like any other file - so it travels into every checkout
 // of the repo, including a mission's own camp. A headless Claude Code
-// turn run there outside a herdr pane - internal/checkpoint's review
+// turn run there outside a herdr pane - internal/tribunal's review
 // step, which shells out to "claude -p ..." directly from "vexillum
 // ship", is the case that surfaced this - inherits the hook too, with no
 // HERDR_WORKSPACE_ID in its environment. Without this guard, that turn

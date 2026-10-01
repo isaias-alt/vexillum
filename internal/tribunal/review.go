@@ -1,4 +1,4 @@
-package checkpoint
+package tribunal
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 // gives for any scout whose question requires judgment rather than
 // verifiable facts: a code review is exactly that kind of question, and
 // the commander already never picks a soldier's model per-invocation for
-// this step (ADR-05 reserves that judgment for dispatch, not checkpoint).
+// this step (ADR-05 reserves that judgment for dispatch, not tribunal).
 const (
 	reviewModel  = "sonnet"
 	reviewEffort = "medium"
@@ -23,16 +23,16 @@ const (
 // VerdictPrefix is the line the review soldier's prompt requires its
 // response to end with - the only thing runReview actually parses out of
 // an otherwise free-form review.
-const VerdictPrefix = "CHECKPOINT_VERDICT:"
+const VerdictPrefix = "TRIBUNAL_VERDICT:"
 
 // runReview dispatches a headless review soldier (internal/soldier's
 // Layer 3 path - ClaudeCommand's CommandSpec, run directly with
 // os/exec rather than through a herdr pane) against campPath's diff since
 // base, and blocks on anything short of an explicit pass. Unlike
 // dispatch's interactive soldiers, this runs synchronously inside
-// checkpoint.Run: there is no pane to poll and no sentinel watching it,
+// tribunal.Run: there is no pane to poll and no sentinel watching it,
 // the same "ship doesn't return until the whole pipeline has" property
-// the rest of checkpoint has.
+// the rest of tribunal has.
 func runReview(campPath, base string) (StepResult, error) {
 	diff, err := gitDiff(campPath, base, "")
 	if err != nil {

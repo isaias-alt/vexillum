@@ -60,7 +60,7 @@ const (
 	// any work it had already committed is still sitting in its camp.
 	StatusInterrupted Status = "interrupted"
 	// StatusShipped marks a mission pushed through vexillum's own
-	// checkpoint pipeline (vexillum ship, internal/checkpoint) and opened
+	// tribunal pipeline (vexillum ship, internal/tribunal) and opened
 	// as a real pull request. From here the PR is the source of truth,
 	// not this camp: land merges the real PR instead of fast-forwarding a
 	// local branch, and release can no longer rely on a plain ancestor

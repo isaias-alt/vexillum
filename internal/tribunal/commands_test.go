@@ -1,4 +1,4 @@
-package checkpoint
+package tribunal
 
 import (
 	"os"
@@ -32,7 +32,7 @@ func TestRunTests_NoMarkersSkips(t *testing.T) {
 // dependencies, so this runs offline) into dir.
 func goModule(t *testing.T, dir string) {
 	t.Helper()
-	writeFile(t, dir, "go.mod", "module checkpointfixture\n\ngo 1.21\n")
+	writeFile(t, dir, "go.mod", "module tribunalfixture\n\ngo 1.21\n")
 }
 
 func writeFile(t *testing.T, dir, name, content string) {

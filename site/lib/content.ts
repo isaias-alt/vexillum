@@ -132,11 +132,11 @@ export const features = [
     prompt: "The pagination fix looks good, land it.",
   },
   {
-    term: "Ship through the checkpoint pipeline",
+    term: "Ship through the tribunal pipeline",
     cluster: "shipping",
     icon: "ShieldCheck",
     commands: ["ship"],
-    def: "ship runs vexillum's own checkpoint pipeline against the mission's camp - lint, tests, a soldier-driven review of the diff, and a docs check, in order, synchronously - then pushes and opens the real PR itself once everything's green.",
+    def: "ship runs vexillum's own tribunal pipeline against the mission's camp - lint, tests, a soldier-driven review of the diff, and a docs check, in order, synchronously - then pushes and opens the real PR itself once everything's green.",
     prompt:
       "This one touches the billing code, push it through the real gate - I want a proper reviewed PR, not a local merge.",
   },

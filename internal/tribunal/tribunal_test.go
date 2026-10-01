@@ -1,4 +1,4 @@
-package checkpoint
+package tribunal
 
 import (
 	"os"
@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-// newCheckpointRepo creates a git repo with one commit on "main", tags
+// newTribunalRepo creates a git repo with one commit on "main", tags
 // that commit as "base" (the fork point a camp's own base branch would
 // resolve to), and returns the repo's directory - callers add further
 // commits on top of "main" to simulate a mission's own camp changes, then
-// call checkpoint functions with base="base".
-func newCheckpointRepo(t *testing.T) string {
+// call tribunal functions with base="base".
+func newTribunalRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	run(t, dir, "init", "-q")
@@ -34,7 +34,7 @@ func run(t *testing.T, dir string, args ...string) string {
 }
 
 // commitFile writes name/content into dir and commits it on the current
-// branch - the mission-side change a checkpoint step is meant to see.
+// branch - the mission-side change a tribunal step is meant to see.
 func commitFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
@@ -86,7 +86,7 @@ func fakeClaude(t *testing.T, output string) string {
 		t.Fatalf("linking real cat: %v", err)
 	}
 
-	script := "#!/bin/sh\ncat <<'CHECKPOINT_EOF'\n" + output + "\nCHECKPOINT_EOF\n"
+	script := "#!/bin/sh\ncat <<'TRIBUNAL_EOF'\n" + output + "\nTRIBUNAL_EOF\n"
 	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(script), 0o755); err != nil {
 		t.Fatalf("writing claude stub: %v", err)
 	}
@@ -94,7 +94,7 @@ func fakeClaude(t *testing.T, output string) string {
 }
 
 func TestRun_StopsAtFirstFailingStep(t *testing.T) {
-	dir := newCheckpointRepo(t)
+	dir := newTribunalRepo(t)
 	// No go.mod/package.json: lint and tests both skip (pass), so review
 	// is the first real step - and a broken claude stub fails it,
 	// meaning docs must never run.
@@ -118,7 +118,7 @@ func TestRun_StopsAtFirstFailingStep(t *testing.T) {
 }
 
 func TestRun_AllStepsPass(t *testing.T) {
-	dir := newCheckpointRepo(t)
+	dir := newTribunalRepo(t)
 	commitFile(t, dir, "change.txt", "hi\n")
 	t.Setenv("PATH", fakeClaude(t, "looks fine.\n"+VerdictPrefix+" PASS"))
 
@@ -138,7 +138,7 @@ func TestRun_AllStepsPass(t *testing.T) {
 }
 
 func TestRunCommand_MissingBinaryReportsExecErrorAsDetail(t *testing.T) {
-	sr, err := runCommand(StepLint, t.TempDir(), "vexillum-checkpoint-does-not-exist")
+	sr, err := runCommand(StepLint, t.TempDir(), "vexillum-tribunal-does-not-exist")
 	if err != nil {
 		t.Fatalf("runCommand: %v", err)
 	}

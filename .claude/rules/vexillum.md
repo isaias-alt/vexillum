@@ -243,12 +243,12 @@ If the general tells you to land things going forward without asking each
 time for this project, you can skip the approval step for future
 missions - but that's their call, not your default.
 
-## Shipping through vexillum's own checkpoint pipeline (alternative to landing)
+## Shipping through vexillum's own tribunal pipeline (alternative to landing)
 
 `vexillum land` merges locally, no PR, no review pipeline - the right
 default for most missions in this project. If the general instead wants
 a real, validated GitHub PR for a finished mission, offer `vexillum ship <task-id>`
-instead. It runs vexillum's own checkpoint pipeline (lint, tests, a
+instead. It runs vexillum's own tribunal pipeline (lint, tests, a
 soldier-driven review of the diff, a docs check) against the mission's
 camp, synchronously, and only pushes and opens the pull request once
 every step has passed - deterministically, you never decide on your own
@@ -259,8 +259,8 @@ consequential: it produces a real PR outside the machine.
 Requires the `gh` binary installed (`vexillum doctor` reports whether it
 is) - `vexillum ship` refuses up front and tells the general so if it
 isn't. There's no separate setup step for you or the general to remember
-otherwise: the checkpoint pipeline runs entirely inside vexillum, with no
-external tool to install or configure first. If a checkpoint step fails,
+otherwise: the tribunal pipeline runs entirely inside vexillum, with no
+external tool to install or configure first. If a tribunal step fails,
 `vexillum ship` reports which one and why, and nothing is pushed. Once
 every step passes and the PR opens, `vexillum ship` itself reports the
 PR's URL - there's no separate pipeline to track afterward the way there

@@ -85,7 +85,7 @@ func Binary(label, binaryName string, required bool) Result {
 
 // GitHubCLI reports whether the "gh" binary is installed - the official
 // GitHub CLI, called directly by "vexillum ship" (internal/ghpr.Create)
-// to open a mission's pull request once its checkpoint pipeline passes,
+// to open a mission's pull request once its tribunal pipeline passes,
 // and by "vexillum land" (internal/ghpr.MergeShipped) to later merge it -
 // not the separate "gh-tool" agent-facing AXI. Optional and purely
 // informational: a project that never ships never needs it.

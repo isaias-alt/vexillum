@@ -32,7 +32,7 @@ release then fails, land reports both outcomes plainly - the merge is
 NOT undone - and leaves the camp for 'vexillum release <task-id>' to
 retry by hand.
 
-For a task already shipped through vexillum's own checkpoint pipeline
+For a task already shipped through vexillum's own tribunal pipeline
 ('vexillum ship'), this instead merges the real pull request on GitHub -
 the PR, not the camp's own branch, is the source of truth once the
 general (or CI, or a reviewer) may have pushed further commits directly
@@ -121,7 +121,7 @@ func runLand(projectDir, vexillumHome, homeDir, taskID string, client herdr.Clie
 
 // mergeShippedPR merges a shipped mission's real PR on GitHub - the
 // vexillum-side replacement for a fast-forward land once a mission has
-// gone through vexillum's own checkpoint pipeline (see internal/ghpr for
+// gone through vexillum's own tribunal pipeline (see internal/ghpr for
 // the verification and merge itself). Unlike a local fast-forward, this
 // never auto-releases the camp: the branch is still in flight until the
 // general merges the real PR.

@@ -1,4 +1,4 @@
-// Package checkpoint is vexillum's own validation pipeline for a
+// Package tribunal is vexillum's own validation pipeline for a
 // finished mission's camp branch, run synchronously by "vexillum ship"
 // right before it pushes and opens a real pull request - replacing the
 // former dependency on the third-party github.com/upstream
@@ -7,14 +7,7 @@
 // check), no external binary, no separate worktree, no TUI to track
 // afterward: every step runs in the mission's own camp and Run returns
 // only once the whole pipeline has settled.
-//
-// "checkpoint" is a working name for this mechanism, chosen because the
-// general hasn't settled on the final vocabulary yet (see the product
-// AGENTS.md's domain vocabulary - commander, soldier, mission, scout,
-// camp, sentinel). Name is the single place that name lives, so renaming
-// it later is a one-line change plus a `gofmt`-safe package rename, not a
-// hunt through call sites.
-package checkpoint
+package tribunal
 
 import (
 	"fmt"
@@ -24,12 +17,11 @@ import (
 	"strings"
 )
 
-// Name is checkpoint's own domain-vocabulary name, used anywhere it needs
+// Name is tribunal's own domain-vocabulary name, used anywhere it needs
 // to identify itself in a user-facing message (doctor, ship's own output).
-// See the package doc comment for why this is a working name.
-const Name = "checkpoint"
+const Name = "tribunal"
 
-// Step is one stage of the checkpoint pipeline, run in a fixed order.
+// Step is one stage of the tribunal pipeline, run in a fixed order.
 type Step string
 
 const (
@@ -55,7 +47,7 @@ type StepResult struct {
 	Detail string
 }
 
-// Result is the outcome of a full checkpoint run.
+// Result is the outcome of a full tribunal run.
 type Result struct {
 	Steps []StepResult
 }
@@ -80,7 +72,7 @@ func (r Result) FailedStep() *StepResult {
 	return nil
 }
 
-// Run executes the checkpoint pipeline against campPath - a mission's
+// Run executes the tribunal pipeline against campPath - a mission's
 // camp worktree - stopping at the first step that fails. base is the
 // branch campPath's branch was forked from (state.Task.CampBase), used
 // to scope the review and docs steps to only what this mission actually
@@ -107,7 +99,7 @@ func Run(campPath, base string) (Result, error) {
 			sr, err = runDocs(campPath, base)
 		}
 		if err != nil {
-			return result, fmt.Errorf("checkpoint %s step: %w", step, err)
+			return result, fmt.Errorf("tribunal %s step: %w", step, err)
 		}
 		result.Steps = append(result.Steps, sr)
 		if !sr.Passed {
@@ -125,7 +117,7 @@ func hasFile(dir, name string) bool {
 
 // gitDiff returns the diff of campPath's current HEAD against base,
 // restricted to pathspec when non-empty - the same base..HEAD range
-// camp.HasNewCommits counts commits over, so a checkpoint step only ever
+// camp.HasNewCommits counts commits over, so a tribunal step only ever
 // looks at what this mission's camp actually introduced.
 func gitDiff(campPath, base, pathspec string) (string, error) {
 	args := []string{"diff", base + "..HEAD"}
@@ -145,7 +137,7 @@ func gitDiff(campPath, base, pathspec string) (string, error) {
 // step: passed if the command exits zero, failed with its combined
 // output as Detail otherwise. A command that isn't found at all (rather
 // than one that ran and failed) is treated the same as any other
-// failure - the checkpoint pipeline has no separate "tooling missing"
+// failure - the tribunal pipeline has no separate "tooling missing"
 // state for a step whose command is simply absent.
 func runCommand(step Step, dir, name string, args ...string) (StepResult, error) {
 	cmd := exec.Command(name, args...)

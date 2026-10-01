@@ -1,6 +1,6 @@
 // Package ghpr handles a shipped mission's real GitHub pull request end
 // to end via the "gh" CLI: opening it (Create, once "vexillum ship" has
-// pushed a mission's branch through internal/checkpoint's own validation
+// pushed a mission's branch through internal/tribunal's own validation
 // pipeline) and later merging it (MergeShipped, "vexillum land" on a
 // shipped task) - the PR, not the project's own camp, is the source of
 // truth once a mission has shipped, so land verifies live, right before
@@ -62,8 +62,8 @@ func View(projectDir, branch string) (PullRequest, error) {
 }
 
 // Create opens a new pull request for branch via "gh pr create", once a
-// mission has passed vexillum's own checkpoint pipeline
-// (internal/checkpoint) - the vexillum-side replacement for review-tool'
+// mission has passed vexillum's own tribunal pipeline
+// (internal/tribunal) - the vexillum-side replacement for review-tool'
 // own auto-open-PR step, now that the push target is the real remote
 // directly rather than a gate remote that opened the PR on vexillum's
 // behalf. base may be empty, letting gh fall back to the repository's

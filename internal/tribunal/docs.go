@@ -1,4 +1,4 @@
-package checkpoint
+package tribunal
 
 import (
 	"regexp"

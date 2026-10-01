@@ -232,7 +232,7 @@ func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 // Outside a herdr-managed pane (no HERDR_WORKSPACE_ID), runSentinelAwaitGuarded
 // must exit 0 immediately, without ever polling - the case that surfaced
 // this: a camp's own headless Claude Code turn (e.g.
-// internal/checkpoint's review step) inherits the committed Stop hook
+// internal/tribunal's review step) inherits the committed Stop hook
 // too, but the sentinel has no task tracking it, so a real wake could
 // never arrive and the turn would otherwise sit blocked for the full
 // maxWait. A pending wake existing is irrelevant here - the whole point

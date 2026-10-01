@@ -21,7 +21,7 @@ Commands:
   decide      Answer a blocked task's open question so it can continue
   status      Report the current project's fleet of tasks (read-only)
   land        Land a finished mission's work into the base branch
-  ship        Push a finished mission through vexillum's own checkpoint pipeline for a real PR
+  ship        Push a finished mission through vexillum's own tribunal pipeline for a real PR
   release     Release a soldier's camp back to the pool
   sentinel    Watch dispatched soldiers and record status changes
   forum       Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards

@@ -1,4 +1,4 @@
-package checkpoint
+package tribunal
 
 import (
 	"strings"
@@ -98,8 +98,8 @@ func TestRunDocs_SkipsNonGoProject(t *testing.T) {
 }
 
 func TestRunDocs_EndToEndFailsOnUndocumentedExport(t *testing.T) {
-	dir := newCheckpointRepo(t)
-	commitFile(t, dir, "go.mod", "module checkpointfixture\n\ngo 1.21\n")
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "go.mod", "module tribunalfixture\n\ngo 1.21\n")
 	commitFile(t, dir, "foo.go", "package foo\n\nfunc Bar() int {\n\treturn 1\n}\n")
 
 	sr, err := runDocs(dir, "base")
@@ -115,8 +115,8 @@ func TestRunDocs_EndToEndFailsOnUndocumentedExport(t *testing.T) {
 }
 
 func TestRunDocs_EndToEndPassesWhenDocumented(t *testing.T) {
-	dir := newCheckpointRepo(t)
-	commitFile(t, dir, "go.mod", "module checkpointfixture\n\ngo 1.21\n")
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "go.mod", "module tribunalfixture\n\ngo 1.21\n")
 	commitFile(t, dir, "foo.go", "package foo\n\n// Bar returns a constant.\nfunc Bar() int {\n\treturn 1\n}\n")
 
 	sr, err := runDocs(dir, "base")

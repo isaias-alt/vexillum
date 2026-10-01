@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
-	"github.com/isaias-alt/vexillum/internal/checkpoint"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
+	"github.com/isaias-alt/vexillum/internal/tribunal"
 )
 
 // shipTestProject is initDispatchTestProject plus a real "origin" remote
@@ -106,8 +106,8 @@ func gitOnlyPath(t *testing.T) string {
 
 // shipToolsPath returns a PATH with a real git, a fake "claude" whose
 // review verdict is fixed to claudeVerdict regardless of the prompt it's
-// given, and a fake "gh" driven by ghScript - so ship's checkpoint
-// pipeline (internal/checkpoint's review step) and its own "gh pr
+// given, and a fake "gh" driven by ghScript - so ship's tribunal
+// pipeline (internal/tribunal's review step) and its own "gh pr
 // create"/"gh pr view" calls can be exercised without a real Claude Code
 // API call or a real GitHub remote.
 func shipToolsPath(t *testing.T, claudeVerdict, ghScript string) string {
@@ -126,7 +126,7 @@ func shipToolsPath(t *testing.T, claudeVerdict, ghScript string) string {
 		t.Fatalf("linking real cat: %v", err)
 	}
 
-	claudeScript := "#!/bin/sh\ncat <<'CHECKPOINT_EOF'\n" + claudeVerdict + "\nCHECKPOINT_EOF\n"
+	claudeScript := "#!/bin/sh\ncat <<'TRIBUNAL_EOF'\n" + claudeVerdict + "\nTRIBUNAL_EOF\n"
 	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(claudeScript), 0o755); err != nil {
 		t.Fatalf("writing claude stub: %v", err)
 	}
@@ -139,7 +139,7 @@ func shipToolsPath(t *testing.T, claudeVerdict, ghScript string) string {
 	return dir
 }
 
-const passingReview = "reviewed, no issues.\n" + checkpoint.VerdictPrefix + " PASS"
+const passingReview = "reviewed, no issues.\n" + tribunal.VerdictPrefix + " PASS"
 
 const ghCreatesNewPR = `case "$1 $2" in
   "pr create") echo "https://github.com/x/y/pull/1" ;;
@@ -149,7 +149,7 @@ const ghHasOpenPR = `case "$1 $2" in
   "pr view") echo '{"number":1,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","headRefOid":"abc123","url":"https://github.com/x/y/pull/1"}' ;;
 esac`
 
-// B4-04: shipping a done mission whose checkpoint pipeline passes pushes
+// B4-04: shipping a done mission whose tribunal pipeline passes pushes
 // its camp branch to "origin" and opens a real pull request.
 func TestRunShip_Success(t *testing.T) {
 	project := shipTestProject(t)
@@ -290,7 +290,7 @@ func TestRunShip_RefusesScout(t *testing.T) {
 }
 
 // ship refuses up front when "gh" isn't installed - no point running the
-// whole checkpoint pipeline just to fail at the push step.
+// whole tribunal pipeline just to fail at the push step.
 func TestRunShip_RefusesWhenGhNotInstalled(t *testing.T) {
 	project := shipTestProject(t)
 	home := t.TempDir()
@@ -308,8 +308,8 @@ func TestRunShip_RefusesWhenGhNotInstalled(t *testing.T) {
 	}
 }
 
-// A failing checkpoint step blocks the ship entirely - no push, no PR.
-func TestRunShip_RefusesWhenCheckpointFails(t *testing.T) {
+// A failing tribunal step blocks the ship entirely - no push, no PR.
+func TestRunShip_RefusesWhenTribunalFails(t *testing.T) {
 	project := shipTestProject(t)
 	home := t.TempDir()
 	task := doneMissionTask(t, project, home)
@@ -321,13 +321,13 @@ esac`))
 	code := runShip(project, home, task.ID, &out, &out)
 
 	if code == 0 {
-		t.Fatal("expected non-zero exit when a checkpoint step fails")
+		t.Fatal("expected non-zero exit when a tribunal step fails")
 	}
 	if !strings.Contains(out.String(), "review") {
 		t.Errorf("expected the error to name the failing step, got: %s", out.String())
 	}
 	if strings.Contains(out.String(), "pushed ") {
-		t.Errorf("expected no push attempt after a failed checkpoint step, got: %s", out.String())
+		t.Errorf("expected no push attempt after a failed tribunal step, got: %s", out.String())
 	}
 
 	projectRoot, err := vxproject.Root(home, project)
@@ -339,6 +339,6 @@ esac`))
 		t.Fatalf("state.Load: %v", err)
 	}
 	if reloaded.Status == state.StatusShipped {
-		t.Error("expected the task to stay unshipped after a failed checkpoint")
+		t.Error("expected the task to stay unshipped after a failed tribunal")
 	}
 }

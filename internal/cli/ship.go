@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
-	"github.com/isaias-alt/vexillum/internal/checkpoint"
 	"github.com/isaias-alt/vexillum/internal/ghpr"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
+	"github.com/isaias-alt/vexillum/internal/tribunal"
 )
 
-const shipUsage = `Ship a finished mission through vexillum's own checkpoint pipeline,
+const shipUsage = `Ship a finished mission through vexillum's own tribunal pipeline,
 opening a real pull request.
 
 Usage:
@@ -36,7 +36,7 @@ whether it's installed).
 
 A mission already shipped can be shipped again, to push follow-up commits
 onto the same open PR - only "done" and "shipped" are valid starting
-states; a re-ship still runs the full checkpoint pipeline first. Once
+states; a re-ship still runs the full tribunal pipeline first. Once
 shipped, land the PR with 'vexillum land <task-id>' rather than 'vexillum
 land'-ing the camp locally.
 `
@@ -99,9 +99,9 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		return 1
 	}
 
-	result, err := checkpoint.Run(c.Path, task.CampBase)
+	result, err := tribunal.Run(c.Path, task.CampBase)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: running the %s pipeline: %v\n", checkpoint.Name, err)
+		fmt.Fprintf(stderr, "vexillum: running the %s pipeline: %v\n", tribunal.Name, err)
 		return 1
 	}
 	for _, sr := range result.Steps {
@@ -112,7 +112,7 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		fmt.Fprintf(stdout, "[%s] %s\n", status, sr.Step)
 	}
 	if failed := result.FailedStep(); failed != nil {
-		fmt.Fprintf(stderr, "vexillum: %s failed at %s, refusing to push or open a pull request\n", checkpoint.Name, failed.Step)
+		fmt.Fprintf(stderr, "vexillum: %s failed at %s, refusing to push or open a pull request\n", tribunal.Name, failed.Step)
 		if failed.Detail != "" {
 			fmt.Fprintln(stderr, failed.Detail)
 		}
@@ -149,7 +149,7 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "%s passed, pushed %s, pull request: %s\n", checkpoint.Name, c.Branch, prURL)
+	fmt.Fprintf(stdout, "%s passed, pushed %s, pull request: %s\n", tribunal.Name, c.Branch, prURL)
 	return 0
 }
 
@@ -166,5 +166,5 @@ func shipPRTitle(task state.Task) string {
 
 // shipPRBody derives a pull request body from task's full prompt.
 func shipPRBody(task state.Task) string {
-	return fmt.Sprintf("%s\n\n---\nvexillum mission %s, verified by %s: lint, tests, review, and docs all passed.", task.Prompt, task.ID, checkpoint.Name)
+	return fmt.Sprintf("%s\n\n---\nvexillum mission %s, verified by %s: lint, tests, review, and docs all passed.", task.Prompt, task.ID, tribunal.Name)
 }
