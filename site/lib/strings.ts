@@ -74,7 +74,7 @@ const en: Dictionary = {
     steps: [
       {
         title: "Install vexillum",
-        command: "curl -fsSL https://vexillum.lucasco.dev/install | bash",
+        command: "curl -fsSL https://vx.lucasco.dev/install | bash",
         description:
           "One binary, no runtime dependencies. Works the same over curl or brew.",
         output: [
