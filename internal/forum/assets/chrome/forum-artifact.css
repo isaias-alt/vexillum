@@ -158,9 +158,13 @@
      up (8px instead of the full gap) and push away from what is above them. */
   .fr-stack { --fr-stack-gap: var(--fr-space-4); display: flex; flex-direction: column; gap: var(--fr-stack-gap); }
   .fr-stack > * { margin-block: 0; }
-  .fr-stack > section:not(:first-child) { margin-top: var(--fr-space-4); }
+  .fr-stack > :is(section, form):not(:first-child) { margin-top: var(--fr-space-4); }
   .fr-stack > :is(h1, h2, h3, h4, h5, h6):not(:first-child) { margin-top: var(--fr-space-3); }
   .fr-stack > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--fr-space-2) - var(--fr-stack-gap)); }
+  /* A decision form is a stack of its own (its gap is --fr-space-3), so the
+     heading that opens it pulls its question or choices up the same way. */
+  .fr-form > * { margin-block: 0; }
+  .fr-form > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--fr-space-2) - var(--fr-space-3)); }
   .fr-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fr-space-2); }
   .fr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--fr-space-4); }
   .fr-grid > *, .fr-stack > * { min-width: 0; }

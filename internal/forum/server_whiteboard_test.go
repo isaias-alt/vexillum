@@ -203,3 +203,18 @@ func TestWhiteboardBundle_TalksToItsParentNotTheTop(t *testing.T) {
 		t.Error("the whiteboard frame never posts to window.parent")
 	}
 }
+
+// The fullscreen Close button is a small forum-style button on the design
+// tokens, not the big yellow one it used to be.
+func TestWhiteboardEmbed_CloseButtonUsesTheDesignTokens(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	_, js := env.get("/whiteboard-embed.js")
+	for _, want := range []string{`"border-strong"`, `"surface"`, `"text"`, `--fr-radius-sm`, `padding: "4px 10px"`} {
+		if !strings.Contains(js, want) {
+			t.Errorf("embed's close button does not use %s", want)
+		}
+	}
+	if strings.Contains(js, "#f4c95d") || strings.Contains(js, `fontWeight: "700"`) {
+		t.Error("the close button is still the big yellow one")
+	}
+}

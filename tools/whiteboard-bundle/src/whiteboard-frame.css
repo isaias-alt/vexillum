@@ -40,9 +40,9 @@ body[data-vexillum-whiteboard-theme="dark"] {
   align-items: center;
   gap: 10px;
   /* Right padding reserves room for the embedder's "× Close" button (about
-     84px wide at 10px from the edge), which floats above this header from
+     70px wide at 10px from the edge), which floats above this header from
      outside the iframe. */
-  padding: 8px 104px 8px 12px;
+  padding: 8px 92px 8px 12px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.35);
   flex: none;
 }

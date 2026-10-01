@@ -57,6 +57,10 @@
   let overlayReady = false;
 
   function theme() {
+    // The chrome's theme switch wins (the server renders it on <html>); the
+    // OS preference only decides when the artifact carries no forum theme.
+    const forced = document.documentElement.getAttribute("data-fr-theme");
+    if (forced === "dark" || forced === "light") return forced;
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
@@ -314,19 +318,24 @@
     });
     overlayCloseButton = document.createElement("button");
     overlayCloseButton.type = "button";
-    overlayCloseButton.textContent = "× Close";
+    overlayCloseButton.textContent = "\u00d7 Close";
+    // Looks like a forum secondary button: the --fr-* design tokens when the
+    // artifact has them, the same palette values otherwise (the embed runs in
+    // artifacts that bring their own styles and no tokens).
+    const dark = theme() === "dark";
+    const color = (name, darkValue, lightValue) => "var(--fr-" + name + ", " + (dark ? darkValue : lightValue) + ")";
     Object.assign(overlayCloseButton.style, {
       position: "absolute",
-      top: "10px",
+      top: "8px",
       right: "10px",
       zIndex: "1",
-      border: "0",
-      borderRadius: "8px",
-      padding: "8px 12px",
-      fontWeight: "700",
+      padding: "4px 10px",
+      font: "500 13px/1.3 var(--fr-font-sans, system-ui, sans-serif)",
       cursor: "pointer",
-      background: "#f4c95d",
-      color: "#17130a",
+      color: color("text", "#E9EAEC", "#1A1D22"),
+      background: color("surface", "#1C1F24", "#FFFFFF"),
+      border: "1px solid " + color("border-strong", "#3A3F47", "#C2C0B8"),
+      borderRadius: "var(--fr-radius-sm, 4px)",
     });
     overlayCloseButton.onclick = closeOverlay;
     overlay.append(overlayIframe, overlayCloseButton);

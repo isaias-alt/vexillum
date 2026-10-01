@@ -73,12 +73,13 @@ func TestArtifactStyle_RealChrome_HeadingIsCloserToItsBodyThanToWhatPrecedesIt(t
 <main class="fr-page fr-stack">
 <section class="fr-stack"><h2>One</h2><ul><li>a</li><li>b</li></ul></section>
 <section class="fr-stack"><h2>Two</h2><p>text</p></section>
+<form class="fr-form"><h2>Decision</h2><div class="fr-choices"><label class="fr-choice"><input type="radio" name="a"> x</label></div></form>
 </main>
 <h2>Flow one</h2><p>body</p>
 <h2>Flow two</h2><ul><li>x</li></ul>
 `+measureScript+`</body></html>`)
-	if len(gaps) != 4 {
-		t.Fatalf("measured %d headings, want 4: %v", len(gaps), gaps)
+	if len(gaps) != 5 {
+		t.Fatalf("measured %d headings, want 5: %v", len(gaps), gaps)
 	}
 	for i, g := range gaps {
 		after, before := g[0], g[1]
