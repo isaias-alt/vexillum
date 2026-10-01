@@ -146,9 +146,19 @@ waiting; everything queued is on disk.
 A conversation panel next to your artifact: their messages (plain text), your
 replies (markdown, sanitized), a composer, a removable list of **queued**
 messages, **Send to Agent** and **Send & End**, and an indicator of whether
-your agent is listening. When no poll is running the panel tells the user:
-"Your agent is not listening. Ask it to poll for updates." - so keep a poll
-running whenever the session is open.
+your agent is listening. The indicator and a notice show one of three states:
+
+- **Agent listening** - a poll is open.
+- **Agent working** ("Your agent received your message and is working.") - a
+  poll just delivered the user's messages and you have neither polled again nor
+  replied since. This holds for up to 15 minutes (it survives a server
+  restart), which is why you should reply (`--reply`) or poll again as soon as
+  you can instead of going silent.
+- **Agent not listening** ("Your agent is not listening. Ask it to poll for
+  updates.") - no poll is open and nothing was delivered recently (or the
+  working window ran out).
+
+Keep a poll running whenever the session is open.
 
 **Several tabs.** The same session can be open in more than one browser tab or
 window; every tab shows the same queue, transcript, listening state and end

@@ -118,6 +118,12 @@ type sessionRecord struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Queued    []Prompt  `json:"queued"`
 	Outbox    []Prompt  `json:"outbox"`
+	// DeliveredAt is when a poll last took prompts from the outbox and the
+	// agent has not polled again or replied since. It is what lets the browser
+	// say "your agent received your message and is working" instead of "not
+	// listening" in the gap between the delivering poll returning and the
+	// next one starting. Persisted so it survives a server restart.
+	DeliveredAt time.Time `json:"delivered_at,omitempty"`
 }
 
 const sessionRecordVersion = 1

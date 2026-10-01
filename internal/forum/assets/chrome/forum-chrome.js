@@ -11,6 +11,7 @@
   const frame = $("artifact");
 
   let snapshot = null;
+  let workingTimer = 0; // re-renders when the "agent is working" window runs out
   let version = 0;
   let artifactVersion = "";
   let renderedTranscriptKey = "";
@@ -182,17 +183,28 @@
 
     const presence = $("presence");
     const presenceText = $("presenceText");
+    // Not polling right now, but the agent took the user's prompts and has not
+    // polled or replied since: it is working, not absent (until the server's
+    // window runs out, then the plain "not listening" warning comes back).
+    const workingMs = snap.working_until ? Date.parse(snap.working_until) - Date.now() : 0;
+    const working = !ended && !snap.listening && workingMs > 0;
+    clearTimeout(workingTimer);
+    if (working) workingTimer = setTimeout(() => snapshot && render(snapshot), workingMs + 250);
     if (ended) {
       presence.dataset.state = "ended";
       presenceText.textContent = "Session ended";
     } else if (snap.listening) {
       presence.dataset.state = "listening";
       presenceText.textContent = "Agent listening";
+    } else if (working) {
+      presence.dataset.state = "working";
+      presenceText.textContent = "Agent working";
     } else {
       presence.dataset.state = "idle";
       presenceText.textContent = "Agent not listening";
     }
-    $("listenBanner").hidden = ended || snap.listening;
+    $("listenBanner").hidden = ended || snap.listening || working;
+    $("workingBanner").hidden = !working;
 
     const pending = $("pendingBanner");
     if (!ended && snap.pending > 0) {

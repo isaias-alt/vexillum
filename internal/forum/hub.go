@@ -52,6 +52,13 @@ type HubOptions struct {
 
 const defaultBrowserGrace = 30 * time.Second
 
+// AgentWorkingWindow is how long after delivering prompts to a poll the
+// browser keeps saying the agent is working. The agent has no way to say "I am
+// busy", and a real task (a mission, a review) easily runs for many minutes
+// between polls; past this without a poll or a reply the honest answer is
+// "not listening" again.
+const AgentWorkingWindow = 15 * time.Minute
+
 // Hub owns every live session of one server process. All durable state goes
 // through atomicfile (see persist.go) before it is committed to memory, so
 // a crash or restart never loses a queued or sent prompt; waiters (agent
@@ -520,6 +527,14 @@ func (h *Hub) Reply(key, text string) error {
 	if err != nil {
 		return err
 	}
+	if !l.rec.DeliveredAt.IsZero() {
+		if err := h.commit(l, func(rec *sessionRecord) error {
+			rec.DeliveredAt = time.Time{}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
 	if err := h.appendTranscript(l, Message{ID: id, Role: RoleAgent, Text: text, At: h.opts.Now().UTC()}); err != nil {
 		return err
 	}
@@ -549,6 +564,15 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 		return PollResult{}, err
 	}
 	l.pollers++
+	if !l.rec.DeliveredAt.IsZero() {
+		// Polling again: the agent is listening, not merely working.
+		if err := h.commit(l, func(rec *sessionRecord) error {
+			rec.DeliveredAt = time.Time{}
+			return nil
+		}); err != nil {
+			h.logf("clearing delivered_at: %v", err)
+		}
+	}
 	h.bump(l)
 	var deadline time.Time
 	if timeout > 0 {
@@ -573,6 +597,7 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 			taken := append([]Prompt(nil), l.rec.Outbox...)
 			if err := h.commit(l, func(rec *sessionRecord) error {
 				rec.Outbox = []Prompt{}
+				rec.DeliveredAt = h.opts.Now().UTC()
 				return nil
 			}); err != nil {
 				h.mu.Unlock()
@@ -652,6 +677,7 @@ func (h *Hub) Restore(key string, prompts []Prompt) error {
 	}
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		rec.Outbox = append(append([]Prompt(nil), prompts...), rec.Outbox...)
+		rec.DeliveredAt = time.Time{} // never reached the agent
 		return nil
 	}); err != nil {
 		return err
@@ -662,32 +688,42 @@ func (h *Hub) Restore(key string, prompts []Prompt) error {
 
 // Snapshot is the browser's view of a session.
 type Snapshot struct {
-	Version    int64     `json:"version"`
-	Key        string    `json:"key"`
-	File       string    `json:"file"`
-	Status     string    `json:"status"`
-	EndedBy    string    `json:"ended_by,omitempty"`
-	Listening  bool      `json:"listening"`
-	Pending    int       `json:"pending"`
-	Queued     []Prompt  `json:"queued"`
-	Transcript []Message `json:"transcript"`
+	Version   int64  `json:"version"`
+	Key       string `json:"key"`
+	File      string `json:"file"`
+	Status    string `json:"status"`
+	EndedBy   string `json:"ended_by,omitempty"`
+	Listening bool   `json:"listening"`
+	// WorkingUntil is set while the agent is not polling but took the user's
+	// prompts and has neither polled again nor replied: the browser shows
+	// "received your message and is working" until then.
+	WorkingUntil *time.Time `json:"working_until,omitempty"`
+	Pending      int        `json:"pending"`
+	Queued       []Prompt   `json:"queued"`
+	Transcript   []Message  `json:"transcript"`
 	// LayoutWarnings is the passive layout inbox. It is browser-only: a poll
 	// never carries it and nothing in it reaches the agent until the user
 	// queues it as a prompt.
 	LayoutWarnings []LayoutWarningView `json:"layout_warnings"`
 }
 
-func (l *liveSession) snapshot() Snapshot {
+func (l *liveSession) snapshot(now time.Time) Snapshot {
+	var workingUntil *time.Time
+	if until := l.rec.DeliveredAt.Add(AgentWorkingWindow); l.pollers == 0 && l.rec.Status != StatusEnded &&
+		!l.rec.DeliveredAt.IsZero() && now.Before(until) {
+		workingUntil = &until
+	}
 	return Snapshot{
-		Version:    l.version,
-		Key:        l.rec.Key,
-		File:       l.rec.File,
-		Status:     l.rec.Status,
-		EndedBy:    l.rec.EndedBy,
-		Listening:  l.pollers > 0,
-		Pending:    len(l.rec.Outbox),
-		Queued:     append([]Prompt{}, l.rec.Queued...),
-		Transcript: append([]Message{}, l.transcript...),
+		WorkingUntil: workingUntil,
+		Version:      l.version,
+		Key:          l.rec.Key,
+		File:         l.rec.File,
+		Status:       l.rec.Status,
+		EndedBy:      l.rec.EndedBy,
+		Listening:    l.pollers > 0,
+		Pending:      len(l.rec.Outbox),
+		Queued:       append([]Prompt{}, l.rec.Queued...),
+		Transcript:   append([]Message{}, l.transcript...),
 
 		LayoutWarnings: layoutViews(l.layout.Warnings),
 	}
@@ -724,7 +760,7 @@ func (h *Hub) State(ctx context.Context, key string, since int64, wait time.Dura
 	}
 	for {
 		if l.version != since || wait <= 0 || ctx.Err() != nil {
-			snap := l.snapshot()
+			snap := l.snapshot(h.opts.Now())
 			h.mu.Unlock()
 			return snap, nil
 		}
@@ -740,7 +776,7 @@ func (h *Hub) State(ctx context.Context, key string, since int64, wait time.Dura
 		}
 		h.mu.Lock()
 		if expired {
-			snap := l.snapshot()
+			snap := l.snapshot(h.opts.Now())
 			h.mu.Unlock()
 			return snap, nil
 		}
@@ -774,7 +810,7 @@ func (h *Hub) Watch(ctx context.Context, key string, tick time.Duration, fn func
 	timer := time.NewTicker(tick)
 	defer timer.Stop()
 	for {
-		snap := l.snapshot()
+		snap := l.snapshot(h.opts.Now())
 		changed := h.changed
 		h.mu.Unlock()
 		if err := fn(snap); err != nil {

@@ -117,6 +117,9 @@ button, textarea { font: inherit; color: inherit; }
 .presence-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fr-text-secondary); opacity: 0.6; }
 .presence[data-state="listening"] { color: var(--fr-accent); }
 .presence[data-state="listening"] .presence-dot { background: var(--fr-accent); opacity: 1; box-shadow: 0 0 0 3px var(--fr-accent-soft); }
+.presence[data-state="working"] { color: var(--fr-text); }
+.presence[data-state="working"] .presence-dot { background: var(--fr-bronze); opacity: 1; animation: working-pulse 1.6s ease-in-out infinite; }
+@keyframes working-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--fr-bronze-soft); } 50% { box-shadow: 0 0 0 4px var(--fr-bronze-soft); } }
 .presence[data-state="idle"], .presence[data-state="ended"] { color: var(--fr-text-secondary); }
 
 .banner {
@@ -127,6 +130,10 @@ button, textarea { font: inherit; color: inherit; }
   background: var(--fr-surface-sunken); color: var(--fr-text-secondary);
   border-bottom: 1px solid var(--fr-border);
 }
+.banner-working { display: flex; align-items: center; gap: var(--fr-space-2); background: var(--fr-surface-sunken); color: var(--fr-text); }
+.banner-working[hidden] { display: none; }
+.working-spinner { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fr-border-strong); border-top-color: var(--fr-bronze); animation: working-spin 0.9s linear infinite; }
+@keyframes working-spin { to { transform: rotate(360deg); } }
 .banner-warn { background: var(--fr-bronze-soft); color: var(--fr-text); }
 .banner-danger { background: var(--fr-danger-soft); color: var(--fr-danger); }
 .banner-ended { background: var(--fr-surface-sunken); color: var(--fr-text); font-weight: 600; }

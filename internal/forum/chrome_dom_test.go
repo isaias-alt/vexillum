@@ -107,3 +107,10 @@ func TestChromeCSS_DisabledButtonsShareOneLook(t *testing.T) {
 func TestChromeLayoutPass_VersionedToItsDocumentAndRetried(t *testing.T) {
 	runChromeNodeTest(t, "chrome_layout_version_test.js")
 }
+
+// "Listening", "working" (prompts delivered, no new poll or reply yet) and
+// "not listening" are three distinct states in the panel, and working falls
+// back to the warning when its window runs out.
+func TestChromePresence_WorkingIsDistinctFromNotListening(t *testing.T) {
+	runChromeNodeTest(t, "chrome_working_test.js")
+}
