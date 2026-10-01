@@ -269,6 +269,7 @@ func (s *Server) handleAgentPoll(w http.ResponseWriter, r *http.Request) {
 	delivered := make([]Prompt, len(prompts))
 	for i, p := range prompts {
 		p.QueueKey = ""
+		p.LayoutIDs = nil
 		// The agent reads attachments from disk: hand it their local paths.
 		p.Attachments = append([]Attachment(nil), p.Attachments...)
 		for j := range p.Attachments {

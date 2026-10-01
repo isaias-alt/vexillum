@@ -130,8 +130,9 @@ func (h *Hub) get(key string) (*liveSession, error) {
 	if rec == nil {
 		return nil, ErrNoSession
 	}
-	// A transcript written under an older or looser cap is trimmed on load.
-	transcript, _ = boundTranscript(transcript)
+	// A transcript written under an older or looser cap is trimmed on load (and
+	// the trim persisted and its orphaned images swept, below).
+	transcript, trimmed := boundTranscript(transcript)
 	// The layout inbox is advisory: a damaged file starts an empty one rather
 	// than blocking the session.
 	layout, err := loadLayout(h.home, key)
@@ -147,6 +148,12 @@ func (h *Hub) get(key string) (*liveSession, error) {
 		lastBrowser: h.opts.Now(),
 	}
 	h.sessions[key] = l
+	if len(trimmed) > 0 {
+		if err := saveTranscript(h.home, key, l.transcript); err != nil {
+			h.logf("forum: %v", err)
+		}
+		h.sweepAttachments(l)
+	}
 	return l, nil
 }
 
@@ -414,9 +421,7 @@ func (h *Hub) RemoveQueued(key, uid string) error {
 		for i := range rec.Queued {
 			if rec.Queued[i].UID == uid {
 				removed = rec.Queued[i].Attachments
-				if rec.Queued[i].Tag == LayoutWarningsTag {
-					released = layoutTargetIDs(rec.Queued[i].Target)
-				}
+				released = rec.Queued[i].LayoutIDs
 				rec.Queued = append(rec.Queued[:i], rec.Queued[i+1:]...)
 				return nil
 			}
@@ -426,7 +431,7 @@ func (h *Hub) RemoveQueued(key, uid string) error {
 		return err
 	}
 	h.dropAttachments(l, attachmentIDs(removed))
-	h.releaseLayout(l, released)
+	h.releaseLayout(l, l.unreferencedLayoutIDs(released))
 	h.bump(l)
 	return nil
 }
@@ -863,10 +868,21 @@ func (h *Hub) QueueLayoutWarnings(key string, ids []string) (Prompt, error) {
 	if len(selected) == 0 {
 		return Prompt{}, ErrNothingToQueue
 	}
-	text, label, target := layoutPrompt(selected)
+	selected, text, label, target, err := layoutPrompt(selected)
+	if err != nil {
+		return Prompt{}, err
+	}
 	p, err := normalizePrompt(PromptInput{Prompt: text, Tag: LayoutWarningsTag, Text: label, Target: target})
 	if err != nil {
 		return Prompt{}, err
+	}
+	// normalizePrompt drops an over-limit target silently; layoutPrompt fits it
+	// already, so a missing one is a bug to surface, not to store.
+	if len(p.Target) == 0 {
+		return Prompt{}, ErrLayoutTargetTooLarge
+	}
+	for _, w := range selected {
+		p.LayoutIDs = append(p.LayoutIDs, w.ID)
 	}
 	if p.UID, err = newID("pr_"); err != nil {
 		return Prompt{}, err
@@ -915,6 +931,27 @@ func (h *Hub) DismissLayoutWarning(key, id string) (bool, error) {
 	h.saveLayoutState(l)
 	h.bump(l)
 	return true, nil
+}
+
+// unreferencedLayoutIDs filters ids down to those no pending prompt (queued or
+// waiting in the outbox) still carries, so removing one prompt never frees a
+// warning another one is about.
+func (l *liveSession) unreferencedLayoutIDs(ids []string) []string {
+	held := map[string]bool{}
+	for _, list := range [][]Prompt{l.rec.Queued, l.rec.Outbox} {
+		for _, p := range list {
+			for _, id := range p.LayoutIDs {
+				held[id] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if !held[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // releaseLayout returns warnings whose queued prompt was removed unsent to

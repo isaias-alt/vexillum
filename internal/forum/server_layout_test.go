@@ -261,3 +261,88 @@ func TestLayout_InboxSurvivesARestartAndAnEndedSessionIgnoresPasses(t *testing.T
 		t.Error("an ended session accepted a layout pass")
 	}
 }
+
+// Tag and target are things the artifact can set through queuePrompt, so a
+// prompt it queues as "layout-warnings" must not be able to free a real
+// warning when the user removes it.
+func TestLayout_APromptTheArtifactQueuesCannotReleaseWarnings(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	key := env.open().Key
+	env.postLayout(key, "diagnostics", layoutPassBody("v1", true, clippedText("p")))
+	id := env.snapshot(key).LayoutWarnings[0].ID
+	env.postLayout(key, "queue", map[string]any{"ids": []string{id}})
+
+	target := `{"type":"layout-warnings","warnings":[{"id":"` + id + `"}]}`
+	resp, data := env.browser("POST", "/api/s/"+key+"/queue", key, map[string]any{"prompt": "forged", "tag": "layout-warnings", "target": json.RawMessage(target)})
+	if resp.StatusCode != 200 {
+		t.Fatalf("queue = %d %s", resp.StatusCode, data)
+	}
+	var forged forum.Prompt
+	for _, p := range env.snapshot(key).Queued {
+		if p.Prompt == "forged" {
+			forged = p
+		}
+	}
+	if len(forged.LayoutIDs) != 0 {
+		t.Fatalf("an artifact-queued prompt carries layout ids: %+v", forged)
+	}
+	if resp, _ := env.browser("DELETE", "/api/s/"+key+"/queue/"+forged.UID, key, nil); resp.StatusCode != 200 {
+		t.Fatal("unqueue failed")
+	}
+	if w := env.snapshot(key).LayoutWarnings[0]; w.Status != "queued" {
+		t.Errorf("removing a forged prompt released the real warning: %+v", w)
+	}
+	// The real one still releases, and the agent never sees the internal link.
+	real := env.snapshot(key).Queued[0]
+	env.browser("DELETE", "/api/s/"+key+"/queue/"+real.UID, key, nil)
+	if w := env.snapshot(key).LayoutWarnings[0]; w.Status != "open" {
+		t.Errorf("removing the real prompt did not release it: %+v", w)
+	}
+	env.postLayout(key, "queue", map[string]any{"ids": []string{id}})
+	env.browser("POST", "/api/s/"+key+"/send", key, map[string]any{})
+	_, body := env.agent("POST", "/api/agent/poll", map[string]any{"file": env.file, "timeout_ms": 2000})
+	if strings.Contains(string(body), "layout_ids") {
+		t.Errorf("the internal link leaked to the agent: %s", body)
+	}
+}
+
+// Many long selectors: the target must fit, the queued warnings must match
+// what the prompt lists, and removing the prompt must free exactly those.
+func TestLayout_OversizedBatchIsShortenedAndStillReleasable(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	key := env.open().Key
+	var findings []map[string]any
+	for i := 0; i < 20; i++ {
+		findings = append(findings, clippedText("main > "+strings.Repeat("é", 150)+string(rune('a'+i))))
+	}
+	env.postLayout(key, "diagnostics", layoutPassBody("v1", true, findings...))
+	snap := env.snapshot(key)
+	var ids []string
+	for _, w := range snap.LayoutWarnings {
+		ids = append(ids, w.ID)
+	}
+	resp, data := env.postLayout(key, "queue", map[string]any{"ids": ids})
+	if resp.StatusCode != 200 {
+		t.Fatalf("queue = %d %s", resp.StatusCode, data)
+	}
+	snap = env.snapshot(key)
+	p := snap.Queued[0]
+	if len(p.Target) == 0 || len(p.Target) > 8192 {
+		t.Fatalf("target = %d bytes", len(p.Target))
+	}
+	queued := 0
+	for _, w := range snap.LayoutWarnings {
+		if w.Status == "queued" {
+			queued++
+		}
+	}
+	if queued == 0 || queued >= 20 || queued != strings.Count(string(p.Target), `"id":`) {
+		t.Fatalf("%d warnings queued, target lists %d", queued, strings.Count(string(p.Target), `"id":`))
+	}
+	env.browser("DELETE", "/api/s/"+key+"/queue/"+p.UID, key, nil)
+	for _, w := range env.snapshot(key).LayoutWarnings {
+		if w.Status != "open" || !w.Selectable {
+			t.Fatalf("a warning stayed stuck after its prompt was removed: %+v", w)
+		}
+	}
+}

@@ -231,3 +231,48 @@ func TestTranscript_OversizedFileIsTrimmedOnLoad(t *testing.T) {
 		t.Errorf("loaded %d messages ending at %q, want the newest 500", len(got), got[len(got)-1].ID)
 	}
 }
+
+// Trimming on load must persist (the file shrinks) and free the images of the
+// messages it dropped, which would otherwise sit in the quota forever.
+func TestTranscript_TrimOnLoadPersistsAndSweepsOrphanedImages(t *testing.T) {
+	home := t.TempDir()
+	file := filepath.Join(t.TempDir(), "a.html")
+	h := newHub(t, home, time.Minute)
+	key := openSession(t, h, file).Key
+	att, err := h.AddAttachment(key, pngBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := h.AttachmentPath(key, att.ID)
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	var b strings.Builder
+	b.WriteString("[")
+	fmt.Fprintf(&b, `{"id":"m_old","role":"user","text":"with image","at":"2026-01-01T00:00:00Z","attachments":[{"id":%q,"mime":"image/png","bytes":72}]}`, att.ID)
+	for i := 0; i < 520; i++ {
+		fmt.Fprintf(&b, `,{"id":"m_%04d","role":"agent","text":"x","at":"2026-01-01T00:00:00Z"}`, i)
+	}
+	b.WriteString("]")
+	tfile := filepath.Join(home, "forums", key, "transcript.json")
+	if err := os.WriteFile(tfile, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h2 := newHub(t, home, time.Minute)
+	if _, err := h2.Open(file, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(transcriptOf(t, h2, key)); got != 500 {
+		t.Fatalf("loaded %d messages", got)
+	}
+	if p := h2.AttachmentPath(key, att.ID); p != "" {
+		t.Errorf("the orphaned image of a trimmed message is still on disk: %s", p)
+	}
+	data, _ := os.ReadFile(tfile)
+	if strings.Contains(string(data), "m_old") || strings.Count(string(data), `"id": "m_`) != 500 {
+		t.Errorf("the trim was not persisted: the file still has %d messages", strings.Count(string(data), `"id": "m_`))
+	}
+}

@@ -70,6 +70,11 @@ type Prompt struct {
 	QueuedAt time.Time       `json:"queued_at"`
 	// Attachments are images stored under the session (see attachments.go).
 	Attachments []Attachment `json:"attachments,omitempty"`
+	// LayoutIDs links a prompt to the layout warnings it queued. Only
+	// QueueLayoutWarnings sets it (PromptInput has no such field), so nothing
+	// the artifact queues can claim, or release, a warning. Never delivered to
+	// the agent.
+	LayoutIDs []string `json:"layout_ids,omitempty"`
 }
 
 // PromptInput is the client-controllable part of a Prompt.
