@@ -69,6 +69,10 @@ var KnownAXIs = []AXI{
 	// ("npx skills add", .claude/skills/<name>/SKILL.md) is identical and
 	// this is where the general already looks for on-demand skill status.
 	{Name: "muster", Repo: "isaias-alt/vexillum", Global: false},
+	// forum is first-party too (skills/forum/SKILL.md): the agent-facing
+	// guide to "vexillum forum", the in-binary replacement for forum-tool.
+	// forum stays listed above until the cutover removes it.
+	{Name: "forum", Repo: "isaias-alt/vexillum", Global: false},
 }
 
 // Binary checks whether binaryName is on PATH.

@@ -88,6 +88,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+Also adapted from the same forum-tool release (same MIT license and
+copyright notice as above):
+
+- `internal/forum/assets/chrome/forum-sdk.js`: the prompt-context helpers
+  (selector, element text, queue-key derivation) of `src/artifact-sdk.js`.
+  The `queuePrompt`/`sendQueuedPrompts` option model and the poll/session
+  semantics (`feedback`, `ended`, `browser_disconnected`, user-ended sessions
+  needing `--reopen`) follow `src/server.js` and `src/session-store.js`,
+  reimplemented in Go.
+- `skills/forum/playbooks/*.md` (plan, comparison, input, diagram, table):
+  rewritten for `window.forum` and the `vexillum forum` commands from
+  `src/playbooks.js`.
+
 Each adapted file's own header comment describes what changed from
 upstream. Treat this code as vexillum's own - not an opaque vendor blob -
 per `tools/whiteboard-bundle/README.md`: forum-tool ships a high release

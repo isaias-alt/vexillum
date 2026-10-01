@@ -536,6 +536,34 @@ func TestDoctor_MusterNotInstalled(t *testing.T) {
 	}
 }
 
+// forum is first-party like muster: detected from .claude/skills/forum and
+// hinted with a project-local install from this repo.
+func TestDoctor_ForumInstalledAndNotInstalled(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+	vexillumHome := t.TempDir()
+	homeDir := t.TempDir()
+
+	var out bytes.Buffer
+	if code := runDoctor(projectDir, vexillumHome, homeDir, &out); code != 0 {
+		t.Fatalf("expected exit 0 (forum status never affects the exit code), got %d\n%s", code, out.String())
+	}
+	want := "[not installed] forum - install with: npx skills add isaias-alt/vexillum --skill forum"
+	if !bytes.Contains(out.Bytes(), []byte(want)) {
+		t.Errorf("expected exact install hint, got:\n%s", out.String())
+	}
+
+	writeSkillFile(t, projectDir, "forum")
+	out.Reset()
+	runDoctor(projectDir, vexillumHome, homeDir, &out)
+	if !bytes.Contains(out.Bytes(), []byte("[installed] forum")) {
+		t.Errorf("expected forum reported installed, got:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("forum")) {
+		t.Errorf("forum must stay listed until the cutover, got:\n%s", out.String())
+	}
+}
+
 // snapshotTree returns a string describing every entry under dir (relative
 // path, size, mode, mod time), so two snapshots can be compared for any
 // change doctor might have made.

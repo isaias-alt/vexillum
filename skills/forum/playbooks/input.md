@@ -1,0 +1,80 @@
+<!--
+Adapted from upstream (MIT License, Copyright (c) 2026 the upstream author),
+src/playbooks.js at v0.1.80 (commit a2a199c), rewritten for vexillum forum
+(window.forum and the `vexillum forum` commands). See THIRD-PARTY-NOTICES.md at
+the vexillum repo root.
+-->
+
+# Playbook: input
+
+Use when: you need to collect user input on decisions, choices, preferences, triage, scope, or other structured feedback from within the artifact. **Open this playbook whenever the artifact contains a question for the user.**
+
+## Choose
+
+- Use controls for decisions the user can make faster visually than by writing a prompt.
+- Use an opt-in tracked batch when you must preserve completeness across a multi-item decision (findings to fixes, constraints to implementation, recommendations to follow-up work).
+- Use plain messages (the conversation panel) when the artifact only needs open-ended feedback.
+
+## Structure
+
+- Make each decision surface visible: what is chosen, what each option means, what happens next.
+- For a tracked batch, give every candidate item a short, stable, visible ID and let the user select or disposition items with native controls.
+- Keep reversible selection state local in the artifact until the user explicitly submits that question.
+- Pair each question with a Submit or "Queue answer" control that sends exactly one prompt for the final answer.
+- Show "selected" separately from "queued" so the user trusts what will be sent.
+
+## Design rules
+
+- Native controls (radios, checkboxes, text inputs, selects, textareas, buttons, labels, `<details>`, contenteditable) work exactly as authored: forum installs no click, change or submit handler, so build option UIs from them.
+- For reversible choices, never call `window.forum.queuePrompt()` from radio `change` or option `click` handlers; those only update local selected state.
+- Use a per-question form submit (or an explicit Queue answer button) to read the current values and call `window.forum.queuePrompt()` exactly once for the final answer.
+- Put `data-forum-question="<id>"` on a question wrapper, or pass `queueKey`, so a re-submission before sending replaces the prior unsent answer for that question.
+- Pass `tag`, `text`, `selector`, `target`, `data`, `queueKey` or `element` when they help you understand exactly what the user chose.
+- For a tracked batch, queue the final selected set once, with a concise, bounded `data.items` array (stable ID, short label, requested disposition), and tell yourself in the prompt to account for every submitted ID before reporting completion.
+- Call `window.forum.sendQueuedPrompts()` only when a control should immediately send committed feedback instead of waiting for the user to press Send to Agent.
+- Make queued prompts specific enough to act on without a follow-up question. Keep controls accessible and readable on mobile.
+
+## Pitfalls
+
+- Do not queue one prompt per radio change, checkbox toggle, dropdown change or choice-button click while the user can still change their mind.
+- Do not create controls whose queued prompt is unclear or too vague to execute.
+- Do not hide the difference between selected locally and queued for the agent.
+- Do not require interaction for content the user only needs to read.
+
+## Patterns
+
+Single choice, submitted once:
+
+```html
+<form data-forum-question="plan" onsubmit="event.preventDefault();
+  const choice = new FormData(event.currentTarget).get('plan');
+  if (choice) window.forum.queuePrompt('Use the ' + choice + ' plan', {
+    tag: 'choice', text: 'Plan: ' + choice, element: event.currentTarget,
+    data: { question: 'plan', answer: choice } });">
+  <label><input type="radio" name="plan" value="Starter"> Starter</label>
+  <label><input type="radio" name="plan" value="Pro"> Pro</label>
+  <button type="submit">Queue this answer</button>
+</form>
+```
+
+Tracked batch, the final selected set queued once:
+
+```html
+<form data-forum-question="tracked-review" onsubmit="event.preventDefault();
+  const selected = [...event.currentTarget.querySelectorAll('input[name=items]:checked')]
+    .map((i) => ({ id: i.value, label: i.dataset.label, disposition: i.dataset.disposition }));
+  if (selected.length) window.forum.queuePrompt(
+    'Act on every selected item and return an item-by-item receipt. Account for every submitted ID before reporting completion.',
+    { tag: 'tracked-batch', text: 'Apply ' + selected.length + ' selected review items',
+      element: event.currentTarget, data: { items: selected } });">
+  <label><input type="checkbox" name="items" value="R-03" data-label="Preserve rollback behavior" data-disposition="must-address"> R-03 - Preserve rollback behavior</label>
+  <label><input type="checkbox" name="items" value="R-08" data-label="Reuse the existing error surface" data-disposition="must-address"> R-08 - Reuse the existing error surface</label>
+  <button type="submit">Queue selected items</button>
+</form>
+```
+
+The receipt you give for a tracked batch must assign every submitted ID exactly one outcome: addressed with concrete evidence, deferred with a reason, or rejected with a reason. Before declaring completion, compare the submitted ID set with the receipt's ID set and surface every missing ID. Deliver the receipt with `vexillum forum poll <file> --reply-file -`.
+
+A custom (non-native) choice UI should make its option elements update local state, then use a separate Queue answer button to queue the final value.
+
+Use `window.forum.queuePrompt` for user intent, not for analytics or UI-only state changes. End every input path with an obvious way for the user to send the feedback to you.
