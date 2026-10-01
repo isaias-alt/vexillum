@@ -110,7 +110,12 @@
   --color-fd-diff-add-symbol: rgb(10, 200, 100);
 }
 
+/* Width floor shared by the landing and the docs: below 320px (the narrowest
+   phone we design for) the page stops shrinking and scrolls horizontally
+   instead of breaking the layout. Fixed overlays (the docs drawer, search)
+   stay viewport-sized. */
 html {
+  min-width: 320px;
   color-scheme: light;
 }
 html.dark {

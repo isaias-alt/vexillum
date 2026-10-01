@@ -48,11 +48,11 @@ export function MinuteSteps({
 
   return (
     <div
-      className="grid items-start gap-7 md:grid-cols-2"
+      className="grid grid-cols-1 items-start gap-7 md:grid-cols-2"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <ol className="relative m-0 list-none p-0 pl-1">
+      <ol className="relative m-0 min-w-0 list-none p-0 pl-1">
         <span
           aria-hidden
           className="absolute top-[26px] bottom-[26px] left-[25px] w-px bg-border"
