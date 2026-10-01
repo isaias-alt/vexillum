@@ -202,3 +202,21 @@ func TestArtifactStyle_DocumentedClassesExist(t *testing.T) {
 		}
 	}
 }
+
+// Vertical rhythm: a stack's gap is its only spacing and a heading pulls its
+// body up, so spacing is never counted twice (margins in a flex column do not
+// collapse: gap + heading margin + body margin made the heading look further
+// from its own body than from the block above it).
+func TestArtifactStyle_StackSpacingIsNotCountedTwice(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	_, css := env.get("/forum-assets/forum-artifact.css")
+	for _, want := range []string{
+		".fr-stack > * { margin-block: 0; }",
+		".fr-stack > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--fr-space-2) - var(--fr-stack-gap)); }",
+		":is(h1, h2, h3, h4, h5, h6) + * { margin-top: 0; }",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("stylesheet missing the rhythm rule %q", want)
+		}
+	}
+}

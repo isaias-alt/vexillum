@@ -417,7 +417,9 @@ no styling of its own** (see "When the forum styles apply" below).
   checked one highlights itself), `fr-actions` (button row). A
   `<button type="submit">` is the primary action by default.
 - **Layout helpers** (opt-in, never applied to the page by default):
-  `fr-page` (centered 72rem column with padding), `fr-stack` (vertical gap),
+  `fr-page` (centered 72rem column with padding), `fr-stack` (vertical gap;
+  it is the only spacing between its children, so do not add margins to them,
+  and a heading directly inside it sits close to the block it introduces),
   `fr-cluster` (wrapping row), `fr-grid` (responsive columns), `fr-muted`.
 - **SVG diagrams**: `fr-node` (`--accent` `--success` `--danger` `--bronze`),
   `fr-edge`, `fr-arrow`, `fr-label` (`--muted`) instead of hard-coded colors.

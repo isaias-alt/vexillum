@@ -32,6 +32,14 @@
 
   /* ---- type ---- */
   h1, h2, h3, h4, h5, h6 { color: var(--fr-text); font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+  /* Vertical rhythm (proximity): a heading sits closer to the body it introduces
+     than to whatever came before, and spacing is never counted twice. In normal
+     flow the heading owns the space around it (the body's own top margin is
+     dropped, margins would otherwise collapse to the larger one); inside a
+     .fr-stack the gap is the only spacing, see the layout helpers below. */
+  h1, h2, h3, h4, h5, h6 { margin-block: 1.5em 0.4em; }
+  :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 0; }
+  :is(h1, h2, h3, h4, h5, h6) + * { margin-top: 0; }
   h1 { font-size: 2rem; }
   h2 { font-size: 1.5rem; }
   h3 { font-size: 1.2rem; }
@@ -145,7 +153,14 @@
 
   /* ---- layout helpers (opt-in) ---- */
   .fr-page { max-width: 72rem; margin-inline: auto; padding: var(--fr-space-6) var(--fr-space-5); }
-  .fr-stack { display: flex; flex-direction: column; gap: var(--fr-space-4); }
+  /* A stack's gap is its only spacing: margins in a flex column do not collapse,
+     so a child's own margin would be added to the gap. Headings pull their body
+     up (8px instead of the full gap) and push away from what is above them. */
+  .fr-stack { --fr-stack-gap: var(--fr-space-4); display: flex; flex-direction: column; gap: var(--fr-stack-gap); }
+  .fr-stack > * { margin-block: 0; }
+  .fr-stack > section:not(:first-child) { margin-top: var(--fr-space-4); }
+  .fr-stack > :is(h1, h2, h3, h4, h5, h6):not(:first-child) { margin-top: var(--fr-space-3); }
+  .fr-stack > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--fr-space-2) - var(--fr-stack-gap)); }
   .fr-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fr-space-2); }
   .fr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--fr-space-4); }
   .fr-grid > *, .fr-stack > * { min-width: 0; }
