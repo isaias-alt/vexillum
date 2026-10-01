@@ -114,11 +114,13 @@ func TestEvents_TwoTabsSeeQueueTranscriptListeningAndEnd(t *testing.T) {
 	env.browser("POST", "/api/s/"+key+"/send", key, map[string]any{})
 	waitResult(t, pollDone)
 	for name, tab := range map[string]*eventStream{"A": tabA, "B": tabB} {
-		got := tab.next(func(s forum.Snapshot) bool { return len(s.Transcript) == 1 })
+		// The poll's wake-up and its end can reach a tab in one snapshot or
+		// two, so wait for the state that has both rather than for each
+		// change on its own.
+		got := tab.next(func(s forum.Snapshot) bool { return len(s.Transcript) == 1 && !s.Listening })
 		if got.Transcript[0].Text != "from tab A" || len(got.Queued) != 0 {
 			t.Errorf("tab %s transcript = %+v", name, got.Transcript)
 		}
-		tab.next(func(s forum.Snapshot) bool { return !s.Listening })
 	}
 
 	// The agent replies, then ends the session: both tabs see both.
