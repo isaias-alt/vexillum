@@ -9,20 +9,56 @@ import { notFound } from "next/navigation";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import type { Metadata } from "next";
 import { getMDXComponents } from "@/components/mdx";
-import { i18n } from "@/lib/i18n";
-import { SITE_URL } from "@/lib/site";
+import { type Lang } from "@/lib/i18n";
+import { basePath, DOCS_LABEL, docsPageInfo } from "@/lib/docs-seo";
+import {
+  absoluteUrl,
+  breadcrumbLd,
+  localizedPath,
+  pageMetadata,
+  techArticleLd,
+  type Crumb,
+} from "@/lib/seo";
+import { dictionary } from "@/lib/strings";
+import { JsonLd } from "@/components/JsonLd";
 
 type Props = { params: Promise<{ lang: string; slug?: string[] }> };
 
 export default async function Page(props: Props) {
   const { lang, slug } = await props.params;
-  const page = source.getPage(slug, lang);
-  if (!page) notFound();
+  const info = docsPageInfo(slug, lang);
+  if (!info) notFound();
+  const { page, fallback, contentLang } = info;
+
+  const pageLang = (fallback ? contentLang : lang) as Lang;
+
+  // Breadcrumbs only list levels that are real pages: a section folder with no
+  // index page (get-started, concepts, ...) has no URL to point at.
+  const crumbs: Crumb[] = [
+    { name: "vexillum", path: "/" },
+    { name: DOCS_LABEL[pageLang], path: "/docs" },
+  ];
+  const parts = slug ?? [];
+  for (let i = 1; i <= parts.length; i++) {
+    const level = parts.slice(0, i);
+    const p = source.getPage(level, pageLang);
+    if (p) crumbs.push({ name: p.data.title, path: basePath(level) });
+  }
+  const canonical = absoluteUrl(localizedPath(pageLang, basePath(slug)));
 
   const MDX = page.data.body;
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
+      <JsonLd data={breadcrumbLd(pageLang, crumbs)} />
+      <JsonLd
+        data={techArticleLd({
+          headline: page.data.title,
+          description: page.data.description ?? "",
+          url: canonical,
+          inLanguage: pageLang,
+        })}
+      />
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
@@ -42,20 +78,17 @@ export function generateStaticParams() {
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { lang, slug } = await props.params;
-  const page = source.getPage(slug, lang);
-  if (!page) notFound();
+  const info = docsPageInfo(slug, lang);
+  if (!info) notFound();
+  const { page, translations } = info;
 
-  // The same page in each language (Spanish falls back to the English page
-  // when it has no translation, so both URLs always resolve).
-  const path = (l: string) => `${l === i18n.defaultLanguage ? "" : `/${l}`}${page.url.replace(/^\/(es\/)?/, "/")}`;
-  return {
+  // A page with no translation shows the default-language page under /es; its
+  // canonical is the original, so the two never compete.
+  return pageMetadata({
+    lang: lang as Lang,
     title: page.data.title,
-    description: page.data.description,
-    alternates: {
-      canonical: `${SITE_URL}${page.url}`,
-      languages: Object.fromEntries(
-        i18n.languages.map((l) => [l, `${SITE_URL}${path(l)}`]),
-      ),
-    },
-  };
+    description: page.data.description ?? dictionary(lang).meta.description,
+    translations,
+    type: "article",
+  });
 }

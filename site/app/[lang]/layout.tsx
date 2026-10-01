@@ -37,9 +37,6 @@ export async function generateMetadata({
     metadataBase: new URL(SITE_URL),
     title: { default: "vexillum", template: "%s · vexillum" },
     description: t.meta.description,
-    alternates: {
-      languages: { en: "/", es: "/es" },
-    },
   };
 }
 

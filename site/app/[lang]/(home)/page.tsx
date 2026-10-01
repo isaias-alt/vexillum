@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import { JsonLd } from "@/components/JsonLd";
+import { pageMetadata, softwareApplicationLd } from "@/lib/seo";
 import { SiteNav } from "@/components/SiteNav";
 import { Footer } from "@/components/Footer";
 import { InstallCommand } from "@/components/InstallCommand";
@@ -18,6 +21,28 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
+const TITLE: Record<Lang, string> = {
+  en: "vexillum · orchestrate coding agents from your terminal",
+  es: "vexillum · orquestá agentes de código desde tu terminal",
+};
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}): Promise<Metadata> {
+  const { lang } = await params;
+  if (!i18n.languages.includes(lang as Lang)) notFound();
+  return pageMetadata({
+    lang: lang as Lang,
+    title: TITLE[lang as Lang],
+    absoluteTitle: TITLE[lang as Lang],
+    description: dictionary(lang).meta.description,
+    translations: { en: "/", es: "/" },
+    type: "website",
+  });
+}
+
 export default async function Home({
   params,
 }: {
@@ -30,6 +55,7 @@ export default async function Home({
 
   return (
     <>
+      <JsonLd data={softwareApplicationLd(lang as Lang, t.meta.description)} />
       <SiteNav lang={lang as Lang} />
 
       <main>
