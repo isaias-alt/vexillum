@@ -27,19 +27,23 @@ script verifies the release checksum before installing.
 
 ## Usage
 
-```sh
-vexillum init        # prepare the current project to be orchestrated by vexillum
-vexillum doctor      # check the health of the vexillum environment
-vexillum dispatch    # dispatch a soldier (mission or scout) into an isolated camp
-vexillum redispatch  # re-dispatch an interrupted task from its original prompt
-vexillum decide      # answer a blocked task's open question so it can continue
-vexillum status      # report the current project's fleet of tasks (read-only)
-vexillum land        # land a finished mission's work into the base branch
-vexillum ship        # push a finished mission through vexillum's own tribunal pipeline for a real PR
-vexillum release     # release a soldier's camp back to the pool
-vexillum sentinel    # watch dispatched soldiers and record status changes
-vexillum upgrade     # refresh an already-initialized project's scaffold
-```
+<!-- docgen:commands:start -->
+| Command | Description |
+| --- | --- |
+| `vexillum init` | Prepare the current project to be orchestrated by vexillum |
+| `vexillum upgrade` | Refresh an already-initialized project's scaffold to the latest |
+| `vexillum doctor` | Report on the health of the vexillum environment |
+| `vexillum dispatch` | Dispatch a soldier (mission or scout) into an isolated camp |
+| `vexillum redispatch` | Re-dispatch an interrupted task from its original prompt |
+| `vexillum decide` | Answer a blocked task's open question so it can continue |
+| `vexillum status` | Report the current project's fleet of tasks (read-only) |
+| `vexillum land` | Land a finished mission's work into the base branch |
+| `vexillum ship` | Push a finished mission through vexillum's own tribunal pipeline for a real PR |
+| `vexillum release` | Release a soldier's camp back to the pool |
+| `vexillum sentinel` | Watch dispatched soldiers and record status changes |
+| `vexillum forum` | Open an HTML artifact for visual review and collect the user's feedback |
+| `vexillum banner` | Publish an HTML artifact to a public URL, or update one already published |
+<!-- docgen:commands:end -->
 
 Run `vexillum --help` for the full command list, or `vexillum <command> -h`
 for a specific command.
@@ -49,6 +53,22 @@ for a specific command.
 See `CONTRIBUTING.md` for how to build, test, and submit a PR. Found a bug or
 have a feature request? Open an issue using the templates in
 `.github/ISSUE_TEMPLATE/`.
+
+### Regenerating the command reference
+
+The command list is defined once, in the registry in `internal/cli/commands.go`
+(name, one-line summary, full usage). `vexillum --help`, the table above, and
+the per-command pages under `site/content/docs/reference/cli/` are all derived
+from it - do not edit the generated parts by hand. After adding or changing a
+command, regenerate and commit the result:
+
+```sh
+go run ./tools/docgen
+```
+
+`go test ./...` fails with that same instruction if the committed files drift
+from the registry. `tools/docgen` is a dev-only tool: it is never part of the
+`vexillum` binary or its installation.
 
 ## License
 

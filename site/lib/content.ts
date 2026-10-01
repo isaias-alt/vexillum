@@ -30,10 +30,12 @@ export const commands = [
   { name: "doctor", desc: "Report on the health of the vexillum environment - read-only." },
   { name: "dispatch", desc: "Dispatch a soldier (mission or scout) into an isolated camp." },
   { name: "redispatch", desc: "Re-dispatch an interrupted task from its original prompt." },
+  { name: "decide", desc: "Answer a blocked task's open question so it can continue." },
+  { name: "status", desc: "Report the current project's fleet of tasks - read-only." },
   { name: "land", desc: "Land a finished mission's work into the base branch." },
   {
     name: "ship",
-    desc: "Push a finished mission through an external validation gate for a real PR.",
+    desc: "Push a finished mission through vexillum's own tribunal pipeline for a real PR.",
   },
   {
     name: "release",
@@ -41,6 +43,14 @@ export const commands = [
   },
   { name: "sentinel", desc: "Watch dispatched soldiers and record status changes." },
   { name: "upgrade", desc: "Refresh an already-initialized project's scaffold." },
+  {
+    name: "forum",
+    desc: "Open an HTML artifact for visual review and collect the user's feedback.",
+  },
+  {
+    name: "banner",
+    desc: "Publish an HTML artifact to a public URL, or update one already published.",
+  },
 ];
 
 export const featureClusters = [
