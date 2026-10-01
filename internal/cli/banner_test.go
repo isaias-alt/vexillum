@@ -271,3 +271,45 @@ func TestRunBannerPublishWarnsOnUnpaintedPage(t *testing.T) {
 		t.Errorf("painted page must not warn, got: %s", stderr.String())
 	}
 }
+
+// B7
+func TestParseBannerArgsRefusesRiskyFlagValues(t *testing.T) {
+	cases := map[string][]string{
+		"empty password":            {"a.html", "--password", ""},
+		"blank password":            {"a.html", "--password", "  "},
+		"password eats next flag":   {"a.html", "--password", "--site", "abc", "--update-key", "k"},
+		"empty site":                {"a.html", "--site", "", "--update-key", "k"},
+		"site eats next flag":       {"a.html", "--site", "--update-key", "k"},
+		"empty update-key":          {"a.html", "--site", "abc", "--update-key", ""},
+		"update-key eats next flag": {"a.html", "--site", "abc", "--update-key", "--private"},
+		"empty = form":              {"a.html", "--password="},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseBannerArgs(args); err == nil {
+				t.Errorf("expected an error for %v", args)
+			}
+		})
+	}
+
+	t.Run("empty password error names the public-page risk", func(t *testing.T) {
+		_, err := parseBannerArgs([]string{"a.html", "--password", ""})
+		if err == nil || !strings.Contains(err.Error(), "PUBLIC") {
+			t.Errorf("got %v", err)
+		}
+	})
+
+	t.Run("= form allows a leading --", func(t *testing.T) {
+		a, err := parseBannerArgs([]string{"a.html", "--password=--weird"})
+		if err != nil || a.password != "--weird" {
+			t.Errorf("got %+v, %v", a, err)
+		}
+	})
+
+	t.Run("normal values still work", func(t *testing.T) {
+		a, err := parseBannerArgs([]string{"a.html", "--site", "abc", "--update-key", "-k-"})
+		if err != nil || a.site != "abc" || a.updateKey != "-k-" {
+			t.Errorf("got %+v, %v", a, err)
+		}
+	})
+}

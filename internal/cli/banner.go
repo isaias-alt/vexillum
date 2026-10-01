@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/banner"
 )
@@ -68,6 +69,11 @@ not with --unpublish):
   --private        generate a page password locally and print it once
   --password <pw>   gate the page with a password you already chose
 
+--password, --site and --update-key refuse an empty value (typically an
+unset shell variable) and a value starting with "--" (the next flag,
+swallowed by accident). Use --flag=<value> if a value really starts
+with "--".
+
 Either sets the page's password in the same request that publishes it.
 There is no way to make an already-private page public again - the
 backend silently ignores an attempt to clear a password, so this command
@@ -105,27 +111,28 @@ func parseBannerArgs(args []string) (bannerArgs, error) {
 	var a bannerArgs
 	var files []string
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
+		arg := args[i]
+		if flag, value, ok := splitFlagValue(arg); ok {
+			v, err := checkedBannerFlagValue(flag, value, false)
+			if err != nil {
+				return bannerArgs{}, err
+			}
+			a.setValueFlag(flag, v)
+			continue
+		}
+		switch arg {
 		case "--private":
 			a.private = true
-		case "--password":
+		case "--password", "--site", "--update-key":
 			if i+1 >= len(args) {
-				return bannerArgs{}, fmt.Errorf("--password requires a value")
+				return bannerArgs{}, fmt.Errorf("%s requires a value", arg)
+			}
+			v, err := checkedBannerFlagValue(arg, args[i+1], true)
+			if err != nil {
+				return bannerArgs{}, err
 			}
 			i++
-			a.password = args[i]
-		case "--site":
-			if i+1 >= len(args) {
-				return bannerArgs{}, fmt.Errorf("--site requires a value")
-			}
-			i++
-			a.site = args[i]
-		case "--update-key":
-			if i+1 >= len(args) {
-				return bannerArgs{}, fmt.Errorf("--update-key requires a value")
-			}
-			i++
-			a.updateKey = args[i]
+			a.setValueFlag(arg, v)
 		case "--unpublish":
 			a.unpublish = true
 		default:
@@ -164,6 +171,51 @@ func parseBannerArgs(args []string) (bannerArgs, error) {
 	}
 
 	return a, nil
+}
+
+// bannerValueFlags are the flags that take a value.
+var bannerValueFlags = []string{"--password", "--site", "--update-key"}
+
+// splitFlagValue recognizes the "--flag=value" form of a value flag.
+func splitFlagValue(arg string) (flag, value string, ok bool) {
+	for _, f := range bannerValueFlags {
+		if strings.HasPrefix(arg, f+"=") {
+			return f, arg[len(f)+1:], true
+		}
+	}
+	return "", "", false
+}
+
+func (a *bannerArgs) setValueFlag(flag, v string) {
+	switch flag {
+	case "--password":
+		a.password = v
+	case "--site":
+		a.site = v
+	case "--update-key":
+		a.updateKey = v
+	}
+}
+
+// checkedBannerFlagValue refuses the shapes of a flag value that are
+// guesses rather than values. An unset shell variable ("--password $PW")
+// expands to nothing and would otherwise publish a PUBLIC page the user
+// believes is private, and a value starting with "--" is almost certainly
+// the next flag swallowed by accident. swallows is true for the space-
+// separated form ("--flag value"); the "--flag=value" form can't swallow
+// anything, so only emptiness is checked there.
+func checkedBannerFlagValue(flag, value string, swallows bool) (string, error) {
+	if swallows && strings.HasPrefix(value, "--") {
+		return "", fmt.Errorf("%s was given no value: the next argument %q is another flag, so it would have been used as the value (use %s=<value> if the value itself starts with --)", flag, value, flag)
+	}
+	if strings.TrimSpace(value) == "" {
+		msg := fmt.Sprintf("%s was given an empty value", flag)
+		if flag == "--password" {
+			msg += ", and publishing a PUBLIC page while you believed it was private is the worse failure - quote the value as --password \"<pw>\" (an unset shell variable expands to nothing) or pass --private to have vexillum generate one"
+		}
+		return "", errors.New(msg)
+	}
+	return value, nil
 }
 
 func runBanner(opts bannerArgs, client *banner.Client, stdout, stderr io.Writer) int {
