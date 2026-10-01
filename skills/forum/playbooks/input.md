@@ -25,7 +25,7 @@ Use when: you need to collect user input on decisions, choices, preferences, tri
 
 ## Design rules
 
-- Native controls (radios, checkboxes, text inputs, selects, textareas, buttons, labels, `<details>`, contenteditable) work exactly as authored: forum installs no click, change or submit handler of its own, so build option UIs from them. One thing to tell the user: while the chrome's **Annotate** switch is On (its default), a plain click on any control annotates it instead of acting, and Alt/Option+click acts on it normally. Say so next to your form ("switch Annotate Off, or hold Alt/Option while clicking") so a decision form is not mistaken for broken.
+- Native controls (radios, checkboxes, text inputs, selects, textareas, buttons, labels, `<details>`, contenteditable) work exactly as authored: forum installs no click, change or submit handler of its own, so build option UIs from them. This holds with the chrome's **Annotate** switch On too (its default): a plain click on a control, or on a label, always acts on it. Only Alt/Option+click annotates a control, which the user may do to comment on a specific option; clicks on the surrounding text annotate it as usual.
 - For reversible choices, never call `window.forum.queuePrompt()` from radio `change` or option `click` handlers; those only update local selected state.
 - Use a per-question form submit (or an explicit Queue answer button) to read the current values and call `window.forum.queuePrompt()` exactly once for the final answer.
 - Put `data-forum-question="<id>"` on a question wrapper, or pass `queueKey`, so a re-submission before sending replaces the prior unsent answer for that question.

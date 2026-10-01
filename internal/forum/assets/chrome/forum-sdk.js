@@ -7,10 +7,11 @@
 // upstream's artifact-sdk.js (MIT, v0.1.80); see
 // THIRD-PARTY-NOTICES.md at the vexillum repo root.
 //
-// Native controls (radios, checkboxes, inputs, selects, buttons, forms) are
-// never touched outside annotation mode: the handlers below do nothing until
-// the user switches that mode on, so a decision form behaves exactly as the
-// artifact authored it and calls window.forum.queuePrompt itself on submit. In annotation mode the artifact
+// Native controls (radios, checkboxes, inputs, selects, buttons, labels,
+// forms) are never intercepted by a plain click, in any mode, so a decision
+// form behaves exactly as the artifact authored it and calls
+// window.forum.queuePrompt itself on submit. In annotation mode only content
+// annotates on a click; Alt/Option+click annotates a control instead. In annotation mode the artifact
 // side (hover outline, element and text capture) lives here; the floating
 // note card and every request to the server live in the chrome, which owns
 // the session token (see forum-chrome.js, "annotation").
@@ -182,7 +183,7 @@
   const INK = "#5B2A5E";
   const HALO = "#B695B8";
   const FILL = "rgba(91, 42, 94, 0.16)";
-  const CONTROLS = "button,input,select,textarea,option,optgroup,label,summary,a[href],[contenteditable]:not([contenteditable='false'])";
+  const CONTROLS = "button,input,select,textarea,option,optgroup,label,summary,[contenteditable]:not([contenteditable='false'])";
 
   let mode = false; // annotation mode, owned by the chrome
   let hoverEl = null;
@@ -285,28 +286,43 @@
     post("forum:selection", { context: found.context, rect: rectOf(found.range.getBoundingClientRect()) });
   }
 
-  // In annotation mode a click annotates instead of acting, so none of the
-  // events that would fire the control under the pointer reach the artifact.
-  // Holding Alt/Option while clicking opts out: the click goes to the artifact
-  // as if annotation mode were off.
-  const SWALLOWED = ["pointerdown", "mousedown", "pointerup", "dblclick", "auxclick", "submit"];
+  // The artifact's own controls (radios, checkboxes, inputs, selects, buttons,
+  // labels, summaries, links inside forms) always act normally, even in
+  // annotation mode: a decision form must keep working. Alt/Option+click on a
+  // control annotates it instead. Everything else (text, headings, cards)
+  // annotates on a plain click and never reaches the artifact's handlers.
+  function isControl(node) {
+    const el = elementOf(node);
+    if (!el || !el.closest) return false;
+    if (el.closest(CONTROLS)) return true;
+    const link = el.closest("a[href]");
+    return !!(link && link.closest("form"));
+  }
+
+  // intercepts reports whether an event on target belongs to annotation: it
+  // does in annotation mode, outside the forum UI, unless it is a plain
+  // (no Alt/Option) press on a control.
+  function intercepts(event) {
+    return mode && !isForumUi(event.target) && (event.altKey || !isControl(event.target));
+  }
+
+  const SWALLOWED = ["pointerdown", "mousedown", "pointerup", "dblclick", "auxclick"];
   let ignoreClick = false;
   let pointerDown = false;
-  // A submit event carries no modifier keys: remember that the click that
-  // causes it was an Alt/Option click, for the rest of that click's dispatch.
-  let altClick = false;
 
   for (const type of SWALLOWED) {
     document.addEventListener(
       type,
       (event) => {
-        if (type === "pointerdown" || type === "mousedown") pointerDown = true;
-        if (!mode || event.altKey || (type === "submit" && altClick) || isForumUi(event.target)) return;
+        if (type === "pointerdown" || type === "mousedown") {
+          pointerDown = true;
+          ignoreClick = false;
+        }
+        if (!intercepts(event)) return;
         event.stopPropagation();
-        if (type === "submit") event.preventDefault();
-        // A press on a control would focus it, open its popup or start a drag; keep
+        // An Alt+press on a control would focus it, open its popup or start a drag; keep
         // that off, but never on plain content so text can still be selected.
-        if (type === "mousedown" && elementOf(event.target) && elementOf(event.target).closest(CONTROLS)) event.preventDefault();
+        if (type === "mousedown" && isControl(event.target)) event.preventDefault();
       },
       true,
     );
@@ -317,11 +333,10 @@
     (event) => {
       pointerDown = false;
       window.setTimeout(checkSelection, 0);
-      if (!mode || event.altKey || isForumUi(event.target)) return;
+      if (!intercepts(event)) return;
       event.stopPropagation();
       // A drag that selected text ends in a click on the common ancestor: that click is not an element annotation.
-      const selected = selectionContext(window.getSelection());
-      if (selected) ignoreClick = true;
+      if (selectionContext(window.getSelection())) ignoreClick = true;
     },
     true,
   );
@@ -329,11 +344,7 @@
   document.addEventListener(
     "click",
     (event) => {
-      if (event.altKey) {
-        altClick = true;
-        window.setTimeout(() => (altClick = false), 0);
-      }
-      if (!mode || event.altKey || isForumUi(event.target)) return;
+      if (!intercepts(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (ignoreClick) {
@@ -351,25 +362,35 @@
     true,
   );
 
-  document.addEventListener(
-    "mouseover",
-    (event) => {
-      if (!mode || isForumUi(event.target)) return;
-      hoverEl = elementOf(event.target);
-      schedule();
-    },
-    true,
-  );
+  // The hover outline shows what a click would annotate: not a control that
+  // would act instead, unless Alt/Option is held. It follows the Alt key too.
+  let lastTarget = null;
+  function updateHover(target, altKey) {
+    lastTarget = target;
+    const el = elementOf(target);
+    hoverEl = mode && el && !isForumUi(el) && (altKey || !isControl(el)) ? el : null;
+    schedule();
+  }
+
+  document.addEventListener("mouseover", (event) => updateHover(event.target, event.altKey), true);
 
   document.addEventListener(
     "mouseout",
     (event) => {
       if (event.relatedTarget) return;
+      lastTarget = null;
       hoverEl = null;
       schedule();
     },
     true,
   );
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Alt" && lastTarget) updateHover(lastTarget, true);
+  });
+  document.addEventListener("keyup", (event) => {
+    if (event.key === "Alt" && lastTarget) updateHover(lastTarget, false);
+  });
 
   document.addEventListener("keyup", (event) => {
     if (event.key === "Shift" || event.shiftKey || event.key.startsWith("Arrow")) window.setTimeout(checkSelection, 0);

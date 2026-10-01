@@ -22,10 +22,13 @@ class El {
   getAttribute(name) { return name in this.attrs ? this.attrs[name] : null; }
   closest(selector) {
     // The forum-ui marker, or a comma list of plain tag names.
-    const tags = selector.split(",");
-    for (let el = this; el; el = el.parentElement) {
-      if (selector === "[data-forum-ui]" ? el.getAttribute("data-forum-ui") !== null : tags.includes(el.tagName.toLowerCase())) return el;
-    }
+    const entries = selector.split(",");
+    const matches = (el) => {
+      if (selector === "[data-forum-ui]") return el.getAttribute("data-forum-ui") !== null;
+      const tag = el.tagName.toLowerCase();
+      return entries.some((e) => (e === "a[href]" ? tag === "a" && el.getAttribute("href") !== null : tag === e));
+    };
+    for (let el = this; el; el = el.parentElement) if (matches(el)) return el;
     return null;
   }
   getBoundingClientRect() { return { left: 10, top: 20, width: 100, height: 30 }; }
@@ -138,38 +141,68 @@ const overlay = walk(tree).find((e) => e.getAttribute("data-forum-ui"));
 assert.strictEqual(dom.selectionContext(selection("overlay", text(overlay.children[0]))), null, "forum ui is never annotated");
 assert.strictEqual(dom.selectionContext(null), null);
 
-// Annotation mode: off leaves the artifact alone; on annotates instead of
-// acting; Alt/Option held opts out of the interception.
-const save = main.children[1];
-const click = (extra) => dispatch("click", Object.assign({ target: save }, extra));
-let e = click();
+// Annotation mode. Off: nothing is touched. On: plain content annotates on a
+// click; the artifact's own controls keep acting, and only Alt/Option+click
+// annotates them.
+const annotations = () => posts.filter((m) => m.type === "forum:annotate");
+const clickOn = (target, extra) => dispatch("click", Object.assign({ target }, extra));
+const save = main.children[1]; // a button
+const paragraph = main.children[4];
+const input = main.children[2];
+
+let e = clickOn(save);
 assert.ok(!e.defaultPrevented && !e.stopped, "annotation off: a click must reach the artifact untouched");
-assert.strictEqual(posts.filter((m) => m.type === "forum:annotate").length, 0);
+assert.strictEqual(annotations().length, 0);
 
 sendToSDK({ type: "forum:mode", on: true });
-e = click();
-assert.ok(e.defaultPrevented && e.stopped, "annotation on: the click annotates instead of acting");
-const annotate = posts.filter((m) => m.type === "forum:annotate");
-assert.strictEqual(annotate.length, 1);
+
+// Plain content: a click annotates and never reaches the artifact.
+e = clickOn(paragraph);
+assert.ok(e.defaultPrevented && e.stopped, "annotation on: a click on content annotates");
+assert.strictEqual(annotations().length, 1);
 // Compared as JSON: the SDK runs in its own vm realm, so prototypes differ.
-assert.strictEqual(JSON.stringify(annotate[0].context), JSON.stringify({ tag: "button", selector: 'button[data-testid="save"]', text: "Save" }));
-assert.strictEqual(JSON.stringify(Object.keys(annotate[0].rect).sort()), JSON.stringify(["h", "w", "x", "y"]));
-for (const type of ["mousedown", "pointerdown", "pointerup", "dblclick", "submit"]) {
-  const ev = dispatch(type, { target: save });
-  assert.ok(ev.stopped, type + " must not reach the artifact in annotation mode");
+assert.strictEqual(JSON.stringify(annotations()[0].context), JSON.stringify(dom.elementContext(paragraph)));
+assert.strictEqual(JSON.stringify(Object.keys(annotations()[0].rect).sort()), JSON.stringify(["h", "w", "x", "y"]));
+for (const type of ["mousedown", "pointerdown", "pointerup", "dblclick"]) {
+  assert.ok(dispatch(type, { target: paragraph }).stopped, type + " on content must not reach the artifact");
 }
 
-e = click({ altKey: true });
-assert.ok(!e.defaultPrevented && !e.stopped, "Alt+click acts on the control natively");
-assert.strictEqual(posts.filter((m) => m.type === "forum:annotate").length, 1, "Alt+click does not annotate");
-assert.ok(!dispatch("mousedown", { target: save, altKey: true }).stopped);
+// Controls act normally: nothing is prevented, stopped or annotated, for every kind.
+const radio = new El("input", { type: "radio", name: "p" });
+const label = new El("label", {}, [new El("span", {}, [], "Plan A")]);
+const select = new El("select", {}, [new El("option", {}, [], "one")]);
+const summary = new El("summary", {}, [], "More");
+const formLink = new El("a", { href: "#next" }, [], "next");
+const form = new El("form", {}, [formLink, radio, label, select, summary, new El("textarea")]);
+new El("div", {}, [form]);
+const before = annotations().length;
+for (const [name, target] of [["button", save], ["text input", input], ["radio", radio], ["label", label], ["text inside a label", label.children[0]], ["select", select], ["option", select.children[0]], ["summary", summary], ["link inside a form", formLink], ["textarea", form.children[5]]]) {
+  for (const type of ["click", "mousedown", "pointerdown", "pointerup", "mouseup"]) {
+    const ev = dispatch(type, { target });
+    assert.ok(!ev.defaultPrevented && !ev.stopped, name + ": a plain " + type + " must act normally in annotation mode");
+  }
+}
+assert.strictEqual(annotations().length, before, "controls are not annotated by a plain click");
+// A link outside any form is content, not a control.
+assert.ok(clickOn(new El("a", { href: "#x" }, [], "see")).defaultPrevented, "a link in prose annotates");
+const afterLink = annotations().length;
+
+// Alt/Option+click annotates a control instead of acting, and does not fire it.
+e = clickOn(radio, { altKey: true });
+assert.ok(e.defaultPrevented && e.stopped, "Alt+click on a control annotates it without firing it");
+assert.strictEqual(annotations().length, afterLink + 1);
+assert.strictEqual(annotations()[afterLink].context.tag, "input");
+e = clickOn(save, { altKey: true });
+assert.ok(e.defaultPrevented, "Alt+click on a button must not press it");
+for (const type of ["mousedown", "pointerdown", "pointerup"]) assert.ok(dispatch(type, { target: radio, altKey: true }).stopped);
+assert.ok(dispatch("mousedown", { target: radio, altKey: true }).defaultPrevented, "Alt+press on a control must not focus or open it");
+assert.ok(!dispatch("mousedown", { target: paragraph }).defaultPrevented, "a press on content stays free so text can be selected");
 
 // Overlay clicks are never annotated.
-const overlayClick = dispatch("click", { target: overlay.children[0] });
-assert.ok(!overlayClick.defaultPrevented);
+assert.ok(!dispatch("click", { target: overlay.children[0] }).defaultPrevented);
 
 sendToSDK({ type: "forum:mode", on: false });
-assert.ok(!click().defaultPrevented, "switching annotation off restores normal clicks");
+assert.ok(!clickOn(paragraph).defaultPrevented, "switching annotation off restores normal clicks");
 
 // Ctrl/Cmd+I asks the chrome to toggle the mode, wherever focus is.
 dispatch("keydown", { key: "i", ctrlKey: true, metaKey: false, shiftKey: false });
