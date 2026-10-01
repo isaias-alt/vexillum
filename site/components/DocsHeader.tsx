@@ -7,8 +7,8 @@ import { Navbar } from "./Navbar";
 import { i18n, type Lang } from "@/lib/i18n";
 
 // Fumadocs' header slot, replaced by the shared Navbar. The docs add only
-// what the landing has no use for: search and the sidebar toggles (styled as
-// the design's square buttons in globals.css).
+// what the landing has no use for: search and the mobile menu trigger (styled as
+// the design's square button in globals.css).
 export function DocsHeader() {
   const { slots } = useNotebookLayout();
   const params = useParams<{ lang?: string }>();
@@ -37,15 +37,12 @@ export function DocsHeader() {
       trailing={
         <>
           {Search && <Search.sm hideIfDisabled className="md:hidden" />}
+          {/* The sidebar is always open on desktop (no collapse control); the
+              trigger only exists where it would otherwise be unreachable. */}
           {Sidebar && (
-            <>
-              <Sidebar.collapseTrigger className="max-md:hidden">
-                <PanelLeft />
-              </Sidebar.collapseTrigger>
-              <Sidebar.trigger className="md:hidden">
-                <PanelLeft />
-              </Sidebar.trigger>
-            </>
+            <Sidebar.trigger className="md:hidden">
+              <PanelLeft />
+            </Sidebar.trigger>
           )}
         </>
       }

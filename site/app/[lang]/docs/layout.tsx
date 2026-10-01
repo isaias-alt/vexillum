@@ -19,6 +19,8 @@ export default async function Layout({
       {...baseOptions(lang as Lang)}
       tree={source.getPageTree(lang)}
       nav={{ ...baseOptions(lang as Lang).nav, mode: "top" }}
+      // The desktop sidebar is always open: no collapse control anywhere.
+      sidebar={{ collapsible: false }}
       slots={{ ...baseOptions(lang as Lang).slots, header: DocsHeader }}
     >
       {children}

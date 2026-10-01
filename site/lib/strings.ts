@@ -11,7 +11,7 @@ export interface Step {
 
 export interface Dictionary {
   meta: { description: string };
-  nav: { docs: string; github: string; getStarted: string };
+  nav: { docs: string; github: string; theme: string };
   hero: {
     eyebrow: string;
     title: string;
@@ -58,7 +58,7 @@ const en: Dictionary = {
     description:
       "vexillum orchestrates coding agents from your terminal. A commander dispatches soldiers into isolated camps, a sentinel watches for what needs your attention.",
   },
-  nav: { docs: "docs", github: "github", getStarted: "get started" },
+  nav: { docs: "docs", github: "GitHub", theme: "Light theme" },
   hero: {
     eyebrow: "for coding agents",
     title: "One commander. Many soldiers.",
@@ -187,7 +187,7 @@ const es: Dictionary = {
     description:
       "vexillum orquesta agentes de código desde tu terminal. Un commander despacha soldiers a camps aislados y un sentinel vigila lo que necesita tu atención.",
   },
-  nav: { docs: "docs", github: "github", getStarted: "empezar" },
+  nav: { docs: "docs", github: "GitHub", theme: "Tema claro" },
   hero: {
     eyebrow: "para agentes de código",
     title: "Un commander. Muchos soldiers.",

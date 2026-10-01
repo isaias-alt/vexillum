@@ -206,6 +206,74 @@ body {
 .btn-secondary:hover {
   border-color: var(--fr-accent);
 }
+/* An icon-only button: 36px square, the same box as the EN/ES and theme
+   controls, so the navbar controls share one hit area. */
+.btn-square {
+  height: 36px;
+  width: 36px;
+  padding: 0;
+}
+
+/* The theme switch: the forum's .switch (internal/forum/assets/chrome/
+   forum.css) at the navbar's 36px control height. Checked = light theme; the
+   look follows data-theme, set before paint, not React state. */
+.theme-switch {
+  display: inline-flex;
+  height: 36px;
+  cursor: pointer;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--fr-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  padding: 0 12px;
+  color: var(--fr-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color 120ms,
+    border-color 120ms;
+}
+.theme-switch:hover {
+  background: var(--fr-surface);
+}
+.theme-icon {
+  flex: none;
+}
+.theme-switch-track {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--fr-border-strong);
+  transition: background-color 120ms;
+}
+.theme-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fr-surface);
+  transition: transform 120ms;
+}
+:root[data-theme="light"] .theme-switch-track {
+  background: var(--fr-accent);
+}
+:root[data-theme="light"] .theme-switch-thumb {
+  transform: translateX(12px);
+  background: var(--fr-accent-contrast);
+}
+.theme-icon-sun,
+:root[data-theme="light"] .theme-icon-moon {
+  display: none;
+}
+:root[data-theme="light"] .theme-icon-sun {
+  display: block;
+}
 }
 
 :focus-visible {
@@ -373,10 +441,9 @@ pre .line {
   line-height: 1.7;
 }
 
-/* The sidebar toggles (desktop collapse, mobile drawer) are the design's
-   secondary button, square, so they sit with the EN/ES and theme controls
-   instead of Fumadocs' round grey icon button. */
-#nd-subnav button[aria-controls="nd-sidebar"],
+/* The mobile menu trigger is the design's secondary button, square, so it
+   sits with the EN/ES, github and theme controls instead of Fumadocs' round
+   grey icon button. (The desktop sidebar has no collapse control.) */
 #nd-subnav button[aria-controls="nd-sidebar-mobile"] {
   display: inline-flex;
   height: 36px;
@@ -395,33 +462,25 @@ pre .line {
     border-color 120ms,
     color 120ms;
 }
-#nd-subnav button[aria-controls="nd-sidebar"]:hover,
 #nd-subnav button[aria-controls="nd-sidebar-mobile"]:hover {
   border-color: var(--fr-accent);
   background: transparent;
   color: var(--fr-text);
 }
-#nd-subnav button[aria-controls="nd-sidebar"][aria-expanded="false"],
 #nd-subnav button[aria-controls="nd-sidebar-mobile"][aria-expanded="true"] {
   border-color: var(--fr-accent);
   background: var(--fr-accent-soft);
 }
-#nd-subnav button[aria-controls="nd-sidebar"] svg,
 #nd-subnav button[aria-controls="nd-sidebar-mobile"] svg {
   width: 16px;
   height: 16px;
   stroke-width: 1.75;
 }
 
-/* The id selectors above beat Fumadocs' responsive hide utilities, so the
-   breakpoint split between the two toggles is restated here. */
+/* The id selector above beats Fumadocs' responsive hide utility, so the
+   breakpoint is restated here. */
 @media (min-width: 768px) {
   #nd-subnav button[aria-controls="nd-sidebar-mobile"] {
-    display: none;
-  }
-}
-@media (max-width: 767.98px) {
-  #nd-subnav button[aria-controls="nd-sidebar"] {
     display: none;
   }
 }
