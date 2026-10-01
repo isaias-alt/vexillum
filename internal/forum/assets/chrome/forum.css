@@ -13,9 +13,12 @@
   --fr-line-height: 1.55;
   --fr-panel-width: 380px;
   --fr-topbar-height: 44px;
-  /* Artifacts are authored for a white canvas, in any chrome theme. */
-  --fr-artifact-bg: #FFFFFF;
+  /* What the artifact frame shows before (and behind) the artifact: the
+     chrome's own canvas in dark, so loading never flashes white; light
+     artifacts are authored for a white canvas. */
+  --fr-artifact-bg: var(--fr-bg);
 }
+:root[data-fr-theme="light"] { --fr-artifact-bg: #FFFFFF; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -89,7 +92,7 @@ button, textarea { font: inherit; color: inherit; }
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--fr-panel-width);
 }
-.stage { min-width: 0; min-height: 0; padding: var(--fr-space-3); }
+.stage { min-width: 0; min-height: 0; padding: var(--fr-space-3); background: var(--fr-bg); }
 .artifact-frame {
   display: block; width: 100%; height: 100%;
   border: 1px solid var(--fr-border);

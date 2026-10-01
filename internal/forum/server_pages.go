@@ -195,7 +195,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file, theme string) {
 	}
 	doc := injectSDK(source)
 	if wantsForumStyle(doc) {
-		doc = injectStyles(doc)
+		doc = injectStyles(doc, theme)
 	}
 	doc = setThemeAttr(doc, theme)
 	doc = injectFavicon(doc)
@@ -320,17 +320,39 @@ func bringsOwnStyle(doc string) bool {
 	return false
 }
 
+// Canvas colors (the --fr-bg token of each theme, see forum-tokens.css; a test
+// keeps them in step) for the inline boot style: the page paints in its theme
+// before the linked stylesheets have arrived.
+const (
+	bootBgDark  = "#15171A"
+	bootBgLight = "#F2F1EC"
+)
+
+// bootStyle is the first thing in a forum-styled artifact: the document's
+// canvas color and color-scheme, inline, so the first paint is already in the
+// chrome's theme instead of the browser's default white. It joins the same
+// low-priority layer as the stylesheet it precedes.
+func bootStyle(theme string) string {
+	bg, scheme := bootBgDark, "dark"
+	if theme == "light" {
+		bg, scheme = bootBgLight, "light"
+	}
+	return "<style>@layer forum-artifact{html{background:" + bg + ";color-scheme:" + scheme + "}}</style>"
+}
+
 // injectStyles links the forum tokens and content stylesheet at the very top
-// of the document, ahead of everything the artifact brings. The stylesheet
-// sits in a low-priority cascade layer, so the artifact's own styles win
-// whatever their order or specificity.
-func injectStyles(doc string) string {
+// of the document, ahead of everything the artifact brings (after the inline
+// boot style that makes the first paint themed). The stylesheet sits in a
+// low-priority cascade layer, so the artifact's own styles win whatever their
+// order or specificity.
+func injectStyles(doc, theme string) string {
+	tags := bootStyle(theme) + stylesTags
 	for _, re := range []*regexp.Regexp{headOpenPattern, htmlOpenPattern, doctypePattern} {
 		if loc := re.FindStringIndex(doc); loc != nil {
-			return doc[:loc[1]] + stylesTags + doc[loc[1]:]
+			return doc[:loc[1]] + tags + doc[loc[1]:]
 		}
 	}
-	return stylesTags + doc
+	return tags + doc
 }
 
 // setThemeAttr puts data-fr-theme on <html>, so the tokens resolve to the

@@ -6,7 +6,10 @@ import (
 	"time"
 )
 
-const stylesTags = `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
+// bootStyleDark is the inline style that makes the first paint themed (dark by default).
+const bootStyleDark = `<style>@layer forum-artifact{html{background:#15171A;color-scheme:dark}}</style>`
+
+const stylesTags = bootStyleDark + `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
 
 func TestArtifact_SDKInjectedAfterDoctypeAndHead(t *testing.T) {
 	env := newEnv(t, time.Minute)

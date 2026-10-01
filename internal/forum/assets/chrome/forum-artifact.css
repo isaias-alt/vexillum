@@ -133,7 +133,8 @@
   .fr-choice { display: flex; align-items: flex-start; gap: var(--fr-space-3); padding: var(--fr-space-3); background: var(--fr-surface); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-md); cursor: pointer; }
   .fr-choice:hover { border-color: var(--fr-border-strong); }
   .fr-choice:has(input:checked) { border-color: var(--fr-accent); background: var(--fr-accent-soft); }
-  .fr-choice input { margin-top: 0.25em; flex: none; }
+  /* The control sits on the middle of the first text line (the body's 1.6 line box: (1.6 - 1) / 2 = 0.3em). */
+  .fr-choice input { flex: none; align-self: flex-start; width: 1em; height: 1em; margin: calc(0.3em + 1px) 0 0; }
   .fr-choice small { display: block; }
   .fr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fr-space-2); }
 
