@@ -7,9 +7,10 @@ export const SITE_NAME = "vexillum";
 
 const OG_LOCALE: Record<Lang, string> = { en: "en_US", es: "es_ES" };
 
-/** Absolute URL of a path on the site ("/" is the English landing). */
+/** Absolute URL of a path on the site. The English landing ("/") is the bare
+ * origin, the form Next itself emits for it, so every tag and the sitemap agree. */
 export function absoluteUrl(path: string): string {
-  return `${SITE_URL}${path}`;
+  return path === "/" ? SITE_URL : `${SITE_URL}${path}`;
 }
 
 /** Path of `path` (a locale-less path such as "/docs/concepts/camps") in `lang`. */

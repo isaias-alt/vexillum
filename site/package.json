@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "seo:audit": "node scripts/seo-audit.mjs",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

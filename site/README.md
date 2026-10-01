@@ -12,6 +12,7 @@ pnpm dev        # http://localhost:3000
 pnpm build      # production build, includes the static search index
 pnpm lint
 pnpm typecheck
+pnpm seo:audit  # after pnpm build: serves the build and audits every page's SEO
 ```
 
 ## Layout
@@ -25,6 +26,10 @@ pnpm typecheck
 | `lib/strings.ts` | landing and nav strings per locale |
 | `app/api/search/route.ts` | static search index, queried in the browser per locale |
 | `app/llms.txt`, `app/llms-full.txt`, `app/llms.mdx` | `llms.txt`, `llms-full.txt` and `/docs/<page>.md` (`/es/...` for Spanish) |
+| `lib/seo.ts`, `lib/docs-seo.ts` | metadata (title, canonical, hreflang, Open Graph, Twitter) and JSON-LD for every page |
+| `app/sitemap.ts`, `app/robots.txt` | sitemap with hreflang alternates, robots.txt |
+| `app/og/[lang]/[...slug]` | the 1200x630 social images, prerendered at build with `next/og` (`lib/og.tsx`, fonts in `assets/fonts`) |
+| `scripts/seo-audit.mjs` | `pnpm seo:audit`: fails on duplicate or missing titles and descriptions, broken canonical or hreflang, bad JSON-LD, missing images |
 | `proxy.ts` | locale routing: English has no prefix, Spanish lives under `/es` |
 
 ## The CLI reference is generated
