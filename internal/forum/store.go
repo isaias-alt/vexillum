@@ -34,31 +34,30 @@ type FeedbackFiles struct {
 }
 
 // Store persists whiteboard scenes and published feedback under
-// <projectRoot>/forums/<key>/whiteboards/, one JSON file per (session key,
+// <home>/forums/<key>/whiteboards/ (home is ~/.vexillum, shared with each
+// session's own session.json and transcript.json - see persist.go), one JSON file per (session key,
 // diagram index) plus the published `.excalidraw`/`.png` pair a queued
 // feedback writes. Kept out of any single combined state file on purpose:
 // a multi-hundred-KB Excalidraw scene autosaving every second would turn
 // every unrelated write into a large rewrite if it shared one file with
 // anything else.
 //
-// A Store instance is process-local to one `vexillum forum` invocation
-// serving one browser tab, so a single mutex serializing its writes (rather
-// than a per-index write queue) is enough to prevent interleaved writes to
-// the same file without adding concurrency machinery this scope doesn't
-// need.
+// A Store instance is process-local to the one forum server, so a single
+// mutex serializing its writes (rather than a per-index write queue) is
+// enough to prevent interleaved writes to the same file without adding
+// concurrency machinery this scope doesn't need.
 type Store struct {
-	projectRoot string
-	mu          sync.Mutex
+	home string
+	mu   sync.Mutex
 }
 
-// NewStore returns a Store rooted at projectRoot (an
-// internal/project.Root(...) result).
-func NewStore(projectRoot string) *Store {
-	return &Store{projectRoot: projectRoot}
+// NewStore returns a Store rooted at home (~/.vexillum).
+func NewStore(home string) *Store {
+	return &Store{home: home}
 }
 
 func (s *Store) dir(key string) string {
-	return filepath.Join(s.projectRoot, "forums", key, "whiteboards")
+	return filepath.Join(sessionDir(s.home, key), "whiteboards")
 }
 
 func (s *Store) workingFile(key string, index int) string {
