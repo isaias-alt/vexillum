@@ -69,7 +69,7 @@ func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
 	src := "/a/" + key + "/" + url.PathEscape(name)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	data := chromeData{Name: name, Src: src, Boot: chromeBoot{Key: key, Token: token, File: file, Name: name, ArtifactSrc: src}}
 	if err := chromeTemplate.Execute(w, data); err != nil {

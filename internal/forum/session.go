@@ -45,7 +45,11 @@ const (
 	maxQueuedPrompts   = 200
 	maxReplyChars      = 64000
 	maxTranscriptItems = 500
-	defaultPromptTag   = "feedback"
+	// maxTranscriptBytes bounds the transcript file (forum-tool's chat cap).
+	maxTranscriptBytes = 5 << 20
+	// attachmentOnlyPrompt is the prompt text of a message that is only images.
+	attachmentOnlyPrompt = "(see the attached image)"
+	defaultPromptTag     = "feedback"
 )
 
 var tagPattern = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
@@ -64,6 +68,8 @@ type Prompt struct {
 	Target   json.RawMessage `json:"target,omitempty"`
 	QueueKey string          `json:"queue_key,omitempty"`
 	QueuedAt time.Time       `json:"queued_at"`
+	// Attachments are images stored under the session (see attachments.go).
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // PromptInput is the client-controllable part of a Prompt.
@@ -74,6 +80,8 @@ type PromptInput struct {
 	Text     string          `json:"text"`
 	Target   json.RawMessage `json:"target"`
 	QueueKey string          `json:"queue_key"`
+	// Attachments are the ids of images already uploaded for this session.
+	Attachments []string `json:"attachments"`
 }
 
 // Message is one transcript entry: a prompt the user sent, or a reply the
@@ -86,6 +94,8 @@ type Message struct {
 	Tag      string    `json:"tag,omitempty"`
 	Selector string    `json:"selector,omitempty"`
 	At       time.Time `json:"at"`
+	// Attachments mirror the images the prompt carried.
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // sessionRecord is the durable, restart-proof part of a session
@@ -146,8 +156,16 @@ func isBadPrompt(err error) bool {
 // error; an unusable tag falls back to the default instead of failing.
 func normalizePrompt(in PromptInput) (Prompt, error) {
 	text := strings.TrimSpace(in.Prompt)
+	if text == "" && len(in.Attachments) > 0 {
+		text = attachmentOnlyPrompt
+	}
 	if text == "" {
 		return Prompt{}, &errBadPrompt{reason: "prompt is empty"}
+	}
+	for _, id := range in.Attachments {
+		if !ValidAttachmentID(id) {
+			return Prompt{}, &errBadPrompt{reason: "invalid attachment id"}
+		}
 	}
 	tag := strings.TrimSpace(in.Tag)
 	if tag == "" || len(tag) > maxTagChars || !tagPattern.MatchString(tag) {

@@ -36,11 +36,12 @@
 
   async function api(method, path, body, signal) {
     const headers = { "X-Forum-Token": boot.token };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const raw = body instanceof Blob; // an image upload: the bytes themselves
+    if (body !== undefined) headers["Content-Type"] = raw ? "application/octet-stream" : "application/json";
     const response = await fetch("/api/s/" + boot.key + path, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       cache: "no-store",
       signal,
     });
@@ -170,11 +171,12 @@
   function updateButtons() {
     if (!snapshot) return;
     const ended = snapshot.status === "ended";
-    const hasText = $("input").value.trim() !== "";
+    const hasText = $("input").value.trim() !== "" || staged.length > 0;
     const queued = (snapshot.queued || []).length;
     $("sendBtn").disabled = ended || (!hasText && queued === 0);
     $("sendEndBtn").disabled = ended;
-    $("queueBtn").disabled = ended || !hasText;
+    $("queueBtn").disabled = ended || !hasText || uploading > 0;
+    $("attachBtn").disabled = ended;
   }
 
   function renderLog(transcript) {
@@ -204,6 +206,7 @@
         // The reviewer's own words are never parsed, only shown.
         item.append(el("p", "msg-text", message.text));
         if (message.selector) item.append(el("span", "msg-where", message.selector));
+        item.append(...thumbRow(message.attachments));
       }
       log.append(item);
     }
@@ -230,6 +233,7 @@
       body.append(text);
       if (prompt.text) body.append(el("span", "queued-quote", prompt.text));
       if (prompt.selector) body.append(el("span", "queued-where", prompt.selector));
+      body.append(...thumbRow(prompt.attachments));
       item.append(body);
       const remove = el("button", "queued-remove", "×");
       remove.type = "button";
@@ -323,6 +327,183 @@
     if (endedShown && !endedDialog.contains(event.target)) endedDialog.focus();
   });
 
+  // ------------------------------------------------------------ attachments
+
+  // Images pasted or dropped into the conversation are uploaded as raw bytes
+  // (the server decides what they are from the bytes, and enforces the same
+  // limits again), shown as thumbnails in the tray under the composer, and
+  // sent with the message. Thumbnails everywhere are fetched with the token
+  // and shown from a blob: URL, since an <img> cannot send the header.
+  const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+  const MAX_PER_MESSAGE = 4;
+  let staged = []; // uploaded, not yet in a message: {id, mime, bytes, name, preview}
+  let uploading = 0;
+  const thumbCache = new Map(); // attachment id -> Promise<blob url>
+
+  async function apiBlob(path) {
+    const response = await fetch("/api/s/" + boot.key + path, { headers: { "X-Forum-Token": boot.token }, cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    return response.blob();
+  }
+
+  function thumbURL(att) {
+    if (!thumbCache.has(att.id)) {
+      thumbCache.set(
+        att.id,
+        apiBlob("/attachments/" + encodeURIComponent(att.id)).then((blob) => URL.createObjectURL(blob)),
+      );
+    }
+    return thumbCache.get(att.id);
+  }
+
+  // thumb is a small image that opens full size in a new tab once loaded.
+  function thumb(att) {
+    const link = el("a", "thumb");
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.title = "Open the image";
+    const img = el("img");
+    img.alt = "Attached image";
+    link.append(img);
+    thumbURL(att).then(
+      (url) => {
+        img.src = url;
+        link.href = url;
+      },
+      () => link.replaceWith(el("span", "thumb-missing", "gone")),
+    );
+    return link;
+  }
+
+  function thumbRow(attachments) {
+    if (!attachments || attachments.length === 0) return [];
+    const row = el("div", "thumbs");
+    for (const att of attachments) row.append(thumb(att));
+    return [row];
+  }
+
+  function renderTray() {
+    const tray = $("composerTray");
+    tray.hidden = staged.length === 0 && uploading === 0;
+    tray.replaceChildren();
+    for (const att of staged) {
+      const chip = el("div", "fr-attachment-chip");
+      chip.setAttribute("role", "listitem");
+      const preview = el("span", "thumb");
+      const img = el("img");
+      img.alt = "";
+      img.src = att.preview;
+      preview.append(img);
+      chip.append(preview, el("span", "fr-attachment-name", att.name));
+      const remove = el("button", "fr-attachment-remove", "×");
+      remove.type = "button";
+      remove.title = "Remove this image";
+      remove.setAttribute("aria-label", "Remove " + att.name);
+      remove.addEventListener("click", () => removeStaged(att));
+      chip.append(remove);
+      tray.append(chip);
+    }
+    for (let i = 0; i < uploading; i += 1) {
+      const chip = el("div", "fr-attachment-chip", "Uploading...");
+      chip.dataset.state = "uploading";
+      chip.setAttribute("role", "listitem");
+      tray.append(chip);
+    }
+    updateButtons();
+  }
+
+  async function removeStaged(att) {
+    // Even if the server no longer has it (already swept), the user's intent is clear.
+    await run(() => api("DELETE", "/attachments/" + encodeURIComponent(att.id)));
+    staged = staged.filter((a) => a.id !== att.id);
+    URL.revokeObjectURL(att.preview);
+    renderTray();
+  }
+
+  // clearStaged forgets the tray; with discard it also deletes the files.
+  function clearStaged(discard) {
+    const gone = staged;
+    staged = [];
+    for (const att of gone) {
+      if (discard) api("DELETE", "/attachments/" + encodeURIComponent(att.id)).catch(() => {});
+      URL.revokeObjectURL(att.preview);
+    }
+    renderTray();
+  }
+
+  async function addFiles(list) {
+    if (snapshot && snapshot.status === "ended") return;
+    const files = [...list];
+    const images = files.filter((f) => f && /^image\//.test(f.type));
+    if (images.length === 0) {
+      if (files.length) notice("Only images can be attached (PNG, JPEG, GIF or WebP).");
+      return;
+    }
+    if (images.length < files.length) notice("Only images can be attached; the other files were skipped.");
+    for (const file of images) {
+      if (staged.length + uploading >= MAX_PER_MESSAGE) {
+        notice("You can attach up to " + MAX_PER_MESSAGE + " images to one message.");
+        break;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        notice((file.name || "That image") + " is larger than 10 MB.");
+        continue;
+      }
+      uploading += 1;
+      renderTray();
+      try {
+        const result = await api("POST", "/attachments", file);
+        const name = file.name && file.name !== "image.png" ? file.name : "Image " + (staged.length + 1);
+        staged.push({ ...result.attachment, name, preview: URL.createObjectURL(file) });
+      } catch (error) {
+        notice(error.message || "Could not attach the image.");
+      } finally {
+        uploading -= 1;
+        renderTray();
+      }
+    }
+  }
+
+  const hasFiles = (event) => !!event.dataTransfer && [...event.dataTransfer.types].includes("Files");
+
+  $("input").addEventListener("paste", (event) => {
+    const data = event.clipboardData;
+    if (!data) return;
+    const images = [...data.files].filter((f) => /^image\//.test(f.type));
+    if (images.length === 0) return;
+    // A screenshot arrives with no useful text; a file copied in the
+    // file manager arrives with its name, which is not worth pasting either.
+    const text = data.getData("text/plain").trim();
+    if (!text || images.some((f) => text === f.name || text.endsWith("/" + f.name))) event.preventDefault();
+    addFiles(images);
+  });
+  $("attachBtn").addEventListener("click", () => $("attachInput").click());
+  $("attachInput").addEventListener("change", () => {
+    addFiles($("attachInput").files);
+    $("attachInput").value = "";
+  });
+  const panel = $("panel");
+  panel.addEventListener("dragenter", (event) => {
+    if (hasFiles(event)) panel.dataset.drop = "true";
+  });
+  panel.addEventListener("dragover", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    panel.dataset.drop = "true";
+  });
+  panel.addEventListener("dragleave", (event) => {
+    if (!panel.contains(event.relatedTarget)) delete panel.dataset.drop;
+  });
+  panel.addEventListener("drop", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    delete panel.dataset.drop;
+    addFiles(event.dataTransfer.files);
+  });
+  // A file dropped anywhere else must not navigate the chrome away to the image.
+  window.addEventListener("dragover", (event) => hasFiles(event) && event.preventDefault());
+  window.addEventListener("drop", (event) => hasFiles(event) && event.preventDefault());
+
   // ---------------------------------------------------------------- actions
 
   let noticeTimer = 0;
@@ -349,10 +530,17 @@
   async function queueComposerText() {
     const input = $("input");
     const text = input.value.trim();
-    if (!text) return true;
-    const queued = await run(() => api("POST", "/queue", { prompt: text, tag: "message" }));
+    if (!text && staged.length === 0) return true;
+    if (uploading > 0) {
+      notice("Wait for the images to finish uploading.");
+      return false;
+    }
+    const body = { prompt: text, tag: "message" };
+    if (staged.length) body.attachments = staged.map((a) => a.id);
+    const queued = await run(() => api("POST", "/queue", body));
     if (!queued) return false;
     input.value = "";
+    clearStaged(false);
     updateButtons();
     return true;
   }

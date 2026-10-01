@@ -2,6 +2,7 @@ package forum
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -156,21 +157,44 @@ func (h *Hub) commit(l *liveSession, fn func(rec *sessionRecord) error) error {
 	return nil
 }
 
-// appendTranscript adds msgs to l's transcript, keeping the newest
-// maxTranscriptItems. A failed write is logged, not returned: the prompts
-// the messages mirror are already safely queued, and the next successful
-// write persists the full transcript anyway. Callers hold h.mu.
+// appendTranscript adds msgs to l's transcript, keeping the newest messages
+// that fit maxTranscriptItems and maxTranscriptBytes (see boundTranscript).
+// Evicting a message only frees its images once nothing else references
+// them: a prompt still queued or waiting in the outbox keeps its files. A
+// failed write is logged, not returned: the prompts the messages mirror are
+// already safely queued, and the next successful write persists the full
+// transcript anyway. Callers hold h.mu.
 func (h *Hub) appendTranscript(l *liveSession, msgs ...Message) error {
-	next := append(append([]Message(nil), l.transcript...), msgs...)
-	if over := len(next) - maxTranscriptItems; over > 0 {
-		next = next[over:]
-	}
+	next, evicted := boundTranscript(append(append([]Message(nil), l.transcript...), msgs...))
 	err := saveTranscript(h.home, l.rec.Key, next)
 	l.transcript = next
 	if err != nil {
 		h.logf("forum: %v", err)
 	}
+	if len(evicted) > 0 {
+		h.sweepAttachments(l)
+	}
 	return err
+}
+
+// boundTranscript keeps the newest suffix of msgs with at most
+// maxTranscriptItems entries whose JSON fits maxTranscriptBytes, and reports
+// what it evicted. The newest message is always kept, however large.
+func boundTranscript(msgs []Message) (kept, evicted []Message) {
+	cut := len(msgs)
+	size := 2
+	for i := len(msgs) - 1; i >= 0 && len(msgs)-i <= maxTranscriptItems; i-- {
+		data, err := json.Marshal(msgs[i])
+		if err != nil {
+			break
+		}
+		size += len(data) + 1
+		if size > maxTranscriptBytes && cut < len(msgs) {
+			break
+		}
+		cut = i
+	}
+	return msgs[cut:], msgs[:cut]
 }
 
 func (l *liveSession) endedErr() error {
@@ -326,6 +350,17 @@ func (h *Hub) QueuePrompt(key string, in PromptInput) (Prompt, error) {
 	if err := l.endedErr(); err != nil {
 		return Prompt{}, err
 	}
+	var replaced []Attachment
+	if p.QueueKey != "" {
+		for _, q := range l.rec.Queued {
+			if q.QueueKey == p.QueueKey {
+				replaced = q.Attachments
+			}
+		}
+	}
+	if p.Attachments, err = h.resolveAttachments(l, in.Attachments, replaced); err != nil {
+		return Prompt{}, err
+	}
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		if p.QueueKey != "" {
 			for i := range rec.Queued {
@@ -343,6 +378,8 @@ func (h *Hub) QueuePrompt(key string, in PromptInput) (Prompt, error) {
 	}); err != nil {
 		return Prompt{}, err
 	}
+	// Images only the replaced prompt carried are no longer anyone's.
+	h.dropAttachments(l, attachmentIDs(replaced))
 	h.bump(l)
 	return p, nil
 }
@@ -358,9 +395,11 @@ func (h *Hub) RemoveQueued(key, uid string) error {
 	if err := l.endedErr(); err != nil {
 		return err
 	}
+	var removed []Attachment
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		for i := range rec.Queued {
 			if rec.Queued[i].UID == uid {
+				removed = rec.Queued[i].Attachments
 				rec.Queued = append(rec.Queued[:i], rec.Queued[i+1:]...)
 				return nil
 			}
@@ -369,6 +408,7 @@ func (h *Hub) RemoveQueued(key, uid string) error {
 	}); err != nil {
 		return err
 	}
+	h.dropAttachments(l, attachmentIDs(removed))
 	h.bump(l)
 	return nil
 }
@@ -407,7 +447,7 @@ func (h *Hub) Send(key string, end bool) (int, error) {
 		msgs := make([]Message, 0, len(sent))
 		for _, p := range sent {
 			id, _ := newID("m_")
-			msgs = append(msgs, Message{ID: id, Role: RoleUser, Text: clip(p.Prompt, 4000), Tag: p.Tag, Selector: p.Selector, At: h.opts.Now().UTC()})
+			msgs = append(msgs, Message{ID: id, Role: RoleUser, Text: clip(p.Prompt, 4000), Tag: p.Tag, Selector: p.Selector, At: h.opts.Now().UTC(), Attachments: p.Attachments})
 		}
 		_ = h.appendTranscript(l, msgs...)
 	}

@@ -89,10 +89,10 @@ function makeEnv(chromePath, boot) {
     getSelection: () => ({ removeAllRanges() {}, addRange() {} }),
   };
   const sandbox = {
-    window: win, document: doc, fetch: fetchStub, console, URL, Promise, Date, JSON, Math, Map, Set, Object, Array, String, Number, RegExp, Error, Intl,
+    window: win, document: doc, fetch: fetchStub, console, URL: Object.assign(function URL_(...a) { return new URL(...a); }, { createObjectURL: () => 'blob:stub', revokeObjectURL() {} }), Promise, Date, JSON, Math, Map, Set, Object, Array, String, Number, RegExp, Error, Intl,
     setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
     navigator: { clipboard: { writeText: async () => {} } },
-    TextDecoder, AbortController,
+    TextDecoder, AbortController, Blob,
   };
   win.window = win;
   Object.assign(win, sandbox);

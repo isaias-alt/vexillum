@@ -63,10 +63,13 @@
         <p class="notice" id="notice" role="alert" hidden></p>
         <label class="sr-only" for="input">Message for the agent</label>
         <textarea id="input" class="input" rows="3" placeholder="Write a message for the agent..."></textarea>
+        <div class="fr-attachments-tray" id="composerTray" role="list" aria-label="Images attached to this message" hidden></div>
+        <input type="file" id="attachInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
         <div class="composer-row">
           <button type="button" class="btn" id="queueBtn">Add to queue</button>
-          <span class="hint">Enter adds to the queue, Shift+Enter for a new line.</span>
+          <button type="button" class="btn" id="attachBtn" title="Attach images (PNG, JPEG, GIF or WebP, up to 10 MB, 4 per message). You can also paste or drop them here.">Attach image</button>
         </div>
+        <p class="hint">Enter adds to the queue, Shift+Enter for a new line. Paste or drop images here.</p>
         <div class="actions">
           <button type="button" class="btn btn-danger" id="sendEndBtn">Send &amp; End</button>
           <button type="submit" class="btn btn-primary" id="sendBtn">Send to Agent</button>

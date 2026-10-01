@@ -120,6 +120,16 @@ func writeHubError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "nothing_to_send", err.Error())
 	case errors.Is(err, ErrQueueFull):
 		writeError(w, http.StatusConflict, "queue_full", err.Error())
+	case errors.Is(err, ErrUnsupportedImage):
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported_type", err.Error())
+	case errors.Is(err, ErrNoAttachment):
+		writeError(w, http.StatusNotFound, "no_attachment", err.Error())
+	case errors.Is(err, ErrAttachmentInUse):
+		writeError(w, http.StatusConflict, "attachment_in_use", err.Error())
+	case errors.Is(err, ErrTooManyAttachments):
+		writeError(w, http.StatusBadRequest, "too_many_attachments", err.Error())
+	case errors.Is(err, ErrTooManyStaged), errors.Is(err, ErrAttachmentsFull):
+		writeError(w, http.StatusConflict, "attachments_full", err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "internal", err.Error())
 	}
@@ -249,6 +259,11 @@ func (s *Server) handleAgentPoll(w http.ResponseWriter, r *http.Request) {
 	delivered := make([]Prompt, len(prompts))
 	for i, p := range prompts {
 		p.QueueKey = ""
+		// The agent reads attachments from disk: hand it their local paths.
+		p.Attachments = append([]Attachment(nil), p.Attachments...)
+		for j := range p.Attachments {
+			p.Attachments[j].Path = s.hub.AttachmentPath(key, p.Attachments[j].ID)
+		}
 		delivered[i] = p
 	}
 	writeJSON(w, http.StatusOK, PollResponse{Session: res.Key, File: res.File, Status: res.Status, EndedBy: res.EndedBy, Prompts: delivered})

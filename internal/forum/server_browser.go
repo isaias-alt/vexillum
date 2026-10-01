@@ -1,7 +1,10 @@
 package forum
 
 import (
+	"errors"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -12,6 +15,9 @@ func (s *Server) browserRoutes() {
 	s.mux.HandleFunc("DELETE /api/s/{key}/queue/{uid}", s.browserAPI(s.handleUnqueue))
 	s.mux.HandleFunc("POST /api/s/{key}/send", s.browserAPI(s.handleSend))
 	s.mux.HandleFunc("POST /api/s/{key}/end", s.browserAPI(s.handleBrowserEnd))
+	s.mux.HandleFunc("POST /api/s/{key}/attachments", s.browserAPI(s.handleAttachmentUpload))
+	s.mux.HandleFunc("GET /api/s/{key}/attachments/{id}", s.browserAPI(s.handleAttachmentGet))
+	s.mux.HandleFunc("DELETE /api/s/{key}/attachments/{id}", s.browserAPI(s.handleAttachmentDelete))
 }
 
 const (
@@ -131,4 +137,68 @@ func (s *Server) handleBrowserEnd(w http.ResponseWriter, r *http.Request, key st
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ended"})
+}
+
+// handleAttachmentUpload stores one image sent as the raw request body. The
+// type is decided from the bytes (what the client calls the file means
+// nothing), the size is capped while reading, and the stored name is
+// generated here.
+func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request, key string) {
+	if err := s.hub.RequireOpen(key); err != nil {
+		writeHubError(w, err)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxAttachmentBytes)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeError(w, http.StatusRequestEntityTooLarge, "too_large", "image is larger than "+strconv.Itoa(maxAttachmentBytes>>20)+" MB")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "bad_request", "could not read the image")
+		return
+	}
+	att, err := s.hub.AddAttachment(key, data)
+	if err != nil {
+		writeHubError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"attachment": att})
+}
+
+// handleAttachmentGet serves a stored image back to the chrome (which fetches
+// it with its token and shows it as a thumbnail). The type comes from the
+// stored extension, never from anything the client said, and the response
+// can run no script even if opened directly.
+func (s *Server) handleAttachmentGet(w http.ResponseWriter, r *http.Request, key string) {
+	path, mime, err := s.hub.AttachmentFile(key, r.PathValue("id"))
+	if err != nil {
+		writeHubError(w, err)
+		return
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "no_attachment", ErrNoAttachment.Error())
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		writeError(w, http.StatusNotFound, "no_attachment", ErrNoAttachment.Error())
+		return
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request, key string) {
+	if err := s.hub.RemoveAttachment(key, r.PathValue("id")); err != nil {
+		writeHubError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }

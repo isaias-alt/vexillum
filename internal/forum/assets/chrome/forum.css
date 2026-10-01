@@ -192,7 +192,8 @@ button, textarea { font: inherit; color: inherit; }
 }
 .input:focus { outline: none; border-color: var(--fr-accent); box-shadow: 0 0 0 3px var(--fr-accent-soft); }
 .input:disabled { opacity: 0.55; }
-.composer-row { display: flex; align-items: center; justify-content: space-between; gap: var(--fr-space-3); }
+.composer-row { display: flex; align-items: center; gap: var(--fr-space-2); }
+.composer .hint { margin: 0; }
 .hint { min-width: 0; color: var(--fr-text-secondary); font-size: var(--fr-text-size-small); }
 .notice { margin: 0; padding: var(--fr-space-2) var(--fr-space-3); border-radius: var(--fr-radius-sm); font-size: var(--fr-text-size-small); background: var(--fr-danger-soft); color: var(--fr-danger); }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--fr-space-2); }
@@ -230,6 +231,22 @@ button, textarea { font: inherit; color: inherit; }
 .annot-where { font-family: var(--fr-font-mono); font-size: var(--fr-text-size-small); color: var(--fr-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .annot-input { min-height: 56px; }
 .annot-foot { display: flex; flex-direction: column; gap: var(--fr-space-2); }
+
+/* Attachments: the tray under the composer (the design system's
+   .fr-attachments-tray / .fr-attachment-chip, with a thumbnail and a remove
+   button) and the thumbnails shown in the queue and the transcript. */
+.fr-attachments-tray { display: flex; gap: var(--fr-space-2); flex-wrap: wrap; padding: var(--fr-space-2) var(--fr-space-3); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-sm); background: var(--fr-surface-sunken); }
+.fr-attachment-chip { display: flex; align-items: center; gap: var(--fr-space-2); max-width: 100%; padding: var(--fr-space-1) var(--fr-space-2); background: var(--fr-surface); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-sm); font-size: 11.5px; color: var(--fr-text-secondary); }
+.fr-attachment-chip[data-state="uploading"] { opacity: 0.7; }
+.fr-attachment-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-attachment-remove { flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--fr-radius-sm); background: transparent; color: var(--fr-text-secondary); cursor: pointer; line-height: 1; font-size: 16px; }
+.fr-attachment-remove:hover { color: var(--fr-danger); }
+.thumb { display: inline-block; flex: none; width: 36px; height: 36px; overflow: hidden; border: 1px solid var(--fr-border); border-radius: var(--fr-radius-sm); background: var(--fr-surface-sunken); }
+.thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.thumb-missing { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1px dashed var(--fr-border-strong); border-radius: var(--fr-radius-sm); font-size: 10px; color: var(--fr-text-muted); }
+.thumbs { display: flex; flex-wrap: wrap; gap: var(--fr-space-1); margin-top: var(--fr-space-2); }
+.thumbs .thumb { width: 56px; height: 56px; }
+.panel[data-drop="true"] { box-shadow: inset 0 0 0 2px var(--fr-accent); background: var(--fr-accent-soft); }
 
 /* Dialog: the design system's .fr-dialog, shown over the whole chrome. The
    session-ended dialog is the only user; it has no way out by design. */

@@ -18,6 +18,10 @@ import (
 //	    selector: <css selector>      (omitted when empty)
 //	    text: <element text>          (omitted when empty)
 //	    target: <compact JSON>        (omitted when empty)
+//	    attachments[N]:               (omitted when none)
+//	      - path: <absolute local path of an image the user attached>
+//	        type: <image/png | image/jpeg | image/gif | image/webp>
+//	        bytes: <size>
 //	next_step: <what to do now>
 //
 // A multi-line value is written as `key: |` followed by its lines indented
@@ -47,6 +51,15 @@ func FormatPoll(file string, res PollResponse) string {
 		if len(p.Target) > 0 {
 			writeField(&b, "    ", "target", string(p.Target))
 		}
+		if len(p.Attachments) > 0 {
+			fmt.Fprintf(&b, "    attachments[%d]:\n", len(p.Attachments))
+			for _, a := range p.Attachments {
+				b.WriteString("      - ")
+				writeField(&b, "", "path", a.Path)
+				writeField(&b, "        ", "type", a.Mime)
+				writeField(&b, "        ", "bytes", fmt.Sprint(a.Bytes))
+			}
+		}
 	}
 	fmt.Fprintf(&b, "next_step: %s\n", PollNextStep(file, res))
 	return b.String()
@@ -74,6 +87,9 @@ func PollNextStep(file string, res PollResponse) string {
 	poll := "vexillum forum poll " + shellQuote(file)
 	switch res.Status {
 	case PollFeedback:
+		if hasAttachments(res.Prompts) {
+			return "Some prompts carry attachments: read each image from its path (your file-reading tool can open images) before acting. Apply this feedback, then run `" + poll + " --reply \"<what you did>\"` to answer in the browser and keep waiting for more."
+		}
 		return "Apply this feedback, then run `" + poll + " --reply \"<what you did>\"` to answer in the browser and keep waiting for more."
 	case PollEnded:
 		who := "The session ended"
@@ -114,4 +130,13 @@ func shellQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func hasAttachments(prompts []Prompt) bool {
+	for _, p := range prompts {
+		if len(p.Attachments) > 0 {
+			return true
+		}
+	}
+	return false
 }
