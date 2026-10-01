@@ -7,31 +7,6 @@ import (
 	"github.com/isaias-alt/vexillum/internal/cli"
 )
 
-const usage = `vexillum is a CLI orchestrator for code agents.
-
-Usage:
-  vexillum <command> [flags]
-
-Commands:
-  init        Prepare the current project to be orchestrated by vexillum
-  upgrade     Refresh an already-initialized project's scaffold to the latest
-  doctor      Report on the health of the vexillum environment
-  dispatch    Dispatch a soldier (mission or scout) into an isolated camp
-  redispatch  Re-dispatch an interrupted task from its original prompt
-  decide      Answer a blocked task's open question so it can continue
-  status      Report the current project's fleet of tasks (read-only)
-  land        Land a finished mission's work into the base branch
-  ship        Push a finished mission through vexillum's own tribunal pipeline for a real PR
-  release     Release a soldier's camp back to the pool
-  sentinel    Watch dispatched soldiers and record status changes
-  forum       Open an HTML artifact for visual review and collect the user's feedback
-  banner      Publish an HTML artifact to a public URL, or update one already published
-
-Flags:
-  -h, --help      Show this help message
-  -v, --version   Show version information
-`
-
 // version is set at build time via -ldflags "-X main.version=...".
 // It stays "dev" for a plain `go build` outside the release pipeline.
 var version = "dev"
@@ -42,13 +17,13 @@ func main() {
 
 func run(args []string) int {
 	if len(args) == 0 {
-		fmt.Print(usage)
+		fmt.Print(cli.GeneralUsage())
 		return 0
 	}
 
 	switch args[0] {
 	case "-h", "--help":
-		fmt.Print(usage)
+		fmt.Print(cli.GeneralUsage())
 		return 0
 	case "-v", "--version":
 		fmt.Printf("vexillum %s\n", version)
