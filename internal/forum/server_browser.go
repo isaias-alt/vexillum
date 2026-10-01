@@ -1,7 +1,9 @@
 package forum
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 func (s *Server) browserRoutes() {
 	s.mux.HandleFunc("GET /api/s/{key}/state", s.browserAPI(s.handleState))
+	s.mux.HandleFunc("GET /api/s/{key}/events", s.browserAPI(s.handleEvents))
 	s.mux.HandleFunc("POST /api/s/{key}/queue", s.browserAPI(s.handleQueue))
 	s.mux.HandleFunc("DELETE /api/s/{key}/queue/{uid}", s.browserAPI(s.handleUnqueue))
 	s.mux.HandleFunc("POST /api/s/{key}/send", s.browserAPI(s.handleSend))
@@ -201,4 +204,60 @@ func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+}
+
+const defaultEventsHeartbeat = 15 * time.Second
+
+// handleEvents is the browser's live feed (Server-Sent Events): the full
+// snapshot right away, then again whenever anything about the session
+// changes - the queue, the transcript, whether the agent is listening, the
+// session's end, the artifact file - so every open tab of the same session
+// shows the same thing without reloading. The stream is authenticated like
+// every other browser route (the chrome reads it with fetch, which can send
+// the token header; EventSource cannot, and a token in the URL would leak
+// into logs). It lasts until the client goes away, which is also what frees
+// its goroutine: the request context ends with the connection.
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request, key string) {
+	file, err := s.hub.File(key)
+	if err != nil {
+		writeHubError(w, err)
+		return
+	}
+	rc := http.NewResponseController(w)
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	if err := rc.Flush(); err != nil {
+		return
+	}
+
+	var (
+		lastVersion int64 = -1
+		lastAV      string
+		lastWrite   = time.Now()
+	)
+	_ = s.hub.Watch(r.Context(), key, time.Second, func(snap Snapshot) error {
+		av := artifactVersion(file)
+		now := time.Now()
+		switch {
+		case snap.Version != lastVersion || av != lastAV:
+			data, err := json.Marshal(stateResponse{Snapshot: snap, ArtifactVersion: av})
+			if err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(w, "id: %d\nevent: state\ndata: %s\n\n", snap.Version, data); err != nil {
+				return err
+			}
+			lastVersion, lastAV, lastWrite = snap.Version, av, now
+		case now.Sub(lastWrite) >= s.heartbeat:
+			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+				return err
+			}
+			lastWrite = now
+		default:
+			return nil
+		}
+		return rc.Flush()
+	})
 }

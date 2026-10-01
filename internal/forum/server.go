@@ -25,6 +25,9 @@ type ServerOptions struct {
 	Addr string
 	// Shutdown asks the process to stop (the `vexillum forum stop` route).
 	Shutdown func()
+	// EventsHeartbeat is how often an idle event stream sends a comment so a
+	// dead connection is noticed; zero means 15 seconds. Tests shrink it.
+	EventsHeartbeat time.Duration
 }
 
 // Server is the single local forum server: it multiplexes every session of
@@ -45,6 +48,7 @@ type Server struct {
 	agentToken string
 	addr       string
 	shutdown   func()
+	heartbeat  time.Duration
 	mux        *http.ServeMux
 }
 
@@ -56,7 +60,11 @@ func NewServer(opts ServerOptions) *Server {
 		agentToken: opts.AgentToken,
 		addr:       opts.Addr,
 		shutdown:   opts.Shutdown,
+		heartbeat:  opts.EventsHeartbeat,
 		mux:        http.NewServeMux(),
+	}
+	if s.heartbeat <= 0 {
+		s.heartbeat = defaultEventsHeartbeat
 	}
 	s.routes()
 	return s

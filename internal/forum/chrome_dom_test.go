@@ -68,3 +68,8 @@ func TestChromeEndedDialog_MarkupIsModalAndHasNoCloseControl(t *testing.T) {
 		t.Error("the dialog must be hidden from exactly one place (a reopened session)")
 	}
 }
+
+// The live feed reconnects by itself and two tabs of one session converge.
+func TestChromeLiveFeed_ReconnectsAndTabsConverge(t *testing.T) {
+	runChromeNodeTest(t, "chrome_live_test.js")
+}

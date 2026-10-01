@@ -718,6 +718,49 @@ func (h *Hub) State(ctx context.Context, key string, since int64, wait time.Dura
 	}
 }
 
+// Watch streams key's snapshots to fn: once right away, then again each time
+// the session changes or tick elapses, until ctx is done or fn fails. fn sees
+// every wake-up (not only real changes) so the caller can heartbeat and check
+// things the hub does not own, like the artifact file; it dedupes on
+// Snapshot.Version. While it runs the browser counts as connected, exactly as
+// during a State long-poll. It returns nil when ctx ends.
+func (h *Hub) Watch(ctx context.Context, key string, tick time.Duration, fn func(Snapshot) error) error {
+	h.mu.Lock()
+	l, err := h.get(key)
+	if err != nil {
+		h.mu.Unlock()
+		return err
+	}
+	l.browsers++
+	l.lastBrowser = h.opts.Now()
+	h.notify()
+	defer func() {
+		h.mu.Lock()
+		l.browsers--
+		l.lastBrowser = h.opts.Now()
+		h.notify()
+		h.mu.Unlock()
+	}()
+
+	timer := time.NewTicker(tick)
+	defer timer.Stop()
+	for {
+		snap := l.snapshot()
+		changed := h.changed
+		h.mu.Unlock()
+		if err := fn(snap); err != nil {
+			return err
+		}
+		select {
+		case <-changed:
+		case <-timer.C:
+		case <-ctx.Done():
+			return nil
+		}
+		h.mu.Lock()
+	}
+}
+
 // Idle reports whether nothing has been connected (no poll, no browser) to
 // any session for at least idleFor.
 func (h *Hub) Idle(idleFor time.Duration) bool {

@@ -6,7 +6,7 @@
 const fs = require("fs");
 const vm = require("vm");
 
-function makeEnv(chromePath, boot) {
+function makeEnv(chromePath, boot, opts = {}) {
   const elements = new Map();
   const docListeners = {};
   const winListeners = {};
@@ -62,20 +62,50 @@ function makeEnv(chromePath, boot) {
     documentElement: stub("html"),
   });
 
-  const pending = [];
-  const waiting = [];
+  // The live feed is an SSE stream: push() delivers one "state" event on the
+  // current stream; drop() ends it (a server that went away); failNext(n)
+  // makes the next n connection attempts fail.
+  const encoder = new TextEncoder();
   const calls = [];
-  const sse = { open: false };
+  const streams = []; // open streams: {chunks, readers}
+  let failures = opts.failures || 0; // connection attempts that fail before one succeeds
+  const backlog = [];
+  const makeStream = () => {
+    const stream = { queue: [], waiting: [], closed: false };
+    streams.push(stream);
+    for (const chunk of backlog.splice(0)) stream.queue.push(chunk);
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: () =>
+            new Promise((resolve) => {
+              if (stream.queue.length) resolve({ done: false, value: stream.queue.shift() });
+              else if (stream.closed) resolve({ done: true });
+              else stream.waiting.push(resolve);
+            }),
+        }),
+      },
+    };
+  };
+  const deliver = (chunk) => {
+    const open = streams.filter((s) => !s.closed);
+    if (!open.length) return backlog.push(chunk);
+    const stream = open[open.length - 1];
+    if (stream.waiting.length) stream.waiting.shift()({ done: false, value: chunk });
+    else stream.queue.push(chunk);
+  };
   const fetchStub = (url, init) => {
     calls.push({ url: String(url), init });
-    if (String(url).includes("/state")) {
-      return new Promise((resolve) => {
-        const respond = (snapshot) => resolve({ ok: true, status: 200, json: async () => snapshot });
-        if (pending.length) respond(pending.shift());
-        else waiting.push(respond);
-      });
+    if (String(url).endsWith("/events")) {
+      if (failures > 0) {
+        failures -= 1;
+        return Promise.reject(new Error("connection refused"));
+      }
+      return Promise.resolve(makeStream());
     }
-    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({}), blob: async () => ({}) });
   };
 
   const win = {
@@ -92,7 +122,7 @@ function makeEnv(chromePath, boot) {
     window: win, document: doc, fetch: fetchStub, console, URL: Object.assign(function URL_(...a) { return new URL(...a); }, { createObjectURL: () => 'blob:stub', revokeObjectURL() {} }), Promise, Date, JSON, Math, Map, Set, Object, Array, String, Number, RegExp, Error, Intl,
     setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
     navigator: { clipboard: { writeText: async () => {} } },
-    TextDecoder, AbortController, Blob,
+    TextDecoder, TextEncoder, AbortController, Blob,
   };
   win.window = win;
   Object.assign(win, sandbox);
@@ -109,9 +139,21 @@ function makeEnv(chromePath, boot) {
     winListeners,
     // push delivers one snapshot as the server's answer to the live feed.
     push(snapshot) {
-      if (waiting.length) waiting.shift()(snapshot);
-      else pending.push(snapshot);
+      deliver(encoder.encode("id: " + snapshot.version + "\nevent: state\ndata: " + JSON.stringify(snapshot) + "\n\n"));
     },
+    ping() {
+      deliver(encoder.encode(": ping\n\n"));
+    },
+    drop() {
+      for (const s of streams) {
+        s.closed = true;
+        for (const w of s.waiting.splice(0)) w({ done: true });
+      }
+    },
+    failNext(n) {
+      failures = n;
+    },
+    connections: () => calls.filter((c) => c.url.endsWith("/events")).length,
     tick: () => new Promise((resolve) => setTimeout(resolve, 20)),
     key(event) {
       const e = { defaultPrevented: false, stopped: false, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; }, stopPropagation() {}, ...event };

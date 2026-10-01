@@ -62,22 +62,79 @@
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // The live feed: a long-poll that returns as soon as anything changes
-  // (queue, transcript, agent listening, session status) or the agent edits
-  // the artifact. A failed request means the server is gone or restarting;
-  // everything pending is on its disk, so keep retrying quietly.
+  // The live feed: a Server-Sent Events stream of the session's snapshot. The
+  // server sends it whole on connect and again whenever anything changes
+  // (queue, transcript, agent listening, session status, the artifact file),
+  // so every tab of the same session stays in step without reloading. It is
+  // read with fetch because EventSource cannot send the token header. A
+  // failed or silent stream means the server is gone or restarting;
+  // everything pending is on its disk, so keep reconnecting quietly.
+  const STREAM_SILENCE_MS = 45000; // the server pings every 15s
+
+  function apply(snap) {
+    version = snap.version;
+    const changed = artifactVersion && snap.artifact_version !== artifactVersion;
+    artifactVersion = snap.artifact_version;
+    if (changed) frame.src = boot.artifact_src + "?theme=" + window.forumTheme.current();
+    render(snap);
+  }
+
+  // readEvents feeds each complete "state" event of an SSE body to onState.
+  async function readEvents(body, onState, onChunk) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      onChunk();
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n?/g, "\n");
+      for (let end = buffer.indexOf("\n\n"); end >= 0; end = buffer.indexOf("\n\n")) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        let name = "message";
+        const data = [];
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) name = line.slice(6).trim();
+          else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
+        }
+        if (name === "state" && data.length) onState(JSON.parse(data.join("\n")));
+      }
+    }
+  }
+
   async function live() {
     let failures = 0;
     for (;;) {
+      const abort = new AbortController();
+      let watchdog = 0;
+      const arm = () => {
+        clearTimeout(watchdog);
+        watchdog = setTimeout(() => abort.abort(), STREAM_SILENCE_MS);
+      };
       try {
-        const snap = await api("GET", "/state?since=" + version + "&av=" + encodeURIComponent(artifactVersion));
-        failures = 0;
+        arm();
+        const response = await fetch("/api/s/" + boot.key + "/events", {
+          headers: { "X-Forum-Token": boot.token, Accept: "text/event-stream" },
+          cache: "no-store",
+          signal: abort.signal,
+        });
+        if (!response.ok) {
+          const error = new Error("HTTP " + response.status);
+          error.status = response.status;
+          throw error;
+        }
         setConnected(true);
-        version = snap.version;
-        const changed = artifactVersion && snap.artifact_version !== artifactVersion;
-        artifactVersion = snap.artifact_version;
-        if (changed) frame.src = boot.artifact_src + "?theme=" + window.forumTheme.current();
-        render(snap);
+        await readEvents(
+          response.body,
+          (snap) => {
+            failures = 0;
+            setConnected(true);
+            apply(snap);
+          },
+          arm,
+        );
+        throw new Error("the event stream closed");
       } catch (error) {
         if (error.status === 401 || error.status === 404) {
           fatal("This review session is no longer available. Ask your agent to run `vexillum forum " + boot.name + "` again.");
@@ -86,6 +143,9 @@
         failures += 1;
         setConnected(false);
         await sleep(Math.min(400 * 2 ** failures, 5000));
+      } finally {
+        clearTimeout(watchdog);
+        abort.abort();
       }
     }
   }
