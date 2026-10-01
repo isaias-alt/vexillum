@@ -5,7 +5,10 @@
  * only the theme wiring differs: dark is the default (the zip's default is
  * light) and does not follow prefers-color-scheme; <html data-fr-theme="light">
  * switches to the light tokens. forum-theme.js sets that attribute from the
- * user's saved choice before first paint. Self-contained: system font stacks, nothing from the network.
+ * user's saved choice before first paint. color-scheme is not set here: it is a
+ * rendering mode, set by forum.css for the chrome and by forum-artifact.css
+ * (inside its low-priority layer) for artifacts, so that serving these tokens
+ * to an artifact never changes how its own styles render. Self-contained: system font stacks, nothing from the network.
  * --fr-selection (tyrian) marks annotations and selections and is never a
  * status color.
  */
@@ -24,7 +27,6 @@
   --fr-space-6: 32px;
 
   /* --- dark (default) --- */
-  color-scheme: dark;
   --fr-bg: #15171A;
   --fr-surface: #1C1F24;
   --fr-surface-sunken: #20242A;
@@ -54,7 +56,6 @@
 
 /* Light: the alternative theme, chosen with the toggle in the top bar. */
 :root[data-fr-theme="light"] {
-  color-scheme: light;
   --fr-bg: #F2F1EC;
   --fr-surface: #FFFFFF;
   --fr-surface-sunken: #ECEBE4;

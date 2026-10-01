@@ -36,7 +36,8 @@
   </header>
   <main class="layout">
     <section class="stage" aria-label="Artifact">
-      <iframe id="artifact" class="artifact-frame" title="Artifact: {{.Name}}" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" src="{{.Src}}"></iframe>
+      <iframe id="artifact" class="artifact-frame" title="Artifact: {{.Name}}" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" data-src="{{.Src}}"></iframe>
+      <script src="/forum-assets/forum-frame.js"></script>
     </section>
     <aside class="panel" id="panel" aria-label="Conversation">
       <div class="panel-head">

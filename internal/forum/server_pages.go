@@ -96,9 +96,9 @@ func (s *Server) handleChromeAsset(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var contentType string
 	switch name {
-	case "forum.css", "forum-tokens.css":
+	case "forum.css", "forum-tokens.css", "forum-artifact.css":
 		contentType = "text/css; charset=utf-8"
-	case "forum-chrome.js", "forum-sdk.js", "forum-theme.js", "forum-prefs.js":
+	case "forum-chrome.js", "forum-sdk.js", "forum-theme.js", "forum-prefs.js", "forum-frame.js":
 		contentType = "text/javascript; charset=utf-8"
 	default:
 		http.NotFound(w, r)
@@ -142,7 +142,7 @@ func (s *Server) handleArtifactFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 
 	if rel == "" || rel == filepath.Base(file) {
-		s.serveArtifactHTML(w, file)
+		s.serveArtifactHTML(w, file, r.URL.Query().Get("theme"))
 		return
 	}
 	for _, seg := range strings.Split(rel, "/") {
@@ -183,13 +183,22 @@ func readArtifactFile(file string) (string, error) {
 	return string(data), nil
 }
 
-func (s *Server) serveArtifactHTML(w http.ResponseWriter, file string) {
+// serveArtifactHTML serves the artifact with window.forum and, unless the
+// artifact opts out, the forum content stylesheet injected. theme is the
+// chrome's current theme ("dark" or "light", anything else means dark), put on
+// <html> in the response itself so the first paint already has it.
+func (s *Server) serveArtifactHTML(w http.ResponseWriter, file, theme string) {
 	source, err := readArtifactFile(file)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	doc := injectFavicon(injectSDK(source))
+	doc := injectSDK(source)
+	if !optsOutOfForumStyle(doc) {
+		doc = injectStyles(doc)
+	}
+	doc = setThemeAttr(doc, theme)
+	doc = injectFavicon(doc)
 	if len(ExtractMermaidSources(doc)) > 0 {
 		doc = injectEmbedScript(doc)
 	}
@@ -199,6 +208,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file string) {
 }
 
 const (
+	stylesTags     = `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
 	faviconTag     = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`
 	sdkScriptTag   = `<script src="/forum-assets/forum-sdk.js"></script>`
 	embedScriptTag = `<script src="/whiteboard-embed.js"></script>`
@@ -224,6 +234,10 @@ func injectSDK(doc string) string {
 }
 
 var (
+	metaTagPattern   = regexp.MustCompile(`(?i)<meta\b[^>]*>`)
+	forumStyleName   = regexp.MustCompile(`(?i)\bname\s*=\s*["']?forum-style["']?[\s/>]`)
+	forumStyleNone   = regexp.MustCompile(`(?i)\bcontent\s*=\s*["']?none["']?[\s/>]`)
+	htmlTagThemeAttr = regexp.MustCompile(`(?i)\sdata-fr-theme\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
 	iconLinkPattern  = regexp.MustCompile(`(?i)<link\b[^>]*\brel\s*=\s*["']?(?:shortcut\s+)?icon\b`)
 	headClosePattern = regexp.MustCompile(`(?i)</head\s*>`)
 )
@@ -239,6 +253,47 @@ func injectFavicon(doc string) string {
 		return doc[:loc[0]] + faviconTag + doc[loc[0]:]
 	}
 	return doc
+}
+
+// optsOutOfForumStyle reports whether the artifact asked not to receive the
+// forum content stylesheet: <meta name="forum-style" content="none">.
+func optsOutOfForumStyle(doc string) bool {
+	for _, tag := range metaTagPattern.FindAllString(doc, -1) {
+		if forumStyleName.MatchString(tag+" ") && forumStyleNone.MatchString(tag+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// injectStyles links the forum tokens and content stylesheet at the very top
+// of the document, ahead of everything the artifact brings. The stylesheet
+// sits in a low-priority cascade layer, so the artifact's own styles win
+// whatever their order or specificity.
+func injectStyles(doc string) string {
+	for _, re := range []*regexp.Regexp{headOpenPattern, htmlOpenPattern, doctypePattern} {
+		if loc := re.FindStringIndex(doc); loc != nil {
+			return doc[:loc[1]] + stylesTags + doc[loc[1]:]
+		}
+	}
+	return stylesTags + doc
+}
+
+// setThemeAttr puts data-fr-theme on <html>, so the tokens resolve to the
+// chrome's theme from the first paint. A document with no <html> tag is left
+// alone: the SDK applies the theme as soon as the chrome tells it.
+func setThemeAttr(doc, theme string) string {
+	if theme != "light" {
+		theme = "dark"
+	}
+	loc := htmlOpenPattern.FindStringSubmatchIndex(doc)
+	if loc == nil {
+		return doc
+	}
+	tag := doc[loc[0]:loc[1]]
+	tag = htmlTagThemeAttr.ReplaceAllString(tag, "")
+	tag = strings.TrimSuffix(tag, ">") + ` data-fr-theme="` + theme + `">`
+	return doc[:loc[0]] + tag + doc[loc[1]:]
 }
 
 // injectEmbedScript appends the whiteboard embed just before </body> (or at

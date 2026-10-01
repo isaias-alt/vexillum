@@ -18,6 +18,7 @@ class El {
     this.innerText = text;
     for (const child of children) child.parentElement = this;
   }
+  setAttribute(name, value) { this.attrs[name] = String(value); }
   getAttribute(name) { return name in this.attrs ? this.attrs[name] : null; }
   closest(selector) {
     // The forum-ui marker, or a comma list of plain tag names.
@@ -173,5 +174,13 @@ assert.ok(!click().defaultPrevented, "switching annotation off restores normal c
 // Ctrl/Cmd+I asks the chrome to toggle the mode, wherever focus is.
 dispatch("keydown", { key: "i", ctrlKey: true, metaKey: false, shiftKey: false });
 assert.ok(posts.some((m) => m.type === "forum:toggle-mode"));
+
+// The chrome's theme reaches the artifact's <html>; garbage is dark.
+sendToSDK({ type: "forum:theme", theme: "light" });
+assert.strictEqual(tree.getAttribute("data-fr-theme"), "light");
+sendToSDK({ type: "forum:theme", theme: "dark" });
+assert.strictEqual(tree.getAttribute("data-fr-theme"), "dark");
+sendToSDK({ type: "forum:theme", theme: "<script>" });
+assert.strictEqual(tree.getAttribute("data-fr-theme"), "dark");
 
 console.log("ok");

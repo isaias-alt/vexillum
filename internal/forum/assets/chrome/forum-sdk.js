@@ -407,6 +407,10 @@
       mode = !!message.on;
       if (!mode) hoverEl = null;
       schedule();
+    } else if (message.type === "forum:theme") {
+      // The artifact follows the chrome's theme; the server already rendered
+      // the right one, this keeps it in step when the user flips the switch.
+      document.documentElement.setAttribute("data-fr-theme", message.theme === "light" ? "light" : "dark");
     } else if (message.type === "forum:hold") {
       if (message.kind === "element" && lastEl) held = { el: lastEl };
       else if (message.kind === "selection" && pendingSelection) held = { range: pendingSelection.range };

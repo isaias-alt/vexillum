@@ -23,6 +23,8 @@
     const light = window.forumTheme.current() === "light";
     $("themeSwitch").setAttribute("aria-checked", String(light));
     $("themeState").textContent = light ? "On" : "Off";
+    // The artifact follows the chrome's theme.
+    toFrame({ type: "forum:theme", theme: light ? "light" : "dark" });
   }
   $("themeSwitch").addEventListener("click", () => {
     window.forumTheme.toggle();
@@ -73,7 +75,7 @@
         version = snap.version;
         const changed = artifactVersion && snap.artifact_version !== artifactVersion;
         artifactVersion = snap.artifact_version;
-        if (changed) frame.src = boot.artifact_src;
+        if (changed) frame.src = boot.artifact_src + "?theme=" + window.forumTheme.current();
         render(snap);
       } catch (error) {
         if (error.status === 401 || error.status === 404) {
@@ -488,7 +490,10 @@
     if (offer) place($("annotOffer"), offer.rect);
   });
 
-  frame.addEventListener("load", syncMode);
+  frame.addEventListener("load", () => {
+    syncMode();
+    syncThemeButton();
+  });
 
   window.addEventListener("message", (event) => {
     if (event.source !== frame.contentWindow) return;
@@ -500,6 +505,7 @@
     switch (message.type) {
       case "forum:ready":
         syncMode();
+        syncThemeButton();
         break;
       case "forum:toggle-mode":
         setMode(!annotateMode);

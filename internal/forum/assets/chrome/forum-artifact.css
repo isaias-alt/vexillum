@@ -1,0 +1,148 @@
+/*
+ * forum-artifact.css: the look vexillum forum gives an artifact's content.
+ * Served at /forum-assets/forum-artifact.css and linked, together with
+ * forum-tokens.css, ahead of the artifact's own markup, so the --fr-* tokens
+ * (direction B, "Marmol y Lapislazuli") and everything below are available to
+ * any artifact with no setup. The theme follows the chrome's switch: the
+ * server renders <html data-fr-theme> and forum-sdk.js keeps it in step.
+ *
+ * Everything lives in one low-priority cascade layer, so ANY style the
+ * artifact writes itself wins regardless of specificity or order, and an
+ * artifact that brings its own look keeps it. Only skin is set on bare
+ * elements (color, type, borders, radius); layout (width, padding of the page,
+ * grids) is opt-in through classes, so a self-styled layout is never moved.
+ * An artifact opts out entirely with <meta name="forum-style" content="none">.
+ *
+ * The tyrian selection color is reserved for annotations: nothing here uses it.
+ * Status uses success and danger; accent (lapis) is the primary action.
+ */
+@layer forum-artifact {
+  :root { color-scheme: dark; }
+  :root[data-fr-theme="light"] { color-scheme: light; }
+
+  html { background: var(--fr-bg); }
+  body {
+    background: var(--fr-bg); color: var(--fr-text);
+    font: 15px/1.6 var(--fr-font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- type ---- */
+  h1, h2, h3, h4, h5, h6 { color: var(--fr-text); font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.2rem; }
+  h4, h5, h6 { font-size: 1rem; }
+  small, figcaption, caption { color: var(--fr-text-secondary); font-size: 0.85em; }
+  a { color: var(--fr-accent); text-underline-offset: 0.18em; }
+  a:hover { color: var(--fr-accent-hover); }
+  hr { border: 0; border-top: 1px solid var(--fr-border); }
+  blockquote { margin-inline: 0; padding: var(--fr-space-1) var(--fr-space-4); border-left: 3px solid var(--fr-accent); color: var(--fr-text-secondary); }
+  mark { background: var(--fr-bronze-soft); color: inherit; border-radius: 2px; padding: 0 2px; }
+  ul, ol { padding-left: 1.4em; }
+  li::marker { color: var(--fr-text-muted); }
+  code, kbd, samp { font-family: var(--fr-font-mono); font-size: 0.9em; padding: 1px 5px; border-radius: var(--fr-radius-sm); background: var(--fr-bronze-soft); }
+  kbd { background: var(--fr-surface-sunken); border: 1px solid var(--fr-border-strong); }
+  pre { padding: var(--fr-space-3) var(--fr-space-4); overflow: auto; background: var(--fr-surface-sunken); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-md); line-height: 1.5; }
+  pre code { padding: 0; background: none; font-size: 0.88em; }
+
+  /* ---- tables (wrap wide ones in .fr-table-wrap) ---- */
+  table { border-collapse: collapse; }
+  th, td { padding: var(--fr-space-2) var(--fr-space-3); border-bottom: 1px solid var(--fr-border); text-align: left; vertical-align: top; }
+  th { background: var(--fr-surface-sunken); color: var(--fr-text-secondary); font-size: 0.85em; font-weight: 600; border-bottom-color: var(--fr-border-strong); }
+  caption { padding: var(--fr-space-2) 0; text-align: left; }
+  .fr-table-wrap { overflow-x: auto; border: 1px solid var(--fr-border); border-radius: var(--fr-radius-md); }
+  .fr-table-wrap > table { width: 100%; }
+  .fr-table-wrap tr:last-child td { border-bottom: 0; }
+
+  /* ---- buttons and form controls ---- */
+  button, .fr-btn {
+    font: inherit; font-weight: 500; color: var(--fr-text); cursor: pointer;
+    padding: var(--fr-space-2) var(--fr-space-4);
+    background: transparent; border: 1px solid var(--fr-border-strong); border-radius: var(--fr-radius-sm);
+    text-decoration: none; display: inline-block;
+  }
+  button:hover:not(:disabled), .fr-btn:hover { background: var(--fr-surface); color: var(--fr-text); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .fr-btn--primary, button[type="submit"] { background: var(--fr-accent); border-color: var(--fr-accent); color: var(--fr-accent-contrast); }
+  .fr-btn--primary:hover, button[type="submit"]:hover:not(:disabled) { background: var(--fr-accent-hover); border-color: var(--fr-accent-hover); color: var(--fr-accent-contrast); }
+  .fr-btn--secondary { background: transparent; border-color: var(--fr-border-strong); color: var(--fr-text); }
+  .fr-btn--bronze { background: var(--fr-bronze-soft); border-color: var(--fr-bronze); color: var(--fr-bronze); }
+  .fr-btn--danger { color: var(--fr-danger); border-color: var(--fr-danger); }
+  .fr-btn--danger:hover { background: var(--fr-danger-soft); color: var(--fr-danger); }
+
+  input:not([type="radio"], [type="checkbox"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"]), textarea, select {
+    font: inherit; color: var(--fr-text); background: var(--fr-surface);
+    padding: var(--fr-space-2) var(--fr-space-3);
+    border: 1px solid var(--fr-border); border-radius: var(--fr-radius-sm);
+  }
+  input::placeholder, textarea::placeholder { color: var(--fr-text-muted); }
+  input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; border-color: var(--fr-accent); box-shadow: 0 0 0 3px var(--fr-accent-soft); }
+  button:focus-visible, summary:focus-visible { outline: 2px solid var(--fr-accent); outline-offset: 2px; }
+  input[type="radio"], input[type="checkbox"], input[type="range"], progress { accent-color: var(--fr-accent); }
+  fieldset { border: 1px solid var(--fr-border); border-radius: var(--fr-radius-md); }
+  legend { padding: 0 var(--fr-space-2); color: var(--fr-text-secondary); font-size: 0.85em; }
+  details { border: 1px solid var(--fr-border); border-radius: var(--fr-radius-md); padding: var(--fr-space-2) var(--fr-space-3); }
+  summary { cursor: pointer; font-weight: 500; }
+
+  /* ---- figures and SVG ---- */
+  figure { margin-inline: 0; }
+  svg { max-width: 100%; }
+  .fr-figure { margin: var(--fr-space-4) 0; padding: var(--fr-space-4); background: var(--fr-surface); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-lg); }
+  .fr-figure svg { display: block; margin-inline: auto; height: auto; }
+  .fr-figure figcaption { margin-top: var(--fr-space-3); text-align: center; }
+  /* Diagram parts: give inline SVG these classes instead of hard-coded colors. */
+  .fr-node { fill: var(--fr-surface); stroke: var(--fr-border-strong); stroke-width: 1.5; }
+  .fr-node--accent { fill: var(--fr-accent-soft); stroke: var(--fr-accent); }
+  .fr-node--success { fill: var(--fr-success-soft); stroke: var(--fr-success); }
+  .fr-node--danger { fill: var(--fr-danger-soft); stroke: var(--fr-danger); }
+  .fr-node--bronze { fill: var(--fr-bronze-soft); stroke: var(--fr-bronze); }
+  .fr-edge { fill: none; stroke: var(--fr-text-muted); stroke-width: 1.5; }
+  .fr-arrow { fill: var(--fr-text-muted); stroke: none; }
+  .fr-label { fill: var(--fr-text); font: 13px var(--fr-font-sans); }
+  .fr-label--muted { fill: var(--fr-text-secondary); }
+
+  /* ---- components ---- */
+  .fr-card { padding: var(--fr-space-4); background: var(--fr-surface); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-lg); box-shadow: var(--fr-shadow-sm); }
+  .fr-card > :first-child { margin-top: 0; }
+  .fr-card > :last-child { margin-bottom: 0; }
+  .fr-card--accent { border-left: 3px solid var(--fr-accent); }
+
+  .fr-badge { display: inline-flex; align-items: center; padding: 1px var(--fr-space-2); border-radius: 999px; font-size: 0.78rem; font-weight: 600; line-height: 1.6; white-space: nowrap; background: var(--fr-surface-sunken); color: var(--fr-text-secondary); border: 1px solid var(--fr-border); }
+  .fr-badge--accent { background: var(--fr-accent-soft); color: var(--fr-accent); border-color: transparent; }
+  .fr-badge--success { background: var(--fr-success-soft); color: var(--fr-success); border-color: transparent; }
+  .fr-badge--danger { background: var(--fr-danger-soft); color: var(--fr-danger); border-color: transparent; }
+  .fr-badge--bronze { background: var(--fr-bronze-soft); color: var(--fr-bronze); border-color: transparent; }
+
+  .fr-callout { padding: var(--fr-space-3) var(--fr-space-4); background: var(--fr-surface-sunken); border: 1px solid var(--fr-border); border-left: 3px solid var(--fr-text-muted); border-radius: var(--fr-radius-md); }
+  .fr-callout > :first-child { margin-top: 0; }
+  .fr-callout > :last-child { margin-bottom: 0; }
+  .fr-callout--info { background: var(--fr-accent-soft); border-left-color: var(--fr-accent); }
+  .fr-callout--success { background: var(--fr-success-soft); border-left-color: var(--fr-success); }
+  .fr-callout--danger { background: var(--fr-danger-soft); border-left-color: var(--fr-danger); }
+  .fr-callout--bronze { background: var(--fr-bronze-soft); border-left-color: var(--fr-bronze); }
+
+  /* Decision forms: a stack of fields, options as selectable rows. */
+  .fr-form { display: flex; flex-direction: column; gap: var(--fr-space-3); }
+  .fr-field { display: flex; flex-direction: column; gap: var(--fr-space-1); }
+  .fr-field > label, .fr-field > .fr-label-text { font-weight: 500; }
+  .fr-choices { display: flex; flex-direction: column; gap: var(--fr-space-2); }
+  .fr-choice { display: flex; align-items: flex-start; gap: var(--fr-space-3); padding: var(--fr-space-3); background: var(--fr-surface); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-md); cursor: pointer; }
+  .fr-choice:hover { border-color: var(--fr-border-strong); }
+  .fr-choice:has(input:checked) { border-color: var(--fr-accent); background: var(--fr-accent-soft); }
+  .fr-choice input { margin-top: 0.25em; flex: none; }
+  .fr-choice small { display: block; }
+  .fr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fr-space-2); }
+
+  .fr-stat { display: flex; flex-direction: column; gap: var(--fr-space-1); }
+  .fr-stat-value { font-size: 1.8rem; font-weight: 600; line-height: 1.1; color: var(--fr-text); }
+  .fr-stat-label { font-size: 0.85em; color: var(--fr-text-secondary); }
+  .fr-muted { color: var(--fr-text-secondary); }
+
+  /* ---- layout helpers (opt-in) ---- */
+  .fr-page { max-width: 72rem; margin-inline: auto; padding: var(--fr-space-6) var(--fr-space-5); }
+  .fr-stack { display: flex; flex-direction: column; gap: var(--fr-space-4); }
+  .fr-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fr-space-2); }
+  .fr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--fr-space-4); }
+  .fr-grid > *, .fr-stack > * { min-width: 0; }
+}

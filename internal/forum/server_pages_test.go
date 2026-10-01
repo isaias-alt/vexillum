@@ -133,8 +133,8 @@ func TestChromeAssets_ServedAndSelfContained(t *testing.T) {
 		t.Error("the default theme must not depend on prefers-color-scheme")
 	}
 	base := tokens[:strings.Index(tokens, `:root[data-fr-theme="light"]`)]
-	if !strings.Contains(base, "--fr-bg: #15171A;") || !strings.Contains(base, "color-scheme: dark;") {
-		t.Error("the base :root block must carry the dark tokens")
+	if !strings.Contains(base, "--fr-bg: #15171A;") || strings.Contains(tokens, "color-scheme:") {
+		t.Error("the base :root block must carry the dark tokens, and the tokens must not set color-scheme (it would leak into artifacts)")
 	}
 	for name, sheet := range map[string]string{"forum.css": css, "forum-tokens.css": tokens} {
 		if strings.Contains(sheet, "http://") || strings.Contains(sheet, "https://") || strings.Contains(sheet, "@import") {

@@ -4,6 +4,9 @@
  * replaced by editing that file and nothing here hardcodes a color. The few
  * custom properties below are layout constants, not identity.
  */
+:root { color-scheme: dark; }
+:root[data-fr-theme="light"] { color-scheme: light; }
+
 :root {
   --fr-text-size: 13px;
   --fr-text-size-small: 12px;

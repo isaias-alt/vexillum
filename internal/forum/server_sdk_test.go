@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const stylesTags = `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
+
 func TestArtifact_SDKInjectedAfterDoctypeAndHead(t *testing.T) {
 	env := newEnv(t, time.Minute)
 	open := env.open()
@@ -17,8 +19,9 @@ func TestArtifact_SDKInjectedAfterDoctypeAndHead(t *testing.T) {
 	if !strings.HasPrefix(body, `<!DOCTYPE html>`) {
 		t.Errorf("the doctype must stay first (quirks mode otherwise): %.60s", body)
 	}
-	if !strings.Contains(body, `<head><script src="/forum-assets/forum-sdk.js"></script><meta charset`) {
-		t.Errorf("sdk not injected right after <head>:\n%s", body)
+	// The stylesheets come first (the artifact's own styles still win: they sit in a low-priority layer), then the sdk.
+	if !strings.Contains(body, `<head>`+stylesTags+`<script src="/forum-assets/forum-sdk.js"></script><meta charset`) {
+		t.Errorf("styles and sdk not injected right after <head>:\n%s", body)
 	}
 	if strings.Contains(body, "whiteboard-embed.js") {
 		t.Error("no mermaid container, so no whiteboard embed")
@@ -32,9 +35,9 @@ func TestArtifact_SDKInjectionFallbacks(t *testing.T) {
 	env := newEnv(t, time.Minute)
 	open := env.open()
 	cases := map[string]string{
-		`<!doctype html><p>no head</p>`: `<!doctype html><script src="/forum-assets/forum-sdk.js"></script><p>no head</p>`,
-		`<html><body>x</body></html>`:   `<html><script src="/forum-assets/forum-sdk.js"></script><body>x</body></html>`,
-		`<p>bare fragment</p>`:          `<script src="/forum-assets/forum-sdk.js"></script><p>bare fragment</p>`,
+		`<!doctype html><p>no head</p>`: `<!doctype html>` + stylesTags + `<script src="/forum-assets/forum-sdk.js"></script><p>no head</p>`,
+		`<html><body>x</body></html>`:   `<html data-fr-theme="dark">` + stylesTags + `<script src="/forum-assets/forum-sdk.js"></script><body>x</body></html>`,
+		`<p>bare fragment</p>`:          stylesTags + `<script src="/forum-assets/forum-sdk.js"></script><p>bare fragment</p>`,
 	}
 	for in, want := range cases {
 		env.setArtifact(in)
