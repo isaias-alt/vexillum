@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { Spectral, JetBrains_Mono } from "next/font/google";
-import { RootProvider } from "fumadocs-ui/provider/next";
 import { i18nProvider } from "fumadocs-ui/i18n";
 import { i18n } from "@/lib/i18n";
 import { translations } from "@/lib/layout.shared";
 import { SITE_URL } from "@/lib/site";
 import { dictionary } from "@/lib/strings";
+import { Provider } from "@/components/Provider";
 import { ThemeScript } from "@/components/ThemeScript";
 import { ThemeSync } from "@/components/ThemeSync";
 import StaticSearchDialog from "@/components/SearchDialog";
@@ -64,13 +64,13 @@ export default async function RootLayout({
       <body className="flex min-h-screen flex-col bg-bg font-mono text-text antialiased">
         <ThemeScript />
         <ThemeSync />
-        <RootProvider
+        <Provider
           theme={{ enabled: false }}
           i18n={i18nProvider(translations, lang)}
           search={{ SearchDialog: StaticSearchDialog }}
         >
           {children}
-        </RootProvider>
+        </Provider>
       </body>
     </html>
   );
