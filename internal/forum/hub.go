@@ -129,6 +129,8 @@ func (h *Hub) get(key string) (*liveSession, error) {
 	if rec == nil {
 		return nil, ErrNoSession
 	}
+	// A transcript written under an older or looser cap is trimmed on load.
+	transcript, _ = boundTranscript(transcript)
 	l := &liveSession{
 		rec:         *rec,
 		transcript:  transcript,
@@ -179,16 +181,18 @@ func (h *Hub) appendTranscript(l *liveSession, msgs ...Message) error {
 
 // boundTranscript keeps the newest suffix of msgs with at most
 // maxTranscriptItems entries whose JSON fits maxTranscriptBytes, and reports
-// what it evicted. The newest message is always kept, however large.
+// what it evicted. The newest message is always kept, however large. Sizes
+// are measured the way the file is written (indented, one element per
+// array slot), so the cap bounds the file on disk, not just the payload.
 func boundTranscript(msgs []Message) (kept, evicted []Message) {
 	cut := len(msgs)
-	size := 2
+	size := 3
 	for i := len(msgs) - 1; i >= 0 && len(msgs)-i <= maxTranscriptItems; i-- {
-		data, err := json.Marshal(msgs[i])
+		data, err := json.MarshalIndent(msgs[i], "  ", "  ")
 		if err != nil {
 			break
 		}
-		size += len(data) + 1
+		size += len(data) + 4 // indent, separator and newline
 		if size > maxTranscriptBytes && cut < len(msgs) {
 			break
 		}
