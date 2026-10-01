@@ -166,7 +166,7 @@ func runBannerPublish(opts bannerArgs, client *banner.Client, stdout, stderr io.
 		fmt.Fprintf(stderr, "vexillum: %v\n", err)
 		return 1
 	}
-	printWarnings(stderr, warnings)
+	printWarnings(stderr, withSelfPaintWarning(html, warnings))
 
 	password, shown, err := resolveBannerPassword(opts)
 	if err != nil {
@@ -211,7 +211,7 @@ func runBannerRepublish(opts bannerArgs, client *banner.Client, stdout, stderr i
 		fmt.Fprintf(stderr, "vexillum: %v\n", err)
 		return 1
 	}
-	printWarnings(stderr, warnings)
+	printWarnings(stderr, withSelfPaintWarning(html, warnings))
 
 	password, shown, err := resolveBannerPassword(opts)
 	if err != nil {
@@ -277,6 +277,15 @@ func resolveBannerPassword(opts bannerArgs) (password string, shown bool, err er
 		return password, true, nil
 	}
 	return opts.password, false, nil
+}
+
+// withSelfPaintWarning appends the self-paint warning when html never paints
+// its own background. It never blocks the publish.
+func withSelfPaintWarning(html string, warnings []string) []string {
+	if painted, _ := banner.AnalyzeSelfPaint(html); !painted {
+		return append(warnings, banner.SelfPaintWarning)
+	}
+	return warnings
 }
 
 func printWarnings(stderr io.Writer, warnings []string) {

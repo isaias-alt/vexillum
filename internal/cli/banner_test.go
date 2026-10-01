@@ -246,3 +246,28 @@ func TestRunBannerPublishWarnsWhenSiteIDRejected(t *testing.T) {
 		t.Errorf("the rejected site_id must not be printed, got: %s", out)
 	}
 }
+
+func TestRunBannerPublishWarnsOnUnpaintedPage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(banner.Site{URL: "https://plans.example.com/a", UpdateKey: "k", SiteID: "a"})
+	}))
+	defer srv.Close()
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+
+	var stdout, stderr bytes.Buffer
+	file := writeBannerFixture(t, `<html><body>hi</body></html>`)
+	if code := runBanner(bannerArgs{file: file}, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("a self-paint warning must not block publishing, got exit %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "never paints its own surface") {
+		t.Errorf("expected the self-paint warning, got: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	file = writeBannerFixture(t, `<html><body style="background:#000">hi</body></html>`)
+	runBanner(bannerArgs{file: file}, client, &stdout, &stderr)
+	if strings.Contains(stderr.String(), "never paints") {
+		t.Errorf("painted page must not warn, got: %s", stderr.String())
+	}
+}
