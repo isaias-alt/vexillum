@@ -1,6 +1,6 @@
 ---
 name: muster
-description: Snapshot vexillum's fleet of missions and scouts for this project into a categorized digest (needs attention, in flight, finished, shipped), opened as an interactive board. Use /muster for the full fleet, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
+description: Snapshot vexillum's fleet of missions and scouts for this project into a categorized digest (needs attention, awaiting land approval, in flight, finished, shipped), opened as an interactive board. Use /muster for the full fleet, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
 license: MIT
 metadata:
   argument-hint: "[pr|sitrep]"
@@ -42,22 +42,70 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 ### Fleet mode and pr mode - both always open a board
 
 1. Run `vexillum status --json`.
-2. Group every task into four sections, using these headings verbatim so the
+2. Group every task into five sections, using these headings verbatim so the
    board's shape stays stable run to run:
    - **Needs attention** - status `blocked`, `interrupted`, or `failed`. A
      `blocked` task carries its open question in its `decision` field
      (`question`, and `options` if the soldier offered any) - show that
      question on the board itself, not just the word "blocked". Once
      answered (`vexillum decide`), `decision.answer` is also set.
+   - **Awaiting land approval** - `kind` mission, status `done`, and not yet
+     landed on its base branch. This is a decision on the commander's side
+     (ask the general whether to `vexillum land`), unlike **Needs attention**,
+     which is the soldier being stuck. Which done missions belong here is
+     decided with git, see "Classifying done missions" below.
    - **In flight** - status `pending` or `running`.
-   - **Finished** - status `done` (a mission ready to land, or a scout with
-     its report ready - vexillum doesn't record whether a `done` mission has
-     actually been landed yet, so don't claim it has or hasn't).
+   - **Finished** - status `done` that isn't awaiting land approval: a scout
+     with its report ready, or a mission that "Classifying done missions"
+     found already landed. vexillum doesn't record landing in the task, so
+     never claim a mission is landed from its status alone.
    - **Shipped** - status `shipped` (pushed through vexillum's own tribunal
      pipeline; the real PR may be open, merged, or closed - see pr mode for
      live state).
+   Missions the classification couldn't verify are not listed anywhere as
+   pending; see "Classifying done missions" for how they're counted.
    Within each section, keep the order `vexillum status --json` already
    returns tasks in (most recently updated first).
+   **Classifying done missions.** For each task with `kind` mission and
+   status `done`, run these from the git project root (the directory you ran
+   `vexillum status --json` from; camp branches are plain local branches of
+   that repo). `camp_base` is the branch the camp was forked from; if it's
+   empty (tasks persisted before vexillum recorded it), use the project's
+   current branch instead - that's exactly what `vexillum land` itself lands
+   onto - and mark the item "base assumed".
+   ```
+   base=<camp_base, or: git rev-parse --abbrev-ref HEAD>
+   git rev-parse --verify -q refs/heads/<camp_branch>      # does the branch exist?
+   git merge-base --is-ancestor <camp_branch> $base        # exit 0: already landed
+   git merge-base --is-ancestor $base <camp_branch>        # exit 0: clean fast-forward
+   git rev-list --count $base..<camp_branch>               # commits ahead of base
+   git merge-tree --write-tree $base <camp_branch>         # compare with: git rev-parse $base^{tree}
+   ```
+   Apply in this order, first match wins:
+   1. Branch doesn't exist, or `base` can't be resolved (`git rev-parse
+      --verify -q refs/heads/$base` fails): **unverifiable**. `vexillum
+      release` never deletes a camp branch (only `vexillum redispatch`
+      does), so a missing branch means it was discarded or the repo was
+      re-cloned - old history, not a pending decision. Don't list it as
+      pending; just count it in one line under **Finished**, e.g. "N older
+      done missions not verified (branch gone)".
+   2. camp_branch is an ancestor of base: **landed**. Not pending; it stays
+      under **Finished**.
+   3. base is an ancestor of camp_branch: **ready to land** (a clean
+      fast-forward). Lists under **Awaiting land approval**.
+   4. Neither is an ancestor, but `git merge-tree --write-tree` prints the
+      same tree as `git rev-parse $base^{tree}`: the content is already in
+      base under different SHAs (squash or rebase merge). **Landed**, same as
+      rule 2.
+   5. Otherwise: **needs rebase**. Lists under **Awaiting land approval**,
+      shown distinctly, with the note that the commander asks the soldier to
+      rebase its own branch onto the base (re-prompt its pane, don't
+      dispatch a new one), then retries `vexillum land`.
+   Each item in **Awaiting land approval** shows its id, prompt, camp_branch,
+   the verdict (`ready to land` or `needs rebase`), and the commit count from
+   `git rev-list --count $base..<camp_branch>` ("N commits ahead"), plus
+   "base assumed: <branch>" when `camp_base` was empty. If a verdict isn't
+   one of these, don't guess - say it's unverifiable.
 3. **pr mode only** - narrow to missions with a real PR. The only status
    vexillum ever pushes a real branch through its tribunal pipeline for is
    `shipped`, so start from that section. For each shipped task, look up its
@@ -97,6 +145,10 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    (kind, current status, and what it was for). If one no longer appears in
    the snapshot, say so (its camp was likely released) instead of omitting it
    silently.
+   Then, in one extra line, name the missions from this session that are
+   `done` but not yet landed (classify them with "Classifying done missions"
+   above), with their verdict: ready to land, or needs rebase. Skip the line
+   if there are none.
 4. Never invoke `forum` in this mode and never open a board - sitrep is
    meant to be a lightweight, terminal-only recap (mirrors upstream-tool's own
    `ahoy`), not a rendered artifact.
