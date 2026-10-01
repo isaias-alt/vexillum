@@ -127,6 +127,7 @@ body {
   color: var(--fr-accent-contrast);
 }
 
+@layer components {
 /* The design's buttons (.fr-btn in forum-tokens.css). */
 .btn {
   display: inline-flex;
@@ -160,6 +161,7 @@ body {
 .btn-secondary:hover {
   border-color: var(--fr-accent);
 }
+}
 
 :focus-visible {
   outline: 2px solid var(--fr-accent);
@@ -180,14 +182,21 @@ body {
    Docs.dc.html. Structure and behaviour (sidebar, toc, search, mobile
    drawer) are Fumadocs'; type, rules and surfaces are the design's.
    ------------------------------------------------------------------------ */
-#nd-notebook-layout {
-  --fd-sidebar-width: 244px;
-  --fd-toc-width: 220px;
+/* Fumadocs zeroes these on small screens; only widen where it shows them. */
+@media (min-width: 768px) {
+  #nd-notebook-layout {
+    --fd-sidebar-width: 244px;
+  }
+}
+@media (min-width: 1280px) {
+  #nd-notebook-layout {
+    --fd-toc-width: 220px;
+  }
 }
 
-/* page header: breadcrumb as the design's small caps eyebrow */
-#nd-page > nav,
-#nd-page nav[aria-label="breadcrumb"] {
+/* page header: the breadcrumb is the design's small-caps eyebrow */
+#nd-page > div:first-child,
+#nd-page > div:first-child * {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -200,7 +209,8 @@ body {
   line-height: 1.2;
   color: var(--fr-text);
 }
-#nd-page h1 + p {
+#nd-page > p {
+  margin-bottom: 12px;
   font-size: 14px;
   line-height: 1.75;
   color: var(--fr-text-secondary);
@@ -277,6 +287,17 @@ pre .line {
 #nd-sidebar {
   font-size: 13px;
 }
+#nd-sidebar button {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fr-text-muted);
+}
+
+/* the design sets code in plain text colors, not a syntax theme */
+.shiki span {
+  color: var(--fr-text) !important;
+}
 #nd-sidebar a[data-active="true"] {
   font-weight: 600;
   color: var(--fr-text);
@@ -286,4 +307,17 @@ pre .line {
 /* prev/next at the foot of a page */
 #nd-page > div:last-child a {
   border-color: var(--fr-border);
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+/* the design's note: a quiet frame with a rule on the left, no shadow */
+.prose [style*="--callout-color"] {
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12.5px;
+  line-height: 1.7;
 }

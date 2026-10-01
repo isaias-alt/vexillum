@@ -1,9 +1,9 @@
-import { docsLlms } from "@/lib/source";
+import { llmsFull } from "@/lib/llms";
 
 export const revalidate = false;
 
 export async function GET() {
-  return new Response(await docsLlms.full("es"), {
+  return new Response(await llmsFull("es"), {
     headers: { "Content-Type": "text/plain; charset=utf-8" },
   });
 }

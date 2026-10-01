@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# vexillum site
 
-## Getting Started
+Marketing landing and documentation for vexillum. Next.js 16 with
+[Fumadocs](https://fumadocs.dev) (versions pinned in `package.json`), Tailwind 4,
+English and Spanish. Governed by `AGENTS.md` here; not part of the Go binary.
 
-First, run the development server:
+## Run
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```sh
+pnpm install
+pnpm dev        # http://localhost:3000
+pnpm build      # production build, includes the static search index
+pnpm lint
+pnpm typecheck
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Layout
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Path | What |
+| --- | --- |
+| `app/[lang]/(home)` | the landing, `/` and `/es` |
+| `app/[lang]/docs` | the docs, `/docs` and `/es/docs` (Fumadocs notebook layout, re-themed in `app/globals.css`) |
+| `content/docs/en`, `content/docs/es` | the pages, one tree per locale; `meta.json` orders the sidebar |
+| `content/docs/en/reference/cli` | **generated**, see below |
+| `lib/strings.ts` | landing and nav strings per locale |
+| `app/api/search/route.ts` | static search index, queried in the browser per locale |
+| `app/llms.txt`, `app/llms-full.txt`, `app/llms.mdx` | `llms.txt`, `llms-full.txt` and `/docs/<page>.md` (`/es/...` for Spanish) |
+| `proxy.ts` | locale routing: English has no prefix, Spanish lives under `/es` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## The CLI reference is generated
 
-## Learn More
+`content/docs/en/reference/cli/*` and `content/docs/es/reference/cli/index.mdx`
+come from the command registry in `internal/cli`. Never edit them by hand; from
+the repository root run `go run ./tools/docgen` (`go test ./...` fails when they
+drift). The reference is English only, because a command's usage is the binary's
+own output: Spanish pages for a command fall back to the English page, and the
+generated Spanish index links to them under `/es/docs`.
 
-To learn more about Next.js, take a look at the following resources:
+## Writing docs
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- English first, then the Spanish translation with the same file name and
+  structure. Domain and technical terms (commander, soldier, mission, scout,
+  camp, sentinel, worktree, hook, flag) stay in English in Spanish.
+- A page missing from `es/` is served from `en/` until it is translated.
+- Facts come from the code and `vexillum <command> -h`; check them before writing.

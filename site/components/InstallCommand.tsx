@@ -53,7 +53,7 @@ export function InstallCommand({
           </button>
         ))}
       </div>
-      <div className="mx-auto flex max-w-[480px] items-center gap-2.5 rounded-md border border-border bg-sunken px-[18px] py-3 text-[13px] text-text">
+      <div className="mx-auto flex max-w-[560px] items-center gap-2.5 rounded-md border border-border bg-sunken px-[18px] py-3 text-[13px] text-text">
         <span className="text-text-muted">$</span>
         <code className="min-w-0 flex-1 overflow-x-auto text-left whitespace-nowrap">
           {INSTALL_COMMANDS[tab]}

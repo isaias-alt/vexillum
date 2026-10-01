@@ -111,3 +111,19 @@ Tailwind or daisyUI. Safety rules, each covered by a test:
   danger.
 - `--fr-accent` (lapis) is the primary action and the "listening" state;
   `--fr-bronze` is the tertiary accent.
+
+## site (landing and docs)
+
+`site/` is built from `Vexillum Landing.dc.html` and `Vexillum Docs.dc.html`,
+which use the same `forum-tokens.css` identity (lapis on marble, bronze as the
+tertiary accent).
+
+| In the export | Shipped as | Notes |
+|---|---|---|
+| `forum-tokens.css` (the `--fr-*` tokens) | `site/app/globals.css` | Names and values copied verbatim; only the theme wiring differs: **dark is the default** and is the `.dark` class set by next-themes, light is the base `:root`. The tokens are mapped onto Tailwind colors and onto Fumadocs' `--color-fd-*` so its components use the brand. |
+| `Vexillum Landing.dc.html` | `site/app/[lang]/(home)/page.tsx` and `site/components/` | The "minute with vexillum" steps use the real `vexillum` commands (the export's `vx` is not a binary). |
+| `Vexillum Docs.dc.html` | Fumadocs notebook layout, re-themed in `site/app/globals.css` | Top bar, 244px sidebar with small-caps groups, content, "on this page". Fumadocs UI was kept (search dialog, mobile drawer, language switch) and re-themed rather than rebuilt on its headless core. |
+| `assets/vexillum-mark.svg` | `site/components/Logo.tsx`, `site/app/icon.svg` | currentColor mark. |
+
+Fonts are Spectral and JetBrains Mono through `next/font`, self-hosted at build
+time: no request to Google Fonts at runtime.
