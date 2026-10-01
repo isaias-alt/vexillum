@@ -16,7 +16,7 @@ export function SiteNav({ lang }: { lang: Lang }) {
   return (
     <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-bg/90 px-[6vw] py-[18px] backdrop-blur">
       <Link href={`${prefix}/`} className="flex items-center gap-[9px]">
-        <LogoMark className="h-[18px] w-[18px] shrink-0 text-accent" />
+        <LogoMark className="h-[18px] w-[18px] shrink-0 text-brand" />
         <span className="text-[13.5px] text-text">vexillum</span>
       </Link>
       <nav className="flex items-center gap-[26px] text-[12.5px] text-text-secondary">

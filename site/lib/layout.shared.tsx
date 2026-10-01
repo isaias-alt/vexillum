@@ -53,7 +53,7 @@ export function baseOptions(lang: Lang): BaseLayoutProps {
       url: `${prefix}/`,
       title: (
         <>
-          <LogoMark className="h-[18px] w-[18px] shrink-0 text-accent" />
+          <LogoMark className="h-[18px] w-[18px] shrink-0 text-brand" />
           <span className="text-[13.5px] font-normal text-text">vexillum</span>
           <span className="ml-1 text-[11px] font-normal text-text-muted">
             docs

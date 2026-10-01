@@ -134,7 +134,7 @@ export function MinuteSteps({
       <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border bg-sunken px-4 py-2 text-[12.5px]">
           <span className="flex items-center gap-2">
-            <LogoMark className="h-3 w-3 shrink-0 text-accent" />
+            <LogoMark className="h-3 w-3 shrink-0 text-brand" />
             <span className="font-medium text-text">~/project - vexillum</span>
           </span>
           <span className="text-[11px] text-text-muted">

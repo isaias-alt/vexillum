@@ -63,6 +63,10 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
+  /* The brand mark is gold in both themes (same as app/icon.svg); the lapis
+     accent is for the UI only. */
+  --color-brand: #bf9455;
+
   --color-bg: var(--fr-bg);
   --color-surface: var(--fr-surface);
   --color-sunken: var(--fr-surface-sunken);
