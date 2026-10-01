@@ -98,7 +98,7 @@ func (s *Server) handleChromeAsset(w http.ResponseWriter, r *http.Request) {
 	switch name {
 	case "forum.css", "forum-tokens.css":
 		contentType = "text/css; charset=utf-8"
-	case "forum-chrome.js", "forum-sdk.js", "forum-theme.js":
+	case "forum-chrome.js", "forum-sdk.js", "forum-theme.js", "forum-prefs.js":
 		contentType = "text/javascript; charset=utf-8"
 	default:
 		http.NotFound(w, r)

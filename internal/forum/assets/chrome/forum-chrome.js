@@ -21,10 +21,10 @@
   // first paint; this only keeps the toggle in step with it.
   function syncThemeButton() {
     const light = window.forumTheme.current() === "light";
-    $("themeBtn").setAttribute("aria-pressed", String(light));
-    $("themeLabel").textContent = light ? "Light" : "Dark";
+    $("themeSwitch").setAttribute("aria-checked", String(light));
+    $("themeState").textContent = light ? "On" : "Off";
   }
-  $("themeBtn").addEventListener("click", () => {
+  $("themeSwitch").addEventListener("click", () => {
     window.forumTheme.toggle();
     syncThemeButton();
   });
@@ -153,11 +153,12 @@
     renderLog(snap.transcript || []);
     renderQueue(snap.queued || [], ended);
 
-    $("annotateBtn").disabled = ended;
+    $("annotateSwitch").disabled = ended;
     if (ended) {
       closeCard();
       hideOffer();
     }
+    syncMode();
     $("input").disabled = ended;
     $("queueBtn").disabled = ended;
     updateButtons();
@@ -342,7 +343,7 @@
   // here, so the token never leaves this page and the chrome cannot annotate
   // itself: nothing outside the iframe's document is ever reported.
 
-  let annotateMode = false;
+  let annotateMode = window.forumPrefs.annotate(); // On unless the user switched it off
   let card = null; // {kind: "element" | "selection", ctx, rect}
   let offer = null; // {ctx, rect}
 
@@ -374,11 +375,22 @@
     if (frame.contentWindow) frame.contentWindow.postMessage(message, "*");
   }
 
+  // The switch and the artifact follow the user's choice, except that a
+  // finished session can no longer be annotated.
+  function syncMode() {
+    const ended = snapshot && snapshot.status === "ended";
+    const effective = annotateMode && !ended;
+    $("annotateSwitch").setAttribute("aria-checked", String(effective));
+    $("annotateState").textContent = effective ? "On" : "Off";
+    toFrame({ type: "forum:mode", on: effective });
+    if (!effective && card && card.kind === "element") closeCard();
+  }
+
+  // setMode is the user's choice (switch or shortcut); it is remembered.
   function setMode(on) {
-    annotateMode = on && !(snapshot && snapshot.status === "ended");
-    $("annotateBtn").setAttribute("aria-pressed", String(annotateMode));
-    toFrame({ type: "forum:mode", on: annotateMode });
-    if (!annotateMode && card && card.kind === "element") closeCard();
+    annotateMode = !!on;
+    window.forumPrefs.setAnnotate(annotateMode);
+    syncMode();
   }
 
   // place puts a floating node under (or, with no room, over) the anchor rect
@@ -444,7 +456,8 @@
     else add.disabled = $("annotInput").value.trim() === "";
   }
 
-  $("annotateBtn").addEventListener("click", () => setMode(!annotateMode));
+  syncMode();
+  $("annotateSwitch").addEventListener("click", () => setMode(!annotateMode));
   $("annotOfferBtn").addEventListener("click", () => offer && openCard("selection", offer.ctx, offer.rect));
   // Pressing the action must not steal the artifact's text selection.
   $("annotOfferBtn").addEventListener("mousedown", (event) => event.preventDefault());
@@ -475,7 +488,7 @@
     if (offer) place($("annotOffer"), offer.rect);
   });
 
-  frame.addEventListener("load", () => toFrame({ type: "forum:mode", on: annotateMode }));
+  frame.addEventListener("load", syncMode);
 
   window.addEventListener("message", (event) => {
     if (event.source !== frame.contentWindow) return;
@@ -486,7 +499,7 @@
     const rect = isRect(message.rect) ? message.rect : null;
     switch (message.type) {
       case "forum:ready":
-        toFrame({ type: "forum:mode", on: annotateMode });
+        syncMode();
         break;
       case "forum:toggle-mode":
         setMode(!annotateMode);

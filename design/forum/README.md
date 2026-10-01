@@ -19,12 +19,23 @@ system stacks only.
 
 ## Theme
 
-The chrome starts dark. The top bar has a toggle (icon plus text, `aria-pressed`
-true when light) that switches to light. The choice is saved in `localStorage`
+The chrome starts dark. The top bar has two switches built from one component
+(`.switch`: `role="switch"`, state in `aria-checked`, an icon, a text label and a
+visible On/Off). **Light theme** turns the light tokens on. The choice is saved in `localStorage`
 (`forum-theme`) and applied by `forum-theme.js`, a blocking script in `<head>`
 that runs before the stylesheets paint, so there is no flash. With no saved
 choice, or with storage blocked, the chrome is dark. The artifact canvas stays
 white in both themes: artifacts are authored for it.
+
+**Annotate** is the other switch. It starts On in every new page load and the
+user's choice is remembered in `localStorage` (`forum-annotate`, handled by
+`forum-prefs.js`, same try/catch fallback as the theme). Because On makes clicks
+on the artifact's own controls annotate instead of act, the bar always shows
+its state as text, Ctrl/Cmd+I toggles it, and Alt/Option+click acts on a
+control normally.
+
+Buttons never wrap their label (`white-space: nowrap`); when the panel is too
+narrow it is the hint text or the button row that wraps, not a label.
 
 ## Updating the identity
 

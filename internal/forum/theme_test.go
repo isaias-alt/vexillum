@@ -19,3 +19,14 @@ func TestThemeScript_DefaultsToDarkAndToggles(t *testing.T) {
 		t.Fatalf("theme script test failed: %v\n%s", err, out)
 	}
 }
+
+func TestPrefsScript_AnnotateDefaultsOnAndIsRemembered(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	out, err := exec.Command(node, "testdata/prefs_test.js", "assets/chrome/forum-prefs.js").CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "ok") {
+		t.Fatalf("prefs script test failed: %v\n%s", err, out)
+	}
+}

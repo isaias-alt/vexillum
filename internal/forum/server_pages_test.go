@@ -56,7 +56,7 @@ func TestSessionPage_ServesChromeWithTokenAndStrictHeaders(t *testing.T) {
 	if boot.Token != token || boot.Key != open.Key || boot.ArtifactSrc != "/a/"+open.Key+"/artifact.html" {
 		t.Errorf("boot = %+v", boot)
 	}
-	for _, want := range []string{`/forum-assets/forum.css`, `/forum-assets/forum-chrome.js`, `sandbox="allow-scripts`, `Your agent is not listening. Ask it to poll for updates.`, `Send to Agent`, `Send &amp; End`, `id="themeBtn"`, `aria-pressed=`} {
+	for _, want := range []string{`/forum-assets/forum.css`, `/forum-assets/forum-chrome.js`, `sandbox="allow-scripts`, `Your agent is not listening. Ask it to poll for updates.`, `Send to Agent`, `Send &amp; End`, `id="themeSwitch"`, `id="annotateSwitch"`, `/forum-assets/forum-prefs.js`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
 		}
@@ -66,6 +66,20 @@ func TestSessionPage_ServesChromeWithTokenAndStrictHeaders(t *testing.T) {
 	theme, tokens := strings.Index(body, "/forum-assets/forum-theme.js"), strings.Index(body, "/forum-assets/forum-tokens.css")
 	if theme < 0 || tokens < 0 || theme > tokens || strings.Contains(body[theme-20:theme+60], "defer") || strings.Contains(body[theme-20:theme+60], "async") {
 		t.Error("forum-theme.js must be a blocking script ahead of the stylesheets")
+	}
+	// Both toggles are real switches: role=switch with aria-checked, a text
+	// label and a visible On/Off. Annotation starts On (aria-checked="true").
+	for _, id := range []string{"annotateSwitch", "themeSwitch"} {
+		m := regexp.MustCompile(`<button[^>]*id="` + id + `"[^>]*>`).FindString(body)
+		if !strings.Contains(m, `role="switch"`) || !strings.Contains(m, "aria-checked=") || strings.Contains(m, "aria-pressed") {
+			t.Errorf("%s must be a role=switch with aria-checked: %s", id, m)
+		}
+	}
+	if m := regexp.MustCompile(`<button[^>]*id="annotateSwitch"[^>]*>`).FindString(body); !strings.Contains(m, `aria-checked="true"`) {
+		t.Error("annotation must start On")
+	}
+	if !strings.Contains(body, `class="switch-label">Annotate`) || !strings.Contains(body, `class="switch-label">Light theme`) {
+		t.Error("the switches need visible text labels")
 	}
 	if strings.Contains(body, "allow-same-origin") {
 		t.Error("the artifact iframe must not be granted allow-same-origin")
