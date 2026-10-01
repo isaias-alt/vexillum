@@ -101,3 +101,9 @@ func TestChromeCSS_DisabledButtonsShareOneLook(t *testing.T) {
 		}
 	}
 }
+
+// A layout pass belongs to the document that ran it, not to whatever the chrome
+// shows when it arrives, and a failed report is retried rather than lost.
+func TestChromeLayoutPass_VersionedToItsDocumentAndRetried(t *testing.T) {
+	runChromeNodeTest(t, "chrome_layout_version_test.js")
+}

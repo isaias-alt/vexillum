@@ -115,6 +115,16 @@
 
   // -------------------------------------------------------------------- audit
 
+  // The artifact version this document was served from (see injectSDK).
+  const DOC_VERSION = (() => {
+    try {
+      return new URL(document.currentScript.src).searchParams.get("av") || "";
+    } catch {
+      return "";
+    }
+  })();
+
+  const RESIZE_DEBOUNCE_MS = 300;
   const SETTLE_MS = 180;
   const MAX_WAIT_MS = 2000;
   const ANIMATION_MAX_WAIT_MS = 4000;
@@ -678,6 +688,7 @@
     window.parent.postMessage(
       {
         type: "forum:layout",
+        artifact_version: DOC_VERSION,
         complete,
         target_presence_complete: targetPresenceComplete === true,
         viewport_width: viewportWidth,
@@ -715,11 +726,21 @@
     }, 50);
   }
 
+  // Only what can change layout re-audits: the first settle, the load event and
+  // a finished resize. animationend/transitionend are not listened to - they
+  // bubble from every hover and fade in the document, and finite animations
+  // already reschedule the audit themselves when they settle.
+  let resizeTimer = 0;
   schedule();
   window.addEventListener("load", schedule, { once: true });
-  window.addEventListener("resize", schedule, { passive: true });
-  window.addEventListener("animationend", schedule, { passive: true });
-  window.addEventListener("transitionend", schedule, { passive: true });
+  window.addEventListener(
+    "resize",
+    () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(schedule, RESIZE_DEBOUNCE_MS);
+    },
+    { passive: true },
+  );
 
   window.forumLayout = Object.freeze(api);
 })();

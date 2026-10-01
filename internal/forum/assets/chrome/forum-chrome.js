@@ -14,7 +14,6 @@
   let version = 0;
   let artifactVersion = "";
   let renderedTranscriptKey = "";
-  let frameVersion = ""; // the artifact version the iframe was loaded with (tags layout passes)
 
   // ----------------------------------------------------------------- theme
 
@@ -74,18 +73,11 @@
 
   function apply(snap) {
     version = snap.version;
-    const first = !artifactVersion;
     const changed = artifactVersion && snap.artifact_version !== artifactVersion;
     artifactVersion = snap.artifact_version;
-    if (changed) {
-      frameVersion = artifactVersion;
-      pendingPass = null; // from the document that was just replaced
-      frame.src = boot.artifact_src + "?theme=" + window.forumTheme.current();
-    } else if (first) {
-      frameVersion = artifactVersion;
-    }
+    if (changed) frame.src = boot.artifact_src + "?theme=" + window.forumTheme.current();
     render(snap);
-    if (frameVersion && pendingPass) sendLayoutPass(pendingPass);
+    settlePendingPass();
   }
 
   // readEvents feeds each complete "state" event of an SSE body to onState.
@@ -892,6 +884,9 @@
   let pendingPass = null; // a pass that arrived before the first snapshot
   let layoutShown = ""; // what the tray list was last built from
   let layoutBusy = false;
+  const LAYOUT_RETRIES = 6;
+  const LAYOUT_RETRY_BASE_MS = 1000;
+  const LAYOUT_RETRY_MAX_MS = 30000;
   const selectedIssues = new Set();
   const finiteNumber = (value) => (Number.isFinite(value) ? value : 0);
 
@@ -900,6 +895,7 @@
   function cleanPass(message) {
     const findings = Array.isArray(message.findings) ? message.findings : [];
     return {
+      artifact_version: typeof message.artifact_version === "string" ? message.artifact_version.slice(0, 128) : "",
       complete: message.complete === true,
       target_presence_complete: message.target_presence_complete === true,
       viewport_width: finiteNumber(message.viewport_width),
@@ -910,16 +906,45 @@
     };
   }
 
-  // A failed report is not worth bothering the user with: detection is
-  // passive, and the next pass (or the next page load) reports again.
+  // A pass is stamped by the audit with the version of the document that ran
+  // it. One for the version the chrome shows goes out; one for a version the
+  // chrome has not learned about yet (the file changed and the snapshot is a
+  // beat behind, or none has arrived at all) waits for it; one from a document
+  // that has been replaced is dropped - it describes something no longer there.
   function sendLayoutPass(pass) {
     if (snapshot && snapshot.status === "ended") return;
-    if (!frameVersion) {
+    if (!pass.artifact_version) return;
+    if (pass.artifact_version === artifactVersion) {
+      pendingPass = null;
+      deliverLayoutPass(pass);
+    } else {
       pendingPass = pass;
-      return;
     }
+  }
+
+  function settlePendingPass() {
+    if (!pendingPass) return;
+    const pass = pendingPass;
     pendingPass = null;
-    api("POST", "/layout/diagnostics", { ...pass, artifact_version: frameVersion }).catch(() => {});
+    if (pass.artifact_version === artifactVersion) deliverLayoutPass(pass);
+  }
+
+  // Detection is passive, so a failed report is retried quietly instead of
+  // shown, with growing delays; a newer pass supersedes a retry still waiting
+  // (the audit never resends an identical pass on its own, so a lost one
+  // would otherwise stay lost for good). Errors that retrying cannot fix stop.
+  let passRetry = 0;
+  let passGeneration = 0;
+  async function deliverLayoutPass(pass, attempt = 0, generation = ++passGeneration) {
+    clearTimeout(passRetry);
+    try {
+      await api("POST", "/layout/diagnostics", pass);
+    } catch (error) {
+      // A newer pass started while this one was in flight: it owns the retries now.
+      if (generation !== passGeneration) return;
+      if (error.status === 401 || error.status === 404 || error.status === 409 || attempt >= LAYOUT_RETRIES) return;
+      passRetry = setTimeout(() => deliverLayoutPass(pass, attempt + 1, generation), Math.min(LAYOUT_RETRY_BASE_MS * 2 ** attempt, LAYOUT_RETRY_MAX_MS));
+    }
   }
 
   function layoutNotice(message) {

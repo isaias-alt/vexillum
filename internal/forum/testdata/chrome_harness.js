@@ -68,6 +68,7 @@ function makeEnv(chromePath, boot, opts = {}) {
   const encoder = new TextEncoder();
   const calls = [];
   const streams = []; // open streams: {chunks, readers}
+  let failPosts = opts.failPosts || 0; // layout diagnostics POSTs that fail with a 500 first
   let failures = opts.failures || 0; // connection attempts that fail before one succeeds
   const backlog = [];
   const makeStream = () => {
@@ -105,6 +106,10 @@ function makeEnv(chromePath, boot, opts = {}) {
       }
       return Promise.resolve(makeStream());
     }
+    if (String(url).endsWith("/layout/diagnostics") && failPosts > 0) {
+      failPosts -= 1;
+      return Promise.resolve({ ok: false, status: 500, json: async () => ({ error: "boom" }) });
+    }
     return Promise.resolve({ ok: true, status: 200, json: async () => ({}), blob: async () => ({}) });
   };
 
@@ -120,7 +125,9 @@ function makeEnv(chromePath, boot, opts = {}) {
   };
   const sandbox = {
     window: win, document: doc, fetch: fetchStub, console, URL: Object.assign(function URL_(...a) { return new URL(...a); }, { createObjectURL: () => 'blob:stub', revokeObjectURL() {} }), Promise, Date, JSON, Math, Map, Set, Object, Array, String, Number, RegExp, Error, Intl,
-    setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
+    // timeScale compresses the chrome's own delays (retry backoff) for tests.
+    setTimeout: opts.timeScale ? (fn, ms, ...args) => setTimeout(fn, ms / opts.timeScale, ...args) : setTimeout,
+    clearTimeout, setInterval, clearInterval, queueMicrotask,
     navigator: { clipboard: { writeText: async () => {} } },
     TextDecoder, TextEncoder, AbortController, Blob,
   };

@@ -1,6 +1,7 @@
 package forum_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,13 @@ const bootStyleDark = `<style>@layer forum-artifact{html{background:#15171A;colo
 // sdkTags are the scripts injected into every artifact: window.forum and the passive layout audit.
 const sdkTags = `<script src="/forum-assets/forum-sdk.js"></script><script src="/forum-assets/forum-layout.js"></script>`
 
+// versionless drops the artifact version the layout script's address carries
+// (?av=<mtime:size>), which changes with the file, so the tests can compare
+// the rest of the injection exactly.
+var avParam = regexp.MustCompile(`\?av=[^"]*`)
+
+func versionless(doc string) string { return avParam.ReplaceAllString(doc, "") }
+
 const stylesTags = bootStyleDark + `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
 
 func TestArtifact_SDKInjectedAfterDoctypeAndHead(t *testing.T) {
@@ -22,6 +30,7 @@ func TestArtifact_SDKInjectedAfterDoctypeAndHead(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
+	body = versionless(body)
 	if !strings.HasPrefix(body, `<!DOCTYPE html>`) {
 		t.Errorf("the doctype must stay first (quirks mode otherwise): %.60s", body)
 	}
@@ -47,7 +56,7 @@ func TestArtifact_SDKInjectionFallbacks(t *testing.T) {
 	}
 	for in, want := range cases {
 		env.setArtifact(in)
-		if _, got := env.get("/a/" + open.Key + "/artifact.html"); got != want {
+		if _, got := env.get("/a/" + open.Key + "/artifact.html"); versionless(got) != want {
 			t.Errorf("injection of %q\n got: %s\nwant: %s", in, got, want)
 		}
 	}
@@ -72,5 +81,31 @@ func TestFavicon_ServedAndInjectedUnlessArtifactHasOwn(t *testing.T) {
 		if _, got := env.get("/a/" + open.Key + "/artifact.html"); strings.Contains(got, "/favicon.svg") {
 			t.Errorf("artifact with its own favicon %q was overridden", own)
 		}
+	}
+}
+
+// Which document a layout pass came from must not depend on when it arrives:
+// the audit script's address carries the version of the file this very
+// response was rendered from, and a later edit changes it.
+func TestArtifact_LayoutScriptCarriesTheVersionItWasServedWith(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	open := env.open()
+	env.setArtifact(`<!doctype html><html><head><title>t</title></head><body>one</body></html>`)
+	version := func() string {
+		_, body := env.get("/a/" + open.Key + "/artifact.html")
+		m := regexp.MustCompile(`forum-layout\.js\?av=([^"]+)"`).FindStringSubmatch(body)
+		if m == nil {
+			t.Fatalf("no versioned layout script in:\n%s", body)
+		}
+		return m[1]
+	}
+	first := version()
+	if again := version(); again != first {
+		t.Errorf("the version changed with no edit: %q -> %q", first, again)
+	}
+	time.Sleep(10 * time.Millisecond)
+	env.setArtifact(`<!doctype html><html><head><title>t</title></head><body>two, longer</body></html>`)
+	if second := version(); second == first {
+		t.Errorf("an edited artifact kept version %q", first)
 	}
 }

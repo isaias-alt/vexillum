@@ -193,7 +193,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file, theme string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	doc := injectSDK(source)
+	doc := injectSDK(source, artifactVersion(file))
 	if wantsForumStyle(doc) {
 		doc = injectStyles(doc, theme)
 	}
@@ -210,7 +210,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file, theme string) {
 const (
 	stylesTags     = `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
 	faviconTag     = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`
-	sdkScriptTag   = `<script src="/forum-assets/forum-sdk.js"></script><script src="/forum-assets/forum-layout.js"></script>`
+	sdkScriptTag   = `<script src="/forum-assets/forum-sdk.js"></script>`
 	embedScriptTag = `<script src="/whiteboard-embed.js"></script>`
 )
 
@@ -225,13 +225,19 @@ var (
 // after <head>, else <html>, else the doctype (never before it, which would
 // push the page into quirks mode) - so the API exists before the artifact's
 // own scripts run.
-func injectSDK(doc string) string {
+//
+// The layout audit's address carries the version of the artifact file this
+// very document was rendered from (?av=), which the audit stamps on every pass
+// it reports: the chrome then knows which document a pass came from, however
+// late it arrives.
+func injectSDK(doc, artifactVersion string) string {
+	tags := sdkScriptTag + `<script src="/forum-assets/forum-layout.js?av=` + url.QueryEscape(artifactVersion) + `"></script>`
 	for _, re := range []*regexp.Regexp{headOpenPattern, htmlOpenPattern, doctypePattern} {
 		if loc := re.FindStringIndex(doc); loc != nil {
-			return doc[:loc[1]] + sdkScriptTag + doc[loc[1]:]
+			return doc[:loc[1]] + tags + doc[loc[1]:]
 		}
 	}
-	return sdkScriptTag + doc
+	return tags + doc
 }
 
 var (

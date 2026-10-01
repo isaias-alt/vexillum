@@ -22,7 +22,7 @@ const posts = (env, suffix) => env.calls.filter((c) => c.url.endsWith(suffix));
   const list = env.get("layoutList");
   const count = env.get("layoutCount");
   tray.hidden = true; // the markup ships it closed
-  const pass = (extra = {}) => ({ type: "forum:layout", complete: true, target_presence_complete: true, viewport_width: 1200, findings: [], ...extra });
+  const pass = (extra = {}) => ({ type: "forum:layout", artifact_version: "v1", complete: true, target_presence_complete: true, viewport_width: 1200, findings: [], ...extra });
 
   // A pass that arrives before the first snapshot waits for the artifact version.
   await fromFrame(env, pass({ findings: [{ kind: "clipped-text", selector: "p", axis: "horizontal", overflow_px: 12 }] }));
@@ -33,10 +33,16 @@ const posts = (env, suffix) => env.calls.filter((c) => c.url.endsWith(suffix));
   const sent = posts(env, "/layout/diagnostics");
   assert.strictEqual(sent.length, 1, "the held pass is sent once the version is known");
   const body = JSON.parse(sent[0].init.body);
-  assert.strictEqual(body.artifact_version, "v1");
+  assert.strictEqual(body.artifact_version, "v1", "the pass keeps the version of the document that produced it");
   assert.strictEqual(body.complete, true);
   assert.deepStrictEqual(body.findings, [{ kind: "clipped-text", selector: "p", axis: "horizontal", overflow_px: 12 }]);
   assert.strictEqual(sent[0].init.headers["X-Forum-Token"], "t", "passes carry the session token like every other request");
+
+  // A pass with no version, or one the audit stamped for a document the chrome
+  // no longer shows, is never filed against the current one.
+  await fromFrame(env, pass({ artifact_version: undefined }));
+  await fromFrame(env, pass({ artifact_version: "v0-old" }));
+  assert.strictEqual(posts(env, "/layout/diagnostics").length, 1, "unversioned and old-document passes are not sent");
 
   // The tray reflects the snapshot: a count, one item per issue, closed by default.
   assert.strictEqual(count.textContent, "2");

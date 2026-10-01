@@ -48,12 +48,26 @@ func TestLayoutAudit_OnlyTalksToTheChromeAndNeverToTheAgent(t *testing.T) {
 		}
 	}
 	// The chrome's only route for it is the diagnostics endpoint - never the queue.
-	idx := strings.Index(chrome, "function sendLayoutPass")
-	if idx < 0 {
-		t.Fatal("sendLayoutPass missing")
+	from, to := strings.Index(chrome, "function sendLayoutPass"), strings.Index(chrome, "function layoutNotice")
+	if from < 0 || to < from {
+		t.Fatal("the layout pass functions moved: update this test")
 	}
-	body := chrome[idx : idx+600]
+	body := chrome[from:to]
 	if !strings.Contains(body, `"/layout/diagnostics"`) || strings.Contains(body, `"/queue"`) || strings.Contains(body, `"/send"`) {
 		t.Errorf("a diagnostic pass must go to /layout/diagnostics only:\n%s", body)
+	}
+}
+
+// The audit re-runs only for what changes layout, and a resize drag costs one
+// audit, not one per event (animationend/transitionend bubble from every hover
+// and fade in the document and are not listened to at all).
+func TestLayoutAudit_ReschedulesOnlyForLayoutAndDebouncesResize(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	out, err := exec.Command(node, "testdata/layout_schedule_test.js", "assets/chrome/forum-layout.js").CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "ok") {
+		t.Fatalf("layout scheduling failed: %v\n%s", err, out)
 	}
 }
