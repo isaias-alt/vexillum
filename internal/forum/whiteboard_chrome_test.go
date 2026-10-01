@@ -16,14 +16,25 @@ import (
 // browser exercises. The frame autosaves its scene once the embedder's init
 // message has arrived and the Mermaid source converted, so a saved scene on
 // disk proves the whole chain: ready -> init -> render -> save.
+//
+// Both conversions run: a flowchart becomes editable shapes, a pie chart is
+// not natively convertible and embeds as an image on the same canvas.
 func TestWhiteboard_RealChrome_FrameHandshakeRendersAndSavesTheScene(t *testing.T) {
+	for name, source := range map[string]string{
+		"flowchart (editable shapes)": "flowchart LR\n  A[Start] --> B{Ok?}\n  B -- yes --> C[Done]",
+		"pie (image fallback)":        "pie title Pets\n  \"Dogs\" : 3\n  \"Cats\" : 2",
+	} {
+		t.Run(name, func(t *testing.T) { whiteboardSavesScene(t, source) })
+	}
+}
+
+func whiteboardSavesScene(t *testing.T, source string) {
+	t.Helper()
 	chrome := headlessChrome(t)
 	env := newEnv(t, time.Minute)
 	key := env.open().Key
 	env.setArtifact(`<!doctype html><html><head><meta charset="utf-8"><title>wb</title></head><body>
-<h2>Flow</h2><div class="mermaid">flowchart LR
-  A[Start] --> B{Ok?}
-  B -- yes --> C[Done]
+<h2>Flow</h2><div class="mermaid">` + source + `
 </div></body></html>`)
 
 	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
