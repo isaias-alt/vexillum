@@ -389,6 +389,46 @@
     });
   }
 
+  // Does the element paint something the user sees (a fill, a border, an image)?
+  // A wide box with text only at its left is still content past the edge.
+  function paintsBox(el, style) {
+    if (el.matches && el.matches("img,video,canvas,table,iframe")) return true;
+    if (!backgroundIsTransparent(style.backgroundColor) || (style.backgroundImage && style.backgroundImage !== "none")) return true;
+    return ["Top", "Right", "Bottom", "Left"].some((side) => toPx(style["border" + side + "Width"]) > 0 && style["border" + side + "Style"] !== "none");
+  }
+
+  function backgroundIsTransparent(color) {
+    const value = String(color || "").trim().toLowerCase();
+    if (!value || value === "transparent") return true;
+    const rgba = value.match(/^rgba\(([^)]+)\)$/);
+    if (!rgba) return false;
+    const parts = rgba[1].split(/[\s,/]+/).filter(Boolean);
+    return parts.length >= 4 && Number(parts[3]) === 0;
+  }
+
+  // A visible, painted, in-flow box that runs past the right edge of the
+  // viewport by a material amount, with nothing clipping or scrolling it:
+  // that is what makes the page scroll sideways. Positioned boxes are skipped
+  // (off-canvas menus and the like sit out there on purpose).
+  function hasEscapedPaintedBox(el, viewportWidth, animated) {
+    if (isRoot(el) || hasScrollerAncestor(el, "x") || isAnimated(el, animated) || isExcluded(el)) return false;
+    const rect = el.getBoundingClientRect();
+    if (!isVisible(el, rect)) return false;
+    const style = getComputedStyle(el);
+    if (["absolute", "fixed", "sticky"].includes(style.position) || !paintsBox(el, style)) return false;
+    if (clippingBoundariesFor(el).some((boundary) => boundary.axes.includes("horizontal"))) return false;
+    const escape = escapesViewport(rect, viewportWidth, Math.max(24, viewportWidth * 0.05));
+    return !!escape && escape.side === "end";
+  }
+
+  // The root scrolls sideways unless html or body clips (or hides) overflow-x.
+  function rootHorizontalScrollLocked() {
+    return [document.documentElement, document.body].filter(Boolean).some((node) => {
+      const value = getComputedStyle(node).overflowX;
+      return value === "hidden" || value === "clip";
+    });
+  }
+
   // Text left of the viewport can never be scrolled to.
   function auditUnreachableLeftText(el, viewportWidth, findings, seen, animated) {
     if (hasScrollerAncestor(el, "x") || isAnimated(el, animated) || isExcluded(el)) return;
@@ -492,7 +532,7 @@
       })
       .filter((el) => isSemanticTextBoundary(el) || !hasSemanticTextBoundaryAncestor(el))
       .filter((el) => isVisible(el))
-      .filter((el) => getComputedStyle(el).position === "static")
+      .filter((el) => getComputedStyle(el).position !== "fixed")
       .filter((el) => !isAnimated(el, animated))
       .slice(0, 200);
     const failedRoots = [];
@@ -523,7 +563,8 @@
     const elements = collectElements();
     const animated = activeAnimationTargets();
     const pageOverflowPx = document.documentElement.scrollWidth - viewportWidth;
-    const escapedContent = elements.some((el) => hasMaterialViewportEscape(el, viewportWidth, animated));
+    const escapedContent =
+      !rootHorizontalScrollLocked() && elements.some((el) => hasMaterialViewportEscape(el, viewportWidth, animated) || hasEscapedPaintedBox(el, viewportWidth, animated));
     if (isMaterialPageOverflow({ overflowPx: pageOverflowPx, viewportWidth, hasEscapedContent: escapedContent })) {
       pushFinding(findings, seen, { selector: "html", kind: "page-horizontal-overflow", axis: "horizontal", overflowPx: pageOverflowPx });
     }
