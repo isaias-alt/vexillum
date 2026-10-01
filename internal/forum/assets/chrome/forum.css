@@ -227,11 +227,16 @@ button, textarea { font: inherit; color: inherit; }
 }
 .btn { flex: none; }
 .btn:hover:not(:disabled) { background: var(--fr-surface); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary { background: var(--fr-accent); border-color: var(--fr-accent); color: var(--fr-accent-contrast); }
 .btn-primary:hover:not(:disabled) { background: var(--fr-accent-hover); }
 .btn-danger { color: var(--fr-danger); }
 .btn-danger:hover:not(:disabled) { background: var(--fr-danger-soft); }
+/* Disabled is one look for every variant: the primary fill and the danger text
+   do not survive it, so a finished session greys all three actions equally. */
+.btn:disabled, .btn-primary:disabled, .btn-danger:disabled {
+  background: var(--fr-surface-sunken); border-color: var(--fr-border); color: var(--fr-text-muted);
+  opacity: 0.7; cursor: not-allowed;
+}
 
 /* Annotation: the toggle, the selection action and the note card */
 .btn-small { padding: var(--fr-space-1) var(--fr-space-3); font-size: var(--fr-text-size-small); box-shadow: var(--fr-shadow-md); }
@@ -268,6 +273,46 @@ button, textarea { font: inherit; color: inherit; }
 .thumbs { display: flex; flex-wrap: wrap; gap: var(--fr-space-1); margin-top: var(--fr-space-2); }
 .thumbs .thumb { width: 56px; height: 56px; }
 .panel[data-drop="true"] { box-shadow: inset 0 0 0 2px var(--fr-accent); background: var(--fr-accent-soft); }
+
+/* Layout issues: the top-bar button with its count, and the tray it opens
+   (the design system's .fr-notice-tray / .fr-notice-item, one per issue). */
+.tray-count { min-width: 18px; padding: 0 5px; border: 1px solid var(--fr-danger); border-radius: 999px; background: var(--fr-danger-soft); color: var(--fr-danger); font-size: 11px; font-weight: 700; line-height: 16px; text-align: center; }
+.layout-tray {
+  position: fixed; z-index: 40;
+  top: calc(var(--fr-topbar-height) + var(--fr-space-1)); right: var(--fr-space-3);
+  width: min(460px, calc(100vw - 2 * var(--fr-space-3)));
+  max-height: calc(100vh - var(--fr-topbar-height) - var(--fr-space-4));
+  display: flex; flex-direction: column; gap: var(--fr-space-2);
+  padding: var(--fr-space-3);
+  background: var(--fr-surface);
+  border: 1px solid var(--fr-border-strong); border-radius: var(--fr-radius-md);
+  box-shadow: var(--fr-shadow-md);
+}
+.layout-tray-head { display: flex; align-items: center; justify-content: space-between; gap: var(--fr-space-3); }
+.layout-tray-title { margin: 0; font-size: var(--fr-text-size); font-weight: 600; }
+.layout-tray-note { margin: 0; font-size: var(--fr-text-size-small); color: var(--fr-text-secondary); }
+.layout-tray .empty { font-size: var(--fr-text-size-small); }
+.layout-list { min-height: 0; overflow-y: auto; }
+.layout-tray-foot { display: flex; justify-content: flex-end; }
+.fr-notice-tray { display: flex; flex-direction: column; gap: var(--fr-space-2); }
+.fr-notice-item {
+  display: flex; align-items: flex-start; gap: var(--fr-space-2);
+  padding: var(--fr-space-2) var(--fr-space-3);
+  background: var(--fr-danger-soft); border: 1px solid var(--fr-danger); border-radius: var(--fr-radius-sm);
+  font-size: var(--fr-text-size-small); color: var(--fr-text);
+}
+.fr-notice-item-icon { flex: none; color: var(--fr-danger); }
+.fr-notice-item[data-state="queued"] { background: var(--fr-accent-soft); border-color: var(--fr-accent); }
+.fr-notice-item[data-state="queued"] .fr-notice-item-icon { color: var(--fr-accent); }
+.fr-notice-item[data-state="closed"] { background: transparent; border-color: var(--fr-border); color: var(--fr-text-secondary); }
+.fr-notice-item[data-state="closed"] .fr-notice-item-icon { color: var(--fr-text-muted); }
+.layout-check { flex: none; margin: 2px 0 0; accent-color: var(--fr-accent); }
+.layout-item { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; cursor: pointer; }
+.layout-item-title { font-weight: 600; color: var(--fr-text); }
+.layout-item-status { margin-left: var(--fr-space-2); font-weight: 500; color: var(--fr-text-secondary); }
+.layout-item-where { font-family: var(--fr-font-mono); color: var(--fr-text-secondary); }
+.layout-item-meta { color: var(--fr-text-muted); }
+.fr-notice-item .link-btn { flex: none; margin-left: 0; }
 
 /* Dialog: the design system's .fr-dialog, shown over the whole chrome. The
    session-ended dialog is the only user; it has no way out by design. */

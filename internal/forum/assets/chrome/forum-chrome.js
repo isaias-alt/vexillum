@@ -14,6 +14,7 @@
   let version = 0;
   let artifactVersion = "";
   let renderedTranscriptKey = "";
+  let frameVersion = ""; // the artifact version the iframe was loaded with (tags layout passes)
 
   // ----------------------------------------------------------------- theme
 
@@ -73,10 +74,18 @@
 
   function apply(snap) {
     version = snap.version;
+    const first = !artifactVersion;
     const changed = artifactVersion && snap.artifact_version !== artifactVersion;
     artifactVersion = snap.artifact_version;
-    if (changed) frame.src = boot.artifact_src + "?theme=" + window.forumTheme.current();
+    if (changed) {
+      frameVersion = artifactVersion;
+      pendingPass = null; // from the document that was just replaced
+      frame.src = boot.artifact_src + "?theme=" + window.forumTheme.current();
+    } else if (first) {
+      frameVersion = artifactVersion;
+    }
     render(snap);
+    if (frameVersion && pendingPass) sendLayoutPass(pendingPass);
   }
 
   // readEvents feeds each complete "state" event of an SSE body to onState.
@@ -215,6 +224,7 @@
 
     renderLog(snap.transcript || []);
     renderQueue(snap.queued || [], ended);
+    renderLayout(snap.layout_warnings || [], ended);
     syncEndedDialog(snap);
 
     $("annotateSwitch").disabled = ended;
@@ -810,7 +820,8 @@
       event.preventDefault();
       setMode(!annotateMode);
     } else if (event.key === "Escape") {
-      if (card) closeCard();
+      if (trayOpen()) setTray(false);
+      else if (card) closeCard();
       else hideOffer();
     }
   });
@@ -861,12 +872,174 @@
           place($("annotOffer"), rect);
         }
         break;
+      case "forum:layout":
+        sendLayoutPass(cleanPass(message));
+        break;
       case "forum:escape":
-        if (card) closeCard();
+        if (trayOpen()) setTray(false);
+        else if (card) closeCard();
         else hideOffer();
         break;
     }
   });
+
+  // ----------------------------------------------------------- layout issues
+
+  // The artifact's passive audit (forum-layout.js) posts what it finds as
+  // "forum:layout". That only fills this tray: nothing is queued, sent or shown
+  // to the agent unless the user selects issues and presses Queue selected
+  // fixes, which puts one ordinary prompt (tag layout-warnings) in the queue.
+  let pendingPass = null; // a pass that arrived before the first snapshot
+  let layoutShown = ""; // what the tray list was last built from
+  let layoutBusy = false;
+  const selectedIssues = new Set();
+  const finiteNumber = (value) => (Number.isFinite(value) ? value : 0);
+
+  // cleanPass trusts nothing the artifact sent: strings are bounded and the
+  // server checks the rules again.
+  function cleanPass(message) {
+    const findings = Array.isArray(message.findings) ? message.findings : [];
+    return {
+      complete: message.complete === true,
+      target_presence_complete: message.target_presence_complete === true,
+      viewport_width: finiteNumber(message.viewport_width),
+      findings: findings
+        .filter((f) => f && typeof f === "object")
+        .slice(0, 100)
+        .map((f) => ({ kind: clipText(f.kind, 64), selector: clipText(f.selector, 300), axis: f.axis === "vertical" ? "vertical" : "horizontal", overflow_px: finiteNumber(f.overflow_px) })),
+    };
+  }
+
+  // A failed report is not worth bothering the user with: detection is
+  // passive, and the next pass (or the next page load) reports again.
+  function sendLayoutPass(pass) {
+    if (snapshot && snapshot.status === "ended") return;
+    if (!frameVersion) {
+      pendingPass = pass;
+      return;
+    }
+    pendingPass = null;
+    api("POST", "/layout/diagnostics", { ...pass, artifact_version: frameVersion }).catch(() => {});
+  }
+
+  function layoutNotice(message) {
+    const node = $("layoutNotice");
+    node.textContent = message || "";
+    node.hidden = !message;
+  }
+
+  function setTray(open) {
+    $("layoutTray").hidden = !open;
+    $("layoutBtn").setAttribute("aria-expanded", String(open));
+    if (open) layoutNotice("");
+  }
+  const trayOpen = () => !$("layoutTray").hidden;
+
+  function updateLayoutFooter() {
+    const n = selectedIssues.size;
+    const ended = snapshot && snapshot.status === "ended";
+    const queue = $("layoutQueue");
+    queue.textContent = n > 0 ? "Queue selected fixes (" + n + ")" : "Queue selected fixes";
+    queue.disabled = ended || layoutBusy || n === 0;
+    const selectable = ((snapshot && snapshot.layout_warnings) || []).filter((w) => w.selectable);
+    const all = $("layoutSelectAll");
+    all.hidden = selectable.length === 0;
+    all.textContent = selectable.length > 0 && n >= selectable.length ? "Clear" : "Select all";
+  }
+
+  function layoutItem(w) {
+    const state = !w.active ? "closed" : w.outstanding ? "queued" : "open";
+    const item = el("div", "fr-notice-item");
+    item.dataset.state = state;
+    if (w.selectable) {
+      const box = el("input", "layout-check");
+      box.type = "checkbox";
+      box.id = "layout-" + w.id;
+      box.checked = selectedIssues.has(w.id);
+      box.setAttribute("aria-label", "Select: " + w.title);
+      box.addEventListener("change", () => {
+        if (box.checked) selectedIssues.add(w.id);
+        else selectedIssues.delete(w.id);
+        updateLayoutFooter();
+      });
+      item.append(box);
+    }
+    item.append(el("span", "fr-notice-item-icon", state === "closed" ? "✓" : "⚠"));
+    const body = el(w.selectable ? "label" : "div", "layout-item");
+    if (w.selectable) body.htmlFor = "layout-" + w.id;
+    const title = el("span", "layout-item-title", w.title);
+    if (w.status !== "open") title.append(el("span", "layout-item-status", w.status_label));
+    body.append(title, el("span", "layout-item-text", w.explanation), el("span", "layout-item-where", w.selector || "page"), el("span", "layout-item-meta", w.viewport_label + " (" + Math.round(w.viewport_width) + "px)"));
+    item.append(body);
+    if (w.selectable) {
+      const dismiss = el("button", "link-btn", "Dismiss");
+      dismiss.type = "button";
+      dismiss.title = "Dismiss for this version of the artifact; it returns if it is still there after the next change";
+      dismiss.addEventListener("click", async () => {
+        layoutNotice("");
+        try {
+          await api("POST", "/layout/dismiss", { id: w.id });
+        } catch (error) {
+          layoutNotice(error.message || "Could not dismiss it.");
+        }
+      });
+      item.append(dismiss);
+    }
+    return item;
+  }
+
+  function renderLayout(warnings, ended) {
+    const active = warnings.filter((w) => w.active);
+    const count = $("layoutCount");
+    count.textContent = String(active.length);
+    count.hidden = active.length === 0;
+    $("layoutBtn").setAttribute("aria-label", active.length > 0 ? "Layout issues, " + active.length + " detected" : "Layout issues");
+    $("layoutBtn").disabled = !!ended;
+    if (ended && trayOpen()) setTray(false);
+    for (const id of [...selectedIssues]) {
+      if (!warnings.some((w) => w.id === id && w.selectable)) selectedIssues.delete(id);
+    }
+    const signature = JSON.stringify(warnings.map((w) => [w.id, w.status, w.selectable, w.explanation]));
+    if (signature !== layoutShown) {
+      layoutShown = signature;
+      $("layoutEmpty").hidden = warnings.length > 0;
+      // Open issues first; a few recently closed ones stay as a record of what got fixed.
+      const closed = warnings.filter((w) => !w.active).slice(-5).reverse();
+      $("layoutList").replaceChildren(...active.map(layoutItem), ...closed.map(layoutItem));
+    }
+    updateLayoutFooter();
+  }
+
+  $("layoutBtn").addEventListener("click", () => setTray(!trayOpen()));
+  $("layoutSelectAll").addEventListener("click", () => {
+    const selectable = ((snapshot && snapshot.layout_warnings) || []).filter((w) => w.selectable);
+    const everything = selectable.length > 0 && selectedIssues.size >= selectable.length;
+    selectedIssues.clear();
+    if (!everything) for (const w of selectable) selectedIssues.add(w.id);
+    layoutShown = ""; // rebuild so the checkboxes follow
+    renderLayout((snapshot && snapshot.layout_warnings) || [], snapshot && snapshot.status === "ended");
+  });
+  $("layoutQueue").addEventListener("click", async () => {
+    if (selectedIssues.size === 0 || layoutBusy) return;
+    layoutBusy = true;
+    updateLayoutFooter();
+    layoutNotice("");
+    try {
+      await api("POST", "/layout/queue", { ids: [...selectedIssues] });
+      selectedIssues.clear();
+      setTray(false);
+    } catch (error) {
+      layoutNotice(error.message || "Could not queue the selected issues.");
+    } finally {
+      layoutBusy = false;
+      updateLayoutFooter();
+    }
+  });
+  // Clicking anywhere else closes the tray; so does focus moving into the artifact.
+  document.addEventListener("mousedown", (event) => {
+    if (trayOpen() && !$("layoutTray").contains(event.target) && !$("layoutBtn").contains(event.target)) setTray(false);
+  });
+  window.addEventListener("blur", () => trayOpen() && setTray(false));
 
   // -------------------------------------------------------------- markdown
 

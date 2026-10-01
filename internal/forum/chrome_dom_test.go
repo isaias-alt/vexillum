@@ -73,3 +73,10 @@ func TestChromeEndedDialog_MarkupIsModalAndHasNoCloseControl(t *testing.T) {
 func TestChromeLiveFeed_ReconnectsAndTabsConverge(t *testing.T) {
 	runChromeNodeTest(t, "chrome_live_test.js")
 }
+
+// The Layout issues tray: it renders what the server says, queues only what
+// the user selected and never sends, and the passes the artifact reports are
+// bounded and tagged with the artifact version before they go out.
+func TestChromeLayoutTray_RendersQueuesAndReports(t *testing.T) {
+	runChromeNodeTest(t, "chrome_layout_test.js")
+}

@@ -18,6 +18,11 @@
       <span class="file" id="fileName">{{.Name}}</span>
     </div>
     <div class="topbar-actions">
+      <button type="button" class="switch tray-btn" id="layoutBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="layoutTray" title="Severe layout problems the browser detected in this artifact. Nothing reaches your agent unless you select issues and queue them.">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <span class="switch-label">Layout issues</span>
+        <span class="tray-count" id="layoutCount" hidden>0</span>
+      </button>
       <button type="button" class="switch" id="annotateSwitch" role="switch" aria-checked="true" title="When On, clicking text or other content annotates it, and selecting text offers to annotate it. The artifact's own controls (radios, buttons, inputs) keep working normally; hold Alt/Option while clicking a control to annotate it. Shortcut: Ctrl/Cmd+I.">
         <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l7 17 2.5-7.5L21 11z"/></svg>
         <span class="switch-label">Annotate</span>
@@ -79,6 +84,19 @@
     </aside>
   </main>
 </div>
+<section class="layout-tray" id="layoutTray" role="dialog" aria-labelledby="layoutTrayTitle" hidden>
+  <div class="layout-tray-head">
+    <h3 class="layout-tray-title" id="layoutTrayTitle">Layout issues</h3>
+    <button type="button" class="link-btn" id="layoutSelectAll">Select all</button>
+  </div>
+  <p class="layout-tray-note">Detected in your browser. Nothing here reaches your agent unless you select issues and queue them.</p>
+  <p class="notice" id="layoutNotice" role="alert" hidden></p>
+  <p class="empty" id="layoutEmpty">No layout issues detected.</p>
+  <div class="fr-notice-tray layout-list" id="layoutList"></div>
+  <div class="layout-tray-foot">
+    <button type="button" class="btn btn-primary" id="layoutQueue" disabled>Queue selected fixes</button>
+  </div>
+</section>
 <div class="annot-offer" id="annotOffer" hidden>
   <button type="button" class="btn btn-primary btn-small" id="annotOfferBtn">Annotate selection</button>
 </div>

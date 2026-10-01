@@ -167,11 +167,14 @@ func TestLayout_DismissAndTheSecurityMatrix(t *testing.T) {
 
 	for _, action := range []string{"diagnostics", "queue", "dismiss"} {
 		for name, mutate := range map[string]func(*http.Request){
-			"no token":       func(r *http.Request) { r.Header.Set("Origin", env.ts.URL) },
-			"wrong token":    func(r *http.Request) { r.Header.Set("X-Forum-Token", "nope"); r.Header.Set("Origin", env.ts.URL) },
-			"agent token":    func(r *http.Request) { r.Header.Set("X-Forum-Token", agentToken); r.Header.Set("Origin", env.ts.URL) },
-			"foreign origin": func(r *http.Request) { r.Header.Set("X-Forum-Token", token); r.Header.Set("Origin", "http://evil.example") },
-			"no origin":      func(r *http.Request) { r.Header.Set("X-Forum-Token", token) },
+			"no token":    func(r *http.Request) { r.Header.Set("Origin", env.ts.URL) },
+			"wrong token": func(r *http.Request) { r.Header.Set("X-Forum-Token", "nope"); r.Header.Set("Origin", env.ts.URL) },
+			"agent token": func(r *http.Request) { r.Header.Set("X-Forum-Token", agentToken); r.Header.Set("Origin", env.ts.URL) },
+			"foreign origin": func(r *http.Request) {
+				r.Header.Set("X-Forum-Token", token)
+				r.Header.Set("Origin", "http://evil.example")
+			},
+			"no origin": func(r *http.Request) { r.Header.Set("X-Forum-Token", token) },
 		} {
 			resp, _ := env.browserWith("POST", "/api/s/"+key+"/layout/"+action, map[string]any{"id": id, "ids": []string{id}}, mutate)
 			if resp.StatusCode != 401 && resp.StatusCode != 403 {

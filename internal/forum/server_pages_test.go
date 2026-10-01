@@ -149,7 +149,7 @@ func TestChromeAssets_ServedAndSelfContained(t *testing.T) {
 	if strings.Contains(css, "--forum-") {
 		t.Error("forum.css still references the provisional --forum-* palette")
 	}
-	for _, name := range []string{"forum-chrome.js", "forum-sdk.js", "forum-theme.js"} {
+	for _, name := range []string{"forum-chrome.js", "forum-sdk.js", "forum-layout.js", "forum-theme.js"} {
 		if resp, body := env.get("/forum-assets/" + name); resp.StatusCode != 200 || body == "" {
 			t.Errorf("%s = %d", name, resp.StatusCode)
 		}

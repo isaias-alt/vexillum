@@ -98,7 +98,7 @@ func (s *Server) handleChromeAsset(w http.ResponseWriter, r *http.Request) {
 	switch name {
 	case "forum.css", "forum-tokens.css", "forum-artifact.css":
 		contentType = "text/css; charset=utf-8"
-	case "forum-chrome.js", "forum-sdk.js", "forum-theme.js", "forum-prefs.js", "forum-frame.js":
+	case "forum-chrome.js", "forum-sdk.js", "forum-layout.js", "forum-theme.js", "forum-prefs.js", "forum-frame.js":
 		contentType = "text/javascript; charset=utf-8"
 	default:
 		http.NotFound(w, r)
@@ -210,7 +210,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file, theme string) {
 const (
 	stylesTags     = `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
 	faviconTag     = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`
-	sdkScriptTag   = `<script src="/forum-assets/forum-sdk.js"></script>`
+	sdkScriptTag   = `<script src="/forum-assets/forum-sdk.js"></script><script src="/forum-assets/forum-layout.js"></script>`
 	embedScriptTag = `<script src="/whiteboard-embed.js"></script>`
 )
 
@@ -220,7 +220,8 @@ var (
 	doctypePattern  = regexp.MustCompile(`(?i)<!doctype[^>]*>`)
 )
 
-// injectSDK puts the window.forum script as early as it can go - right
+// injectSDK puts the window.forum script (and the passive layout audit that
+// reports to the chrome) as early as it can go - right
 // after <head>, else <html>, else the doctype (never before it, which would
 // push the page into quirks mode) - so the API exists before the artifact's
 // own scripts run.
