@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/cli"
 )
 
 const repoRoot = "../.."
@@ -137,5 +139,43 @@ func TestCodeFenceOutgrowsBackticks(t *testing.T) {
 	}
 	if got := codeFence("has ``` inside"); got != "````" {
 		t.Errorf("codeFence(with fence) = %q", got)
+	}
+}
+
+const hostileSummary = "a < b { c } * d ` e & f > g | h _ i"
+
+func TestEscapeHelpersNeutralizeSpecials(t *testing.T) {
+	cases := []struct {
+		name string
+		fn   func(string) string
+		want string
+	}{
+		{"markdown", escapeMarkdown, "a \\< b { c } \\* d \\` e \\& f \\> g \\| h \\_ i"},
+		{"mdx", escapeMDX, "a \\< b \\{ c \\} \\* d \\` e \\& f \\> g \\| h \\_ i"},
+	}
+	for _, tc := range cases {
+		if got := tc.fn(hostileSummary); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestYAMLStringQuotesFrontmatterValues(t *testing.T) {
+	if got, want := yamlString(`say "hi": a\b`), `"say \"hi\": a\\b"`; got != want {
+		t.Errorf("yamlString = %q, want %q", got, want)
+	}
+}
+
+func TestTablesEscapeHostileSummaries(t *testing.T) {
+	cmds := []cli.Command{{Name: "x", Summary: hostileSummary, Usage: "Usage: vexillum x"}}
+
+	if got := commandTable(cmds); !strings.Contains(got, escapeMarkdown(hostileSummary)) {
+		t.Errorf("README table does not use the Markdown escape:\n%s", got)
+	}
+	if got := indexPage(cmds); !strings.Contains(got, escapeMDX(hostileSummary)) {
+		t.Errorf("index page does not use the MDX escape:\n%s", got)
+	}
+	if got := commandPage(cmds[0]); !strings.Contains(got, "description: "+yamlString(hostileSummary)) {
+		t.Errorf("frontmatter does not use the YAML quoting:\n%s", got)
 	}
 }
