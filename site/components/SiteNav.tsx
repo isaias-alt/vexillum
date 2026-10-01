@@ -14,7 +14,8 @@ export function SiteNav({ lang }: { lang: Lang }) {
   const t = dictionary(lang).nav;
   const prefix = localePrefix(lang);
   return (
-    <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-bg/90 px-[6vw] py-[18px] backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur">
+      <div className="site-container flex items-center justify-between gap-4 py-[18px]">
       <Link href={`${prefix}/`} className="flex items-center gap-[9px]">
         <LogoMark className="h-[18px] w-[18px] shrink-0 text-brand" />
         <span className="text-[13.5px] text-text">vexillum</span>
@@ -39,6 +40,7 @@ export function SiteNav({ lang }: { lang: Lang }) {
         <LangToggle lang={lang} />
         <ThemeToggle />
       </nav>
+      </div>
     </header>
   );
 }

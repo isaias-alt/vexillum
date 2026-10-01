@@ -8,7 +8,8 @@ import type { Lang } from "@/lib/i18n";
 export function Footer({ lang }: { lang: Lang }) {
   const t = dictionary(lang).footer;
   return (
-    <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border px-[6vw] py-5 text-[11.5px] text-text-muted">
+    <footer className="mt-auto border-t border-border text-[11.5px] text-text-muted">
+      <div className="site-container flex flex-wrap items-center justify-between gap-3 py-5">
       <div className="flex items-center gap-2.5">
         <LogoMark className="h-3.5 w-3.5 text-brand" />
         <span>vexillum &middot; {t.license}</span>
@@ -29,6 +30,7 @@ export function Footer({ lang }: { lang: Lang }) {
         >
           lucasco.dev
         </ExternalLink>
+      </div>
       </div>
     </footer>
   );

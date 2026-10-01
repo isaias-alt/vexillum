@@ -35,6 +35,27 @@
   --fr-danger: #a8341f;
   --fr-bronze: #9c7a3f;
   --fr-bronze-soft: rgba(156, 122, 63, 0.14);
+
+  /* Layout: one bounded column shared by the landing and the docs. The
+     gutter grows with the viewport; the max width is the content box, so the
+     gutter sits outside it. */
+  --site-max: 1280px;
+  --site-gutter: 16px;
+}
+@media (min-width: 640px) {
+  :root {
+    --site-gutter: 24px;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --site-gutter: 32px;
+  }
+}
+@media (min-width: 1536px) {
+  :root {
+    --site-gutter: 40px;
+  }
 }
 
 :root[data-theme="dark"] {
@@ -63,7 +84,7 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
-  /* The brand mark is gold in both themes (same as app/icon.svg); the lapis
+  /* The in-page brand mark is gold in both themes (the favicon is lapis); the lapis
      accent is for the UI only. */
   --color-brand: #bf9455;
 
@@ -141,6 +162,14 @@ body {
 }
 
 @layer components {
+/* The bounded, centered column (header content, every landing section, the
+   footer). Bars may span the window; what they hold sits in this. */
+.site-container {
+  width: 100%;
+  max-width: calc(var(--site-max) + 2 * var(--site-gutter));
+  margin-inline: auto;
+  padding-inline: var(--site-gutter);
+}
 /* The design's buttons (.fr-btn in forum-tokens.css). */
 .btn {
   display: inline-flex;
@@ -200,6 +229,11 @@ body {
   #nd-notebook-layout {
     --fd-sidebar-width: 244px;
   }
+}
+/* Fumadocs centers sidebar + page + toc in --fd-layout-width and lets the
+   outer columns absorb the rest; bound it to the shared column. */
+#nd-notebook-layout {
+  --fd-layout-width: calc(var(--site-max) + 2 * var(--site-gutter));
 }
 @media (min-width: 1280px) {
   #nd-notebook-layout {
@@ -333,4 +367,44 @@ pre .line {
   box-shadow: none;
   font-size: 12.5px;
   line-height: 1.7;
+}
+
+/* The sidebar toggles (desktop collapse, mobile drawer) are the design's
+   secondary button, square, so they sit with the EN/ES and theme controls
+   instead of Fumadocs' round grey icon button. */
+#nd-subnav button[aria-controls="nd-sidebar"],
+#nd-subnav button[aria-controls="nd-sidebar-mobile"] {
+  display: inline-flex;
+  height: 36px;
+  width: 36px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--fr-border-strong);
+  border-radius: var(--fr-radius-sm);
+  background: transparent;
+  color: var(--fr-text);
+  transition:
+    background-color 120ms,
+    border-color 120ms,
+    color 120ms;
+}
+#nd-subnav button[aria-controls="nd-sidebar"]:hover,
+#nd-subnav button[aria-controls="nd-sidebar-mobile"]:hover {
+  border-color: var(--fr-accent);
+  background: transparent;
+  color: var(--fr-text);
+}
+#nd-subnav button[aria-controls="nd-sidebar"][aria-expanded="false"],
+#nd-subnav button[aria-controls="nd-sidebar-mobile"][aria-expanded="true"] {
+  border-color: var(--fr-accent);
+  background: var(--fr-accent-soft);
+}
+#nd-subnav button[aria-controls="nd-sidebar"] svg,
+#nd-subnav button[aria-controls="nd-sidebar-mobile"] svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
 }

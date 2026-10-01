@@ -69,7 +69,7 @@ export default async function Home({
 
       <main>
         {/* hero */}
-        <section className="px-[6vw] pt-16 pb-12 text-center">
+        <section className="site-container pt-16 pb-12 text-center">
           <div className="mb-5 text-[11px] tracking-[0.08em] text-text-muted uppercase">
             {t.hero.eyebrow}
           </div>
@@ -93,10 +93,10 @@ export default async function Home({
         </section>
 
         {/* a minute with vexillum */}
-        <section className="mx-auto max-w-[1160px] px-[6vw] pb-14">
+        <section className="site-container pb-14">
           <div className="mx-auto mb-9 max-w-[560px] text-center">
             <Eyebrow>{t.minute.eyebrow}</Eyebrow>
-            <h2 className="mb-4 font-serif text-[30px] leading-[1.2] font-semibold text-text max-sm:text-[26px]">
+            <h2 className="mb-4 font-serif text-[30px] leading-[1.2] font-semibold text-balance text-text max-sm:text-[26px]">
               {t.minute.title}
             </h2>
             <p className="text-sm leading-[1.7] text-text-secondary">
@@ -114,11 +114,11 @@ export default async function Home({
         </section>
 
         {/* vocabulary */}
-        <section className="border-t border-border px-[6vw] py-14">
-          <div className="mx-auto max-w-[1160px]">
+        <section className="border-t border-border">
+          <div className="site-container py-14">
             <div className="mx-auto mb-9 max-w-[560px] text-center">
               <Eyebrow>{t.vocab.eyebrow}</Eyebrow>
-              <h2 className="font-serif text-[26px] font-semibold text-text">
+              <h2 className="font-serif text-[26px] font-semibold text-balance text-text">
                 {t.vocab.title}
               </h2>
             </div>
@@ -137,11 +137,11 @@ export default async function Home({
         </section>
 
         {/* dispatching */}
-        <section className="border-t border-border px-[6vw] py-14">
-          <div className="mx-auto max-w-[1160px]">
+        <section className="border-t border-border">
+          <div className="site-container py-14">
             <div className="mx-auto mb-7 max-w-[560px] text-center">
               <Eyebrow>{t.dispatching.eyebrow}</Eyebrow>
-              <h2 className="mb-4 font-serif text-[26px] font-semibold text-text">
+              <h2 className="mb-4 font-serif text-[26px] font-semibold text-balance text-text">
                 {t.dispatching.title}
               </h2>
               <p className="text-sm leading-[1.7] text-text-secondary">
@@ -156,7 +156,8 @@ export default async function Home({
         </section>
 
         {/* open source */}
-        <section className="border-t border-border px-[6vw] py-14 text-center">
+        <section className="border-t border-border">
+          <div className="site-container py-14 text-center">
           <Eyebrow>{t.oss.eyebrow}</Eyebrow>
           <h2 className="mb-6 font-serif text-[26px] font-semibold text-text">
             {t.oss.title}
@@ -174,6 +175,7 @@ export default async function Home({
             >
               {t.oss.contributing}
             </ExternalLink>
+          </div>
           </div>
         </section>
       </main>

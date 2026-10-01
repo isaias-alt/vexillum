@@ -32,6 +32,7 @@ export const translations = i18n
       "Close Search(search dialog)(aria-label)": "Cerrar búsqueda",
       "Open Sidebar(sidebar)(aria-label)": "Abrir menú lateral",
       "Close Sidebar(aria-label)": "Cerrar menú lateral",
+      "Collapse Sidebar(sidebar)(aria-label)": "Contraer menú lateral",
       "Close Sidebar(sidebar)(aria-label)": "Cerrar menú lateral",
       "Toggle Menu(mobile menu)(aria-label)": "Abrir menú",
       "Copy Text(code block)(aria-label)": "Copiar",

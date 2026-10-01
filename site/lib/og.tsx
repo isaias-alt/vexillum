@@ -7,7 +7,7 @@ export const OG_SIZE = { width: 1200, height: 630 } as const;
 export const OG_CONTENT_TYPE = "image/png";
 
 // Identity from design/forum-tokens.css (dark theme) and the brand sheet; the
-// mark is the gold of app/icon.svg, the lapis is the UI accent.
+// mark is app/icon.svg (lapis on the dark ground).
 const BG = "#15171A";
 const TEXT = "#E9EAEC";
 const TEXT_SECONDARY = "#A0A3A9";
