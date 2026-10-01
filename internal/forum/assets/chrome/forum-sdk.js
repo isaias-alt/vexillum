@@ -166,6 +166,7 @@
     };
     if (opts.target !== undefined && opts.target !== null) prompt.target = opts.target;
     if (opts.data !== undefined && opts.data !== null) prompt.prompt += "\n\nContext data:\n" + JSON.stringify(opts.data, null, 2);
+    learnKey(origin, prompt.queue_key);
     return rpc("queue", prompt);
   }
 
@@ -192,17 +193,45 @@
   const queueListeners = new Set();
   let queuedKeys = null; // null until the chrome has reported
 
-  function formQueueKey(form) {
+  // Every queue key a form's answer may be queued under. Declared:
+  // data-forum-queue-key, else the key queuePrompt derives for a question
+  // ("question:<id>") and the bare id, which is what artifacts naturally pass
+  // as queueKey. Learned: the key of any prompt queued while the form was being
+  // submitted (see queuePrompt), so a custom key works without the attribute
+  // for as long as the page lives; after a reload only the declared ones remain.
+  const learnedKeys = new WeakMap(); // form -> Set of keys
+  let lastSubmitted = null;
+  document.addEventListener("submit", (event) => {
+    lastSubmitted = event.target;
+    setTimeout(() => {
+      if (lastSubmitted === event.target) lastSubmitted = null;
+    }, 0);
+  }, true);
+
+  function formQueueKeys(form) {
+    const keys = new Set(learnedKeys.get(form) || []);
     const explicit = attr(form, "data-forum-queue-key").trim();
-    if (explicit) return explicit;
+    if (explicit) keys.add(explicit);
     const question = attr(form, "data-forum-question").trim();
-    return question ? "question:" + question : "";
+    if (question && !explicit) {
+      keys.add("question:" + question);
+      keys.add(question);
+    }
+    return keys;
+  }
+
+  function learnKey(origin, key) {
+    if (!key) return;
+    const form = lastSubmitted || (origin && origin.closest && origin.closest("form"));
+    if (!form || !form.matches || !form.matches(FORM_SELECTOR)) return;
+    if (!learnedKeys.has(form)) learnedKeys.set(form, new Set());
+    learnedKeys.get(form).add(key);
   }
 
   function syncForms() {
     if (!queuedKeys) return;
     for (const form of document.querySelectorAll(FORM_SELECTOR)) {
-      const queued = queuedKeys.has(formQueueKey(form));
+      const queued = [...formQueueKeys(form)].some((key) => queuedKeys.has(key));
       if (queued) form.setAttribute("data-forum-queued", "true");
       else form.removeAttribute("data-forum-queued");
       for (const button of form.querySelectorAll(SUBMITTERS)) {

@@ -289,7 +289,9 @@ the whole API. There is no `window.forum`.
   answer is queued and re-enabled once that message is removed from the queue
   or sent; `data-forum-queued="true"` mirrors the state on the form. If you
   pass a custom `queueKey` to `queuePrompt`, put the same value in
-  `data-forum-queue-key`. Only buttons forum disabled are re-enabled; your
+  `data-forum-queue-key` (a `queueKey` equal to the bare question id also
+  works with `data-forum-question`; any other key is only matched to its form
+  while the page that submitted it stays open, not after a reload). Only buttons forum disabled are re-enabled; your
   own `disabled` buttons are left alone.
 - `window.forum.sendQueuedPrompts()` - sends everything queued right away,
   instead of waiting for the user to press Send to Agent. Use it only for a
