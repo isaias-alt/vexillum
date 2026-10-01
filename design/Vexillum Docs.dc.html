@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./forum-tokens.css">
+  <style>
+    body { margin: 0; }
+    a { color: var(--fr-accent); text-decoration: none; }
+    a:hover { color: var(--fr-accent-hover); }
+    ::selection { background: var(--fr-accent); color: var(--fr-accent-contrast); }
+  </style>
+</helmet>
+
+<div class="fr-root" data-fr-theme="{{ theme }}" style="font-family:var(--fr-font-mono); color:var(--fr-text); background:var(--fr-bg); min-height:100vh; font-size:14px;">
+
+  <!-- TOP NAV -->
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 28px; border-bottom:1px solid var(--fr-border);">
+    <div style="display:flex; align-items:center; gap:9px;">
+      <svg viewBox="0 0 32 32" fill="none" width="18" height="18" style="color:var(--fr-accent); flex-shrink:0;">
+        <line x1="16" y1="3" x2="16" y2="27" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></line>
+        <line x1="7" y1="9" x2="25" y2="9" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></line>
+        <path d="M10,9.6 L22,9.6 L22,23 L20,25.5 L18,23 L16,25.5 L14,23 L12,25.5 L10,23 Z" fill="currentColor"></path>
+        <circle cx="16" cy="3" r="1.5" fill="currentColor"></circle>
+      </svg>
+      <span style="font-size:13.5px; color:var(--fr-text);">vexillum</span>
+      <span style="font-size:11px; color:var(--fr-text-muted); margin-left:4px;">docs</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:22px; font-size:12.5px; color:var(--fr-text-secondary);">
+      <span>github</span>
+      <span>v0.4</span>
+      <button class="fr-btn fr-btn--secondary" onClick="{{ toggleTheme }}">{{ otherTheme }}</button>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:230px minmax(0,1fr) 220px;">
+
+    <!-- SIDEBAR -->
+    <div style="border-right:1px solid var(--fr-border); padding:28px 20px; font-size:13px;">
+      <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="4">
+        <div style="margin-bottom:22px;">
+          <div style="font-size:11px; letter-spacing:0.06em; color:var(--fr-text-muted); margin-bottom:8px;">{{ sec.heading }}</div>
+          <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="3">
+            <div style="{{ it.style }}">{{ it.label }}</div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- MAIN -->
+    <div style="padding:48px 48px 80px; max-width:680px;">
+      <div style="font-size:11px; letter-spacing:0.06em; color:var(--fr-text-muted); margin-bottom:10px;">COMMANDS / DISPATCH</div>
+      <div style="font-family:'Spectral', serif; font-weight:600; font-size:32px; color:var(--fr-text); margin-bottom:16px;">vx dispatch</div>
+      <div style="font-size:14px; line-height:1.75; color:var(--fr-text-secondary); margin-bottom:28px;">
+        Sends a soldier into its own camp to work a task. Every soldier runs independently &mdash; the commander tracks it, the sentinel watches it, and you get notified only when it needs you.
+      </div>
+
+      <div class="fr-artifact-frame" style="margin-bottom:28px;">
+        <div class="fr-topbar"><span class="fr-topbar-name">usage</span></div>
+        <div style="padding:18px 20px; font-size:13px; line-height:1.8; color:var(--fr-text-secondary);">
+          <span style="color:var(--fr-text);">vx dispatch</span> &lt;task&gt; --kind &lt;mission|scout&gt; [--model &lt;name&gt;]
+        </div>
+      </div>
+
+      <div style="font-family:'Spectral', serif; font-weight:600; font-size:20px; color:var(--fr-text); margin:36px 0 14px;">Arguments</div>
+      <sc-for list="{{ args }}" as="a" hint-placeholder-count="3">
+        <div style="display:grid; grid-template-columns:140px 1fr; gap:16px; padding:14px 0; border-top:1px solid var(--fr-border);">
+          <code style="font-size:12.5px; color:var(--fr-accent);">{{ a.name }}</code>
+          <div style="font-size:13px; line-height:1.6; color:var(--fr-text-secondary);">{{ a.desc }}</div>
+        </div>
+      </sc-for>
+
+      <div style="font-family:'Spectral', serif; font-weight:600; font-size:20px; color:var(--fr-text); margin:36px 0 14px;">Example</div>
+      <div class="fr-artifact-frame" style="margin-bottom:28px;">
+        <div style="padding:18px 20px; font-size:12.5px; line-height:1.9;">
+          <div style="color:var(--fr-text);">$ vx dispatch "refactor the payment module" --kind mission --model sonnet</div>
+          <div style="color:var(--fr-text-muted); padding-left:14px;">&#8627; dispatched &middot; camp/refactor-payment-module</div>
+          <div style="color:var(--fr-text-muted); padding-left:14px;">&#8627; soldier running &middot; sentinel watching</div>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--fr-border); border-left:2px solid var(--fr-accent); border-radius:6px; padding:14px 18px; font-size:12.5px; line-height:1.7; color:var(--fr-text-secondary); margin-bottom:40px;">
+        <strong style="color:var(--fr-text);">Note &mdash;</strong> a <code style="background:var(--fr-bronze-soft); color:var(--fr-text); padding:1px 5px; border-radius:3px;">scout</code> never writes to its camp; use it to investigate before committing a mission.
+      </div>
+
+      <div style="display:flex; justify-content:space-between; border-top:1px solid var(--fr-border); padding-top:20px; font-size:12.5px;">
+        <div><div style="color:var(--fr-text-muted); margin-bottom:2px;">&larr; previous</div><div style="color:var(--fr-accent);">vx camp list</div></div>
+        <div style="text-align:right;"><div style="color:var(--fr-text-muted); margin-bottom:2px;">next &rarr;</div><div style="color:var(--fr-accent);">vx sentinel status</div></div>
+      </div>
+    </div>
+
+    <!-- ON THIS PAGE -->
+    <div style="padding:48px 24px; font-size:12px;">
+      <div style="color:var(--fr-text-muted); letter-spacing:0.06em; margin-bottom:12px;">ON THIS PAGE</div>
+      <div style="display:flex; flex-direction:column; gap:10px; color:var(--fr-text-secondary);">
+        <span style="color:var(--fr-accent);">Arguments</span>
+        <span>Example</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: 'dark' };
+
+  renderVals() {
+    const theme = this.state.theme;
+    const navItem = (label, active) => ({ label, style: { padding: '6px 0', color: active ? 'var(--fr-text)' : 'var(--fr-text-secondary)', fontWeight: active ? 600 : 400, borderLeft: active ? '2px solid var(--fr-accent)' : '2px solid transparent', paddingLeft: 10, marginLeft: -10, cursor: 'pointer' } });
+
+    const sections = [
+      { heading: 'GETTING STARTED', items: [navItem('Install'), navItem('Quickstart'), navItem('Vocabulary')] },
+      { heading: 'COMMANDS', items: [navItem('vx dispatch', true), navItem('vx camp'), navItem('vx sentinel'), navItem('vx mission')] },
+      { heading: 'CONFIGURATION', items: [navItem('mission.yaml'), navItem('environment')] },
+    ];
+
+    const args = [
+      { name: 'task', desc: 'The instruction given to the soldier, in plain language.' },
+      { name: '--kind', desc: 'mission executes work; scout investigates and reports back without writing.' },
+      { name: '--model', desc: 'Optional. Overrides the default model for this soldier.' },
+    ];
+
+    return {
+      sections, args, theme,
+      otherTheme: theme === 'dark' ? 'light' : 'dark',
+      toggleTheme: () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

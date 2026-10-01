@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./forum-tokens.css">
+  <style>
+    body { margin: 0; }
+    a { color: var(--fr-accent); text-decoration: none; }
+    a:hover { color: var(--fr-accent-hover); }
+    ::selection { background: var(--fr-accent); color: var(--fr-accent-contrast); }
+  </style>
+</helmet>
+
+<div class="fr-root" data-fr-theme="{{ theme }}" style="background:var(--fr-bg); color:var(--fr-text); font-family:var(--fr-font-mono); min-height:100vh;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 6vw; border-bottom:1px solid var(--fr-border);">
+    <div style="display:flex; align-items:center; gap:9px;">
+      <svg viewBox="0 0 32 32" fill="none" width="18" height="18" style="color:var(--fr-accent); flex-shrink:0;">
+        <line x1="16" y1="3" x2="16" y2="27" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></line>
+        <line x1="7" y1="9" x2="25" y2="9" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></line>
+        <path d="M10,9.6 L22,9.6 L22,23 L20,25.5 L18,23 L16,25.5 L14,23 L12,25.5 L10,23 Z" fill="currentColor"></path>
+        <circle cx="16" cy="3" r="1.5" fill="currentColor"></circle>
+      </svg>
+      <span style="font-size:13.5px; color:var(--fr-text);">vexillum</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:26px; font-size:12.5px; color:var(--fr-text-secondary);">
+      <span>docs</span>
+      <span>github</span>
+      <button class="fr-btn fr-btn--secondary" style="font-size:12.5px; padding:7px 14px;">get started</button>
+      <button class="fr-btn fr-btn--secondary" onClick="{{ toggleTheme }}">{{ otherTheme }}</button>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="padding:64px 6vw 48px; text-align:center;">
+    <div style="font-size:11px; letter-spacing:0.08em; color:var(--fr-text-muted); margin-bottom:20px;">FOR CODING AGENTS</div>
+    <div style="font-family:'Spectral', serif; font-weight:600; font-size:40px; line-height:1.18; color:var(--fr-text); max-width:620px; margin:0 auto 20px;">One commander. Many soldiers.</div>
+    <div style="font-size:14px; line-height:1.7; color:var(--fr-text-secondary); max-width:480px; margin:0 auto 32px;">vexillum orchestrates coding agents from your terminal. A commander dispatches soldiers into isolated camps, a sentinel watches for what needs your attention.</div>
+
+    <div style="display:inline-flex; border:1px solid var(--fr-border); border-radius:6px; overflow:hidden; margin-bottom:14px;">
+      <span onClick="{{ setInstallTab_curl }}" style="{{ curlTabStyle }}">curl</span>
+      <span onClick="{{ setInstallTab_brew }}" style="{{ brewTabStyle }}">brew</span>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:10px; background:var(--fr-surface-sunken); border:1px solid var(--fr-border); border-radius:6px; padding:12px 18px; font-size:13px; color:var(--fr-text); max-width:480px; margin:0 auto 20px;">
+      <span style="color:var(--fr-text-muted);">$</span>
+      <span style="flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ installCommand }}</span>
+      <button class="fr-btn fr-btn--secondary" style="font-size:11px; padding:4px 10px;">copy</button>
+    </div>
+    <button class="fr-btn fr-btn--primary">read the docs</button>
+  </div>
+
+  <!-- a minute with vexillum -->
+  <div style="padding:0 6vw 56px;" onMouseEnter="{{ pauseSteps }}" onMouseLeave="{{ resumeSteps }}">
+    <div style="text-align:center; max-width:560px; margin:0 auto 36px;">
+      <div style="font-size:11px; letter-spacing:0.08em; color:var(--fr-text-muted); margin-bottom:12px;">A MINUTE WITH VEXILLUM</div>
+      <div style="font-family:'Spectral', serif; font-weight:600; font-size:30px; line-height:1.2; color:var(--fr-text); margin-bottom:16px;">One CLI for the whole chain of command.</div>
+      <div style="font-size:14px; line-height:1.7; color:var(--fr-text-secondary);">Install, dispatch, watch and check in &mdash; every step below is a real command. Click one, or just watch.</div>
+      <div style="font-family:'Spectral', serif; font-style:italic; font-size:13px; color:var(--fr-text-muted); margin-top:10px;">gradus cursusque &mdash; the steps and the course</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:28px; align-items:start;">
+      <div style="position:relative; padding-left:4px;">
+        <div style="position:absolute; left:25px; top:26px; bottom:26px; width:1px; background:var(--fr-border); z-index:0;"></div>
+        <sc-for list="{{ steps }}" as="step" hint-placeholder-count="5">
+          <div onClick="{{ step.select }}" style="{{ step.rowStyle }}">
+            <div style="{{ step.numberStyle }}"><span style="{{ step.badgeStyle }}">{{ step.numeral }}</span></div>
+            <div style="flex:1;">
+              <div style="{{ step.titleStyle }}">{{ step.title }}</div>
+              <div style="font-size:12.5px; color:var(--fr-text-muted); margin-top:2px;">$ {{ step.command }}</div>
+              <sc-if value="{{ step.isActive }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12.5px; line-height:1.6; color:var(--fr-text-secondary); margin-top:12px; max-width:380px;">{{ step.description }}</div>
+                <div style="margin-top:10px; font-size:12px; color:var(--fr-accent); border-bottom:1px solid var(--fr-accent); width:fit-content; padding-bottom:1px;">Docs &rarr;</div>
+                <div style="height:2px; background:var(--fr-border); border-radius:1px; margin-top:14px; overflow:hidden; width:100%; max-width:380px;">
+                  <div style="{{ step.progressStyle }}"></div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div class="fr-artifact-frame" style="padding:0;">
+        <div class="fr-topbar">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <svg viewBox="0 0 32 32" fill="none" width="12" height="12" style="color:var(--fr-accent); flex-shrink:0;">
+              <line x1="16" y1="3" x2="16" y2="27" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"></line>
+              <line x1="7" y1="9" x2="25" y2="9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"></line>
+            </svg>
+            <span class="fr-topbar-name">~/project &mdash; vexillum</span>
+          </span>
+          <span style="font-size:11px; color:var(--fr-text-muted); font-family:var(--fr-font-mono);">{{ stepCounter }}</span>
+        </div>
+        <div style="padding:20px 22px; font-size:12.5px; line-height:1.9; min-height:200px; color:var(--fr-text-secondary);">
+          <div style="color:var(--fr-text);">$ {{ activeStep.command }}</div>
+          <sc-for list="{{ activeStep.output }}" as="line" hint-placeholder-count="3">
+            <div style="{{ line.style }}">{{ line.text }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- vocabulary -->
+  <div style="padding:56px 6vw; border-top:1px solid var(--fr-border);">
+    <div style="font-size:11px; letter-spacing:0.08em; color:var(--fr-text-muted); margin-bottom:12px;">THE VOCABULARY</div>
+    <div style="font-family:'Spectral', serif; font-weight:600; font-size:26px; color:var(--fr-text); max-width:520px; margin-bottom:36px;">Every part of vexillum maps to a role in the field.</div>
+    <sc-for list="{{ concepts }}" as="item" hint-placeholder-count="6">
+      <div style="display:grid; grid-template-columns:150px 1fr; gap:20px; padding:18px 0; border-top:1px solid var(--fr-border);">
+        <div style="font-size:13.5px; color:var(--fr-accent);">{{ item.term }}</div>
+        <div style="font-size:13px; line-height:1.7; color:var(--fr-text-secondary);">{{ item.def }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- open source CTA -->
+  <div style="padding:56px 6vw; border-top:1px solid var(--fr-border); text-align:center;">
+    <div style="font-size:11px; letter-spacing:0.08em; color:var(--fr-text-muted); margin-bottom:12px;">OPEN SOURCE</div>
+    <div style="font-family:'Spectral', serif; font-weight:600; font-size:26px; color:var(--fr-text); margin-bottom:24px;">Found a bug? Want to help?</div>
+    <div style="display:flex; justify-content:center; gap:12px;">
+      <button class="fr-btn fr-btn--secondary">open an issue</button>
+      <button class="fr-btn fr-btn--secondary">read CONTRIBUTING</button>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 6vw; border-top:1px solid var(--fr-border); font-size:11.5px; color:var(--fr-text-muted);">
+    <span>vexillum &middot; MIT licensed</span>
+    <div style="display:flex; gap:18px;">
+      <span>github</span><span>docs</span>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: 'dark', installTab: 'curl', activeStepIdx: 1, paused: false };
+
+  stepDefs = [
+    { title: 'Install vexillum', command: 'curl -fsSL https://vexillum.lucasco.dev/install | bash',
+      description: 'One binary, no runtime dependencies. Works the same over curl or brew.',
+      output: [ { text: 'downloading vexillum v0.4.0\u2026' }, { text: 'installed to /usr/local/bin/vexillum' } ] },
+    { title: 'Dispatch a mission', command: 'vx dispatch "refactor the payment module" --kind mission',
+      description: 'A soldier spins up in its own camp and executes the work end to end.',
+      output: [ { text: 'dispatched \u00b7 camp/refactor-payment-module' }, { text: 'soldier running \u00b7 sentinel watching' } ] },
+    { title: 'Dispatch a scout', command: 'vx dispatch "trace the memory leak" --kind scout',
+      description: 'Scouts investigate and report back \u2014 no changes written to the camp.',
+      output: [ { text: 'dispatched \u00b7 camp/trace-memory-leak' }, { text: 'scout running \u00b7 read-only' } ] },
+    { title: 'Watch the sentinel', command: 'vx sentinel status',
+      description: 'The sentinel only flags the commander when a soldier actually needs you.',
+      output: [ { text: '2 soldiers running \u00b7 0 need input' }, { text: 'sentinel \u00b7 idle' } ] },
+    { title: 'Check camp status', command: 'vx camp list',
+      description: 'See every camp, its soldier, and what it is doing right now.',
+      output: [ { text: 'refactor-payment-module \u00b7 running \u00b7 mission' }, { text: 'trace-memory-leak \u00b7 done \u00b7 scout' } ] },
+  ];
+
+  componentDidMount() {
+    this._stepTick = setInterval(() => {
+      if (this.state.paused) return;
+      this.setState(s => ({ activeStepIdx: (s.activeStepIdx + 1) % this.stepDefs.length }));
+    }, 3200);
+  }
+  componentWillUnmount() { clearInterval(this._stepTick); }
+
+  renderVals() {
+    const { theme, installTab, activeStepIdx } = this.state;
+    const tabBase = { padding: '9px 18px', fontSize: '12.5px', cursor: 'pointer' };
+    const active = { ...tabBase, background: 'var(--fr-surface-sunken)', color: 'var(--fr-text)' };
+    const idle = { ...tabBase, background: 'transparent', color: 'var(--fr-text-muted)' };
+
+    const concepts = [
+      { term: 'general', def: 'The human \u2014 you. Talks only to the commander; never manages soldiers directly.' },
+      { term: 'commander', def: 'The orchestrator you run. Reads a mission, dispatches soldiers, and tracks their progress.' },
+      { term: 'soldier', def: 'A subagent the commander runs. Each one works a task independently, inside its own camp.' },
+      { term: 'camp', def: "A soldier's isolated workspace \u2014 its own worktree, so parallel soldiers never collide." },
+      { term: 'sentinel', def: 'Watches running soldiers and flags the commander when one needs human input.' },
+      { term: 'mission / scout', def: 'The two task types a commander can run: a mission executes work, a scout investigates and reports back.' },
+    ];
+
+    const romanNumerals = ['I', 'II', 'III', 'IV', 'V'];
+    const steps = this.stepDefs.map((def, i) => {
+      const isActive = i === activeStepIdx;
+      return {
+        numeral: romanNumerals[i],
+        title: def.title,
+        command: def.command,
+        description: def.description,
+        isActive,
+        select: () => this.setState({ activeStepIdx: i }),
+        rowStyle: {
+          display: 'flex', gap: 16, padding: '16px', cursor: 'pointer', borderRadius: 8,
+          background: isActive ? 'var(--fr-surface-sunken)' : 'transparent',
+          borderLeft: isActive ? '2px solid var(--fr-accent)' : '2px solid transparent',
+        },
+        numberStyle: { flexShrink: 0, width: 42, position: 'relative', zIndex: 1 },
+        badgeStyle: {
+          display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '50%',
+          fontFamily: "'Spectral', serif", fontSize: '12.5px',
+          background: isActive ? 'var(--fr-accent)' : 'var(--fr-bg)',
+          color: isActive ? 'var(--fr-accent-contrast)' : 'var(--fr-text-muted)',
+          border: isActive ? 'none' : '1px solid var(--fr-border)',
+        },
+        titleStyle: { fontSize: '14px', color: 'var(--fr-text)', fontWeight: isActive ? 600 : 400 },
+        progressStyle: { height: '100%', width: (isActive && !this.state.paused) ? '100%' : '0%', background: 'var(--fr-accent)', transition: (isActive && !this.state.paused) ? 'width 3.2s linear' : 'none' },
+      };
+    });
+    const activeDef = this.stepDefs[activeStepIdx];
+    const activeStep = {
+      command: activeDef.command,
+      output: activeDef.output.map(l => ({ text: l.text, style: { color: 'var(--fr-text-muted)' } })),
+    };
+
+    return {
+      theme,
+      otherTheme: theme === 'dark' ? 'light' : 'dark',
+      toggleTheme: () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+      curlTabStyle: installTab === 'curl' ? active : idle,
+      brewTabStyle: installTab === 'brew' ? active : idle,
+      installCommand: installTab === 'curl' ? 'curl -fsSL https://vexillum.lucasco.dev/install | bash' : 'brew install isaias-alt/tap/vexillum',
+      setInstallTab_curl: () => this.setState({ installTab: 'curl' }),
+      setInstallTab_brew: () => this.setState({ installTab: 'brew' }),
+      concepts,
+      steps,
+      activeStep,
+      stepCounter: `${String(activeStepIdx + 1).padStart(2, '0')} / ${String(this.stepDefs.length).padStart(2, '0')}`,
+      pauseSteps: () => this.setState({ paused: true }),
+      resumeSteps: () => this.setState({ paused: false }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

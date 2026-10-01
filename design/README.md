@@ -1,20 +1,32 @@
-# forum design system
+# Vexillum design system
 
-`Vexillum design system.zip` is the source of truth for the look of
-`vexillum forum`: direction B, "Marmol y Lapislazuli". It is delivered by the
-general and never edited here. The shipped CSS is a copy, adapted by hand.
+This directory is the unzipped export of the Vexillum design system (forum,
+docs, landing and brand), delivered by the general. It is the source of truth
+and is never edited by hand: a new export is unzipped over it. Reference
+screenshots (`uploads/`) are not kept. The shipped CSS is a copy, adapted by
+hand, as described below.
+
+| File | What it defines |
+|---|---|
+| `Vexillum Brand & Design System.dc.html` | brand: colors, type, mark |
+| `Vexillum Landing.dc.html` | the landing page (`site/`) |
+| `Vexillum Docs.dc.html` | the documentation site (`site/`) |
+| `Forum Design System.dc.html`, `Forum App.dc.html`, `forum-tokens.css` | `vexillum forum`: direction B, "Marmol y Lapislazuli" |
+| `assets/vexillum-mark.svg` | the vexillum mark |
+
+## forum
 
 ## What goes where
 
-| In the zip | Shipped as | Notes |
+| In the export | Shipped as | Notes |
 |---|---|---|
 | `forum-tokens.css` | `internal/forum/assets/chrome/forum-tokens.css` | Token names and values are copied verbatim. Only the theme wiring differs, by decision of the general: **dark is the default** (the zip's default is light) and does not follow `prefers-color-scheme`; the zip's light values are the alternative theme, under `:root[data-fr-theme="light"]`. |
 | `Forum Design System.dc.html` | `internal/forum/assets/chrome/forum.css` | The spec (surfaces 1-6: artifact frame, conversation panel, composer, annotation mode, whiteboard frame, toasts). Not copied: its component rules are re-expressed over the chrome's own selectors in `forum.css`, using only `--fr-*` tokens. |
 | (not in the zip) `site/app/icon.svg` | `internal/forum/assets/favicon.svg` | Verbatim copy of the site's vexillum icon, embedded and served at `/favicon.svg`; linked from the chrome and injected into artifacts that declare no icon of their own. It carries its own dark rounded background, so it reads on light and dark tabs. |
 | (derived from the tokens and the spec's component vocabulary) | `internal/forum/assets/chrome/forum-artifact.css` | The look of an artifact's *content*: typography, links, code, tables, cards, badges, buttons, decision-form controls, callouts, SVG figures. Built only from `--fr-*` tokens; the zip defines no content components, so this extends the spec's buttons, code and status colors rather than inventing a separate style. |
-| `assets/vexillum-mark.svg` and the other `.dc.html` files | not shipped | Brand and landing material; unrelated to the forum chrome. |
+| `assets/vexillum-mark.svg` and the other `.dc.html` files | not shipped by forum | Brand, landing and docs material; unrelated to the forum chrome. |
 
-The source lives here in `design/forum/`; the delivered CSS lives under
+The source lives here in `design/`; the delivered CSS lives under
 `internal/forum/assets/` and is embedded in the binary. No fonts, no CDN:
 system stacks only.
 
@@ -66,8 +78,8 @@ Tailwind or daisyUI. Safety rules, each covered by a test:
 
 ## Updating the identity
 
-1. Unzip the new design system to a scratch directory.
-2. Diff its `forum-tokens.css` against `internal/forum/assets/chrome/forum-tokens.css`
+1. Unzip the new export over this directory (delete `uploads/`).
+2. Diff `design/forum-tokens.css` (from git) against `internal/forum/assets/chrome/forum-tokens.css`
    and carry the token changes over, keeping the theme wiring described above (dark in the base `:root`, light under `data-fr-theme`).
 3. Compare the surfaces in the spec against `forum.css` and adjust components.
    `forum.css` must stay free of raw colors (a test enforces it): add or change

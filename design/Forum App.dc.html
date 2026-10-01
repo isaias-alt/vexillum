@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="./forum-tokens.css">
+  <style>
+    body { margin: 0; }
+    ::selection { background: var(--fr-accent); color: var(--fr-accent-contrast); }
+  </style>
+</helmet>
+
+<div class="fr-root" data-fr-theme="{{ theme }}" style="background:var(--fr-bg); color:var(--fr-text); font-family:var(--fr-font-sans); min-height:100vh;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 20px; border-bottom:1px solid var(--fr-border);">
+    <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--fr-text);">
+      <svg viewBox="0 0 32 32" fill="none" width="16" height="16" style="color:var(--fr-accent);">
+        <line x1="16" y1="3" x2="16" y2="27" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"></line>
+        <line x1="7" y1="9" x2="25" y2="9" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"></line>
+        <path d="M10,9.6 L22,9.6 L22,23 L20,25.5 L18,23 L16,25.5 L14,23 L12,25.5 L10,23 Z" fill="currentColor"></path>
+      </svg>
+      forum &middot; dashboard.html
+    </div>
+    <button class="fr-btn fr-btn--secondary" onClick="{{ toggleTheme }}">{{ otherTheme }}</button>
+  </div>
+
+  <div style="display:grid; grid-template-columns:minmax(0,1fr) 360px; height:calc(100vh - 49px);">
+
+    <!-- artifact pane -->
+    <div style="padding:24px; position:relative;">
+      <div class="fr-artifact-frame" style="height:100%; display:flex; flex-direction:column;">
+        <div class="fr-topbar">
+          <span class="fr-topbar-name">dashboard.html</span>
+          <span class="fr-status fr-status--listening"><span class="fr-status-dot"></span>listening</span>
+        </div>
+        <div class="fr-artifact-body" style="flex:1; padding:28px; position:relative;">
+          <div style="font-size:18px; font-weight:600; color:var(--fr-text); margin-bottom:6px;">Revenue overview</div>
+          <div style="font-size:13px; color:var(--fr-text-secondary); margin-bottom:24px;">artifact content rendered by the agent</div>
+          <div class="fr-selected-outline" style="display:inline-block; padding:10px 18px; font-size:13px; color:var(--fr-text);">Export CSV</div>
+
+          <!-- floating annotation card -->
+          <div class="fr-annotation-card" style="position:absolute; top:90px; left:220px; width:220px;">
+            <div style="font-size:11px; color:var(--fr-text-muted); margin-bottom:8px;">annotation</div>
+            <textarea placeholder="What should change here?" style="height:48px;"></textarea>
+            <div class="fr-annotation-card-actions">
+              <button class="fr-btn fr-btn--secondary">cancel</button>
+              <button class="fr-btn fr-btn--primary">queue</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- conversation pane -->
+    <div style="border-left:1px solid var(--fr-border); display:flex; flex-direction:column;">
+      <div class="fr-topbar"><span class="fr-topbar-name">conversation</span></div>
+      <div class="fr-panel" style="flex:1; overflow:auto;">
+        <div class="fr-msg fr-msg--user">move "Export CSV" next to the chart title</div>
+        <div class="fr-msg fr-msg--agent">
+          <p>Done. Moved the button and tightened the header spacing.</p>
+          <pre><code>.toolbar { justify-content: space-between; }</code></pre>
+        </div>
+      </div>
+      <div class="fr-composer">
+        <div class="fr-queue">
+          <div class="fr-queue-item"><span class="fr-queue-item-text">make the chart taller</span><button class="fr-queue-remove">&times;</button></div>
+        </div>
+        <div class="fr-composer-row">
+          <textarea placeholder="Write a message or annotate the artifact&hellip;"></textarea>
+          <button class="fr-btn fr-btn--primary">Send to Agent</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: 'dark' };
+  renderVals() {
+    const theme = this.state.theme;
+    return {
+      theme,
+      otherTheme: theme === 'dark' ? 'light' : 'dark',
+      toggleTheme: () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

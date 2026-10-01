@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="./forum-tokens.css">
+  <style>
+    body { margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; }
+  </style>
+</helmet>
+
+<div class="fr-root" data-fr-theme="{{ theme }}" style="min-height:100vh; padding:40px 5vw 80px;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:40px;">
+    <div>
+      <div style="font-size:11px; letter-spacing:0.08em; color:var(--fr-text-muted);">FORUM &middot; DIRECCI&Oacute;N B &mdash; M&Aacute;RMOL &amp; LAPISL&Aacute;ZULI</div>
+      <div style="font-size:26px; font-weight:600; margin-top:6px;">Superficies 1&ndash;6, con tokens aplicados</div>
+    </div>
+    <button class="fr-btn fr-btn--secondary" onClick="{{ toggleTheme }}">cambiar a {{ otherTheme }}</button>
+  </div>
+
+  <!-- TOKEN TABLE -->
+  <section style="margin-bottom:56px;">
+    <h2 style="font-size:16px; margin-bottom:4px;">Tabla de tokens</h2>
+    <div style="font-size:12.5px; color:var(--fr-text-secondary); margin-bottom:16px;">Ratios de contraste aproximados, texto normal sobre --fr-surface / --fr-bg correspondiente.</div>
+    <div style="overflow-x:auto;">
+      <table style="border-collapse:collapse; width:100%; font-size:12.5px;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--fr-border-strong); text-align:left;">
+            <th style="padding:8px 10px;">token</th>
+            <th style="padding:8px 10px;">claro</th>
+            <th style="padding:8px 10px;">oscuro</th>
+            <th style="padding:8px 10px;">uso</th>
+            <th style="padding:8px 10px;">contraste</th>
+          </tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="12">
+            <tr style="border-bottom:1px solid var(--fr-border);">
+              <td style="padding:8px 10px; font-family:var(--fr-font-mono);">{{ t.name }}</td>
+              <td style="padding:8px 10px;"><span style="{{ t.lightSwatchStyle }}"></span> {{ t.light }}</td>
+              <td style="padding:8px 10px;"><span style="{{ t.darkSwatchStyle }}"></span> {{ t.dark }}</td>
+              <td style="padding:8px 10px; color:var(--fr-text-secondary);">{{ t.use }}</td>
+              <td style="padding:8px 10px; color:var(--fr-text-secondary);">{{ t.contrast }}</td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 1. ARTIFACT FRAME + TOPBAR -->
+  <section style="margin-bottom:48px;">
+    <h2 style="font-size:16px; margin-bottom:14px;">1. Marco del artifact + estados de conexi&oacute;n</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px;">
+      <div class="fr-artifact-frame">
+        <div class="fr-topbar"><span class="fr-topbar-name">dashboard.html</span><span class="fr-status fr-status--listening"><span class="fr-status-dot"></span>listening</span></div>
+        <div class="fr-artifact-body" style="padding:20px; font-size:12px; color:var(--fr-text-secondary);">artifact content</div>
+      </div>
+      <div class="fr-artifact-frame">
+        <div class="fr-topbar"><span class="fr-topbar-name">dashboard.html</span><span class="fr-status fr-status--idle"><span class="fr-status-dot"></span>not listening</span></div>
+        <div class="fr-artifact-body" style="padding:20px; font-size:12px; color:var(--fr-text-secondary);">artifact content</div>
+      </div>
+      <div class="fr-artifact-frame">
+        <div class="fr-topbar"><span class="fr-topbar-name">dashboard.html</span><span class="fr-status fr-status--disconnected"><span class="fr-status-dot"></span>browser disconnected</span></div>
+        <div class="fr-artifact-body" style="padding:20px; font-size:12px; color:var(--fr-text-secondary);">artifact content</div>
+      </div>
+      <div class="fr-artifact-frame">
+        <div class="fr-topbar"><span class="fr-topbar-name">dashboard.html</span><span class="fr-status fr-status--ended"><span class="fr-status-dot"></span>session ended</span></div>
+        <div class="fr-artifact-body" style="padding:20px; font-size:12px; color:var(--fr-text-secondary);">artifact content</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 & 3. CONVERSATION + COMPOSER -->
+  <section style="margin-bottom:48px;">
+    <h2 style="font-size:16px; margin-bottom:14px;">2&ndash;3. Panel de conversaci&oacute;n + compositor</h2>
+    <div class="fr-artifact-frame" style="max-width:480px;">
+      <div class="fr-topbar"><span class="fr-topbar-name">conversation</span><span class="fr-status fr-status--listening"><span class="fr-status-dot"></span>listening</span></div>
+      <div class="fr-panel">
+        <div class="fr-msg fr-msg--user">move the CTA button to the top right</div>
+        <div class="fr-msg fr-msg--agent">
+          <p>Done &mdash; moved it and adjusted the nav spacing.</p>
+          <pre><code>button.cta { justify-self: end; }</code></pre>
+        </div>
+      </div>
+      <div class="fr-composer">
+        <div class="fr-queue">
+          <div class="fr-queue-item"><span class="fr-queue-item-text">make the header sticky</span><button class="fr-queue-remove">&times;</button></div>
+          <div class="fr-queue-item"><span class="fr-queue-item-text">increase body font size</span><button class="fr-queue-remove">&times;</button></div>
+        </div>
+        <div class="fr-composer-row">
+          <textarea placeholder="Write a message or annotate the artifact&hellip;"></textarea>
+          <button class="fr-btn fr-btn--primary">Send to Agent</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. ANNOTATION MODE -->
+  <section style="margin-bottom:48px;">
+    <h2 style="font-size:16px; margin-bottom:14px;">4. Modo anotaci&oacute;n</h2>
+    <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
+      <div class="fr-artifact-frame" style="width:320px;">
+        <div class="fr-artifact-body" style="padding:24px; font-size:13px; line-height:1.8; color:var(--fr-text-secondary);">
+          <div class="fr-hover-outline" style="display:inline-block; padding:4px 8px; margin-bottom:10px;">hover outline (dashed)</div><br/>
+          <div class="fr-selected-outline" style="display:inline-block; padding:4px 8px; margin-bottom:10px;">selected element</div><br/>
+          This paragraph has a <span class="fr-text-highlight">highlighted text selection</span> inside arbitrary artifact copy.
+        </div>
+      </div>
+      <div class="fr-annotation-card">
+        <div style="font-size:11.5px; color:var(--fr-text-muted); margin-bottom:8px;">annotation</div>
+        <textarea placeholder="What should change here?"></textarea>
+        <div class="fr-annotation-card-actions">
+          <button class="fr-btn fr-btn--secondary">cancel</button>
+          <button class="fr-btn fr-btn--primary">queue</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. WHITEBOARD -->
+  <section style="margin-bottom:48px;">
+    <h2 style="font-size:16px; margin-bottom:14px;">5. Marco del whiteboard</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px;">
+      <div class="fr-board-frame" style="height:160px;">
+        <div class="fr-board-topbar"><span class="fr-topbar-name">whiteboard</span><span class="fr-status fr-status--idle"><span class="fr-status-dot"></span>locked</span></div>
+        <div class="fr-board-locked-overlay"><div class="fr-board-locked-hint">click para editar</div></div>
+      </div>
+      <div class="fr-board-frame" style="height:160px;">
+        <div class="fr-board-topbar">
+          <span class="fr-board-editing-badge"><span class="fr-status-dot"></span>editing</span>
+          <button class="fr-btn fr-btn--bronze" style="padding:5px 10px; font-size:11.5px;">Queue feedback</button>
+        </div>
+        <div style="padding:20px; font-size:12px; color:var(--fr-text-muted);">excalidraw canvas</div>
+      </div>
+      <div class="fr-board-frame" style="height:160px;">
+        <div class="fr-board-topbar"><span class="fr-topbar-name">whiteboard &mdash; fullscreen</span><button class="fr-btn fr-btn--secondary" style="padding:5px 10px; font-size:11.5px;">exit fullscreen</button></div>
+        <div style="padding:20px; font-size:12px; color:var(--fr-text-muted);">excalidraw canvas, expanded</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. TOASTS / DIALOGS / EMPTY / TRAYS -->
+  <section>
+    <h2 style="font-size:16px; margin-bottom:14px;">6. Toasts, di&aacute;logos, vac&iacute;os, bandejas</h2>
+    <div style="display:flex; flex-direction:column; gap:12px; max-width:420px; margin-bottom:20px;">
+      <div class="fr-toast fr-toast--success">sent to agent</div>
+      <div class="fr-toast fr-toast--danger">connection lost &mdash; retrying</div>
+      <div class="fr-toast fr-toast--info">3 messages queued</div>
+    </div>
+
+    <div class="fr-board-frame" style="height:180px; position:relative; margin-bottom:20px;">
+      <div class="fr-dialog-backdrop">
+        <div class="fr-dialog">
+          <h3>Discard queued messages?</h3>
+          <p>You have 2 messages waiting to send. This can&apos;t be undone.</p>
+          <div class="fr-dialog-actions">
+            <button class="fr-btn fr-btn--secondary">cancel</button>
+            <button class="fr-btn" style="background:var(--fr-danger); color:#fff;">discard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fr-artifact-frame" style="margin-bottom:20px;">
+      <div class="fr-empty">
+        <div class="fr-empty-title">No conversation yet</div>
+        <div class="fr-empty-sub">Annotate an element or write a message below to start talking with the agent about this artifact.</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div class="fr-attachments-tray" style="border:1px solid var(--fr-border); border-radius:var(--fr-radius-md);">
+        <span class="fr-attachment-chip">screenshot.png</span>
+        <span class="fr-attachment-chip">log.txt</span>
+      </div>
+      <div class="fr-notice-tray">
+        <div class="fr-notice-item"><span class="fr-notice-item-icon">&#9888;</span>layout shifted outside viewport</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: 'light' };
+
+  tokenRow(name, light, dark, use, contrast) {
+    return {
+      name, light, dark, use, contrast,
+      lightSwatchStyle: { display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: light, border: '1px solid rgba(0,0,0,0.15)', verticalAlign: 'middle', marginRight: 6 },
+      darkSwatchStyle: { display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: dark, border: '1px solid rgba(255,255,255,0.15)', verticalAlign: 'middle', marginRight: 6 },
+    };
+  }
+
+  renderVals() {
+    const tokens = [
+      this.tokenRow('--fr-bg', '#F2F1EC', '#15171A', 'app/page background', '\u2014'),
+      this.tokenRow('--fr-surface', '#FFFFFF', '#1C1F24', 'cards, panels, frames', '\u2014'),
+      this.tokenRow('--fr-text', '#1A1D22', '#E9EAEC', 'primary text', '\u224816:1 / \u224815:1'),
+      this.tokenRow('--fr-text-secondary', '#5A5E66', '#A0A3A9', 'secondary text, body copy', '\u22487:1'),
+      this.tokenRow('--fr-text-muted', '#8A8D93', '#6E7177', 'placeholders, timestamps', '\u22484.6:1'),
+      this.tokenRow('--fr-accent (lapis)', '#1F4E79', '#6FA1CB', 'primary button, listening state, links', '\u22488:1 / \u22487.5:1'),
+      this.tokenRow('--fr-success (verdigris)', '#2F6B54', '#6FBE9A', 'connected, sent, done', '\u22484.9:1 / \u22489:1'),
+      this.tokenRow('--fr-danger (cinnabar)', '#A8341F', '#E08268', 'disconnected, destructive', '\u22486.5:1 / \u22486:1'),
+      this.tokenRow('--fr-selection (tirio)', '#5B2A5E', '#B695B8', 'annotation / text selection only', '\u22489:1 / \u22485:1'),
+      this.tokenRow('--fr-bronze', '#9C7A3F', '#C9A15A', 'selection outline, secondary action, shared w/ vexillum', '\u22484.6:1 / \u22487:1'),
+      this.tokenRow('--fr-border', '#DADAD4', '#292D33', 'dividers, frame outlines', '\u2014'),
+    ];
+    const theme = this.state.theme;
+    return {
+      theme,
+      otherTheme: theme === 'light' ? 'oscuro' : 'claro',
+      toggleTheme: () => this.setState(s => ({ theme: s.theme === 'light' ? 'dark' : 'light' })),
+      tokens,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
