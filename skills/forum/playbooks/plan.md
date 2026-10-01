@@ -36,3 +36,19 @@ Use when: explain a product or technical plan before implementation.
 
 - Make the plan and its uncertainties easy to react to: the user can write messages in the panel and answer your open questions through decision forms (see the input playbook), then press Send to Agent.
 - After each round of feedback, edit the artifact (the browser reloads it) and `--reply` with what changed.
+
+## Styles (forum-artifact.css)
+
+Build the plan from forum's own classes (details in SKILL.md, "Design: use forum's own styles"); no Tailwind or daisyUI from a CDN. A minimal plan skeleton: a page container, a status badge, a callout for the decision needed, and cards for the approach and risks.
+
+```html
+<main class="fr-page fr-stack">
+  <h1>Plan: bounded prompt queue <span class="fr-badge fr-badge--accent">proposal</span></h1>
+  <div class="fr-callout fr-callout--info"><strong>Goal.</strong> Never lose a queued prompt, never grow without bound.</div>
+  <section class="fr-grid">
+    <article class="fr-card"><h3>Approach</h3><p>Cap at 200, persist atomically.</p></article>
+    <article class="fr-card fr-card--accent"><h3>Risks</h3><p>A full queue must tell the user, not drop silently.</p></article>
+  </section>
+  <div class="fr-callout fr-callout--bronze"><strong>Open question.</strong> Cap per session or global?</div>
+</main>
+```

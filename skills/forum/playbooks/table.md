@@ -36,3 +36,23 @@ Use when: turn dense records into scan-friendly review surfaces.
 
 - If a row implies a follow-up change, give it an action control that queues a specific prompt: `window.forum.queuePrompt('Rename foo to bar in src/a.go', { tag: 'row-action', text: 'foo', selector: '#row-12', target: { row: 12 } })`. `target` and `selector` tell you exactly which row the prompt is about.
 - When one action covers several rows and completeness matters, use the tracked batch pattern from the input playbook so the user submits one explicit set of IDs and you account for each of them.
+
+## Styles (forum-artifact.css)
+
+Use the forum classes, not Tailwind or daisyUI from a CDN. Wrap the table so a wide one scrolls instead of overflowing, and show status as a text badge (never color alone):
+
+```html
+<div class="fr-table-wrap">
+  <table>
+    <thead><tr><th>File</th><th>Finding</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="row-12"><td><code>internal/forum/hub.go</code></td><td>Queue is not bounded</td>
+          <td><span class="fr-badge fr-badge--danger">blocker</span></td></tr>
+      <tr><td><code>cmd/vexillum/main.go</code></td><td>Help text is stale</td>
+          <td><span class="fr-badge fr-badge--bronze">minor</span></td></tr>
+    </tbody>
+  </table>
+</div>
+```
+
+Cards for records with different shapes: `<article class="fr-card"><h3>...</h3><p>...</p><span class="fr-badge">tag</span></article>` inside a `<section class="fr-grid">`.

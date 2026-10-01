@@ -25,7 +25,7 @@ Use when: you need to collect user input on decisions, choices, preferences, tri
 
 ## Design rules
 
-- Native controls (radios, checkboxes, text inputs, selects, textareas, buttons, labels, `<details>`, contenteditable) work exactly as authored: forum installs no click, change or submit handler, so build option UIs from them.
+- Native controls (radios, checkboxes, text inputs, selects, textareas, buttons, labels, `<details>`, contenteditable) work exactly as authored: forum installs no click, change or submit handler of its own, so build option UIs from them. One thing to tell the user: while the chrome's **Annotate** switch is On (its default), a plain click on any control annotates it instead of acting, and Alt/Option+click acts on it normally. Say so next to your form ("switch Annotate Off, or hold Alt/Option while clicking") so a decision form is not mistaken for broken.
 - For reversible choices, never call `window.forum.queuePrompt()` from radio `change` or option `click` handlers; those only update local selected state.
 - Use a per-question form submit (or an explicit Queue answer button) to read the current values and call `window.forum.queuePrompt()` exactly once for the final answer.
 - Put `data-forum-question="<id>"` on a question wrapper, or pass `queueKey`, so a re-submission before sending replaces the prior unsent answer for that question.
@@ -78,3 +78,25 @@ The receipt you give for a tracked batch must assign every submitted ID exactly 
 A custom (non-native) choice UI should make its option elements update local state, then use a separate Queue answer button to queue the final value.
 
 Use `window.forum.queuePrompt` for user intent, not for analytics or UI-only state changes. End every input path with an obvious way for the user to send the feedback to you.
+
+## Styles (forum-artifact.css)
+
+Style decision forms with forum's classes, not Tailwind or daisyUI from a CDN. `fr-choice` turns a radio or checkbox into a selectable row that highlights when checked, and a `submit` button is the primary action. The same form as above, styled:
+
+```html
+<form class="fr-form" data-forum-question="plan" onsubmit="event.preventDefault();
+  const choice = new FormData(event.currentTarget).get('plan');
+  if (choice) window.forum.queuePrompt('Use the ' + choice + ' plan', {
+    tag: 'choice', text: 'Plan: ' + choice, element: event.currentTarget,
+    data: { question: 'plan', answer: choice } });">
+  <fieldset class="fr-choices" style="border:0;padding:0">
+    <legend>Which plan?</legend>
+    <label class="fr-choice"><input type="radio" name="plan" value="Starter">
+      <span>Starter <small class="fr-muted">For small teams</small></span></label>
+    <label class="fr-choice"><input type="radio" name="plan" value="Pro">
+      <span>Pro <small class="fr-muted">Includes the audit log</small></span></label>
+  </fieldset>
+  <div class="fr-field"><label for="why">Why? (optional)</label><textarea id="why" rows="2"></textarea></div>
+  <div class="fr-actions"><button type="submit">Queue this answer</button></div>
+</form>
+```

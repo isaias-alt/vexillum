@@ -31,7 +31,7 @@ Use when: explain relationships, flows, state, architecture, and concepts with i
 - Keep labels to a few words and put prose beside the figure in HTML: SVG text does not wrap, so short labels are also the overflow discipline.
 - Keep figures self-contained: no external images, fonts or scripts.
 - Check the artifact in light, dark and a narrow viewport before handing it over.
-- When the user asked for a whiteboard, initialize Mermaid theme-aware (`prefers-color-scheme`) instead of hardcoding one theme.
+- When the user asked for a whiteboard, initialize Mermaid theme-aware (read `data-fr-theme` on `<html>`, which follows the user's dark/light switch) instead of hardcoding one theme.
 
 ## Pitfalls
 
@@ -44,3 +44,24 @@ Use when: explain relationships, flows, state, architecture, and concepts with i
 
 - Make modules, edges and captions easy to discuss: when a relationship is uncertain, label it as a question and add a small decision form so the user can resolve it (input playbook).
 - A whiteboard's edits arrive as a `tag: whiteboard` prompt with a bounded summary and two file paths: read the summary, then update the Mermaid source in the artifact.
+
+## Styles (forum-artifact.css)
+
+Draw the figure with forum's SVG classes instead of hard-coded colors, so it follows the dark and light themes, and wrap it in `fr-figure`. No Tailwind, daisyUI or external CSS from a CDN.
+
+```html
+<figure class="fr-figure">
+  <svg viewBox="0 0 360 80" width="100%" role="img" aria-labelledby="t1">
+    <title id="t1">The commander dispatches a soldier</title>
+    <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="fr-arrow" d="M0 0L10 5L0 10z"/></marker></defs>
+    <rect id="commander" class="fr-node fr-node--accent" x="10" y="20" width="110" height="40" rx="6"/>
+    <text class="fr-label" x="65" y="45" text-anchor="middle">commander</text>
+    <path class="fr-edge" d="M120 40H220" marker-end="url(#arrow)"/>
+    <rect id="soldier" class="fr-node" x="230" y="20" width="110" height="40" rx="6"/>
+    <text class="fr-label" x="285" y="45" text-anchor="middle">soldier</text>
+  </svg>
+  <figcaption>Dispatch flow</figcaption>
+</figure>
+```
+
+Node variants: `fr-node--accent`, `--success`, `--danger`, `--bronze`; secondary text: `fr-label fr-label--muted`.

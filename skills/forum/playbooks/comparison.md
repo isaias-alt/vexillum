@@ -37,3 +37,25 @@ Use when: show options, tradeoffs, and current vs target behavior.
 
 - If the goal is selection, give each option a native radio in one `<form data-forum-question="...">` plus a field for the rationale, and queue the chosen option with its rationale once, on submit (input playbook).
 - A re-submission replaces the previous unsent answer thanks to the question key.
+
+## Styles (forum-artifact.css)
+
+Use forum's classes, not Tailwind or daisyUI from a CDN. Option cards in a grid, the recommended one accented, each with badges for its cost and benefit:
+
+```html
+<section class="fr-grid">
+  <article class="fr-card">
+    <h3>A. Rewrite in Go</h3>
+    <p>One binary, no runtime.</p>
+    <span class="fr-badge fr-badge--success">simple to ship</span>
+    <span class="fr-badge fr-badge--danger">3 weeks</span>
+  </article>
+  <article class="fr-card fr-card--accent">
+    <h3>B. Keep the wrapper <span class="fr-badge fr-badge--accent">recommended</span></h3>
+    <p>Ship now, revisit later.</p>
+    <span class="fr-badge fr-badge--bronze">keeps a Node dependency</span>
+  </article>
+</section>
+```
+
+For before/after of the same thing, use two `fr-card`s with matching headings, and a `fr-table-wrap` table when the criteria are explicit.

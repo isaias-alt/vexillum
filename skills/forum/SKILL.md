@@ -284,13 +284,69 @@ combines several, e.g. a plan with a comparison and a diagram):
 | `playbooks/diagram.md` | Explain relationships, flows, state or architecture with illustrations. |
 | `playbooks/table.md` | Turn dense records into scan-friendly review surfaces. |
 
-## Design
+## Design: use forum's own styles
 
-forum injects no design system: artifacts stay portable, so they render the
-same when opened directly. Decide the look in this order: (1) what the user
-asked for; (2) otherwise the design system of the project the artifact is
-about (theme config, CSS variables, component library, existing pages); (3)
-only if both yield nothing, deliberate hand-written CSS. Give the page its own
-background and text colors (and a dark variant via `prefers-color-scheme`), so
-text is never invisible on the chrome's surface. No horizontal overflow at any
-width. Say in your handoff which source you used.
+forum gives every artifact its own identity (the vexillum design system), so
+**do not pull Tailwind, daisyUI, Bootstrap or any CSS framework from a CDN**:
+they bring a different look, need the network, and fight the theme. Write plain
+semantic HTML and use the classes below. The stylesheet is injected for you
+(`/forum-assets/forum-tokens.css` and `/forum-assets/forum-artifact.css`, linked
+ahead of your markup), follows the user's dark/light switch (dark by default),
+and needs no `<link>` from you.
+
+- **Bare elements are already styled**: `h1`-`h6`, `p`, `a`, `ul`/`ol`,
+  `blockquote`, `code`, `pre`, `table`, `button`, `input`, `select`,
+  `textarea`, `fieldset`, `details`. Write them without classes first.
+- **Components** (classes): `fr-card` (`fr-card--accent`), `fr-badge`
+  (`--accent` `--success` `--danger` `--bronze`), `fr-callout` (`--info`
+  `--success` `--danger` `--bronze`), `fr-btn` (`--primary` `--secondary`
+  `--bronze` `--danger`), `fr-stat` (`fr-stat-value`, `fr-stat-label`),
+  `fr-table-wrap` (wraps a `<table>` so wide tables scroll instead of
+  overflowing), `fr-figure` (an SVG with a `figcaption`).
+- **Decision forms**: `fr-form` (a stack), `fr-field` (label above control),
+  `fr-choices` + `fr-choice` (a radio or checkbox as a selectable row; the
+  checked one highlights itself), `fr-actions` (button row). A
+  `<button type="submit">` is the primary action by default.
+- **Layout helpers** (opt-in, never applied to the page by default):
+  `fr-page` (centered 72rem column with padding), `fr-stack` (vertical gap),
+  `fr-cluster` (wrapping row), `fr-grid` (responsive columns), `fr-muted`.
+- **SVG diagrams**: `fr-node` (`--accent` `--success` `--danger` `--bronze`),
+  `fr-edge`, `fr-arrow`, `fr-label` (`--muted`) instead of hard-coded colors.
+- **Tokens**: for anything custom, use the custom properties (`--fr-bg`,
+  `--fr-surface`, `--fr-surface-sunken`, `--fr-border`, `--fr-text`,
+  `--fr-text-secondary`, `--fr-accent`, `--fr-success`, `--fr-danger`,
+  `--fr-bronze`, `--fr-space-1..6`, `--fr-radius-sm|md|lg`, `--fr-font-sans`,
+  `--fr-font-mono`, ...), never raw hex, so the theme switch keeps working.
+  Do not use `--fr-selection` (tyrian): it belongs to annotations.
+
+A page skeleton:
+
+```html
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Plan: rename the sync layer</title></head>
+<body>
+  <main class="fr-page fr-stack">
+    <h1>Rename the sync layer <span class="fr-badge fr-badge--accent">proposal</span></h1>
+    <p class="fr-muted">What changes, why, and what I need from you.</p>
+    <div class="fr-callout fr-callout--info">One decision needed: see the form at the end.</div>
+    <section class="fr-grid">
+      <article class="fr-card"><h3>Before</h3><p>...</p></article>
+      <article class="fr-card fr-card--accent"><h3>After</h3><p>...</p></article>
+    </section>
+  </main>
+</body>
+</html>
+```
+
+**Your own CSS still wins.** The forum stylesheet sits in a low-priority
+cascade layer, so any `<style>` you write (or any CSS file you link) overrides
+it whatever the specificity; small tweaks for one artifact are fine. If an
+artifact needs a completely different look (a mock of the user's product in
+its own design system, a styled slide deck), opt out of the forum stylesheet
+with `<meta name="forum-style" content="none">` in `<head>` and style the page
+yourself; `window.forum` keeps working. When you mock another app's UI, that is
+the one place to bring that app's own styles. Either way: give the page no
+external CDN dependencies, and check the result in the dark and the light
+theme and at a narrow width. No horizontal overflow at any width. Say in your
+handoff whether you used the forum styles or opted out, and why.
