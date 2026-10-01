@@ -8,7 +8,7 @@ Una mission terminada sale de su camp de dos maneras. Las dos son explícitas, y
 | | `vexillum land` | `vexillum ship` |
 | --- | --- | --- |
 | Resultado | fast-forward local de tu checkout | un pull request real de GitHub |
-| Pipeline de revisión | ninguno; la revisaste vos | lint, tests, una revisión hecha por un soldier, un chequeo de docs |
+| Pipeline de revisión | ninguno; la revisaste vos | lint, tests, una revisión adversarial, un chequeo de docs |
 | Necesita | un checkout limpio | `gh` instalado |
 | Sale de la máquina | no | sí, hace push a `origin` |
 
@@ -32,8 +32,32 @@ Corre, en orden, dentro del camp de la mission, y se detiene en el primer fallo 
 
 1. **lint** - `go vet ./...` en un proyecto Go, `npm run lint --if-present` en uno Node;
 2. **tests** - `go test ./...` o `npm run test --if-present`;
-3. **review** - una revisión del diff hecha por un soldier;
+3. **review** - una revisión adversarial del diff hecha por una sesión nueva de Claude Code (ver abajo);
 4. **docs** - en proyectos Go, las declaraciones exportadas nuevas deben llevar un comentario de documentación.
+
+### La revisión adversarial
+
+La revisión corre en una sesión nueva de Claude Code (nunca una reanudada) que no tiene nada del contexto del autor. Recibe la branch, los commits base y objetivo y la lista de archivos cambiados que calculó vexillum - no el diff. Lee el diff ella misma con `git`, asume que el cambio está mal e intenta romperlo: correctness, casos borde, manejo de errores, concurrencia, seguridad y autorización, regresiones y la calidad de los tests nuevos. Un hallazgo necesita un escenario de fallo concreto del uso previsto del cambio, y cada clase de defecto se reporta una sola vez con todos sus sitios hermanos. Corre con `sonnet` en esfuerzo `high` y no corre los tests (ya los corrió el paso anterior).
+
+Cuando la mission tiene prompt, cada componente que el cambio introdujo también se juzga contra ese enunciado original; lo que no se pidió se reporta como warning con remedio "quitarlo". Una mission sin prompt omite esta pasada, y `ship` lo dice.
+
+El revisor devuelve JSON: hallazgos (`file`, `line`, `severity` error/warning/info, `action` ask-user/auto-fix/no-op, descripción, escenario de fallo, sitios hermanos), los `reviewed_paths` que realmente leyó y un nivel de riesgo. Si el JSON no valida, la revisión se reintenta (hasta dos veces más). Después:
+
+- cualquier hallazgo de severidad **error o warning bloquea el ship**, incluidos los `ask-user`, que necesitan tu decisión; los **info** no bloquean;
+- un archivo cambiado que falta en `reviewed_paths` cuenta como no revisado y hace fallar el paso;
+- sin JSON válido tras los reintentos, o un timeout, el paso falla. Ninguno de los dos es jamás un pass.
+
+Los hallazgos se imprimen en la salida de `vexillum ship`. Si el ship pasa, los hallazgos info se agregan al cuerpo del pull request.
+
+### Revisar, arreglar, revisar (opt-in)
+
+```bash
+vexillum ship <task-id> --fix [--max-rounds 2] [--timeout 20m]
+```
+
+Sin `--fix`, una revisión que bloquea solo rechaza el ship e imprime los hallazgos. Con `--fix`, los hallazgos marcados `auto-fix` van a un fixer headless en el camp, que arregla la invariante en todos los sitios hermanos (y prefiere quitar un componente no requerido a endurecerlo). vexillum commitea su trabajo, corre lint y tests de nuevo, y un revisor nuevo vuelve a revisar, sabiendo que los commits del fixer son código sin revisar y deben cumplir el mismo estándar. Quien prescribió una corrección jamás la certifica.
+
+Los hallazgos `ask-user` nunca se auto-corrigen: si algún hallazgo bloqueante necesita a un humano, `ship` rechaza sin ronda de arreglo. `--max-rounds` limita las rondas de arreglo (por defecto 2); agotarlas sin una revisión que pase rechaza el ship. `--timeout` limita cada corrida de revisor o fixer (por defecto 20 minutos).
 
 Sin `go.mod` ni `package.json`, lint y tests pasan con una nota de que no se detectó nada. Es sincrónico: cuando `ship` vuelve, todo el pipeline terminó. Solo después de que pasan todos los pasos hace push de la branch del camp a `origin` y corre `gh pr create`. Ningún agente decide si eso ocurre ni cuándo: es la única acción con un efecto irreversible fuera de la máquina.
 

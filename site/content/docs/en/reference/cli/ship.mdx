@@ -10,13 +10,39 @@ Ship a finished mission through vexillum's own tribunal pipeline,
 opening a real pull request.
 
 Usage:
-  vexillum ship <task-id>
+  vexillum ship <task-id> [--fix] [--max-rounds <n>] [--timeout <duration>]
 
-Runs, in order, inside the mission's own camp: lint, tests, a soldier-
-driven code review of the diff, and a docs check - stopping at the first
-step that fails and reporting it, without pushing or opening anything.
-Every step runs synchronously; "vexillum ship" doesn't return until the
-whole pipeline has settled, there's nothing external to track afterward.
+Runs, in order, inside the mission's own camp: lint, tests, an adversarial
+code review of the diff, and a docs check - stopping at the first step that
+fails and reporting it, without pushing or opening anything. Every step
+runs synchronously; "vexillum ship" doesn't return until the whole pipeline
+has settled, there's nothing external to track afterward.
+
+The review runs in a brand-new Claude Code session that has none of the
+author's context: it reads the diff itself with git, assumes the change is
+wrong and tries to break it, and reports structured findings (file, line,
+severity, action, a concrete failure scenario, sibling sites) plus the
+files it actually read. When the mission has a prompt, every component the
+change introduced is also judged against it, and anything not required is
+reported as a warning whose remedy is removing it. Any finding of severity
+error or warning blocks the ship (including those that need a human
+decision); info findings do not block and are added to the pull request
+body. A changed file the reviewer did not report reading, an answer that
+is not valid findings JSON after retries, or a timeout all fail the step -
+never a pass. Findings are printed in this command's output.
+
+By default a blocking review only rejects. With --fix, findings the
+reviewer marked auto-fix are handed to a headless fixer in the camp, its
+work is committed, and lint, tests and the review run again with a new
+reviewer that treats the fixer's commits as unreviewed code. Findings that
+need a human decision (ask-user) are never fixed: the ship is rejected
+with them. The loop is bounded by --max-rounds (fix rounds, default 2);
+exhausting it without a passing review rejects the ship.
+
+  --fix                 enable the review -> fix -> review loop
+  --max-rounds <n>      maximum fix rounds with --fix (default 2)
+  --timeout <duration>  absolute cap on each reviewer or fixer run, e.g.
+                        30m (default 20m); exceeding it fails the step
 
 Once every step passes, pushes the mission's camp branch to the real
 remote ("origin") and opens the pull request itself with "gh pr create" -

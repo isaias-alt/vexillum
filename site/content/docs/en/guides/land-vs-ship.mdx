@@ -8,7 +8,7 @@ A finished mission leaves its camp in one of two ways. Both are explicit, and ne
 | | `vexillum land` | `vexillum ship` |
 | --- | --- | --- |
 | Result | local fast-forward of your checkout | a real GitHub pull request |
-| Review pipeline | none; you reviewed it | lint, tests, a soldier-driven review, a docs check |
+| Review pipeline | none; you reviewed it | lint, tests, an adversarial review, a docs check |
 | Needs | a clean checkout | `gh` installed |
 | Leaves the machine | no | yes, it pushes to `origin` |
 
@@ -32,8 +32,32 @@ Runs, in order, inside the mission's camp, stopping at the first failure without
 
 1. **lint** - `go vet ./...` for a Go project, `npm run lint --if-present` for a Node one;
 2. **tests** - `go test ./...` or `npm run test --if-present`;
-3. **review** - a soldier-driven review of the diff;
+3. **review** - an adversarial review of the diff by a fresh Claude Code session (see below);
 4. **docs** - for Go projects, new exported declarations must carry a doc comment.
+
+### The adversarial review
+
+The review runs in a brand-new Claude Code session (never a resumed one) that has none of the author's context. It is given the branch, the base and target commits and the list of changed files vexillum computed - not the diff. It reads the diff itself with `git`, assumes the change is wrong and tries to break it: correctness, edge cases, error handling, concurrency, security and authorization, regressions and the quality of new tests. A finding needs a concrete failure scenario from the change's intended use, and each defect class is reported once with all its sibling sites. It runs with `sonnet` at `high` effort and does not run the tests (the previous step did).
+
+When the mission has a prompt, every component the change introduced is also judged against that original statement; whatever was not required is reported as a warning whose remedy is removing it. A mission without a prompt skips this pass, and `ship` says so.
+
+The reviewer returns JSON: findings (`file`, `line`, `severity` error/warning/info, `action` ask-user/auto-fix/no-op, description, failure scenario, sibling sites), the `reviewed_paths` it actually read, and a risk level. If the JSON does not validate, the review is retried (up to two more times). Then:
+
+- any finding of severity **error or warning blocks the ship**, including `ask-user` ones, which need your decision; **info** findings do not block;
+- a changed file missing from `reviewed_paths` counts as unreviewed and fails the step;
+- no valid JSON after the retries, or a timeout, fails the step. Neither is ever a pass.
+
+Findings are printed in the output of `vexillum ship`. If the ship passes, the info findings are added to the pull request body.
+
+### Review, fix, review (opt-in)
+
+```bash
+vexillum ship <task-id> --fix [--max-rounds 2] [--timeout 20m]
+```
+
+Without `--fix`, a blocking review only rejects the ship and prints the findings. With `--fix`, findings marked `auto-fix` go to a headless fixer in the camp, which fixes the invariant at every sibling site (and prefers removing an unrequired component to hardening it). vexillum commits its work, runs lint and tests again, and a new reviewer reviews again, told that the fixer's commits are unreviewed code and must meet the same standard. Whoever prescribed a fix never certifies it.
+
+`ask-user` findings are never auto-fixed: if any blocking finding needs a human, `ship` rejects without a fix round. `--max-rounds` caps the fix rounds (default 2); running out without a passing review rejects the ship. `--timeout` caps each single reviewer or fixer run (default 20 minutes).
 
 With neither `go.mod` nor `package.json`, lint and tests pass with a note that nothing was detected. It is synchronous: when `ship` returns, the whole pipeline has settled. Only after every step passes does it push the camp branch to `origin` and run `gh pr create`. No agent decides whether or when that happens: it is the one action with an irreversible effect outside the machine.
 

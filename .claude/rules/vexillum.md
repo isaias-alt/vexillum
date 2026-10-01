@@ -248,8 +248,9 @@ missions - but that's their call, not your default.
 `vexillum land` merges locally, no PR, no review pipeline - the right
 default for most missions in this project. If the general instead wants
 a real, validated GitHub PR for a finished mission, offer `vexillum ship <task-id>`
-instead. It runs vexillum's own tribunal pipeline (lint, tests, a
-soldier-driven review of the diff, a docs check) against the mission's
+instead. It runs vexillum's own tribunal pipeline (lint, tests, an
+adversarial review of the diff by a fresh session that reads the diff
+itself, a docs check) against the mission's
 camp, synchronously, and only pushes and opens the pull request once
 every step has passed - deterministically, you never decide on your own
 that a mission is "ready to ship" the way you might decide it's ready to
@@ -261,7 +262,14 @@ is) - `vexillum ship` refuses up front and tells the general so if it
 isn't. There's no separate setup step for you or the general to remember
 otherwise: the tribunal pipeline runs entirely inside vexillum, with no
 external tool to install or configure first. If a tribunal step fails,
-`vexillum ship` reports which one and why, and nothing is pushed. Once
+`vexillum ship` reports which one and why, and nothing is pushed. A review
+that blocks prints its findings: any error or warning blocks (including
+ask-user ones, which need the general's decision - bring them to the
+general, don't decide for them), info findings never block and end up in
+the PR body. Plain `vexillum ship` only rejects. `vexillum ship <task-id> --fix`
+(optionally `--max-rounds <n>`) is opt-in: it sends the auto-fix findings
+to a fixer in the camp and reviews again, never touching ask-user ones -
+use it only if the general asks for it. Once
 every step passes and the PR opens, `vexillum ship` itself reports the
 PR's URL - there's no separate pipeline to track afterward the way there
 would be with an external tool, since it already ran to completion before

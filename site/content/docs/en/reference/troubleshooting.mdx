@@ -25,6 +25,8 @@ Start with `vexillum doctor`: it names what is missing.
 | `release refused: scout task ... has no report` | The report is the scout's work product. Have it write the report, or pass `--force`. |
 | `'gh' is not installed` | `ship`, and landing a shipped PR, need the GitHub CLI. |
 | `vexillum failed at <step>, refusing to push` | A tribunal step failed; nothing was pushed. Fix it in the camp and ship again. |
+| `review blocked: N blocking finding(s)` | The adversarial review found an error or warning (info never blocks). Read the findings in the output; fix them in the camp, or retry with `ship --fix` for the `auto-fix` ones. |
+| `review blocked: incomplete coverage` | The reviewer did not report reading every changed file. Ship again. |
 | `task ... is running, not interrupted` | Only an `interrupted` task can be re-dispatched. |
 
 ## A soldier seems stuck

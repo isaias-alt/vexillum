@@ -25,6 +25,8 @@ Empezá con `vexillum doctor`: te dice qué falta. Los mensajes de error de vexi
 | `release refused: scout task ... has no report` | El reporte es el producto del scout. Hacé que lo escriba, o pasá `--force`. |
 | `'gh' is not installed` | `ship`, y aterrizar un PR enviado, necesitan el GitHub CLI. |
 | `vexillum failed at <step>, refusing to push` | Falló un paso del tribunal; no se hizo push de nada. Arreglalo en el camp y volvé a hacer ship. |
+| `review blocked: N blocking finding(s)` | La revisión adversarial encontró un error o warning (info nunca bloquea). Leé los hallazgos en la salida; arreglalos en el camp, o reintentá con `ship --fix` para los `auto-fix`. |
+| `review blocked: incomplete coverage` | El revisor no reportó haber leído todos los archivos cambiados. Volvé a hacer ship. |
 | `task ... is running, not interrupted` | Solo una tarea `interrupted` puede re-despacharse. |
 
 ## Un soldier parece atascado
