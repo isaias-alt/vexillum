@@ -36,16 +36,18 @@ func (s *Server) handleEmbedScript(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(script)
 }
 
+// The asset URLs carry the build id, so a browser that kept an earlier
+// bundle under the old URL can never run it against this embed script.
 const whiteboardFrameHTML = `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Whiteboard</title>
-<link rel="stylesheet" href="/whiteboard-assets/whiteboard.css">
+<link rel="stylesheet" href="/whiteboard-assets/whiteboard.css?v=%[1]s">
 </head>
 <body>
-<script src="/whiteboard-assets/whiteboard.js"></script>
+<script src="/whiteboard-assets/whiteboard.js?v=%[1]s"></script>
 </body>
 </html>
 `
@@ -58,7 +60,7 @@ const whiteboardFrameHTML = `<!doctype html>
 func (s *Server) handleWhiteboardFrame(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(whiteboardFrameHTML))
+	_, _ = fmt.Fprintf(w, whiteboardFrameHTML, buildID())
 }
 
 func (s *Server) artifactSources(key string) ([]MermaidSource, error) {

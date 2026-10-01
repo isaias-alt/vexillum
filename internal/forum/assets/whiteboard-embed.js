@@ -106,6 +106,40 @@
     }
   }
 
+  // A frame that has not rendered yet is an empty box, which is
+  // indistinguishable from a broken one. Every inline frame therefore sits in a
+  // wrapper with a status line over it: "Loading", or the reason it did not
+  // start (the frame never reported ready, or the init round trip failed).
+  const START_TIMEOUT_MS = 20000;
+  const statusTimers = new Map();
+
+  function setStatus(index, text, isError) {
+    const record = inlineFrames.get(index);
+    if (!record || !record.status) return;
+    window.clearTimeout(statusTimers.get(index));
+    statusTimers.delete(index);
+    record.status.textContent = text || "";
+    record.status.style.display = text ? "flex" : "none";
+    record.status.style.color = isError ? "#b91c1c" : "inherit";
+  }
+
+  function watchStart(index) {
+    setStatus(index, "Loading whiteboard...", false);
+    statusTimers.set(
+      index,
+      window.setTimeout(() => {
+        const record = inlineFrames.get(index);
+        if (record && !record.ready) {
+          setStatus(
+            index,
+            "The whiteboard did not start: its frame never reported ready. Reload the page; if it persists, run `vexillum forum stop` and open the session again so the server restarts with the current build.",
+            true,
+          );
+        }
+      }, START_TIMEOUT_MS),
+    );
+  }
+
   function makeIframe(index) {
     const iframe = document.createElement("iframe");
     iframe.src = "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index));
@@ -122,8 +156,25 @@
     const containers = Array.from(document.querySelectorAll(MERMAID_SELECTOR));
     containers.forEach((container, index) => {
       const iframe = makeIframe(index);
-      container.replaceWith(iframe);
-      inlineFrames.set(index, { iframe, channelId: "", ready: false, suspended: false });
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "relative";
+      const status = document.createElement("div");
+      status.setAttribute("role", "status");
+      Object.assign(status.style, {
+        position: "absolute",
+        inset: "0",
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        textAlign: "center",
+        font: "14px/1.5 system-ui, sans-serif",
+        pointerEvents: "none",
+      });
+      wrapper.append(iframe, status);
+      container.replaceWith(wrapper);
+      inlineFrames.set(index, { iframe, status, channelId: "", ready: false, suspended: false });
+      watchStart(index);
     });
     return containers.length;
   }
@@ -151,10 +202,14 @@
         channelId,
       };
       if (mode === "overlay") postOverlay(message);
-      else post(target, message);
+      else {
+        post(target, message);
+        setStatus(index, "", false);
+      }
       return true;
     } catch (error) {
       if (mode === "overlay") showOverlayError(describeError(error));
+      else setStatus(index, "Could not start the whiteboard: " + describeError(error), true);
       return false;
     }
   }
@@ -330,6 +385,7 @@
       // just saved, instead of trying to reconcile two live in-memory scenes.
       record.ready = false;
       record.channelId = "";
+      watchStart(index);
       record.iframe.src = record.iframe.src;
     }
   }
