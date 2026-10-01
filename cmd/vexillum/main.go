@@ -24,7 +24,7 @@ Commands:
   ship        Push a finished mission through vexillum's own tribunal pipeline for a real PR
   release     Release a soldier's camp back to the pool
   sentinel    Watch dispatched soldiers and record status changes
-  forum       Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards
+  forum       Open an HTML artifact for visual review and collect the user's feedback
   banner      Publish an HTML artifact to a public URL, or update one already published
 
 Flags:

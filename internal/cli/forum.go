@@ -5,37 +5,67 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/forum"
-	"github.com/isaias-alt/vexillum/internal/project"
 )
 
-const forumUsage = `Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards.
+const forumUsage = `Open a local HTML artifact for visual review and collect the user's feedback.
 
 Usage:
-  vexillum forum <html-file> [--port <n>] [--no-open]
+  vexillum forum <html-file> [--no-open] [--reopen] [--port <n>]
+  vexillum forum poll <html-file> [--reply <text> | --reply-file <path|->] [--timeout <duration>]
+  vexillum forum end <html-file>
+  vexillum forum stop
 
-Starts a local HTTP server for the given file. Any Mermaid diagram authored
-as <div class="mermaid">...</div> renders as an editable Excalidraw
-whiteboard: click it to unlock editing, edits autosave locally, and a
-"Queue feedback" button writes the edited scene plus a PNG preview to
-~/.vexillum/<project>/forums/<key>/whiteboards/. An artifact with no
-.mermaid container is served completely unmodified.
+forum <html-file> opens (or resumes) the review session for that file and
+returns right away, printing the session URL and the next step; one local
+server per user keeps running in the background on 127.0.0.1 and stops
+itself when nothing is connected. The artifact gets window.forum.queuePrompt
+and window.forum.sendQueuedPrompts, and the user can chat, queue messages and
+send them to the agent from the browser. A Mermaid diagram authored as
+<div class="mermaid">...</div> becomes an editable whiteboard. Sessions are
+identified by the file's absolute path.
 
---port binds a specific port instead of letting the OS choose a free one.
---no-open skips opening the file in the system browser.
+  --no-open   do not open the browser
+  --reopen    reopen a session the user ended from the browser (only when the
+              user asked for further review)
+  --port      port to bind if the server is not already running
 
-Runs in the foreground until interrupted (Ctrl-C).
+forum poll blocks until the user sends feedback, ends the session, or leaves
+the browser disconnected past a grace period (status browser_disconnected;
+the session stays resumable). Delivered feedback is consumed. --reply shows
+the agent's markdown answer in the browser's conversation panel before it
+waits again; --reply-file reads it from a file (- is stdin). --timeout
+returns status timeout if nothing arrives in time. Run it again after each
+response; see skills/forum/SKILL.md for the exact output format.
+
+forum end ends the session as the agent (a plain forum <html-file> reopens
+it later). forum stop shuts the background server down.
 `
+
+// forumHome is ~/.vexillum. Unlike the project commands it is not tied to
+// the current project (or refused inside a camp): the forum server is one
+// per user, and a soldier running in a camp may legitimately use it.
+func forumHome() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return filepath.Join(home, ".vexillum"), nil
+}
+
+// forumSpawn launches the detached background server. A variable so tests
+// can run the server in-process instead of re-executing the test binary.
+var forumSpawn = spawnForumServer
 
 // Forum runs the "vexillum forum" command.
 func Forum(args []string) int {
@@ -47,14 +77,7 @@ func Forum(args []string) int {
 		fmt.Print(forumUsage)
 		return 1
 	}
-
-	file, port, noOpen, err := parseForumArgs(args)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
-		return 1
-	}
-
-	projectDir, vexillumHome, err := resolveDirs()
+	home, err := forumHome()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "vexillum:", err)
 		return 1
@@ -62,113 +85,390 @@ func Forum(args []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runForum(ctx, projectDir, vexillumHome, file, port, noOpen, os.Stdout, os.Stderr)
+
+	switch args[0] {
+	case "serve":
+		return runForumServe(ctx, home, args[1:], os.Stderr)
+	case "poll":
+		return runForumPoll(ctx, home, args[1:], os.Stdin, os.Stdout, os.Stderr)
+	case "end":
+		return runForumEnd(ctx, home, args[1:], os.Stdout, os.Stderr)
+	case "stop":
+		return runForumStop(ctx, home, os.Stdout, os.Stderr)
+	}
+	return runForumOpen(ctx, home, args, os.Stdout, os.Stderr)
 }
 
-func parseForumArgs(args []string) (file string, port int, noOpen bool, err error) {
+type forumOpenArgs struct {
+	file   string
+	port   int
+	noOpen bool
+	reopen bool
+}
+
+func parseForumOpenArgs(args []string) (forumOpenArgs, error) {
+	var a forumOpenArgs
 	for i := 0; i < len(args); i++ {
-		switch a := args[i]; a {
+		switch arg := args[i]; arg {
 		case "--port":
 			i++
 			if i >= len(args) {
-				return "", 0, false, fmt.Errorf("--port requires a value")
+				return a, fmt.Errorf("--port requires a value")
 			}
-			var perr error
-			port, perr = parsePort(args[i])
-			if perr != nil {
-				return "", 0, false, perr
+			port, err := parsePort(args[i])
+			if err != nil {
+				return a, err
 			}
+			a.port = port
 		case "--no-open":
-			noOpen = true
+			a.noOpen = true
+		case "--reopen":
+			a.reopen = true
 		default:
-			if file != "" {
-				return "", 0, false, fmt.Errorf("unexpected extra argument %q", a)
+			if strings.HasPrefix(arg, "--") {
+				return a, fmt.Errorf("unknown flag %q", arg)
 			}
-			file = a
+			if a.file != "" {
+				return a, fmt.Errorf("unexpected extra argument %q", arg)
+			}
+			a.file = arg
 		}
 	}
-	if file == "" {
-		return "", 0, false, fmt.Errorf("missing html file")
+	if a.file == "" {
+		return a, fmt.Errorf("missing html file")
 	}
-	return file, port, noOpen, nil
+	return a, nil
 }
 
 func parsePort(raw string) (int, error) {
-	var port int
-	if _, err := fmt.Sscanf(raw, "%d", &port); err != nil || port <= 0 || port > 65535 {
+	port, err := strconv.Atoi(raw)
+	if err != nil || port <= 0 || port > 65535 {
 		return 0, fmt.Errorf("invalid --port value %q", raw)
 	}
 	return port, nil
 }
 
-// runForum serves file until ctx is canceled (Forum cancels it on
-// Ctrl-C/SIGTERM; tests pass their own cancellable context so the success
-// path doesn't need a real OS signal to end).
-func runForum(ctx context.Context, projectDir, vexillumHome, file string, port int, noOpen bool, stdout, stderr io.Writer) int {
-	absFile, err := filepath.Abs(file)
+// absArtifact resolves file to the absolute path that identifies its
+// session, checking it exists and is a file.
+func absArtifact(file string) (string, error) {
+	abs, err := filepath.Abs(file)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: resolving %s: %v\n", file, err)
-		return 1
+		return "", fmt.Errorf("resolving %s: %w", file, err)
 	}
-	if info, statErr := os.Stat(absFile); statErr != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", statErr)
-		return 1
-	} else if info.IsDir() {
-		fmt.Fprintf(stderr, "vexillum: %s is a directory, not an HTML file\n", absFile)
-		return 1
-	}
-
-	projectRoot, err := project.Root(vexillumHome, projectDir)
+	info, err := os.Stat(abs)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: resolving project root: %v\n", err)
-		return 1
+		return "", err
 	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is a directory, not an HTML file", abs)
+	}
+	return abs, nil
+}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+// ensureForumServer returns a client for the running server, starting the
+// background one first if needed.
+func ensureForumServer(ctx context.Context, home string, port int) (*forum.Client, error) {
+	return forum.EnsureServer(ctx, home, func() error { return forumSpawn(home, port) }, 15*time.Second)
+}
+
+func runForumOpen(ctx context.Context, home string, args []string, stdout, stderr io.Writer) int {
+	a, err := parseForumOpenArgs(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: starting server: %v\n", err)
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	abs, err := absArtifact(a.file)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	client, err := ensureForumServer(ctx, home, a.port)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	res, err := client.Open(ctx, abs, a.reopen)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
 		return 1
 	}
 
-	store := forum.NewStore(projectRoot)
-	srv := &http.Server{Handler: forum.NewServer(absFile, store)}
+	fmt.Fprintf(stdout, "session: %s\n", res.Key)
+	fmt.Fprintf(stdout, "file: %s\n", res.File)
+	fmt.Fprintf(stdout, "status: %s\n", res.Status)
+	if res.Status == forum.OpenUserEnded {
+		fmt.Fprintf(stdout, "next_step: %s\n", forum.OpenNextStep(abs, res))
+		return 1
+	}
+	fmt.Fprintf(stdout, "url: %s\n", res.URL)
+	fmt.Fprintf(stdout, "pending_prompts: %d\n", res.Pending)
+	fmt.Fprintf(stdout, "next_step: %s\n", forum.OpenNextStep(abs, res))
 
-	url := fmt.Sprintf("http://%s/", listener.Addr().String())
-	fmt.Fprintf(stdout, "vexillum forum: serving %s at %s\n", absFile, url)
-	fmt.Fprintln(stdout, "vexillum forum: press Ctrl-C to stop")
-
-	if !noOpen {
-		if openErr := openBrowser(url); openErr != nil {
+	// A browser already showing this session does not need a second tab.
+	if !a.noOpen && !res.BrowserConnected {
+		if openErr := openBrowser(res.URL); openErr != nil {
 			fmt.Fprintf(stderr, "vexillum: warning: could not open a browser automatically: %v\n", openErr)
 		}
 	}
+	return 0
+}
 
-	serveErr := make(chan error, 1)
-	go func() {
-		serveErr <- srv.Serve(listener)
-	}()
+type forumPollArgs struct {
+	file      string
+	reply     string
+	replyFile string
+	hasReply  bool
+	timeout   time.Duration
+}
 
-	select {
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			fmt.Fprintf(stderr, "vexillum: shutting down: %v\n", err)
+func parseForumPollArgs(args []string) (forumPollArgs, error) {
+	var a forumPollArgs
+	for i := 0; i < len(args); i++ {
+		switch arg := args[i]; arg {
+		case "--reply", "--reply-file", "--timeout":
+			i++
+			if i >= len(args) {
+				return a, fmt.Errorf("%s requires a value", arg)
+			}
+			switch arg {
+			case "--reply":
+				a.reply, a.hasReply = args[i], true
+			case "--reply-file":
+				a.replyFile, a.hasReply = args[i], true
+			case "--timeout":
+				d, err := time.ParseDuration(args[i])
+				if err != nil || d <= 0 {
+					return a, fmt.Errorf("invalid --timeout value %q (want a duration like 30s or 10m)", args[i])
+				}
+				a.timeout = d
+			}
+		default:
+			if strings.HasPrefix(arg, "--") {
+				return a, fmt.Errorf("unknown flag %q", arg)
+			}
+			if a.file != "" {
+				return a, fmt.Errorf("unexpected extra argument %q", arg)
+			}
+			a.file = arg
+		}
+	}
+	if a.file == "" {
+		return a, fmt.Errorf("missing html file")
+	}
+	if a.reply != "" && a.replyFile != "" {
+		return a, fmt.Errorf("pass --reply or --reply-file, not both")
+	}
+	return a, nil
+}
+
+func runForumPoll(ctx context.Context, home string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	a, err := parseForumPollArgs(args)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	abs, err := filepath.Abs(a.file)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: resolving %s: %v\n", a.file, err)
+		return 1
+	}
+
+	reply := a.reply
+	if a.replyFile != "" {
+		var data []byte
+		if a.replyFile == "-" {
+			data, err = io.ReadAll(stdin)
+		} else {
+			data, err = os.ReadFile(a.replyFile)
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "vexillum: reading reply: %v\n", err)
 			return 1
 		}
-		return 0
-	case err := <-serveErr:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Fprintf(stderr, "vexillum: server error: %v\n", err)
+		reply = string(data)
+	}
+
+	client, err := ensureForumServer(ctx, home, 0)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+
+	if a.hasReply {
+		if err := client.Reply(ctx, abs, reply); err != nil {
+			var ae *forum.APIError
+			switch {
+			case errors.As(err, &ae) && ae.Code == "no_session":
+				fmt.Fprintln(stderr, noSessionMessage(abs))
+				return 1
+			case errors.As(err, &ae) && ae.Code == "ended":
+				// The session ended: nothing to show a reply in, but the poll
+				// below still delivers any final feedback exactly once.
+				fmt.Fprintln(stderr, "vexillum: warning: reply not shown, the session already ended")
+			default:
+				fmt.Fprintln(stderr, "vexillum: reply failed:", err)
+				return 1
+			}
+		}
+	}
+
+	// The server can disappear under a long poll (stopped by hand, crashed,
+	// idle-stopped); everything pending is on disk, so start it again and
+	// keep waiting instead of surfacing a connection error the agent can do
+	// nothing about.
+	const maxReconnects = 5
+	failures := 0
+	for {
+		res, err := client.Poll(ctx, abs, a.timeout)
+		if err == nil {
+			fmt.Fprint(stdout, forum.FormatPoll(abs, res))
+			return 0
+		}
+		if ctx.Err() != nil {
 			return 1
 		}
+		var ae *forum.APIError
+		if errors.As(err, &ae) {
+			if ae.Code == "no_session" {
+				fmt.Fprintln(stderr, noSessionMessage(abs))
+			} else {
+				fmt.Fprintln(stderr, "vexillum:", err)
+			}
+			return 1
+		}
+		failures++
+		if failures > maxReconnects {
+			fmt.Fprintf(stderr, "vexillum: lost the forum server and could not restart it: %v\n", err)
+			return 1
+		}
+		select {
+		case <-ctx.Done():
+			return 1
+		case <-time.After(500 * time.Millisecond):
+		}
+		if client, err = ensureForumServer(ctx, home, 0); err != nil {
+			fmt.Fprintln(stderr, "vexillum:", err)
+			return 1
+		}
+	}
+}
+
+func noSessionMessage(abs string) string {
+	return fmt.Sprintf("vexillum: no forum session for %s - run `vexillum forum %s` first", abs, abs)
+}
+
+func runForumEnd(ctx context.Context, home string, args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
+		fmt.Fprintln(stderr, "vexillum: usage: vexillum forum end <html-file>")
+		return 1
+	}
+	abs, err := filepath.Abs(args[0])
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: resolving %s: %v\n", args[0], err)
+		return 1
+	}
+	client, err := ensureForumServer(ctx, home, 0)
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	if err := client.End(ctx, abs); err != nil {
+		var ae *forum.APIError
+		if errors.As(err, &ae) && ae.Code == "no_session" {
+			fmt.Fprintln(stderr, noSessionMessage(abs))
+			return 1
+		}
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "session: %s\nstatus: ended\n", forum.SessionKey(abs))
+	fmt.Fprintf(stdout, "next_step: Session ended. Run `vexillum forum %s` to reopen it if the user wants further review.\n", abs)
+	return 0
+}
+
+func runForumStop(ctx context.Context, home string, stdout, stderr io.Writer) int {
+	client, err := forum.Discover(home)
+	if err != nil {
+		if errors.Is(err, forum.ErrNoServer) {
+			fmt.Fprintln(stdout, "no forum server is running")
+			return 0
+		}
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	if err := client.Stop(ctx); err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "forum server stopping")
+	return 0
+}
+
+// runForumServe is the background server process ("vexillum forum serve",
+// started by spawnForumServer; not meant to be run by hand). It exits 0 when
+// another server already holds the lock - several clients racing to start
+// one is expected, and exactly one wins.
+func runForumServe(ctx context.Context, home string, args []string, stderr io.Writer) int {
+	port := 0
+	for i := 0; i < len(args); i++ {
+		if args[i] != "--port" || i+1 >= len(args) {
+			fmt.Fprintf(stderr, "vexillum: unexpected argument %q\n", args[i])
+			return 1
+		}
+		i++
+		p, err := parsePort(args[i])
+		if err != nil {
+			fmt.Fprintln(stderr, "vexillum:", err)
+			return 1
+		}
+		port = p
+	}
+	err := forum.Run(ctx, forum.RunOptions{Home: home, Port: port, Log: os.Stdout})
+	var running *forum.ErrServerRunning
+	if errors.As(err, &running) {
 		return 0
 	}
+	if err != nil {
+		fmt.Fprintln(stderr, "vexillum:", err)
+		return 1
+	}
+	return 0
+}
+
+// spawnForumServer starts "vexillum forum serve" detached, logging to the
+// forum log, so it outlives this command and whatever shell launched it.
+func spawnForumServer(home string, port int) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locating the vexillum binary: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(forum.LogPath(home)), 0o755); err != nil {
+		return err
+	}
+	logFile, err := os.OpenFile(forum.LogPath(home), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+
+	args := []string{"forum", "serve"}
+	if port > 0 {
+		args = append(args, "--port", strconv.Itoa(port))
+	}
+	cmd := exec.Command(exe, args...)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	// The server is its own process group leader now; do not wait on it.
+	return cmd.Process.Release()
 }
 
 // openBrowser best-effort opens url in the system's default browser. A
 // failure here is reported but never fails the command - the server is
-// already up and the URL already printed above.
+// already up and the URL already printed.
 func openBrowser(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
