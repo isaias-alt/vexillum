@@ -80,3 +80,24 @@ func TestChromeLiveFeed_ReconnectsAndTabsConverge(t *testing.T) {
 func TestChromeLayoutTray_RendersQueuesAndReports(t *testing.T) {
 	runChromeNodeTest(t, "chrome_layout_test.js")
 }
+
+// Every composer action looks equally disabled: the primary fill and the
+// danger text must not survive the disabled state, or a finished session shows
+// some buttons less greyed out than others.
+func TestChromeCSS_DisabledButtonsShareOneLook(t *testing.T) {
+	data, err := os.ReadFile("assets/chrome/forum.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(data)
+	idx := strings.Index(css, ".btn:disabled, .btn-primary:disabled, .btn-danger:disabled {")
+	if idx < 0 {
+		t.Fatal("no shared disabled rule for .btn, .btn-primary and .btn-danger")
+	}
+	rule := css[idx : idx+strings.Index(css[idx:], "}")]
+	for _, want := range []string{"background:", "border-color:", "color:", "opacity:"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("the shared disabled rule does not set %s", want)
+		}
+	}
+}

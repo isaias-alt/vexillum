@@ -191,7 +191,7 @@ button, textarea { font: inherit; color: inherit; }
   background: var(--fr-surface); color: var(--fr-text);
 }
 .input:focus { outline: none; border-color: var(--fr-accent); box-shadow: 0 0 0 3px var(--fr-accent-soft); }
-.input:disabled { opacity: 0.55; }
+.input:disabled { opacity: 0.7; }
 .composer { container-type: inline-size; }
 .composer .hint { margin: 0; font-size: var(--fr-text-size-small); color: var(--fr-text-muted); }
 /* The attach action: a link-styled button directly under the text box. */
@@ -203,7 +203,7 @@ button, textarea { font: inherit; color: inherit; }
   color: var(--fr-accent); font-size: var(--fr-text-size-small); font-weight: 500; white-space: nowrap; cursor: pointer;
 }
 .link-btn:hover:not(:disabled) { color: var(--fr-accent-hover); text-decoration: underline; text-underline-offset: 0.2em; }
-.link-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.link-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 /* Three equal-height actions on one line, never wrapping their labels. */
 .composer-actions { display: flex; align-items: stretch; gap: var(--fr-space-2); }
 .composer-actions .btn { flex: 1 1 auto; min-width: 0; text-align: center; line-height: 1.2; }

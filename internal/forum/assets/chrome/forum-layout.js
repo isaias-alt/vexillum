@@ -537,13 +537,20 @@
 
   // ------------------------------------------------------------------ settling
 
+  // Waits for count frames. A hidden tab never paints, so each wait also has a
+  // timer fallback: the audit then runs late instead of never.
   const nextFrames = (count) =>
     new Promise((resolve) => {
       const step = (remaining) => {
         if (remaining <= 0) return resolve();
-        const next = () => step(remaining - 1);
+        let done = false;
+        const next = () => {
+          if (done) return;
+          done = true;
+          step(remaining - 1);
+        };
         if (window.requestAnimationFrame) window.requestAnimationFrame(next);
-        else window.setTimeout(next, 16);
+        window.setTimeout(next, 250);
       };
       step(count);
     });
