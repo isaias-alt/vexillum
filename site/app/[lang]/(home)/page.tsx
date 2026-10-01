@@ -81,10 +81,12 @@ export default async function Home({
         {/* vocabulary */}
         <section className="border-t border-border px-[6vw] py-14">
           <div className="mx-auto max-w-[1160px]">
-            <Eyebrow>{t.vocab.eyebrow}</Eyebrow>
-            <h2 className="mb-9 max-w-[520px] font-serif text-[26px] font-semibold text-text">
-              {t.vocab.title}
-            </h2>
+            <div className="mx-auto mb-9 max-w-[560px] text-center">
+              <Eyebrow>{t.vocab.eyebrow}</Eyebrow>
+              <h2 className="font-serif text-[26px] font-semibold text-text">
+                {t.vocab.title}
+              </h2>
+            </div>
             {t.vocab.items.map((item) => (
               <div
                 key={item.term}
@@ -102,14 +104,19 @@ export default async function Home({
         {/* dispatching */}
         <section className="border-t border-border px-[6vw] py-14">
           <div className="mx-auto max-w-[1160px]">
-            <Eyebrow>{t.dispatching.eyebrow}</Eyebrow>
-            <h2 className="mb-4 max-w-[480px] font-serif text-[26px] font-semibold text-text">
-              {t.dispatching.title}
-            </h2>
-            <p className="mb-7 max-w-[480px] text-sm leading-[1.7] text-text-secondary">
-              {t.dispatching.sub}
-            </p>
-            <DispatchTranscript t={t.dispatching} className="max-w-[720px]" />
+            <div className="mx-auto mb-7 max-w-[560px] text-center">
+              <Eyebrow>{t.dispatching.eyebrow}</Eyebrow>
+              <h2 className="mb-4 font-serif text-[26px] font-semibold text-text">
+                {t.dispatching.title}
+              </h2>
+              <p className="text-sm leading-[1.7] text-text-secondary">
+                {t.dispatching.sub}
+              </p>
+            </div>
+            <DispatchTranscript
+              t={t.dispatching}
+              className="mx-auto max-w-[720px]"
+            />
           </div>
         </section>
 
