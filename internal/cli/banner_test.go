@@ -313,3 +313,30 @@ func TestParseBannerArgsRefusesRiskyFlagValues(t *testing.T) {
 		}
 	})
 }
+
+// B8
+func TestRunBannerRepublishNotesUntouchedPassword(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(banner.Site{URL: "https://plans.example.com/abc123"})
+	}))
+	defer srv.Close()
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+	file := writeBannerFixture(t, `<html><body style="background:#fff">hi</body></html>`)
+
+	var stdout, stderr bytes.Buffer
+	if code := runBanner(bannerArgs{file: file, site: "abc123", updateKey: "k"}, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "did not touch the page's password") || !strings.Contains(stdout.String(), "stores nothing") {
+		t.Errorf("expected the untouched-password note, got: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := runBanner(bannerArgs{file: file, site: "abc123", updateKey: "k", password: "pw"}, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "did not touch") {
+		t.Errorf("note must not appear when a password was set, got: %s", stdout.String())
+	}
+}

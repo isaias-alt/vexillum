@@ -304,6 +304,14 @@ func runBannerRepublish(opts bannerArgs, client *banner.Client, stdout, stderr i
 		fmt.Fprintln(stdout, "Shown once, right now - vexillum does not store it. It's a shared")
 		fmt.Fprintln(stdout, "secret: anyone you give it to can open this page.")
 	}
+	if password == "" {
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "Note: this republish did not touch the page's password, so whatever it")
+		fmt.Fprintln(stdout, "had when it was last published still applies. vexillum stores nothing")
+		fmt.Fprintln(stdout, "about published pages, so this output cannot tell you whether that is a")
+		fmt.Fprintln(stdout, "password or none - a page published without one stays readable by")
+		fmt.Fprintln(stdout, "anyone who has the link.")
+	}
 	return 0
 }
 
