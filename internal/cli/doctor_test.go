@@ -387,10 +387,8 @@ func TestDoctor_AxiStatusNeverAffectsExitCode(t *testing.T) {
 	}
 }
 
-// B2-01: forum-tool installed - its skill folder name is "forum", not
-// "forum-tool" (verified against its own README), so the on-disk path and
-// the reported name both use "forum".
-func TestDoctor_ForumInstalled(t *testing.T) {
+// forum-tool was replaced by `vexillum forum`: doctor must no longer report it.
+func TestDoctor_ForumNotListed(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir := initializedProject(t)
 	writeSkillFile(t, projectDir, "forum")
@@ -400,28 +398,8 @@ func TestDoctor_ForumInstalled(t *testing.T) {
 	var out bytes.Buffer
 	runDoctor(projectDir, vexillumHome, homeDir, &out)
 
-	if !bytes.Contains(out.Bytes(), []byte("[installed] forum")) {
-		t.Errorf("expected forum reported installed, got:\n%s", out.String())
-	}
-}
-
-// B2-02: forum-tool not installed - its own README recommends installing
-// project-local, no "-g", unlike quota-tool's own recommended command.
-func TestDoctor_ForumNotInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	want := "[not installed] forum - install with: npx skills add upstream --skill forum"
-	if !bytes.Contains(out.Bytes(), []byte(want)) {
-		t.Errorf("expected exact install hint, got:\n%s", out.String())
-	}
-	if bytes.Contains(out.Bytes(), []byte("forum -g")) {
-		t.Errorf("expected no -g flag for forum's install hint (its README doesn't recommend one), got:\n%s", out.String())
+	if bytes.Contains(out.Bytes(), []byte("forum")) {
+		t.Errorf("doctor must not mention forum any more, got:\n%s", out.String())
 	}
 }
 
@@ -513,8 +491,8 @@ func TestDoctor_MusterInstalled(t *testing.T) {
 	}
 }
 
-// muster not installed - project-local install hint, same shape as
-// forum's (no "-g"), pointing at this repo instead of a third-party one.
+// muster not installed - project-local install hint, no "-g",
+// pointing at this repo instead of a third-party one.
 func TestDoctor_MusterNotInstalled(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir := initializedProject(t)
@@ -558,9 +536,6 @@ func TestDoctor_ForumInstalledAndNotInstalled(t *testing.T) {
 	runDoctor(projectDir, vexillumHome, homeDir, &out)
 	if !bytes.Contains(out.Bytes(), []byte("[installed] forum")) {
 		t.Errorf("expected forum reported installed, got:\n%s", out.String())
-	}
-	if !bytes.Contains(out.Bytes(), []byte("forum")) {
-		t.Errorf("forum must stay listed until the cutover, got:\n%s", out.String())
 	}
 }
 

@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "forum": {
-      "source": "upstream",
-      "sourceType": "github",
-      "skillPath": "skills/forum/SKILL.md",
-      "computedHash": "3a4d15d8c797b2eb929e2af91155538b677a9fdfd6f5245de45bea2683d65910"
-    },
     "muster": {
       "source": "isaias-alt/vexillum",
       "sourceType": "github",

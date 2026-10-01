@@ -38,15 +38,12 @@ type Result struct {
 //
 // Each AXI's own README names its own recommended install command, and
 // they don't agree on shape: quota-tool's --skill value matches its repo
-// name and recommends -g (global), but forum-tool's --skill value is
-// "forum" (not "forum-tool") and its own README recommends installing
-// project-local, no -g - verified live for both, not assumed from the
-// first one.
+// name and recommends -g (global), while the first-party skills below
+// install project-local, no -g. Verified live, not assumed from the first.
 type AXI struct {
 	// Name is the skill's own folder name once installed (also the
 	// --skill value) - matches its SKILL.md frontmatter `name`, which
-	// isn't guaranteed to match Repo's own name (forum-tool is the
-	// counterexample).
+	// isn't guaranteed to match Repo's own name.
 	Name string
 	// Repo is "<owner>/<repo>", for "npx skills add <repo> --skill <name>".
 	Repo string
@@ -60,18 +57,16 @@ type AXI struct {
 // KnownAXIs is every AXI (and first-party skill) doctor reports on.
 var KnownAXIs = []AXI{
 	{Name: "quota-tool", Repo: "upstream", Global: true},
-	{Name: "forum", Repo: "upstream", Global: false},
 	{Name: "chrome-devtools-tool", Repo: "upstream", Global: true},
 	// muster isn't a third-party AXI - it ships in this repo
 	// (skills/muster/SKILL.md) and reads this project's own
-	// `vexillum status --json`, so it's project-local like forum, not
+	// `vexillum status --json`, so it's project-local, not
 	// global. Listed here anyway because the install/detection mechanism
 	// ("npx skills add", .claude/skills/<name>/SKILL.md) is identical and
 	// this is where the general already looks for on-demand skill status.
 	{Name: "muster", Repo: "isaias-alt/vexillum", Global: false},
 	// forum is first-party too (skills/forum/SKILL.md): the agent-facing
-	// guide to "vexillum forum", the in-binary replacement for forum-tool.
-	// forum stays listed above until the cutover removes it.
+	// guide to "vexillum forum", the in-binary review surface.
 	{Name: "forum", Repo: "isaias-alt/vexillum", Global: false},
 }
 

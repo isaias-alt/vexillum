@@ -102,9 +102,9 @@ func TestAXIStatusLine(t *testing.T) {
 	projectDir := t.TempDir()
 	homeDir := t.TempDir()
 
-	a := AXI{Name: "forum", Repo: "upstream", Global: false}
+	a := AXI{Name: "muster", Repo: "isaias-alt/vexillum", Global: false}
 	line := AXIStatusLine(a, projectDir, homeDir)
-	want := "[not installed] forum - install with: npx skills add upstream --skill forum"
+	want := "[not installed] muster - install with: npx skills add isaias-alt/vexillum --skill muster"
 	if line != want {
 		t.Errorf("got %q, want %q", line, want)
 	}
