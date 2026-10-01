@@ -1,7 +1,9 @@
 /*
  * forum-artifact.css: the look vexillum forum gives an artifact's content.
  * Served at /forum-assets/forum-artifact.css and linked, together with
- * forum-tokens.css, ahead of the artifact's own markup, so the --fr-* tokens
+ * forum-tokens.css, ahead of the artifact's own markup (only into artifacts
+ * that bring no <style>, stylesheet link or CSS-framework CDN of their own, or
+ * that ask with <meta name="forum-style" content="on">), so the --fr-* tokens
  * (direction B, "Marmol y Lapislazuli") and everything below are available to
  * any artifact with no setup. The theme follows the chrome's switch: the
  * server renders <html data-fr-theme> and forum-sdk.js keeps it in step.
@@ -12,6 +14,7 @@
  * elements (color, type, borders, radius); layout (width, padding of the page,
  * grids) is opt-in through classes, so a self-styled layout is never moved.
  * An artifact opts out entirely with <meta name="forum-style" content="none">.
+ * The layer matters when the sheet is forced on next to an artifact's own CSS.
  *
  * The tyrian selection color is reserved for annotations: nothing here uses it.
  * Status uses success and danger; accent (lapis) is the primary action.

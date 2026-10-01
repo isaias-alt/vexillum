@@ -194,7 +194,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file, theme string) {
 		return
 	}
 	doc := injectSDK(source)
-	if !optsOutOfForumStyle(doc) {
+	if wantsForumStyle(doc) {
 		doc = injectStyles(doc)
 	}
 	doc = setThemeAttr(doc, theme)
@@ -234,12 +234,17 @@ func injectSDK(doc string) string {
 }
 
 var (
-	metaTagPattern   = regexp.MustCompile(`(?i)<meta\b[^>]*>`)
-	forumStyleName   = regexp.MustCompile(`(?i)\bname\s*=\s*["']?forum-style["']?[\s/>]`)
-	forumStyleNone   = regexp.MustCompile(`(?i)\bcontent\s*=\s*["']?none["']?[\s/>]`)
-	htmlTagThemeAttr = regexp.MustCompile(`(?i)\sdata-fr-theme\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
-	iconLinkPattern  = regexp.MustCompile(`(?i)<link\b[^>]*\brel\s*=\s*["']?(?:shortcut\s+)?icon\b`)
-	headClosePattern = regexp.MustCompile(`(?i)</head\s*>`)
+	metaTagPattern    = regexp.MustCompile(`(?i)<meta\b[^>]*>`)
+	forumStyleName    = regexp.MustCompile(`(?i)\bname\s*=\s*["']?forum-style["']?[\s/>]`)
+	forumStyleContent = regexp.MustCompile(`(?i)\bcontent\s*=\s*["']?([a-z]+)["']?[\s/>]`)
+	styleBlockPattern = regexp.MustCompile(`(?i)<style[\s>]`)
+	linkTagPattern    = regexp.MustCompile(`(?i)<link\b[^>]*>`)
+	stylesheetRel     = regexp.MustCompile(`(?i)\brel\s*=\s*["']?[^"'>]*\bstylesheet\b`)
+	scriptSrcPattern  = regexp.MustCompile(`(?i)<script\b[^>]*\bsrc\s*=\s*["']?([^"'\s>]+)`)
+	cssFrameworkURL   = regexp.MustCompile(`(?i)tailwind|daisyui|bootstrap|bulma|unocss|twind|windicss|materialize|semantic-ui|picocss|water\.css|mvp\.css`)
+	htmlTagThemeAttr  = regexp.MustCompile(`(?i)\sdata-fr-theme\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+	iconLinkPattern   = regexp.MustCompile(`(?i)<link\b[^>]*\brel\s*=\s*["']?(?:shortcut\s+)?icon\b`)
+	headClosePattern  = regexp.MustCompile(`(?i)</head\s*>`)
 )
 
 // injectFavicon gives an artifact the vexillum icon unless it declares its
@@ -255,11 +260,60 @@ func injectFavicon(doc string) string {
 	return doc
 }
 
-// optsOutOfForumStyle reports whether the artifact asked not to receive the
-// forum content stylesheet: <meta name="forum-style" content="none">.
-func optsOutOfForumStyle(doc string) bool {
+// wantsForumStyle decides whether the artifact gets the forum content
+// stylesheet. <meta name="forum-style" content="none"> always opts out and
+// content="on" always forces it. Otherwise the artifact gets it only when it
+// brings no styling of its own (see bringsOwnStyle): forum gives an unstyled
+// artifact an identity, and never competes with one that already has a look.
+func wantsForumStyle(doc string) bool {
+	switch forumStyleMeta(doc) {
+	case "none":
+		return false
+	case "on":
+		return true
+	}
+	return !bringsOwnStyle(doc)
+}
+
+// forumStyleMeta returns the lowercased content of <meta name="forum-style">
+// ("none", "on") or "". If several are present, "none" wins over "on".
+func forumStyleMeta(doc string) string {
+	mode := ""
 	for _, tag := range metaTagPattern.FindAllString(doc, -1) {
-		if forumStyleName.MatchString(tag+" ") && forumStyleNone.MatchString(tag+" ") {
+		tag += " "
+		if !forumStyleName.MatchString(tag) {
+			continue
+		}
+		m := forumStyleContent.FindStringSubmatch(tag)
+		if m == nil {
+			continue
+		}
+		switch strings.ToLower(m[1]) {
+		case "none":
+			return "none"
+		case "on":
+			mode = "on"
+		}
+	}
+	return mode
+}
+
+// bringsOwnStyle reports whether the artifact styles itself: a <style> block,
+// a stylesheet <link>, or a CSS framework loaded from a CDN (Tailwind,
+// daisyUI, Bootstrap and the like are a <script> or <link> that styles the
+// page, so they count). Inline style="" attributes alone do not: they are the
+// recommended way to tweak a forum-styled page.
+func bringsOwnStyle(doc string) bool {
+	if styleBlockPattern.MatchString(doc) {
+		return true
+	}
+	for _, tag := range linkTagPattern.FindAllString(doc, -1) {
+		if stylesheetRel.MatchString(tag) {
+			return true
+		}
+	}
+	for _, m := range scriptSrcPattern.FindAllStringSubmatch(doc, -1) {
+		if cssFrameworkURL.MatchString(m[1]) {
 			return true
 		}
 	}
