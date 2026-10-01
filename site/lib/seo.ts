@@ -19,6 +19,20 @@ export function localizedPath(lang: string, path: string): string {
   return `${prefix}${path}`;
 }
 
+export const OG_WIDTH = 1200;
+export const OG_HEIGHT = 630;
+
+/** Path of a docs page's social image (`slugs` empty or undefined is the docs root). */
+export function ogImagePath(lang: string, slugs?: string[]): string {
+  const page = slugs?.length ? `docs/${slugs.join("/")}` : "docs";
+  return `/og/${lang}/${page}.png`;
+}
+
+/** Path of the landing's social image. */
+export function landingOgImagePath(lang: string): string {
+  return `/og/${lang}/index.png`;
+}
+
 export interface PageSeo {
   lang: Lang;
   /** Title without the site suffix; the root layout's template adds it. */
@@ -34,6 +48,8 @@ export interface PageSeo {
   /** Locale-less path the canonical URL points at (defaults to this page's own). */
   canonicalPath?: string;
   type: "website" | "article";
+  /** Social image: its path under /og and its alt text. */
+  image: { path: string; alt: string };
 }
 
 /** Everything the head needs for one page except the social image, which the
@@ -58,6 +74,12 @@ export function pageMetadata(seo: PageSeo): Metadata {
   }
 
   const socialTitle = seo.absoluteTitle ?? `${title} · ${SITE_NAME}`;
+  const image = {
+    url: absoluteUrl(seo.image.path),
+    width: OG_WIDTH,
+    height: OG_HEIGHT,
+    alt: seo.image.alt,
+  };
   const translated = Object.keys(translations).filter((l) => l !== canonicalLang);
 
   return {
@@ -73,11 +95,13 @@ export function pageMetadata(seo: PageSeo): Metadata {
       description,
       locale: OG_LOCALE[canonicalLang],
       alternateLocale: translated.map((l) => OG_LOCALE[l as Lang]),
+      images: [{ ...image, type: "image/png" }],
     },
     twitter: {
       card: "summary_large_image",
       title: socialTitle,
       description,
+      images: [image],
     },
   };
 }

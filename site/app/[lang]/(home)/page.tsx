@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { JsonLd } from "@/components/JsonLd";
-import { pageMetadata, softwareApplicationLd } from "@/lib/seo";
+import { landingOgImagePath, pageMetadata, softwareApplicationLd } from "@/lib/seo";
 import { SiteNav } from "@/components/SiteNav";
 import { Footer } from "@/components/Footer";
 import { InstallCommand } from "@/components/InstallCommand";
@@ -26,6 +26,11 @@ const TITLE: Record<Lang, string> = {
   es: "vexillum · orquestá agentes de código desde tu terminal",
 };
 
+const OG_ALT: Record<Lang, string> = {
+  en: "vexillum - One commander. Many soldiers.",
+  es: "vexillum - Un commander. Muchos soldiers.",
+};
+
 export async function generateMetadata({
   params,
 }: {
@@ -40,6 +45,10 @@ export async function generateMetadata({
     description: dictionary(lang).meta.description,
     translations: { en: "/", es: "/" },
     type: "website",
+    image: {
+      path: landingOgImagePath(lang),
+      alt: OG_ALT[lang as Lang],
+    },
   });
 }
 

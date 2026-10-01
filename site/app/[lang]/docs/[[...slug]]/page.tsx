@@ -15,12 +15,18 @@ import {
   absoluteUrl,
   breadcrumbLd,
   localizedPath,
+  ogImagePath,
   pageMetadata,
   techArticleLd,
   type Crumb,
 } from "@/lib/seo";
 import { dictionary } from "@/lib/strings";
 import { JsonLd } from "@/components/JsonLd";
+
+const DOCS_ALT: Record<Lang, string> = {
+  en: "vexillum docs",
+  es: "Documentación de vexillum",
+};
 
 type Props = { params: Promise<{ lang: string; slug?: string[] }> };
 
@@ -80,7 +86,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const { lang, slug } = await props.params;
   const info = docsPageInfo(slug, lang);
   if (!info) notFound();
-  const { page, translations } = info;
+  const { page, translations, fallback, contentLang } = info;
 
   // A page with no translation shows the default-language page under /es; its
   // canonical is the original, so the two never compete.
@@ -90,5 +96,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     description: page.data.description ?? dictionary(lang).meta.description,
     translations,
     type: "article",
+    image: {
+      path: ogImagePath(fallback ? contentLang : lang, slug),
+      alt: `${DOCS_ALT[contentLang]}: ${page.data.title}`,
+    },
   });
 }
