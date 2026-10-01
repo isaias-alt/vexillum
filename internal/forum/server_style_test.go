@@ -1,6 +1,9 @@
 package forum_test
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -104,5 +107,40 @@ func TestArtifactStyle_ThemeIsRenderedFromTheQueryAndReachesTheIframe(t *testing
 	_, sdk := env.get("/forum-assets/forum-sdk.js")
 	if !strings.Contains(sdk, `message.type === "forum:theme"`) || !strings.Contains(sdk, `"data-fr-theme"`) {
 		t.Error("the sdk must apply a forum:theme message to the artifact's <html>")
+	}
+}
+
+// The skill and the playbooks tell agents which classes to use. A class that
+// is documented but not defined (or renamed in the stylesheet only) would
+// silently produce an unstyled artifact, so every documented fr-* class must
+// exist in the stylesheet.
+func TestArtifactStyle_DocumentedClassesExist(t *testing.T) {
+	cssBytes, err := os.ReadFile("assets/chrome/forum-artifact.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	files, err := filepath.Glob("../../skills/forum/playbooks/*.md")
+	if err != nil || len(files) != 5 {
+		t.Fatalf("playbooks = %v (%v), want the 5 ported playbooks", files, err)
+	}
+	files = append(files, "../../skills/forum/SKILL.md")
+	// Not preceded by a hyphen or word character, so data-fr-theme and --fr-* tokens are not classes.
+	classRe := regexp.MustCompile(`(?:^|[^-\w])(fr-[a-z][a-z0-9-]*)`)
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, m := range classRe.FindAllStringSubmatch(text, -1) {
+			if class := m[1]; !strings.Contains(css, "."+class) {
+				t.Errorf("%s documents class %q, which forum-artifact.css does not define", filepath.Base(file), class)
+			}
+		}
+		// Every playbook must steer away from CDN frameworks.
+		if strings.Contains(file, "playbooks") && !strings.Contains(text, "forum-artifact.css") {
+			t.Errorf("%s has no forum-artifact.css section", filepath.Base(file))
+		}
 	}
 }
