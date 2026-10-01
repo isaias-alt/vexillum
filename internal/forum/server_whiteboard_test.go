@@ -187,3 +187,19 @@ func TestWhiteboardStaticRoutes(t *testing.T) {
 		t.Error("traversal served something")
 	}
 }
+
+// The frame bundle must talk to its direct parent, the artifact page that
+// holds the channel (whiteboard-embed.js). Upstream nests the frame one level
+// deeper and posts to window.top, which here is the forum chrome: the "ready"
+// message went to a window that ignores it, init never came back, and every
+// diagram stayed a blank box.
+func TestWhiteboardBundle_TalksToItsParentNotTheTop(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	_, js := env.get("/whiteboard-assets/whiteboard.js")
+	if strings.Contains(js, "window.top.postMessage") || strings.Contains(js, "!==window.top)return") {
+		t.Error("the whiteboard frame addresses window.top (the forum chrome) instead of its embedder")
+	}
+	if !strings.Contains(js, "window.parent.postMessage") {
+		t.Error("the whiteboard frame never posts to window.parent")
+	}
+}

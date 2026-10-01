@@ -10,9 +10,10 @@ import (
 
 var buildID = sync.OnceValue(func() string {
 	h := sha256.New()
-	// The whiteboard bundle is large and rarely changes; the chrome, the SDK,
-	// the embed script and the icon are what a stale server would serve wrong.
-	for _, root := range []string{"assets/chrome", "assets/whiteboard-embed.js", "assets/favicon.svg"} {
+	// The whiteboard frame bundle is large but its postMessage protocol has to
+	// match whiteboard-embed.js, so a stale server serving an old bundle breaks
+	// the whiteboard silently; the fonts and css never do, so skip those.
+	for _, root := range []string{"assets/chrome", "assets/whiteboard-embed.js", "assets/whiteboard/whiteboard.js.gz", "assets/favicon.svg"} {
 		_ = fs.WalkDir(assetsFS, root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil

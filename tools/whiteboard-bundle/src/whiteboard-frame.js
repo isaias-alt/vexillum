@@ -6,6 +6,10 @@
 //
 // Changes from upstream, beyond renaming forum-whiteboard: -> vx-whiteboard:
 // message types and the data-forum-* dataset attributes to data-vexillum-*:
+//   - The embedder is window.parent, not window.top: upstream nests the
+//     frame two levels under its chrome (chrome > artifact > frame), but the
+//     artifact here is the frame's direct parent and the one holding the
+//     channel (see whiteboard-embed.js), while window.top is the forum chrome.
 //   - Dropped the channelToken/authenticateWhiteboardChannel HTTP round trip.
 //     Upstream's chrome is a persistent multi-session server, so it binds a
 //     postMessage channel to a session server-side. vexillum forum's server
@@ -94,8 +98,12 @@ function randomChannelId() {
   return `wb-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
 }
 
+// The frame's embedder is its direct parent: the artifact page (whose
+// whiteboard-embed.js owns the channel) for the inline placement and for the
+// fullscreen overlay alike. window.top would be the forum chrome, one level
+// higher, which neither sends init nor listens for these messages.
 function post(message) {
-  window.top.postMessage(
+  window.parent.postMessage(
     { ...message, diagramIndex: state.diagramIndex, channelId: state.channelId },
     "*",
   );
@@ -692,7 +700,7 @@ function main() {
   state.channelId = randomChannelId();
   let initialized = false;
   window.addEventListener("message", (event) => {
-    if (event.source !== window.top) return;
+    if (event.source !== window.parent) return;
     const msg = event.data || {};
     if (msg.type === "vx-whiteboard:init" && !initialized && msg.channelId === state.channelId) {
       initialized = true;
