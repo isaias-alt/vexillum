@@ -78,6 +78,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/agent/end", s.agentOnly(s.handleAgentEnd))
 	s.mux.HandleFunc("POST /api/agent/stop", s.agentOnly(s.handleAgentStop))
 	s.browserRoutes()
+	s.pageRoutes()
 }
 
 // SessionURL is the page the reviewer opens for key.
@@ -126,7 +127,11 @@ func writeHubError(w http.ResponseWriter, err error) {
 const maxBodyBytes = 1 << 20
 
 func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	return decodeBodyLimit(w, r, v, maxBodyBytes)
+}
+
+func decodeBodyLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil && !errors.Is(err, io.EOF) {
 		writeError(w, http.StatusBadRequest, "bad_request", "invalid request body")
 		return false

@@ -11,13 +11,20 @@ import (
 	"time"
 )
 
-// assetsFS embeds the whiteboard browser bundle (assets/whiteboard/ - built
+// assetsFS embeds the review chrome (assets/chrome/), the whiteboard browser bundle (assets/whiteboard/ - built
 // by tools/whiteboard-bundle/build.js, never at vexillum's own build or
 // install time, see that directory's README) and whiteboard-embed.js, the
 // small hand-written chrome-side integration script served unbundled.
 //
-//go:embed assets/whiteboard assets/whiteboard-embed.js
+//go:embed assets/whiteboard assets/whiteboard-embed.js assets/chrome
 var assetsFS embed.FS
+
+// chromeHTML is the session page's template (assets/chrome/chrome.html);
+// its styles live in assets/chrome/forum.css and its behavior in
+// forum-chrome.js, so the whole look of the chrome is that one stylesheet.
+//
+//go:embed assets/chrome/chrome.html
+var chromeHTML string
 
 const whiteboardAssetsPrefix = "/whiteboard-assets/"
 

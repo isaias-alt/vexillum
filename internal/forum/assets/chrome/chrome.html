@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>forum - {{.Name}}</title>
+<link rel="stylesheet" href="/forum-assets/forum.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="brand">forum</span>
+      <span class="file" id="fileName">{{.Name}}</span>
+    </div>
+    <span class="badge" id="sessionBadge" data-state="open">Open</span>
+  </header>
+  <main class="layout">
+    <section class="stage" aria-label="Artifact">
+      <iframe id="artifact" class="artifact-frame" title="Artifact: {{.Name}}" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads" src="{{.Src}}"></iframe>
+    </section>
+    <aside class="panel" id="panel" aria-label="Conversation">
+      <div class="panel-head">
+        <h2 class="panel-title">Conversation</h2>
+        <span class="presence" id="presence" data-state="unknown" role="status">
+          <span class="presence-dot" aria-hidden="true"></span>
+          <span id="presenceText">Connecting...</span>
+        </span>
+      </div>
+      <div class="banner banner-warn" id="connBanner" role="status" hidden>Lost contact with the forum server. Reconnecting...</div>
+      <div class="banner banner-warn" id="listenBanner" role="status" hidden>Your agent is not listening. Ask it to poll for updates.</div>
+      <div class="banner" id="pendingBanner" role="status" hidden></div>
+      <div class="banner banner-ended" id="endedBanner" role="status" hidden></div>
+      <div class="panel-scroll" id="scroll">
+        <p class="empty" id="emptyLog">Nothing here yet. Write a message or use the controls in the artifact, then press Send to Agent.</p>
+        <ol class="log" id="log" aria-live="polite"></ol>
+        <section class="queued" id="queuedSection" aria-label="Queued messages" hidden>
+          <h3 class="queued-title">Queued <span class="queued-count" id="queuedCount"></span></h3>
+          <ul class="queued-list" id="queuedList"></ul>
+        </section>
+      </div>
+      <form class="composer" id="composer">
+        <p class="notice" id="notice" role="alert" hidden></p>
+        <label class="sr-only" for="input">Message for the agent</label>
+        <textarea id="input" class="input" rows="3" placeholder="Write a message for the agent..."></textarea>
+        <div class="composer-row">
+          <button type="button" class="btn" id="queueBtn">Add to queue</button>
+          <span class="hint">Enter adds to the queue, Shift+Enter for a new line.</span>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn-danger" id="sendEndBtn">Send &amp; End</button>
+          <button type="submit" class="btn btn-primary" id="sendBtn">Send to Agent</button>
+        </div>
+      </form>
+    </aside>
+  </main>
+</div>
+<script type="application/json" id="forum-boot">{{.Boot}}</script>
+<script src="/forum-assets/forum-chrome.js"></script>
+</body>
+</html>

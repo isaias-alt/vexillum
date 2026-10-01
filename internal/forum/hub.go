@@ -291,6 +291,18 @@ func (h *Hub) File(key string) (string, error) {
 	return l.rec.File, nil
 }
 
+// RequireOpen returns *ErrSessionEnded if key's session has ended (and
+// ErrNoSession if it does not exist), nil if it still accepts prompts.
+func (h *Hub) RequireOpen(key string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	l, err := h.get(key)
+	if err != nil {
+		return err
+	}
+	return l.endedErr()
+}
+
 // QueuePrompt adds a prompt to key's unsent queue. A non-empty QueueKey
 // replaces the earlier unsent prompt with the same key, in place.
 func (h *Hub) QueuePrompt(key string, in PromptInput) (Prompt, error) {

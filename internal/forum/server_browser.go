@@ -17,6 +17,7 @@ func (s *Server) browserRoutes() {
 const (
 	defaultStateWait = 25 * time.Second
 	maxStateWait     = 30 * time.Second
+	stateSlice       = 2 * time.Second
 )
 
 // handleState returns the session snapshot. With ?since=<version> it blocks
@@ -45,12 +46,42 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request, key string)
 	if wait > maxStateWait {
 		wait = maxStateWait
 	}
-	snap, err := s.hub.State(r.Context(), key, since, wait)
+	// The artifact file is not part of the hub's state, so the wait runs in
+	// short slices and re-checks the file between them: when the agent
+	// edits the artifact, the page that passed its current ?av= learns of it
+	// within a slice and reloads the iframe.
+	file, err := s.hub.File(key)
 	if err != nil {
 		writeHubError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, snap)
+	av := r.URL.Query().Get("av")
+	deadline := time.Now().Add(wait)
+	for {
+		slice := time.Until(deadline)
+		if slice > stateSlice {
+			slice = stateSlice
+		}
+		if slice < 0 {
+			slice = 0
+		}
+		snap, err := s.hub.State(r.Context(), key, since, slice)
+		if err != nil {
+			writeHubError(w, err)
+			return
+		}
+		current := artifactVersion(file)
+		if snap.Version != since || wait <= 0 || (av != "" && current != av) || !time.Now().Before(deadline) || r.Context().Err() != nil {
+			writeJSON(w, http.StatusOK, stateResponse{Snapshot: snap, ArtifactVersion: current})
+			return
+		}
+	}
+}
+
+// stateResponse is the browser's snapshot plus the artifact fingerprint.
+type stateResponse struct {
+	Snapshot
+	ArtifactVersion string `json:"artifact_version"`
 }
 
 func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request, key string) {
