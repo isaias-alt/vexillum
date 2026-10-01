@@ -350,16 +350,20 @@
     anchor.href = href;
     anchor.rel = "noopener noreferrer";
     anchor.target = "_blank";
-    inline(anchor, label);
+    // A bare URL is its own label; re-scanning it would autolink forever.
+    if (label === raw) anchor.append(document.createTextNode(label));
+    else inline(anchor, label);
     parent.append(anchor);
   }
 
   function inline(parent, text) {
     let last = 0;
-    INLINE.lastIndex = 0;
-    for (let match = INLINE.exec(text); match; match = INLINE.exec(text)) {
+    // A fresh regex per call: the nested calls below (bold inside a link,
+    // and so on) must not reset the outer scan's lastIndex.
+    const pattern = new RegExp(INLINE.source, "g");
+    for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
       if (match.index > last) parent.append(document.createTextNode(text.slice(last, match.index)));
-      last = INLINE.lastIndex;
+      last = pattern.lastIndex;
       if (match[1] !== undefined) parent.append(el("code", "", match[2].trim()));
       else if (match[3] !== undefined) {
         const strong = el("strong");
