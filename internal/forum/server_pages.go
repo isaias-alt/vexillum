@@ -18,6 +18,7 @@ import (
 
 func (s *Server) pageRoutes() {
 	s.mux.HandleFunc("GET /session/{key}", s.handleSessionPage)
+	s.mux.HandleFunc("GET /favicon.svg", s.handleFavicon)
 	s.mux.HandleFunc("GET /forum-assets/{name}", s.handleChromeAsset)
 	s.mux.HandleFunc("GET /a/{key}/{path...}", s.handleArtifactFile)
 }
@@ -77,13 +78,27 @@ func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleFavicon serves the vexillum icon for the chrome and for artifacts
+// that do not declare their own.
+func (s *Server) handleFavicon(w http.ResponseWriter, r *http.Request) {
+	data, err := fs.ReadFile(assetsFS, "assets/favicon.svg")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(data)
+}
+
 func (s *Server) handleChromeAsset(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var contentType string
 	switch name {
-	case "forum.css":
+	case "forum.css", "forum-tokens.css":
 		contentType = "text/css; charset=utf-8"
-	case "forum-chrome.js", "forum-sdk.js":
+	case "forum-chrome.js", "forum-sdk.js", "forum-theme.js":
 		contentType = "text/javascript; charset=utf-8"
 	default:
 		http.NotFound(w, r)
@@ -174,7 +189,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	doc := injectSDK(source)
+	doc := injectFavicon(injectSDK(source))
 	if len(ExtractMermaidSources(doc)) > 0 {
 		doc = injectEmbedScript(doc)
 	}
@@ -184,6 +199,7 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file string) {
 }
 
 const (
+	faviconTag     = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`
 	sdkScriptTag   = `<script src="/forum-assets/forum-sdk.js"></script>`
 	embedScriptTag = `<script src="/whiteboard-embed.js"></script>`
 )
@@ -205,6 +221,24 @@ func injectSDK(doc string) string {
 		}
 	}
 	return sdkScriptTag + doc
+}
+
+var (
+	iconLinkPattern  = regexp.MustCompile(`(?i)<link\b[^>]*\brel\s*=\s*["']?(?:shortcut\s+)?icon\b`)
+	headClosePattern = regexp.MustCompile(`(?i)</head\s*>`)
+)
+
+// injectFavicon gives an artifact the vexillum icon unless it declares its
+// own. The link goes just before </head>; a document with no head is left
+// alone (the browser then asks for /favicon.ico, as it would unreviewed).
+func injectFavicon(doc string) string {
+	if iconLinkPattern.MatchString(doc) {
+		return doc
+	}
+	if loc := headClosePattern.FindStringIndex(doc); loc != nil {
+		return doc[:loc[0]] + faviconTag + doc[loc[0]:]
+	}
+	return doc
 }
 
 // injectEmbedScript appends the whiteboard embed just before </body> (or at

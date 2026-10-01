@@ -11,12 +11,13 @@ import (
 	"time"
 )
 
-// assetsFS embeds the review chrome (assets/chrome/), the whiteboard browser bundle (assets/whiteboard/ - built
+// assetsFS embeds the favicon (assets/favicon.svg, a copy of the vexillum
+// icon in site/app/icon.svg), the review chrome (assets/chrome/), the whiteboard browser bundle (assets/whiteboard/ - built
 // by tools/whiteboard-bundle/build.js, never at vexillum's own build or
 // install time, see that directory's README) and whiteboard-embed.js, the
 // small hand-written chrome-side integration script served unbundled.
 //
-//go:embed assets/whiteboard assets/whiteboard-embed.js assets/chrome
+//go:embed assets/whiteboard assets/whiteboard-embed.js assets/chrome assets/favicon.svg
 var assetsFS embed.FS
 
 // chromeHTML is the session page's template (assets/chrome/chrome.html);

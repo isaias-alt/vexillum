@@ -56,10 +56,16 @@ func TestSessionPage_ServesChromeWithTokenAndStrictHeaders(t *testing.T) {
 	if boot.Token != token || boot.Key != open.Key || boot.ArtifactSrc != "/a/"+open.Key+"/artifact.html" {
 		t.Errorf("boot = %+v", boot)
 	}
-	for _, want := range []string{`/forum-assets/forum.css`, `/forum-assets/forum-chrome.js`, `sandbox="allow-scripts`, `Your agent is not listening. Ask it to poll for updates.`, `Send to Agent`, `Send &amp; End`} {
+	for _, want := range []string{`/forum-assets/forum.css`, `/forum-assets/forum-chrome.js`, `sandbox="allow-scripts`, `Your agent is not listening. Ask it to poll for updates.`, `Send to Agent`, `Send &amp; End`, `id="themeBtn"`, `aria-pressed=`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
 		}
+	}
+	// The theme script is synchronous and ahead of the stylesheets, so the
+	// saved theme lands before the first paint.
+	theme, tokens := strings.Index(body, "/forum-assets/forum-theme.js"), strings.Index(body, "/forum-assets/forum-tokens.css")
+	if theme < 0 || tokens < 0 || theme > tokens || strings.Contains(body[theme-20:theme+60], "defer") || strings.Contains(body[theme-20:theme+60], "async") {
+		t.Error("forum-theme.js must be a blocking script ahead of the stylesheets")
 	}
 	if strings.Contains(body, "allow-same-origin") {
 		t.Error("the artifact iframe must not be granted allow-same-origin")
@@ -97,20 +103,39 @@ func TestChromeAssets_ServedAndSelfContained(t *testing.T) {
 	if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/css") {
 		t.Fatalf("css = %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
-	for _, want := range []string{"--forum-bg:", "--forum-accent:", "--forum-radius-md:", "--forum-space-3:", "prefers-color-scheme: dark"} {
-		if !strings.Contains(css, want) {
-			t.Errorf("stylesheet missing %q", want)
+	resp, tokens := env.get("/forum-assets/forum-tokens.css")
+	if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/css") {
+		t.Fatalf("tokens = %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	// The design system's tokens, with light, OS-dark and manual-dark wiring.
+	for _, want := range []string{"--fr-bg:", "--fr-accent:", "--fr-selection:", "--fr-radius-md:", "--fr-space-3:", `:root[data-fr-theme="light"]`} {
+		if !strings.Contains(tokens, want) {
+			t.Errorf("tokens missing %q", want)
 		}
 	}
-	if strings.Contains(css, "http://") || strings.Contains(css, "https://") || strings.Contains(css, "@import") {
-		t.Error("the stylesheet must not pull anything from the network")
+	// Dark is the default and ignores the OS: the base :root block holds the
+	// dark tokens and light is only reachable through the attribute.
+	if strings.Contains(tokens, "prefers-color-scheme: dark") {
+		t.Error("the default theme must not depend on prefers-color-scheme")
 	}
-	// Components must use tokens, not raw colors (the only literals live in :root blocks).
+	base := tokens[:strings.Index(tokens, `:root[data-fr-theme="light"]`)]
+	if !strings.Contains(base, "--fr-bg: #15171A;") || !strings.Contains(base, "color-scheme: dark;") {
+		t.Error("the base :root block must carry the dark tokens")
+	}
+	for name, sheet := range map[string]string{"forum.css": css, "forum-tokens.css": tokens} {
+		if strings.Contains(sheet, "http://") || strings.Contains(sheet, "https://") || strings.Contains(sheet, "@import") {
+			t.Errorf("%s must not pull anything from the network", name)
+		}
+	}
+	// Components must use tokens, not raw colors (the only literals live in the :root blocks).
 	rules := css[strings.Index(css, "*, *::before"):]
-	if regexp.MustCompile(`#[0-9a-fA-F]{3,8}\b`).MatchString(rules) {
+	if regexp.MustCompile(`#[0-9a-fA-F]{3,8}\b|rgba?\(`).MatchString(rules) {
 		t.Error("a component rule hardcodes a color instead of a custom property")
 	}
-	for _, name := range []string{"forum-chrome.js", "forum-sdk.js"} {
+	if strings.Contains(css, "--forum-") {
+		t.Error("forum.css still references the provisional --forum-* palette")
+	}
+	for _, name := range []string{"forum-chrome.js", "forum-sdk.js", "forum-theme.js"} {
 		if resp, body := env.get("/forum-assets/" + name); resp.StatusCode != 200 || body == "" {
 			t.Errorf("%s = %d", name, resp.StatusCode)
 		}

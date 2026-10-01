@@ -43,3 +43,25 @@ func TestArtifact_SDKInjectionFallbacks(t *testing.T) {
 		}
 	}
 }
+
+func TestFavicon_ServedAndInjectedUnlessArtifactHasOwn(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	resp, body := env.get("/favicon.svg")
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/svg+xml" || !strings.Contains(body, "<svg") {
+		t.Fatalf("favicon = %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	open := env.open()
+	if _, page := env.get("/session/" + open.Key); !strings.Contains(page, `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`) {
+		t.Error("the chrome page does not reference the favicon")
+	}
+	env.setArtifact(`<!doctype html><html><head><title>t</title></head><body>x</body></html>`)
+	if _, got := env.get("/a/" + open.Key + "/artifact.html"); !strings.Contains(got, `href="/favicon.svg"></head>`) {
+		t.Errorf("favicon not injected into an artifact without one:\n%s", got)
+	}
+	for _, own := range []string{`<link rel="icon" href="/mine.png">`, `<link href="/mine.ico" rel='shortcut icon'>`} {
+		env.setArtifact(`<html><head>` + own + `</head><body>x</body></html>`)
+		if _, got := env.get("/a/" + open.Key + "/artifact.html"); strings.Contains(got, "/favicon.svg") {
+			t.Errorf("artifact with its own favicon %q was overridden", own)
+		}
+	}
+}

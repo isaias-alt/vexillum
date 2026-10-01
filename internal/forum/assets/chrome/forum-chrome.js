@@ -15,6 +15,21 @@
   let artifactVersion = "";
   let renderedTranscriptKey = "";
 
+  // ----------------------------------------------------------------- theme
+
+  // forum-theme.js (loaded in <head>) already applied the saved theme before
+  // first paint; this only keeps the toggle in step with it.
+  function syncThemeButton() {
+    const light = window.forumTheme.current() === "light";
+    $("themeBtn").setAttribute("aria-pressed", String(light));
+    $("themeLabel").textContent = light ? "Light" : "Dark";
+  }
+  $("themeBtn").addEventListener("click", () => {
+    window.forumTheme.toggle();
+    syncThemeButton();
+  });
+  syncThemeButton();
+
   // ---------------------------------------------------------------- server
 
   async function api(method, path, body, signal) {
