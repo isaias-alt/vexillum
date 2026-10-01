@@ -83,3 +83,34 @@ func saveTranscript(home, key string, transcript []Message) error {
 	}
 	return nil
 }
+
+func layoutFile(home, key string) string {
+	return filepath.Join(sessionDir(home, key), "layout.json")
+}
+
+// loadLayout reads a session's layout inbox; a missing file is an empty inbox.
+func loadLayout(home, key string) (layoutState, error) {
+	data, err := os.ReadFile(layoutFile(home, key))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return layoutState{Version: layoutStateVersion}, nil
+		}
+		return layoutState{}, fmt.Errorf("reading layout %s: %w", key, err)
+	}
+	var st layoutState
+	if err := json.Unmarshal(data, &st); err != nil {
+		return layoutState{}, fmt.Errorf("parsing layout %s: %w", key, err)
+	}
+	return st, nil
+}
+
+func saveLayout(home, key string, st *layoutState) error {
+	if err := os.MkdirAll(sessionDir(home, key), 0o755); err != nil {
+		return fmt.Errorf("creating session dir for %s: %w", key, err)
+	}
+	st.Version = layoutStateVersion
+	if err := atomicfile.WriteJSON(layoutFile(home, key), st); err != nil {
+		return fmt.Errorf("saving layout %s: %w", key, err)
+	}
+	return nil
+}

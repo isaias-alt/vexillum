@@ -70,6 +70,7 @@ type Hub struct {
 type liveSession struct {
 	rec         sessionRecord
 	transcript  []Message
+	layout      layoutState
 	version     int64
 	pollers     int
 	browsers    int
@@ -131,9 +132,17 @@ func (h *Hub) get(key string) (*liveSession, error) {
 	}
 	// A transcript written under an older or looser cap is trimmed on load.
 	transcript, _ = boundTranscript(transcript)
+	// The layout inbox is advisory: a damaged file starts an empty one rather
+	// than blocking the session.
+	layout, err := loadLayout(h.home, key)
+	if err != nil {
+		h.logf("forum: %v", err)
+		layout = layoutState{Version: layoutStateVersion}
+	}
 	l := &liveSession{
 		rec:         *rec,
 		transcript:  transcript,
+		layout:      layout,
 		version:     h.opts.Now().UnixNano(),
 		lastBrowser: h.opts.Now(),
 	}
@@ -400,10 +409,14 @@ func (h *Hub) RemoveQueued(key, uid string) error {
 		return err
 	}
 	var removed []Attachment
+	var released []string
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		for i := range rec.Queued {
 			if rec.Queued[i].UID == uid {
 				removed = rec.Queued[i].Attachments
+				if rec.Queued[i].Tag == LayoutWarningsTag {
+					released = layoutTargetIDs(rec.Queued[i].Target)
+				}
 				rec.Queued = append(rec.Queued[:i], rec.Queued[i+1:]...)
 				return nil
 			}
@@ -413,6 +426,7 @@ func (h *Hub) RemoveQueued(key, uid string) error {
 		return err
 	}
 	h.dropAttachments(l, attachmentIDs(removed))
+	h.releaseLayout(l, released)
 	h.bump(l)
 	return nil
 }
@@ -652,6 +666,10 @@ type Snapshot struct {
 	Pending    int       `json:"pending"`
 	Queued     []Prompt  `json:"queued"`
 	Transcript []Message `json:"transcript"`
+	// LayoutWarnings is the passive layout inbox. It is browser-only: a poll
+	// never carries it and nothing in it reaches the agent until the user
+	// queues it as a prompt.
+	LayoutWarnings []LayoutWarningView `json:"layout_warnings"`
 }
 
 func (l *liveSession) snapshot() Snapshot {
@@ -665,6 +683,8 @@ func (l *liveSession) snapshot() Snapshot {
 		Pending:    len(l.rec.Outbox),
 		Queued:     append([]Prompt{}, l.rec.Queued...),
 		Transcript: append([]Message{}, l.transcript...),
+
+		LayoutWarnings: layoutViews(l.layout.Warnings),
 	}
 }
 
@@ -784,4 +804,129 @@ func (h *Hub) Touch() {
 	h.mu.Lock()
 	h.lastActivity = h.opts.Now()
 	h.mu.Unlock()
+}
+
+// artifactRevision resolves the revision of a reported artifact version,
+// recording the version if it is new. Callers hold h.mu.
+func (l *liveSession) artifactRevision(version string) (rev int, changed bool) {
+	return l.layout.revisionOf(clip(version, 128))
+}
+
+func (h *Hub) saveLayoutState(l *liveSession) {
+	if err := saveLayout(h.home, l.rec.Key, &l.layout); err != nil {
+		h.logf("forum: %v", err)
+	}
+}
+
+// RecordLayoutPass folds one browser diagnostic pass into key's layout inbox.
+// It is passive by construction: it wakes browser tabs (the inbox changed)
+// but never touches the queue or the outbox, so no poll can return because of
+// it. A pass for an ended session is ignored.
+func (h *Hub) RecordLayoutPass(key string, pass LayoutPass) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	l, err := h.get(key)
+	if err != nil {
+		return err
+	}
+	if l.rec.Status == StatusEnded {
+		return nil
+	}
+	revision, versionsChanged := l.artifactRevision(pass.ArtifactVersion)
+	next, changed := applyLayoutPass(l.layout.Warnings, pass, revision, h.opts.Now().UTC())
+	if !changed && !versionsChanged {
+		return nil
+	}
+	l.layout.Warnings = next
+	h.saveLayoutState(l)
+	if changed {
+		h.bump(l)
+	}
+	return nil
+}
+
+// QueueLayoutWarnings turns the user's selection of layout issues into one
+// ordinary queued prompt tagged "layout-warnings" (the user still has to send
+// it) and marks those issues queued. Issues that can no longer be queued are
+// skipped; if none can, it fails with ErrNothingToQueue.
+func (h *Hub) QueueLayoutWarnings(key string, ids []string) (Prompt, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	l, err := h.get(key)
+	if err != nil {
+		return Prompt{}, err
+	}
+	if err := l.endedErr(); err != nil {
+		return Prompt{}, err
+	}
+	selected := selectableLayoutWarnings(l.layout.Warnings, ids)
+	if len(selected) == 0 {
+		return Prompt{}, ErrNothingToQueue
+	}
+	text, label, target := layoutPrompt(selected)
+	p, err := normalizePrompt(PromptInput{Prompt: text, Tag: LayoutWarningsTag, Text: label, Target: target})
+	if err != nil {
+		return Prompt{}, err
+	}
+	if p.UID, err = newID("pr_"); err != nil {
+		return Prompt{}, err
+	}
+	now := h.opts.Now().UTC()
+	p.QueuedAt = now
+	if err := h.commit(l, func(rec *sessionRecord) error {
+		if len(rec.Queued) >= maxQueuedPrompts {
+			return ErrQueueFull
+		}
+		rec.Queued = append(rec.Queued, p)
+		return nil
+	}); err != nil {
+		return Prompt{}, err
+	}
+	l.layout.Warnings = markLayoutQueued(l.layout.Warnings, selected, l.currentRevision(), now)
+	h.saveLayoutState(l)
+	h.bump(l)
+	return p, nil
+}
+
+// currentRevision is the newest artifact revision recorded so far.
+func (l *liveSession) currentRevision() int {
+	if len(l.layout.Versions) == 0 {
+		return l.layout.Base
+	}
+	return l.layout.Base + len(l.layout.Versions) - 1
+}
+
+// DismissLayoutWarning dismisses one issue for the current artifact revision.
+func (h *Hub) DismissLayoutWarning(key, id string) (bool, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	l, err := h.get(key)
+	if err != nil {
+		return false, err
+	}
+	if err := l.endedErr(); err != nil {
+		return false, err
+	}
+	next, changed := dismissLayoutWarning(l.layout.Warnings, id, l.currentRevision(), h.opts.Now().UTC())
+	if !changed {
+		return false, nil
+	}
+	l.layout.Warnings = next
+	h.saveLayoutState(l)
+	h.bump(l)
+	return true, nil
+}
+
+// releaseLayout returns warnings whose queued prompt was removed unsent to
+// their previous state. Callers hold h.mu.
+func (h *Hub) releaseLayout(l *liveSession, ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	next, changed := releaseLayoutQueued(l.layout.Warnings, ids, l.currentRevision(), h.opts.Now().UTC())
+	if !changed {
+		return
+	}
+	l.layout.Warnings = next
+	h.saveLayoutState(l)
 }

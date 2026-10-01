@@ -19,6 +19,9 @@ func (s *Server) browserRoutes() {
 	s.mux.HandleFunc("POST /api/s/{key}/send", s.browserAPI(s.handleSend))
 	s.mux.HandleFunc("POST /api/s/{key}/end", s.browserAPI(s.handleBrowserEnd))
 	s.mux.HandleFunc("POST /api/s/{key}/attachments", s.browserAPI(s.handleAttachmentUpload))
+	s.mux.HandleFunc("POST /api/s/{key}/layout/diagnostics", s.browserAPI(s.handleLayoutDiagnostics))
+	s.mux.HandleFunc("POST /api/s/{key}/layout/queue", s.browserAPI(s.handleLayoutQueue))
+	s.mux.HandleFunc("POST /api/s/{key}/layout/dismiss", s.browserAPI(s.handleLayoutDismiss))
 	s.mux.HandleFunc("GET /api/s/{key}/attachments/{id}", s.browserAPI(s.handleAttachmentGet))
 	s.mux.HandleFunc("DELETE /api/s/{key}/attachments/{id}", s.browserAPI(s.handleAttachmentDelete))
 }
@@ -204,6 +207,58 @@ func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+}
+
+// handleLayoutDiagnostics records one passive browser audit. It answers
+// "recorded" and nothing more: a diagnostic pass never produces a prompt, so
+// the agent can neither be woken by it nor see it in a poll.
+func (s *Server) handleLayoutDiagnostics(w http.ResponseWriter, r *http.Request, key string) {
+	var pass LayoutPass
+	if !decodeBody(w, r, &pass) {
+		return
+	}
+	if err := s.hub.RecordLayoutPass(key, pass); err != nil {
+		writeHubError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "recorded"})
+}
+
+// handleLayoutQueue queues the user's selected layout issues as one ordinary
+// prompt (tag layout-warnings). Sending it is a separate, explicit step.
+func (s *Server) handleLayoutQueue(w http.ResponseWriter, r *http.Request, key string) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	p, err := s.hub.QueueLayoutWarnings(key, req.IDs)
+	if err != nil {
+		writeHubError(w, err)
+		return
+	}
+	p.QueueKey = ""
+	writeJSON(w, http.StatusOK, map[string]any{"prompt": p})
+}
+
+func (s *Server) handleLayoutDismiss(w http.ResponseWriter, r *http.Request, key string) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	changed, err := s.hub.DismissLayoutWarning(key, req.ID)
+	if err != nil {
+		writeHubError(w, err)
+		return
+	}
+	status := "unchanged"
+	if changed {
+		status = "dismissed"
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": status})
 }
 
 const defaultEventsHeartbeat = 15 * time.Second

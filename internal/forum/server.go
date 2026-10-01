@@ -126,6 +126,8 @@ func writeHubError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "no_prompt", err.Error())
 	case errors.Is(err, ErrNothingToSend):
 		writeError(w, http.StatusBadRequest, "nothing_to_send", err.Error())
+	case errors.Is(err, ErrNothingToQueue):
+		writeError(w, http.StatusConflict, "nothing_to_queue", err.Error())
 	case errors.Is(err, ErrQueueFull):
 		writeError(w, http.StatusConflict, "queue_full", err.Error())
 	case errors.Is(err, ErrUnsupportedImage):
