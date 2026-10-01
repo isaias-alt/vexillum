@@ -99,7 +99,7 @@ func runShip(projectDir, vexillumHome, taskID string, stdout, stderr io.Writer) 
 		return 1
 	}
 
-	result, err := tribunal.Run(c.Path, task.CampBase)
+	result, err := tribunal.Run(c.Path, task.CampBase, tribunal.Options{Branch: c.Branch, TaskPrompt: task.Prompt})
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: running the %s pipeline: %v\n", tribunal.Name, err)
 		return 1

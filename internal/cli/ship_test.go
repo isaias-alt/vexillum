@@ -11,7 +11,6 @@ import (
 	"github.com/isaias-alt/vexillum/internal/camp"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
-	"github.com/isaias-alt/vexillum/internal/tribunal"
 )
 
 // shipTestProject is initDispatchTestProject plus a real "origin" remote
@@ -139,7 +138,10 @@ func shipToolsPath(t *testing.T, claudeVerdict, ghScript string) string {
 	return dir
 }
 
-const passingReview = "reviewed, no issues.\n" + tribunal.VerdictPrefix + " PASS"
+// passingReview is a complete, clean reviewer report for doneMissionTask's
+// single changed file.
+const passingReview = `reviewed, no issues.
+{"findings": [], "reviewed_paths": ["change.txt"], "risk_level": "low", "risk_rationale": "tiny"}`
 
 const ghCreatesNewPR = `case "$1 $2" in
   "pr create") echo "https://github.com/x/y/pull/1" ;;

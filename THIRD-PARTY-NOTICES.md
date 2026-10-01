@@ -118,3 +118,15 @@ per `tools/whiteboard-bundle/README.md`: forum-tool ships a high release
 cadence and keeps patching real bugs in this exact conversion path, so
 diff against a newer forum-tool tag when something in the conversion looks
 wrong before assuming it's a vexillum-specific bug.
+
+## Adapted into `internal/tribunal/` (review and fix prompts)
+
+The adversarial review step of `vexillum ship` (`internal/tribunal/review.go`
+and `internal/tribunal/fix.go`) adapts prompt text, rules and the findings
+vocabulary (severity error/warning/info, action ask-user/auto-fix/no-op,
+`reviewed_paths` coverage record, fix-round provenance clause, simplification
+pass, invariant-at-every-sibling-site fixer rules) from
+[review-tool](https://github.com/upstream)
+(`internal/pipeline/steps/review.go`, `internal/types/findings.go`), MIT
+licensed, Copyright (c) 2026 the upstream author. No code is vendored or linked; the
+full MIT license text above applies to the adapted portions.
