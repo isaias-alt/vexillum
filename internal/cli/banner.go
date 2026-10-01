@@ -189,6 +189,12 @@ func runBannerPublish(opts bannerArgs, client *banner.Client, stdout, stderr io.
 	fmt.Fprintln(stdout, "This is the ONLY credential that can update or unpublish this page -")
 	fmt.Fprintln(stdout, "it is shown once, right now, and vexillum does not store it anywhere.")
 	fmt.Fprintln(stdout, "Save it yourself. Lose it and this page can never be touched again.")
+	if site.SiteIDRejected {
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "WARNING: the host returned a site_id vexillum can't safely use, and --site")
+		fmt.Fprintln(stdout, "is half the republish credential. This page can NEVER be republished or")
+		fmt.Fprintln(stdout, "unpublished, even though its update_key is printed above.")
+	}
 
 	if shown {
 		fmt.Fprintln(stdout)

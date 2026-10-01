@@ -225,3 +225,24 @@ func TestRunBannerUnpublish(t *testing.T) {
 		t.Errorf("expected the still-live caveat in stdout, got: %s", stdout.String())
 	}
 }
+
+func TestRunBannerPublishWarnsWhenSiteIDRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(banner.Site{URL: "https://plans.example.com/x", UpdateKey: "lost-key", SiteID: "../bad"})
+	}))
+	defer srv.Close()
+
+	file := writeBannerFixture(t, `<html></html>`)
+	client := &banner.Client{BaseURL: srv.URL, HTTPClient: srv.Client()}
+	var stdout, stderr bytes.Buffer
+	if code := runBanner(bannerArgs{file: file}, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit 0, got %d, stderr: %s", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "lost-key") || !strings.Contains(out, "NEVER be republished or") {
+		t.Errorf("expected the update_key and the NEVER warning, got: %s", out)
+	}
+	if strings.Contains(out, "site_id:") {
+		t.Errorf("the rejected site_id must not be printed, got: %s", out)
+	}
+}

@@ -52,6 +52,13 @@ type Site struct {
 	UpdateKey string `json:"update_key"`
 	SiteID    string `json:"site_id"`
 	Status    string `json:"status"`
+
+	// SiteIDRejected is set by Create when the host returned a site_id that
+	// failed validateSiteID. The id is then cleared (treated as absent) so it
+	// never reaches a URL path, but url and update_key are still returned: the
+	// page is live, and the caller must tell the user it can never be
+	// republished or unpublished, since --site is half the republish credential.
+	SiteIDRejected bool `json:"-"`
 }
 
 // AmbiguousCreateError wraps a failure from Create where it can't be told
@@ -109,7 +116,8 @@ type siteRequest struct {
 // password. Per contract, a response missing either url or update_key is
 // always treated as an error, wrapped as an AmbiguousCreateError - a
 // response that parses cleanly but omits one of those two fields is just
-// as unrecoverable as a network failure would have been.
+// as unrecoverable as a network failure would have been. A site_id that
+// fails validation is not an error: see Site.SiteIDRejected.
 func (c *Client) Create(html, password string) (Site, error) {
 	site, _, err := c.request(http.MethodPost, "/v1/sites", "", siteRequest{HTMLContent: html, Password: password})
 	if err != nil {
@@ -118,8 +126,12 @@ func (c *Client) Create(html, password string) (Site, error) {
 	if site.URL == "" || site.UpdateKey == "" {
 		return Site{}, &AmbiguousCreateError{Cause: fmt.Errorf("response is missing url or update_key")}
 	}
+	// An invalid echoed site_id is untrusted input: treat it as absent rather
+	// than discarding the whole result, which would throw away the update_key
+	// of a page that is already live.
 	if err := validateSiteID(site.SiteID); err != nil {
-		return Site{}, fmt.Errorf("published at %s, but %w - the update_key you were given can't be used to republish through this site_id", site.URL, err)
+		site.SiteID = ""
+		site.SiteIDRejected = true
 	}
 	return site, nil
 }

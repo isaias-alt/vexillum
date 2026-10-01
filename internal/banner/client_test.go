@@ -85,7 +85,7 @@ func TestCreateNetworkFailureIsAmbiguous(t *testing.T) {
 	}
 }
 
-func TestCreateRejectsUntrustworthySiteID(t *testing.T) {
+func TestCreateTreatsUntrustworthySiteIDAsAbsentButKeepsUpdateKey(t *testing.T) {
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(Site{
 			URL:       "https://plans.example.com/abc123",
@@ -94,12 +94,15 @@ func TestCreateRejectsUntrustworthySiteID(t *testing.T) {
 		})
 	})
 
-	_, err := c.Create("<html></html>", "")
-	if err == nil {
-		t.Fatal("expected an error for a site_id outside the trusted charset")
+	site, err := c.Create("<html></html>", "")
+	if err != nil {
+		t.Fatalf("Create must not fail for a live page with a bad site_id: %v", err)
 	}
-	if !strings.Contains(err.Error(), "site_id") {
-		t.Errorf("expected the error to mention site_id, got: %v", err)
+	if site.URL == "" || site.UpdateKey != "secret-key" {
+		t.Errorf("url and update_key must survive, got %+v", site)
+	}
+	if site.SiteID != "" || !site.SiteIDRejected {
+		t.Errorf("expected the bad site_id cleared and flagged, got %+v", site)
 	}
 }
 
