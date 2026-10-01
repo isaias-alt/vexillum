@@ -25,6 +25,10 @@ type ServerState struct {
 	Addr       string    `json:"addr"`
 	AgentToken string    `json:"agent_token"`
 	StartedAt  time.Time `json:"started_at"`
+	// Build identifies the assets and revision the server was built with. A
+	// server left running by an older binary keeps serving that binary's
+	// chrome, so callers replace a server whose Build differs from theirs.
+	Build string `json:"build,omitempty"`
 }
 
 func statePath(home string) string    { return filepath.Join(serverDir(home), "server.json") }
@@ -47,7 +51,9 @@ type RunOptions struct {
 	BrowserGrace time.Duration
 	// CheckInterval is how often the idle check runs.
 	CheckInterval time.Duration
-	Log           io.Writer
+	// Build overrides the build identity the server publishes (tests only).
+	Build string
+	Log   io.Writer
 	// Ready, if set, is called once the server accepts connections.
 	Ready func(ServerState)
 }
@@ -114,7 +120,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		BaseContext: func(net.Listener) context.Context { return runCtx },
 	}
 
-	state := ServerState{PID: os.Getpid(), Addr: addr, AgentToken: token, StartedAt: time.Now().UTC()}
+	build := opts.Build
+	if build == "" {
+		build = Build()
+	}
+	state := ServerState{PID: os.Getpid(), Addr: addr, AgentToken: token, StartedAt: time.Now().UTC(), Build: build}
 	if err := atomicfile.WriteJSON(statePath(opts.Home), state); err != nil {
 		_ = listener.Close()
 		return fmt.Errorf("publishing forum server state: %w", err)
@@ -210,17 +220,48 @@ func readState(home string) (ServerState, error) {
 // verifies the server answers its health check, so a dead pid reused by an
 // unrelated process is not mistaken for a server.
 func Discover(home string) (*Client, error) {
+	c, _, err := discover(home)
+	return c, err
+}
+
+func discover(home string) (*Client, ServerState, error) {
 	st, err := readState(home)
 	if err != nil {
-		return nil, err
+		return nil, ServerState{}, err
 	}
 	c := newClient(st)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := c.health(ctx); err != nil {
-		return nil, ErrNoServer
+		return nil, ServerState{}, ErrNoServer
 	}
-	return c, nil
+	return c, st, nil
+}
+
+// replaceStale stops a running server built from a different binary than the
+// caller's and waits for it to go, so the caller starts one of its own. The
+// old server's sessions are on disk and survive the restart, and a browser
+// tab reconnects to the same port.
+func replaceStale(ctx context.Context, home string, c *Client, st ServerState) error {
+	stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := c.Stop(stopCtx); err != nil {
+		return fmt.Errorf("stopping the forum server left by an older vexillum (pid %d): %w", st.PID, err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := readState(home); errors.Is(err, ErrNoServer) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the forum server left by an older vexillum (pid %d) did not stop", st.PID)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 // EnsureServer returns a Client for the running server, starting one via
@@ -229,8 +270,13 @@ func Discover(home string) (*Client, error) {
 // Several callers racing here are safe: only one server wins the lock, and
 // every caller then discovers that one.
 func EnsureServer(ctx context.Context, home string, spawn func() error, wait time.Duration) (*Client, error) {
-	if c, err := Discover(home); err == nil {
-		return c, nil
+	if c, st, err := discover(home); err == nil {
+		if st.Build == Build() {
+			return c, nil
+		}
+		if err := replaceStale(ctx, home, c, st); err != nil {
+			return nil, err
+		}
 	} else if !errors.Is(err, ErrNoServer) {
 		return nil, err
 	}
@@ -240,7 +286,7 @@ func EnsureServer(ctx context.Context, home string, spawn func() error, wait tim
 	deadline := time.Now().Add(wait)
 	nextSpawn := time.Now().Add(respawnAfter)
 	for {
-		if c, err := Discover(home); err == nil {
+		if c, st, err := discover(home); err == nil && st.Build == Build() {
 			return c, nil
 		}
 		now := time.Now()

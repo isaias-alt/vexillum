@@ -2,6 +2,7 @@ package forum_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
@@ -307,5 +308,62 @@ func TestRun_StopRouteShutsDownAndPendingSurvivesRestart(t *testing.T) {
 	}
 	if resumed.Key != open.Key || resumed.Created {
 		t.Errorf("restart open = %+v, want the same session resumed", resumed)
+	}
+}
+
+// A forum server outlives the vexillum invocation that started it (an open
+// browser tab keeps it alive), so after an upgrade a newer binary would
+// attach to it and serve the older chrome: no annotation UI at all, while
+// chat, served by the unchanged API, keeps working. EnsureServer must
+// replace a server built from different assets.
+func TestEnsureServer_ReplacesAServerFromAnOlderBuild(t *testing.T) {
+	home := t.TempDir()
+	oldState, stopOld := startServer(t, home, forum.RunOptions{Build: "an-older-build"})
+	if oldState.Build != "an-older-build" {
+		t.Fatalf("old server build = %q", oldState.Build)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var runs sync.WaitGroup
+	spawn := func() error {
+		runs.Add(1)
+		go func() {
+			defer runs.Done()
+			_ = forum.Run(ctx, forum.RunOptions{Home: home})
+		}()
+		return nil
+	}
+	client, err := forum.EnsureServer(ctx, home, spawn, 10*time.Second)
+	if err != nil || client == nil {
+		t.Fatalf("EnsureServer: %v", err)
+	}
+	defer func() { cancel(); runs.Wait() }()
+
+	data, err := os.ReadFile(filepath.Join(home, "forum", "server.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st forum.ServerState
+	if err := json.Unmarshal(data, &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.Build != forum.Build() || forum.Build() == "" {
+		t.Errorf("running server build = %q, want this binary's %q", st.Build, forum.Build())
+	}
+	if err := stopOld(); err != nil {
+		t.Errorf("the old server did not shut down cleanly: %v", err)
+	}
+}
+
+func TestEnsureServer_KeepsAServerFromTheSameBuild(t *testing.T) {
+	home := t.TempDir()
+	st, _ := startServer(t, home, forum.RunOptions{})
+	spawned := false
+	client, err := forum.EnsureServer(context.Background(), home, func() error { spawned = true; return nil }, 2*time.Second)
+	if err != nil || client == nil || spawned {
+		t.Fatalf("EnsureServer = %v, spawned %v: a matching server must be reused", err, spawned)
+	}
+	if st.Build != forum.Build() {
+		t.Errorf("a default server publishes %q, want %q", st.Build, forum.Build())
 	}
 }
