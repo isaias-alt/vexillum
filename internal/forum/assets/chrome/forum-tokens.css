@@ -50,6 +50,7 @@
   --fr-bronze: #C9A15A;
   --fr-bronze-soft: rgba(201,161,90,0.18);
 
+  --fr-scrim: rgba(0,0,0,0.6);
   --fr-shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
   --fr-shadow-md: 0 8px 28px rgba(0,0,0,0.45);
 }
@@ -79,6 +80,7 @@
   --fr-bronze: #9C7A3F;          /* tertiary accent - secondary actions, shared family w/ vexillum */
   --fr-bronze-soft: rgba(156,122,63,0.14);
 
+  --fr-scrim: rgba(26,29,34,0.45);
   --fr-shadow-sm: 0 1px 2px rgba(26,29,34,0.06), 0 1px 1px rgba(26,29,34,0.04);
   --fr-shadow-md: 0 8px 24px rgba(26,29,34,0.12), 0 2px 6px rgba(26,29,34,0.08);
 }

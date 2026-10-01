@@ -91,6 +91,20 @@
     </div>
   </div>
 </form>
+<div class="fr-dialog-backdrop" id="endedBackdrop" hidden>
+  <div class="fr-dialog" id="endedDialog" role="dialog" aria-modal="true" aria-labelledby="endedTitle" aria-describedby="endedDesc endedPathBox" tabindex="-1">
+    <h3 id="endedTitle">Session ended</h3>
+    <p id="endedDesc"></p>
+    <div class="fr-dialog-path" id="endedPathBox">
+      <span class="fr-dialog-path-label">Artifact</span>
+      <code class="fr-dialog-path-value" id="endedPath"></code>
+    </div>
+    <p class="fr-dialog-close-hint">You can close this tab now. To review this artifact again, ask your agent to reopen the session.</p>
+    <div class="fr-dialog-actions">
+      <button type="button" class="btn" id="endedCopy">Copy path</button>
+    </div>
+  </div>
+</div>
 <script type="application/json" id="forum-boot">{{.Boot}}</script>
 <script src="/forum-assets/forum-prefs.js"></script>
 <script src="/forum-assets/forum-chrome.js"></script>

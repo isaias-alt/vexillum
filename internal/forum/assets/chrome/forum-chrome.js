@@ -154,6 +154,7 @@
 
     renderLog(snap.transcript || []);
     renderQueue(snap.queued || [], ended);
+    syncEndedDialog(snap);
 
     $("annotateSwitch").disabled = ended;
     if (ended) {
@@ -240,6 +241,87 @@
       list.append(item);
     }
   }
+
+
+  // ----------------------------------------------------- session ended
+
+  // A finished session shows a modal that cannot be dismissed: no close
+  // button, Escape and clicks outside do nothing, and everything behind it is
+  // inert. The only way out is closing the tab (or the agent reopening the
+  // session, which brings the next snapshot back to "open" and removes it).
+  const endedBackdrop = $("endedBackdrop");
+  const endedDialog = $("endedDialog");
+  const inertWhileEnded = () => [document.querySelector(".app"), $("annotOffer"), $("annotCard")].filter(Boolean);
+  let endedShown = false;
+  let focusBeforeEnded = null;
+
+  function endedFocusables() {
+    return [...endedDialog.querySelectorAll("button:not([disabled])")];
+  }
+
+  function syncEndedDialog(snap) {
+    const ended = snap.status === "ended";
+    if (!ended) {
+      if (!endedShown) return;
+      endedShown = false;
+      endedBackdrop.hidden = true;
+      for (const node of inertWhileEnded()) node.inert = false;
+      if (focusBeforeEnded && focusBeforeEnded.isConnected) focusBeforeEnded.focus();
+      focusBeforeEnded = null;
+      return;
+    }
+    $("endedDesc").textContent =
+      (snap.ended_by === "user" ? "You ended this session." : "Your agent ended this session.") + " Nothing you write here will reach the agent anymore.";
+    $("endedPath").textContent = snap.file || boot.file;
+    if (endedShown) return;
+    endedShown = true;
+    focusBeforeEnded = document.activeElement;
+    closeCard();
+    hideOffer();
+    endedBackdrop.hidden = false;
+    for (const node of inertWhileEnded()) node.inert = true;
+    endedDialog.focus();
+  }
+
+  $("endedCopy").addEventListener("click", async () => {
+    const button = $("endedCopy");
+    try {
+      await navigator.clipboard.writeText($("endedPath").textContent);
+      button.textContent = "Copied";
+    } catch {
+      // No clipboard access: select the path so Ctrl/Cmd+C works.
+      const range = document.createRange();
+      range.selectNodeContents($("endedPath"));
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      button.textContent = "Select and copy";
+    }
+    setTimeout(() => (button.textContent = "Copy path"), 1600);
+  });
+
+  // Capture phase and before every other key handler: while the dialog is up
+  // Escape is swallowed and Tab cycles inside it.
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!endedShown) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        const items = [endedDialog, ...endedFocusables()];
+        const at = items.indexOf(document.activeElement);
+        const next = event.shiftKey ? (at <= 0 ? items.length - 1 : at - 1) : (at + 1) % items.length;
+        items[next].focus();
+      }
+    },
+    true,
+  );
+  document.addEventListener("focusin", (event) => {
+    if (endedShown && !endedDialog.contains(event.target)) endedDialog.focus();
+  });
 
   // ---------------------------------------------------------------- actions
 
