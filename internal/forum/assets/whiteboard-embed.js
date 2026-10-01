@@ -8,34 +8,32 @@
 // whiteboard-frame.js's header for why):
 //   - Upstream's chrome hosts a *separate* artifact iframe and reaches into it
 //     to find `.mermaid` containers, so inline whiteboard iframes are two
-//     levels deep (chrome -> artifact iframe -> whiteboard iframe) and it
-//     validates senders via `source.parent === artifactFrame.contentWindow`.
-//     vexillum forum serves the artifact page directly at `/` with this
-//     script injected into it - there is no separate chrome/artifact split -
-//     so whiteboard iframes are direct children of `window`, and the sender
-//     check is `source.parent === window`.
-//   - No `key`/session id in any URL or endpoint: this server only ever
-//     serves the single artifact given to `vexillum forum <file>` for its
-//     process lifetime, so every request already implicitly belongs to that
-//     one forum - see internal/forum's package doc.
-//   - No prompt queue / poll loop exists yet in vexillum forum (that is a
-//     separate, not-yet-built feature - see the design scout report this
-//     mission was dispatched from). "Queue feedback" here simply persists
-//     the edited scene plus a `.excalidraw`/PNG snapshot to disk and reports
-//     success in the frame's own status line; it does not enqueue anything
-//     for an agent to read.
-//   - No live-reload / chrome-restart flushing: vexillum forum does not
-//     hot-reload the served artifact, so that upstream machinery (relevant
-//     only to forum-tool's editor-in-the-loop workflow) is dropped. Closing
-//     the fullscreen overlay reloads the inline iframe from disk instead, so
-//     it picks up whatever the overlay just saved.
+//     levels deep and it validates senders via
+//     `source.parent === artifactFrame.contentWindow`. Here this script is
+//     injected into the artifact page itself, so whiteboard iframes are
+//     direct children of `window`, and the sender check is
+//     `source.parent === window`.
+//   - The artifact runs in a sandboxed iframe (an opaque origin) under the
+//     forum chrome, and the whiteboard iframes are direct children of it.
+//     This script holds no server credentials: every round trip goes through
+//     window.forum.__rpc (forum-sdk.js), which asks the chrome to call the
+//     session-scoped, token-guarded API on its behalf.
+//   - "Queue feedback" persists the edited scene plus a `.excalidraw`/PNG
+//     snapshot to disk and the server queues a prompt tagged "whiteboard"
+//     (a bounded edit summary and those two paths) into the same queue as
+//     every other feedback, for the user to send to the agent.
+//   - No live-reload / chrome-restart flushing: the forum chrome reloads the
+//     artifact iframe itself when the file changes, and closing the
+//     fullscreen overlay reloads the inline iframe from disk so it picks up
+//     whatever the overlay just saved.
 //
 // Runs inside the artifact page (injected by internal/forum's server before
 // </body> when the page contains at least one `.mermaid` container). Finds
 // every `.mermaid` container, in document order, and replaces it with a
 // sandboxed iframe pointing at /whiteboard-frame - the editable Excalidraw
-// view of that diagram's Mermaid source. Owns every server round trip; the
-// frames themselves have no server access (see whiteboard-frame.js).
+// view of that diagram's Mermaid source. Owns every server round trip
+// (through the chrome); the frames themselves have no server access (see
+// whiteboard-frame.js).
 
 (function () {
   "use strict";
@@ -62,42 +60,39 @@
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
+  const rpc = (op, payload) => window.forum.__rpc(op, payload);
+
   async function fetchMermaidSources() {
-    const response = await fetch("/api/mermaid-sources");
-    if (!response.ok) throw new Error("could not read the page's Mermaid sources");
-    const data = await response.json();
+    const data = await rpc("whiteboard.sources");
     return Array.isArray(data.sources) ? data.sources : [];
   }
 
   async function fetchSavedScene(index) {
-    const response = await fetch("/api/whiteboard/" + index);
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.whiteboard || null;
+    try {
+      const data = await rpc("whiteboard.load", { index });
+      return data.whiteboard || null;
+    } catch {
+      return null;
+    }
   }
 
   async function persistScene(index, message) {
-    const response = await fetch("/api/whiteboard/" + index, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+    await rpc("whiteboard.save", {
+      index,
+      body: {
         source_hash: String(message.sourceHash || ""),
         text_metrics_version: Number(message.textMetricsVersion) || 0,
         scene: message.scene || null,
         baseline: message.baseline || null,
-      }),
+      },
     });
-    if (!response.ok) throw new Error("failed to save whiteboard scene");
   }
 
-  async function publishFeedback(index, scene, pngDataUrl) {
-    const response = await fetch("/api/whiteboard/" + index + "/feedback-files", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scene: scene || null, pngDataUrl: String(pngDataUrl || "") }),
+  async function publishFeedback(index, scene, pngDataUrl, summaryLines) {
+    return rpc("whiteboard.feedback", {
+      index,
+      body: { scene: scene || null, pngDataUrl: String(pngDataUrl || ""), summaryLines: boundedLines(summaryLines) },
     });
-    if (!response.ok) throw new Error("failed to write whiteboard feedback files");
-    return response.json();
   }
 
   function post(record, message) {
@@ -219,33 +214,24 @@
     );
   }
 
-  function summaryText(lines) {
+  function boundedLines(lines) {
     return (Array.isArray(lines) ? lines : [])
       .filter((line) => typeof line === "string")
       .slice(0, 50)
-      .map((line) => line.slice(0, 300))
-      .join("\n");
+      .map((line) => line.slice(0, 300));
   }
 
   async function handleQueueFeedback(index, message, placement) {
+    const reply = (result) => {
+      if (placement === "overlay") postOverlay(result);
+      else post(inlineFrames.get(index), result);
+    };
     try {
       await persistScene(index, message);
-      const files = await publishFeedback(index, message.scene, message.pngDataUrl);
-      const result = { type: "vx-whiteboard:queueResult", ok: true };
-      if (placement === "overlay") postOverlay(result);
-      else post(inlineFrames.get(index), result);
-      // eslint-disable-next-line no-console
-      console.info(
-        "[vexillum forum] whiteboard feedback saved: diagram " + (index + 1),
-        "\n" + summaryText(message.summaryLines),
-        "\nscene:",
-        files.scene_path,
-        files.preview_path ? "\npreview: " + files.preview_path : "",
-      );
+      await publishFeedback(index, message.scene, message.pngDataUrl, message.summaryLines);
+      reply({ type: "vx-whiteboard:queueResult", ok: true });
     } catch (error) {
-      const result = { type: "vx-whiteboard:queueResult", ok: false, error: describeError(error) };
-      if (placement === "overlay") postOverlay(result);
-      else post(inlineFrames.get(index), result);
+      reply({ type: "vx-whiteboard:queueResult", ok: false, error: describeError(error) });
     }
   }
 
