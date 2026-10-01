@@ -12,8 +12,8 @@ import (
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
-const statusUsage = `Report the current project's fleet of tasks - every mission and scout
-vexillum knows about, in whatever state it's in. Read-only.
+const statusUsage = `Report the troop: every mission and scout in the current project, in
+whatever state it's in. Read-only.
 
 Usage:
   vexillum status [--json]
@@ -47,7 +47,7 @@ blocked task's question is also printed on its own indented line.
 // own schema_version per task, but a snapshot as a whole also needs one
 // so a consumer can tell at a glance whether the shape it just parsed is
 // the one it knows how to read, without having to first find a task to
-// check (an empty fleet still reports a schema_version).
+// check (an empty troop still reports a schema_version).
 type statusSnapshot struct {
 	SchemaVersion int          `json:"schema_version"`
 	GeneratedAt   time.Time    `json:"generated_at"`

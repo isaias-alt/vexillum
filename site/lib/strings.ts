@@ -117,7 +117,7 @@ const en: Dictionary = {
         docs: "/concepts/sentinel",
       },
       {
-        title: "Check the fleet",
+        title: "Check the troop",
         command: "vexillum status",
         description:
           "Every mission and scout in this project, most recently updated first.",
@@ -224,7 +224,7 @@ const es: Dictionary = {
             "El sentinel solo despierta al commander cuando un soldier realmente termina o queda bloqueado.",
         },
         {
-          title: "Revisá la flota",
+          title: "Revisá la tropa",
           description:
             "Todas las missions y scouts de este proyecto, la más reciente primero.",
         },

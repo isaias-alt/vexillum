@@ -1,6 +1,6 @@
 ---
 title: Muster skill
-description: A first-party Claude Code skill that turns vexillum status into a fleet board.
+description: A first-party Claude Code skill that turns vexillum status into a troop board.
 ---
 
 `muster` is a Claude Code Agent Skill that ships in the vexillum repository. It reads `vexillum status --json` and groups the project's tasks so you can see, at a glance, what needs you.
@@ -17,7 +17,7 @@ npx skills add isaias-alt/vexillum --skill muster
 
 | Command | Result |
 | --- | --- |
-| `/muster` | the full fleet, opened as an interactive board |
+| `/muster` | the full troop, opened as an interactive board |
 | `/muster pr` | missions with a real GitHub PR, enriched with live PR status |
 | `/muster sitrep` | a terminal-only recap of this session's own dispatches; never opens a board |
 

@@ -168,7 +168,7 @@ func TestStatus_PlainText_EmptyProject(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d\nstderr: %s", code, errOut.String())
 	}
 	if !bytes.Contains(out.Bytes(), []byte("no tasks yet")) {
-		t.Errorf("expected an empty-fleet message, got:\n%s", out.String())
+		t.Errorf("expected an empty-troop message, got:\n%s", out.String())
 	}
 }
 

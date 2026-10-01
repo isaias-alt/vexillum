@@ -1,6 +1,6 @@
 ---
 name: muster
-description: Snapshot vexillum's fleet of missions and scouts for this project into a categorized digest (needs attention, awaiting land approval, in flight, finished, shipped), opened as a board in the browser with vexillum forum. Use /muster for the full fleet, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
+description: Snapshot vexillum's troop of missions and scouts for this project into a categorized digest (needs attention, awaiting land approval, in flight, finished, shipped), opened as a board in the browser with vexillum forum. Use /muster for the full troop, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
 license: MIT
 metadata:
   argument-hint: "[pr|sitrep]"
@@ -8,7 +8,7 @@ metadata:
 
 # Muster
 
-Fleet status for vexillum's missions and scouts, in this project. Read-only:
+Troop status for vexillum's missions and scouts, in this project. Read-only:
 this never lands, releases, redispatches, or otherwise acts on a task - see
 "Scope" below.
 
@@ -33,13 +33,13 @@ never initialized), say so plainly and stop - don't fall back to guessing.
 
 Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 
-- empty -> **fleet mode** (default)
+- empty -> **troop mode** (default)
 - `pr` -> **pr mode**
 - `sitrep` -> **sitrep mode**
 - anything else -> tell the user the three valid modes (no argument, `pr`,
   `sitrep`) and stop; don't guess which one they meant.
 
-### Fleet mode and pr mode - both always open a board
+### Troop mode and pr mode - both always open a board
 
 1. Run `vexillum status --json`.
 2. Group every task into five sections, using these headings verbatim so the
@@ -119,7 +119,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    each one: open and green, open with failing/pending checks, draft, merged,
    or closed. A shipped task whose PR already merged or closed still belongs
    on the board (in that PR state's own group) - don't silently drop it. If
-   `gh` isn't installed, say so once, and fall back to plain fleet mode
+   `gh` isn't installed, say so once, and fall back to plain troop mode
    instead of refusing outright.
 4. Build the digest as a self-contained HTML board (grouped by the sections
    above; each task shows at least its id, kind, status or live PR state,
@@ -140,7 +140,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
      tweak is unavoidable.
    - Open it with `vexillum forum .vexillum/forum/muster.html` (add `--no-open` if the
      general is already looking at the browser). It returns at once.
-   - Both fleet mode and pr mode always reach this step - there's no
+   - Both troop mode and pr mode always reach this step - there's no
      "board-less" variant of either.
    - Then keep the standard forum loop going: tell the general the board is
      open, and run `vexillum forum poll .vexillum/forum/muster.html` in the foreground
@@ -149,7 +149,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
      change to the board, edit the file (the browser reloads by itself) and
      poll again. On `status: ended`, stop polling. When you're done and the
      session is still open, close it with `vexillum forum end
-     .vexillum/forum/muster.html`. The board is a read-only snapshot, so if the fleet
+     .vexillum/forum/muster.html`. The board is a read-only snapshot, so if the troop
      changes while it's open, rewrite the file from a fresh `vexillum status
      --json` rather than patching it by hand.
    - Feedback on the board (annotations, messages) is conversation, not

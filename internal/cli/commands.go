@@ -31,7 +31,7 @@ var commands = []Command{
 	{"dispatch", "Dispatch a soldier (mission or scout) into an isolated camp", dispatchUsage},
 	{"redispatch", "Re-dispatch an interrupted task from its original prompt", redispatchUsage},
 	{"decide", "Answer a blocked task's open question so it can continue", decideUsage},
-	{"status", "Report the current project's fleet of tasks", statusUsage},
+	{"status", "Report the troop: every mission and scout in the current project", statusUsage},
 	{"land", "Land a finished mission's work into this project's base branch", landUsage},
 	{"ship", "Ship a finished mission through vexillum's own tribunal pipeline, opening a real pull request", shipUsage},
 	{"release", "Release a soldier's camp back to the pool once its work has landed", releaseUsage},

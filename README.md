@@ -36,7 +36,7 @@ script verifies the release checksum before installing.
 | `vexillum dispatch` | Dispatch a soldier (mission or scout) into an isolated camp |
 | `vexillum redispatch` | Re-dispatch an interrupted task from its original prompt |
 | `vexillum decide` | Answer a blocked task's open question so it can continue |
-| `vexillum status` | Report the current project's fleet of tasks |
+| `vexillum status` | Report the troop: every mission and scout in the current project |
 | `vexillum land` | Land a finished mission's work into this project's base branch |
 | `vexillum ship` | Ship a finished mission through vexillum's own tribunal pipeline, opening a real pull request |
 | `vexillum release` | Release a soldier's camp back to the pool once its work has landed |
