@@ -23,6 +23,22 @@ as-is, and the result is POSTed to a third-party HTML hosting service
 (ht-ml.app by default) - no account or API key needed. The response
 carries the page's URL and an update_key.
 
+Inlining details:
+  - srcset candidates (img, and source inside picture) are each inlined.
+  - CSS @import rules are followed and replaced by the imported
+    stylesheet, up to 8 levels deep (cycles are skipped with a warning).
+  - file: references are replaced by about:blank (with a warning), so a
+    local filesystem path is never published.
+  - A local asset over 10 MB, or one that would push the total inlined
+    past 25 MB, is left as a reference with a warning instead of being
+    inlined. Override the caps, in bytes, with:
+      VEXILLUM_BANNER_MAX_ASSET_BYTES   per-asset cap (default 10485760)
+      VEXILLUM_BANNER_MAX_BUNDLE_BYTES  whole-page cap (default 26214400)
+  - A page that never paints its own background (no background on
+    html/body/:root, no bg-* class, no data-theme, no stylesheet) gets a
+    warning, since text can be invisible over the host's own surface. It
+    never blocks publishing.
+
 update_key is the ONLY credential that can ever touch that page again -
 it is printed once, right after publishing, and vexillum never stores
 it anywhere. Save it yourself, right now. If you lose it, that page can

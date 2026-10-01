@@ -174,3 +174,225 @@ func mustBase64Decode(t *testing.T, s string) string {
 	}
 	return string(data)
 }
+
+func decodeDataURIs(t *testing.T, s string) string {
+	t.Helper()
+	var out strings.Builder
+	rest := s
+	for {
+		i := strings.Index(rest, ";base64,")
+		if i < 0 {
+			break
+		}
+		rest = rest[i+len(";base64,"):]
+		end := strings.IndexAny(rest, `")' `)
+		if end < 0 {
+			end = len(rest)
+		}
+		b, err := base64.StdEncoding.DecodeString(rest[:end])
+		if err != nil {
+			t.Fatalf("decoding data URI: %v", err)
+		}
+		out.Write(b)
+		out.WriteString("\n")
+		rest = rest[end:]
+	}
+	return out.String()
+}
+
+// B3
+func TestInlineLocalAssetsPerAssetCap(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "big.png"), strings.Repeat("x", 100))
+	writeFile(t, filepath.Join(dir, "small.png"), "ok")
+	htmlPath := filepath.Join(dir, "index.html")
+	writeFile(t, htmlPath, `<img src="big.png"><img src="small.png">`)
+	t.Setenv(EnvMaxAssetBytes, "50")
+
+	out, warnings, err := InlineLocalAssets(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `src="big.png"`) {
+		t.Errorf("oversized asset should stay a reference, got:\n%s", out)
+	}
+	if !strings.Contains(out, `src="data:image/png;base64,`) {
+		t.Errorf("small asset should still be inlined, got:\n%s", out)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "per-asset cap") || !strings.Contains(warnings[0], EnvMaxAssetBytes) {
+		t.Errorf("expected one per-asset cap warning, got %v", warnings)
+	}
+}
+
+func TestInlineLocalAssetsPerBundleCap(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.png"), strings.Repeat("a", 60))
+	writeFile(t, filepath.Join(dir, "b.png"), strings.Repeat("b", 60))
+	htmlPath := filepath.Join(dir, "index.html")
+	writeFile(t, htmlPath, `<img src="a.png"><img src="b.png">`)
+	t.Setenv(EnvMaxBundleBytes, "100")
+
+	out, warnings, err := InlineLocalAssets(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `src="b.png"`) || strings.Contains(out, `src="a.png"`) {
+		t.Errorf("first asset inlined, second left as reference, got:\n%s", out)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "per-bundle cap") {
+		t.Errorf("expected one per-bundle cap warning, got %v", warnings)
+	}
+}
+
+func TestBytesFromEnv(t *testing.T) {
+	t.Setenv("VEXILLUM_BANNER_TEST", "")
+	if got := bytesFromEnv("VEXILLUM_BANNER_TEST", 7); got != 7 {
+		t.Errorf("unset: got %d", got)
+	}
+	t.Setenv("VEXILLUM_BANNER_TEST", "nope")
+	if got := bytesFromEnv("VEXILLUM_BANNER_TEST", 7); got != 7 {
+		t.Errorf("garbage: got %d", got)
+	}
+	t.Setenv("VEXILLUM_BANNER_TEST", "-3")
+	if got := bytesFromEnv("VEXILLUM_BANNER_TEST", 7); got != 7 {
+		t.Errorf("negative: got %d", got)
+	}
+	t.Setenv("VEXILLUM_BANNER_TEST", "1234")
+	if got := bytesFromEnv("VEXILLUM_BANNER_TEST", 7); got != 1234 {
+		t.Errorf("valid: got %d", got)
+	}
+}
+
+// B4
+func TestInlineLocalAssetsSrcset(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "foo-1x.png"), "one-x")
+	writeFile(t, filepath.Join(dir, "foo-2x.png"), "two-x")
+	writeFile(t, filepath.Join(dir, "wide.webp"), "wide")
+	htmlPath := filepath.Join(dir, "index.html")
+	writeFile(t, htmlPath, `<img srcset="foo-1x.png 1x, foo-2x.png 2x, https://cdn.example.com/r.png 3x">
+<picture><source srcset="wide.webp 480w" type="image/webp"><img src="foo-1x.png"></picture>`)
+
+	out, warnings, err := InlineLocalAssets(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("unexpected warnings: %v", warnings)
+	}
+	if strings.Contains(out, "foo-1x.png ") || strings.Contains(out, "foo-2x.png") || strings.Contains(out, "wide.webp") {
+		t.Errorf("srcset candidates should all be inlined, got:\n%s", out)
+	}
+	for _, want := range []string{"one-x", "two-x", "wide"} {
+		if !strings.Contains(decodeDataURIs(t, out), want) {
+			t.Errorf("missing inlined payload %q", want)
+		}
+	}
+	if !strings.Contains(out, " 1x,") || !strings.Contains(out, " 2x,") || !strings.Contains(out, " 480w") {
+		t.Errorf("descriptors must be preserved, got:\n%s", out)
+	}
+	if !strings.Contains(out, "https://cdn.example.com/r.png 3x") {
+		t.Errorf("remote candidate must be untouched, got:\n%s", out)
+	}
+}
+
+func TestParseSrcsetCandidatesKeepsDataURIPayloadComma(t *testing.T) {
+	v := "data:image/png;base64,AAAA 1x, b.png 2x"
+	got := parseSrcsetCandidates(v)
+	if len(got) != 2 || v[got[0].start:got[0].end] != "data:image/png;base64,AAAA" || v[got[1].start:got[1].end] != "b.png" {
+		t.Errorf("unexpected candidates: %+v", got)
+	}
+}
+
+// B5
+func TestInlineLocalAssetsRedactsFileRefs(t *testing.T) {
+	dir := t.TempDir()
+	htmlPath := filepath.Join(dir, "index.html")
+	writeFile(t, htmlPath, `<style>body{background:url(file:///Users/me/bg.png)}</style>
+<img src="file:///Users/me/secret.png">
+<img srcset="FILE:///Users/me/a.png 1x">
+<link rel="stylesheet" href=" file:///Users/me/s.css">`)
+
+	out, warnings, err := InlineLocalAssets(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(out), "file:") || strings.Contains(out, "/Users/me") {
+		t.Errorf("file: refs must not survive, got:\n%s", out)
+	}
+	if strings.Count(out, "about:blank") < 4 {
+		t.Errorf("expected about:blank in every redacted spot, got:\n%s", out)
+	}
+	if len(warnings) != 4 {
+		t.Errorf("expected one warning per redaction, got %v", warnings)
+	}
+}
+
+// B6
+func TestInlineLocalAssetsFollowsCSSImports(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "css", "main.css"), `@import "base.css"; @import url('print.css') print; p{color:red}`)
+	writeFile(t, filepath.Join(dir, "css", "base.css"), `@import url(fonts/f.css); body{background:url(../bg.png)}`)
+	writeFile(t, filepath.Join(dir, "css", "fonts", "f.css"), `h1{font-family:x}`)
+	writeFile(t, filepath.Join(dir, "css", "print.css"), `div{display:none}`)
+	writeFile(t, filepath.Join(dir, "bg.png"), "BGBYTES")
+	htmlPath := filepath.Join(dir, "index.html")
+	writeFile(t, htmlPath, `<link rel="stylesheet" href="css/main.css">`)
+
+	out, warnings, err := InlineLocalAssets(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("unexpected warnings: %v", warnings)
+	}
+	css := decodeDataURIs(t, out)
+	for _, want := range []string{"h1{font-family:x}", "body{background:url(data:", "@media print{div{display:none}}", "p{color:red}", base64.StdEncoding.EncodeToString([]byte("BGBYTES"))} {
+		if !strings.Contains(css, want) {
+			t.Errorf("inlined CSS missing %q, got:\n%s", want, css)
+		}
+	}
+	if strings.Contains(css, "@import") {
+		t.Errorf("no @import should remain, got:\n%s", css)
+	}
+}
+
+func TestInlineLocalAssetsImportDepthAndCycleGuard(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "loop.css"), `@import "loop.css"; a{b:c}`)
+	for i := 0; i < 12; i++ {
+		next := ""
+		if i < 11 {
+			next = `@import "d` + string(rune('a'+i+1)) + `.css";`
+		}
+		writeFile(t, filepath.Join(dir, "d"+string(rune('a'+i))+".css"), next+`.x`+string(rune('a'+i))+`{y:z}`)
+	}
+	htmlPath := filepath.Join(dir, "index.html")
+	writeFile(t, htmlPath, `<link rel="stylesheet" href="loop.css"><style>@import "da.css";</style>`)
+
+	_, warnings, err := InlineLocalAssets(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cycle, deep bool
+	for _, w := range warnings {
+		cycle = cycle || strings.Contains(w, "cycle")
+		deep = deep || strings.Contains(w, "levels deep")
+	}
+	if !cycle || !deep {
+		t.Errorf("expected cycle and depth warnings, got %v", warnings)
+	}
+}
+
+func TestInlineLocalAssetsLeavesRemoteImportAlone(t *testing.T) {
+	dir := t.TempDir()
+	htmlPath := filepath.Join(dir, "index.html")
+	writeFile(t, htmlPath, `<style>@import url(https://fonts.googleapis.com/css?family=X);</style>`)
+	out, warnings, err := InlineLocalAssets(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "@import url(https://fonts.googleapis.com/css?family=X);") || len(warnings) != 0 {
+		t.Errorf("remote import must be untouched, got:\n%s\nwarnings: %v", out, warnings)
+	}
+}
