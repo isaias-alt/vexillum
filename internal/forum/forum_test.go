@@ -1,33 +1,33 @@
-package review_test
+package forum_test
 
 import (
 	"testing"
 
-	"github.com/isaias-alt/vexillum/internal/review"
+	"github.com/isaias-alt/vexillum/internal/forum"
 )
 
 func TestSessionKey_StableAndShaped(t *testing.T) {
-	key := review.SessionKey("/Users/general/artifacts/plan.html")
-	if !review.ValidSessionKey(key) {
+	key := forum.SessionKey("/Users/general/artifacts/plan.html")
+	if !forum.ValidSessionKey(key) {
 		t.Fatalf("SessionKey produced %q, which ValidSessionKey rejects", key)
 	}
-	again := review.SessionKey("/Users/general/artifacts/plan.html")
+	again := forum.SessionKey("/Users/general/artifacts/plan.html")
 	if key != again {
 		t.Errorf("SessionKey not stable: %q != %q", key, again)
 	}
 }
 
 func TestSessionKey_DifferentFilesDifferentKeys(t *testing.T) {
-	a := review.SessionKey("/Users/general/artifacts/plan.html")
-	b := review.SessionKey("/Users/general/artifacts/other.html")
+	a := forum.SessionKey("/Users/general/artifacts/plan.html")
+	b := forum.SessionKey("/Users/general/artifacts/other.html")
 	if a == b {
 		t.Errorf("two different files produced the same session key %q", a)
 	}
 }
 
 func TestSessionKey_CleansPath(t *testing.T) {
-	a := review.SessionKey("/Users/general/artifacts/plan.html")
-	b := review.SessionKey("/Users/general/artifacts/./plan.html")
+	a := forum.SessionKey("/Users/general/artifacts/plan.html")
+	b := forum.SessionKey("/Users/general/artifacts/./plan.html")
 	if a != b {
 		t.Errorf("SessionKey should normalize equivalent paths: %q != %q", a, b)
 	}
@@ -46,7 +46,7 @@ func TestValidSessionKey(t *testing.T) {
 		{"../../../etc/passwd", false},
 	}
 	for _, c := range cases {
-		if got := review.ValidSessionKey(c.key); got != c.want {
+		if got := forum.ValidSessionKey(c.key); got != c.want {
 			t.Errorf("ValidSessionKey(%q) = %v, want %v", c.key, got, c.want)
 		}
 	}
@@ -63,7 +63,7 @@ func TestValidDiagramIndex(t *testing.T) {
 		{1000, false},
 	}
 	for _, c := range cases {
-		if got := review.ValidDiagramIndex(c.index); got != c.want {
+		if got := forum.ValidDiagramIndex(c.index); got != c.want {
 			t.Errorf("ValidDiagramIndex(%d) = %v, want %v", c.index, got, c.want)
 		}
 	}

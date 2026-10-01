@@ -1,4 +1,4 @@
-package review
+package forum
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func whiteboardAssetsHandler() http.Handler {
 	if err != nil {
 		// assets/whiteboard is embedded above; a failure here means the
 		// embed itself is broken, which go build would already have caught.
-		panic(fmt.Sprintf("review: assets/whiteboard not embedded correctly: %v", err))
+		panic(fmt.Sprintf("forum: assets/whiteboard not embedded correctly: %v", err))
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,4 +1,4 @@
-package review
+package forum
 
 import (
 	"crypto/sha256"
@@ -30,7 +30,7 @@ type MermaidSource struct {
 // own artifacts never nest them either) and is not a general HTML parser: a
 // malformed document (an unclosed div inside the container) can misdetect
 // the closing tag. Good enough for vexillum's own scaffolded artifacts; a
-// real HTML parser is out of scope for this feature (see internal/review's
+// real HTML parser is out of scope for this feature (see internal/forum's
 // package doc on deferred scope).
 var divWithClassPattern = regexp.MustCompile(`(?is)<div[^>]*\bclass\s*=\s*["']([^"']*)["'][^>]*>(.*?)</div>`)
 

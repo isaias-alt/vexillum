@@ -10,27 +10,27 @@
 //     to find `.mermaid` containers, so inline whiteboard iframes are two
 //     levels deep (chrome -> artifact iframe -> whiteboard iframe) and it
 //     validates senders via `source.parent === artifactFrame.contentWindow`.
-//     vexillum review serves the artifact page directly at `/` with this
+//     vexillum forum serves the artifact page directly at `/` with this
 //     script injected into it - there is no separate chrome/artifact split -
 //     so whiteboard iframes are direct children of `window`, and the sender
 //     check is `source.parent === window`.
 //   - No `key`/session id in any URL or endpoint: this server only ever
-//     serves the single artifact given to `vexillum review <file>` for its
+//     serves the single artifact given to `vexillum forum <file>` for its
 //     process lifetime, so every request already implicitly belongs to that
-//     one review - see internal/review's package doc.
-//   - No prompt queue / poll loop exists yet in vexillum review (that is a
+//     one forum - see internal/forum's package doc.
+//   - No prompt queue / poll loop exists yet in vexillum forum (that is a
 //     separate, not-yet-built feature - see the design scout report this
 //     mission was dispatched from). "Queue feedback" here simply persists
 //     the edited scene plus a `.excalidraw`/PNG snapshot to disk and reports
 //     success in the frame's own status line; it does not enqueue anything
 //     for an agent to read.
-//   - No live-reload / chrome-restart flushing: vexillum review does not
+//   - No live-reload / chrome-restart flushing: vexillum forum does not
 //     hot-reload the served artifact, so that upstream machinery (relevant
 //     only to forum-tool's editor-in-the-loop workflow) is dropped. Closing
 //     the fullscreen overlay reloads the inline iframe from disk instead, so
 //     it picks up whatever the overlay just saved.
 //
-// Runs inside the artifact page (injected by internal/review's server before
+// Runs inside the artifact page (injected by internal/forum's server before
 // </body> when the page contains at least one `.mermaid` container). Finds
 // every `.mermaid` container, in document order, and replaces it with a
 // sandboxed iframe pointing at /whiteboard-frame - the editable Excalidraw
@@ -236,7 +236,7 @@
       else post(inlineFrames.get(index), result);
       // eslint-disable-next-line no-console
       console.info(
-        "[vexillum review] whiteboard feedback saved: diagram " + (index + 1),
+        "[vexillum forum] whiteboard feedback saved: diagram " + (index + 1),
         "\n" + summaryText(message.summaryLines),
         "\nscene:",
         files.scene_path,

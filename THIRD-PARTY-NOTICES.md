@@ -1,8 +1,8 @@
 # Third-party notices
 
 vexillum's Go binary vendors third-party browser software into
-`internal/review/assets/whiteboard/` for the whiteboard feature of
-`vexillum review` (see that package's doc comment). It is built by
+`internal/forum/assets/whiteboard/` for the whiteboard feature of
+`vexillum forum` (see that package's doc comment). It is built by
 `tools/whiteboard-bundle/build.js` (dev-only, never run at vexillum's own
 build or install time - see that directory's README) and go:embedded into
 the binary. Each component remains under its own license; the notices
@@ -39,7 +39,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Fonts vendored into `internal/review/assets/whiteboard/fonts/` (from `@excalidraw/excalidraw`)
+## Fonts vendored into `internal/forum/assets/whiteboard/fonts/` (from `@excalidraw/excalidraw`)
 
 | Family          | License                                      |
 | --------------- | --------------------------------------------- |

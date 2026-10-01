@@ -24,7 +24,7 @@ Commands:
   ship        Push a finished mission through vexillum's own checkpoint pipeline for a real PR
   release     Release a soldier's camp back to the pool
   sentinel    Watch dispatched soldiers and record status changes
-  review      Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards
+  forum       Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards
   banner      Publish an HTML artifact to a public URL, or update one already published
 
 Flags:
@@ -75,8 +75,8 @@ func run(args []string) int {
 		return cli.Release(args[1:])
 	case "sentinel":
 		return cli.Sentinel(args[1:])
-	case "review":
-		return cli.Review(args[1:])
+	case "forum":
+		return cli.Forum(args[1:])
 	case "banner":
 		return cli.Banner(args[1:])
 	default:

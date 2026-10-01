@@ -1,4 +1,4 @@
-package review
+package forum
 
 import (
 	"encoding/json"
@@ -34,14 +34,14 @@ type FeedbackFiles struct {
 }
 
 // Store persists whiteboard scenes and published feedback under
-// <projectRoot>/reviews/<key>/whiteboards/, one JSON file per (session key,
+// <projectRoot>/forums/<key>/whiteboards/, one JSON file per (session key,
 // diagram index) plus the published `.excalidraw`/`.png` pair a queued
 // feedback writes. Kept out of any single combined state file on purpose:
 // a multi-hundred-KB Excalidraw scene autosaving every second would turn
 // every unrelated write into a large rewrite if it shared one file with
 // anything else.
 //
-// A Store instance is process-local to one `vexillum review` invocation
+// A Store instance is process-local to one `vexillum forum` invocation
 // serving one browser tab, so a single mutex serializing its writes (rather
 // than a per-index write queue) is enough to prevent interleaved writes to
 // the same file without adding concurrency machinery this scope doesn't
@@ -58,7 +58,7 @@ func NewStore(projectRoot string) *Store {
 }
 
 func (s *Store) dir(key string) string {
-	return filepath.Join(s.projectRoot, "reviews", key, "whiteboards")
+	return filepath.Join(s.projectRoot, "forums", key, "whiteboards")
 }
 
 func (s *Store) workingFile(key string, index int) string {
@@ -195,7 +195,7 @@ func excalidrawDocument(scene json.RawMessage) (excalidrawSceneEnvelope, error) 
 	doc := excalidrawSceneEnvelope{
 		Type:     "excalidraw",
 		Version:  2,
-		Source:   "vexillum-review",
+		Source:   "vexillum-forum",
 		Elements: parsed.Elements,
 		AppState: parsed.AppState,
 		Files:    parsed.Files,

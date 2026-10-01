@@ -1,4 +1,4 @@
-package review_test
+package forum_test
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/isaias-alt/vexillum/internal/review"
+	"github.com/isaias-alt/vexillum/internal/forum"
 )
 
 func newTestServer(t *testing.T, artifactHTML string) *httptest.Server {
@@ -19,8 +19,8 @@ func newTestServer(t *testing.T, artifactHTML string) *httptest.Server {
 	if err := os.WriteFile(file, []byte(artifactHTML), 0o644); err != nil {
 		t.Fatalf("writing artifact file: %v", err)
 	}
-	store := review.NewStore(t.TempDir())
-	srv := review.NewServer(file, store)
+	store := forum.NewStore(t.TempDir())
+	srv := forum.NewServer(file, store)
 	return httptest.NewServer(srv)
 }
 
@@ -87,7 +87,7 @@ func TestServer_MermaidSourcesEndpoint(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 	var body struct {
-		Sources []review.MermaidSource `json:"sources"`
+		Sources []forum.MermaidSource `json:"sources"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decoding response: %v", err)
@@ -107,7 +107,7 @@ func TestServer_WhiteboardGetMissingReturnsNull(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	var body struct {
-		Whiteboard *review.SavedScene `json:"whiteboard"`
+		Whiteboard *forum.SavedScene `json:"whiteboard"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decoding response: %v", err)
@@ -142,7 +142,7 @@ func TestServer_PutThenGetWhiteboard_RoundTrips(t *testing.T) {
 	}
 	defer getResp.Body.Close()
 	var body struct {
-		Whiteboard *review.SavedScene `json:"whiteboard"`
+		Whiteboard *forum.SavedScene `json:"whiteboard"`
 	}
 	if err := json.NewDecoder(getResp.Body).Decode(&body); err != nil {
 		t.Fatalf("decoding response: %v", err)
@@ -276,7 +276,7 @@ func TestServer_PathTraversalRequestNeverLeaksRepoFiles(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	body := readBody(t, resp)
-	if strings.Contains(body, "package review") {
+	if strings.Contains(body, "package forum") {
 		t.Error("response leaked this package's own source file")
 	}
 }

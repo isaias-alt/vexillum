@@ -15,22 +15,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/forum"
 	"github.com/isaias-alt/vexillum/internal/project"
-	"github.com/isaias-alt/vexillum/internal/review"
 )
 
-const reviewUsage = `Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards.
+const forumUsage = `Serve a local HTML artifact and edit its Mermaid diagrams as whiteboards.
 
 Usage:
-  vexillum review <html-file> [--port <n>] [--no-open]
-
-"review" is a working name, not final - see internal/review's package doc.
+  vexillum forum <html-file> [--port <n>] [--no-open]
 
 Starts a local HTTP server for the given file. Any Mermaid diagram authored
 as <div class="mermaid">...</div> renders as an editable Excalidraw
 whiteboard: click it to unlock editing, edits autosave locally, and a
 "Queue feedback" button writes the edited scene plus a PNG preview to
-~/.vexillum/<project>/reviews/<key>/whiteboards/. An artifact with no
+~/.vexillum/<project>/forums/<key>/whiteboards/. An artifact with no
 .mermaid container is served completely unmodified.
 
 --port binds a specific port instead of letting the OS choose a free one.
@@ -39,18 +37,18 @@ whiteboard: click it to unlock editing, edits autosave locally, and a
 Runs in the foreground until interrupted (Ctrl-C).
 `
 
-// Review runs the "vexillum review" command.
-func Review(args []string) int {
+// Forum runs the "vexillum forum" command.
+func Forum(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(reviewUsage)
+		fmt.Print(forumUsage)
 		return 0
 	}
 	if len(args) == 0 {
-		fmt.Print(reviewUsage)
+		fmt.Print(forumUsage)
 		return 1
 	}
 
-	file, port, noOpen, err := parseReviewArgs(args)
+	file, port, noOpen, err := parseForumArgs(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "vexillum:", err)
 		return 1
@@ -64,10 +62,10 @@ func Review(args []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runReview(ctx, projectDir, vexillumHome, file, port, noOpen, os.Stdout, os.Stderr)
+	return runForum(ctx, projectDir, vexillumHome, file, port, noOpen, os.Stdout, os.Stderr)
 }
 
-func parseReviewArgs(args []string) (file string, port int, noOpen bool, err error) {
+func parseForumArgs(args []string) (file string, port int, noOpen bool, err error) {
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; a {
 		case "--port":
@@ -103,10 +101,10 @@ func parsePort(raw string) (int, error) {
 	return port, nil
 }
 
-// runReview serves file until ctx is canceled (Review cancels it on
+// runForum serves file until ctx is canceled (Forum cancels it on
 // Ctrl-C/SIGTERM; tests pass their own cancellable context so the success
 // path doesn't need a real OS signal to end).
-func runReview(ctx context.Context, projectDir, vexillumHome, file string, port int, noOpen bool, stdout, stderr io.Writer) int {
+func runForum(ctx context.Context, projectDir, vexillumHome, file string, port int, noOpen bool, stdout, stderr io.Writer) int {
 	absFile, err := filepath.Abs(file)
 	if err != nil {
 		fmt.Fprintf(stderr, "vexillum: resolving %s: %v\n", file, err)
@@ -132,12 +130,12 @@ func runReview(ctx context.Context, projectDir, vexillumHome, file string, port 
 		return 1
 	}
 
-	store := review.NewStore(projectRoot)
-	srv := &http.Server{Handler: review.NewServer(absFile, store)}
+	store := forum.NewStore(projectRoot)
+	srv := &http.Server{Handler: forum.NewServer(absFile, store)}
 
 	url := fmt.Sprintf("http://%s/", listener.Addr().String())
-	fmt.Fprintf(stdout, "vexillum review: serving %s at %s\n", absFile, url)
-	fmt.Fprintln(stdout, "vexillum review: press Ctrl-C to stop")
+	fmt.Fprintf(stdout, "vexillum forum: serving %s at %s\n", absFile, url)
+	fmt.Fprintln(stdout, "vexillum forum: press Ctrl-C to stop")
 
 	if !noOpen {
 		if openErr := openBrowser(url); openErr != nil {

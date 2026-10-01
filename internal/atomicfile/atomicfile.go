@@ -26,7 +26,7 @@ func WriteJSON(path string, v any) error {
 // directory, then renamed into place, so a reader never observes a
 // partially written file. Unlike WriteJSON, data is written as-is - used
 // for non-JSON content (e.g. the whiteboard feedback PNG in
-// internal/review). The parent directory must already exist.
+// internal/forum). The parent directory must already exist.
 func Write(path string, data []byte) error {
 	dir := filepath.Dir(path)
 

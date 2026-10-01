@@ -1,4 +1,4 @@
-package review_test
+package forum_test
 
 import (
 	"encoding/json"
@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/isaias-alt/vexillum/internal/review"
+	"github.com/isaias-alt/vexillum/internal/forum"
 )
 
 const testKey = "0123456789abcdef"
 
 func TestStore_SaveThenLoadScene_RoundTrips(t *testing.T) {
-	store := review.NewStore(t.TempDir())
+	store := forum.NewStore(t.TempDir())
 
 	scene := json.RawMessage(`{"elements":[{"id":"a"}],"appState":{"scrollX":1}}`)
 	baseline := json.RawMessage(`{"elements":[{"id":"a"}]}`)
@@ -39,7 +39,7 @@ func TestStore_SaveThenLoadScene_RoundTrips(t *testing.T) {
 }
 
 func TestStore_LoadScene_MissingReturnsNilNotError(t *testing.T) {
-	store := review.NewStore(t.TempDir())
+	store := forum.NewStore(t.TempDir())
 	loaded, err := store.LoadScene(testKey, 0)
 	if err != nil {
 		t.Fatalf("LoadScene on missing file: %v", err)
@@ -50,7 +50,7 @@ func TestStore_LoadScene_MissingReturnsNilNotError(t *testing.T) {
 }
 
 func TestStore_SaveScene_StripsThemeAndBackgroundFromAppState(t *testing.T) {
-	store := review.NewStore(t.TempDir())
+	store := forum.NewStore(t.TempDir())
 	scene := json.RawMessage(`{"elements":[],"appState":{"theme":"dark","viewBackgroundColor":"#000","scrollX":5}}`)
 	if err := store.SaveScene(testKey, 0, "h", 0, scene, nil); err != nil {
 		t.Fatalf("SaveScene: %v", err)
@@ -78,7 +78,7 @@ func TestStore_SaveScene_StripsThemeAndBackgroundFromAppState(t *testing.T) {
 }
 
 func TestStore_SaveScene_InvalidKeyRejected(t *testing.T) {
-	store := review.NewStore(t.TempDir())
+	store := forum.NewStore(t.TempDir())
 	err := store.SaveScene("not-a-valid-key", 0, "h", 0, json.RawMessage(`{}`), nil)
 	if err == nil {
 		t.Fatal("expected an error for an invalid session key")
@@ -86,7 +86,7 @@ func TestStore_SaveScene_InvalidKeyRejected(t *testing.T) {
 }
 
 func TestStore_SaveScene_InvalidIndexRejected(t *testing.T) {
-	store := review.NewStore(t.TempDir())
+	store := forum.NewStore(t.TempDir())
 	err := store.SaveScene(testKey, 1000, "h", 0, json.RawMessage(`{}`), nil)
 	if err == nil {
 		t.Fatal("expected an error for an out-of-range diagram index")
@@ -95,7 +95,7 @@ func TestStore_SaveScene_InvalidIndexRejected(t *testing.T) {
 
 func TestStore_WriteFeedbackFiles_WritesSceneAndPreview(t *testing.T) {
 	dir := t.TempDir()
-	store := review.NewStore(dir)
+	store := forum.NewStore(dir)
 
 	scene := json.RawMessage(`{"elements":[{"id":"a"}],"appState":{"theme":"dark"}}`)
 	png := []byte{0x89, 0x50, 0x4e, 0x47}
@@ -141,7 +141,7 @@ func TestStore_WriteFeedbackFiles_WritesSceneAndPreview(t *testing.T) {
 }
 
 func TestStore_WriteFeedbackFiles_NoPNGSkipsPreviewFile(t *testing.T) {
-	store := review.NewStore(t.TempDir())
+	store := forum.NewStore(t.TempDir())
 	paths, err := store.WriteFeedbackFiles(testKey, 0, json.RawMessage(`{}`), nil)
 	if err != nil {
 		t.Fatalf("WriteFeedbackFiles: %v", err)
@@ -154,13 +154,13 @@ func TestStore_WriteFeedbackFiles_NoPNGSkipsPreviewFile(t *testing.T) {
 	}
 }
 
-func TestStore_LayoutMatchesReviewsWhiteboardsConvention(t *testing.T) {
+func TestStore_LayoutMatchesForumsWhiteboardsConvention(t *testing.T) {
 	root := t.TempDir()
-	store := review.NewStore(root)
+	store := forum.NewStore(root)
 	if err := store.SaveScene(testKey, 3, "h", 0, json.RawMessage(`{}`), nil); err != nil {
 		t.Fatalf("SaveScene: %v", err)
 	}
-	want := filepath.Join(root, "reviews", testKey, "whiteboards", "3.json")
+	want := filepath.Join(root, "forums", testKey, "whiteboards", "3.json")
 	if _, err := os.Stat(want); err != nil {
 		t.Errorf("expected scene at %s: %v", want, err)
 	}

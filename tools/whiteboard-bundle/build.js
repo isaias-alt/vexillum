@@ -1,5 +1,5 @@
 // Dev-only build script. Produces the static browser bundle that
-// internal/review/assets/whiteboard/ commits and go:embeds - see README.md.
+// internal/forum/assets/whiteboard/ commits and go:embeds - see README.md.
 // Adapted from upstream's scripts/build.js (MIT, see
 // THIRD-PARTY-NOTICES.md at the repo root), trimmed to only the whiteboard
 // entry point vexillum needs.
@@ -9,7 +9,7 @@ import { gzipSync } from "node:zlib";
 import * as esbuild from "esbuild";
 
 const outDir = "dist";
-const finalDir = "../../internal/review/assets/whiteboard";
+const finalDir = "../../internal/forum/assets/whiteboard";
 
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });

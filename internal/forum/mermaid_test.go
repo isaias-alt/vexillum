@@ -1,13 +1,13 @@
-package review_test
+package forum_test
 
 import (
 	"testing"
 
-	"github.com/isaias-alt/vexillum/internal/review"
+	"github.com/isaias-alt/vexillum/internal/forum"
 )
 
 func TestExtractMermaidSources_Empty(t *testing.T) {
-	sources := review.ExtractMermaidSources(`<html><body><p>No diagrams here.</p></body></html>`)
+	sources := forum.ExtractMermaidSources(`<html><body><p>No diagrams here.</p></body></html>`)
 	if len(sources) != 0 {
 		t.Fatalf("expected no sources, got %d", len(sources))
 	}
@@ -16,7 +16,7 @@ func TestExtractMermaidSources_Empty(t *testing.T) {
 func TestExtractMermaidSources_SingleDiagram(t *testing.T) {
 	html := `<html><body><div class="mermaid">flowchart TD
   A --> B</div></body></html>`
-	sources := review.ExtractMermaidSources(html)
+	sources := forum.ExtractMermaidSources(html)
 	if len(sources) != 1 {
 		t.Fatalf("expected 1 source, got %d", len(sources))
 	}
@@ -39,7 +39,7 @@ func TestExtractMermaidSources_MultipleDiagramsInDocumentOrder(t *testing.T) {
 <div class="mermaid">sequenceDiagram
   Alice->>Bob: Hello</div>
 </body></html>`
-	sources := review.ExtractMermaidSources(html)
+	sources := forum.ExtractMermaidSources(html)
 	if len(sources) != 2 {
 		t.Fatalf("expected 2 sources, got %d", len(sources))
 	}
@@ -53,7 +53,7 @@ func TestExtractMermaidSources_MultipleDiagramsInDocumentOrder(t *testing.T) {
 
 func TestExtractMermaidSources_ClassAttributeWithMultipleClasses(t *testing.T) {
 	html := `<div class="artifact-diagram mermaid rounded">graph TD; A-->B</div>`
-	sources := review.ExtractMermaidSources(html)
+	sources := forum.ExtractMermaidSources(html)
 	if len(sources) != 1 {
 		t.Fatalf("expected 1 source when .mermaid is combined with other classes, got %d", len(sources))
 	}
@@ -61,7 +61,7 @@ func TestExtractMermaidSources_ClassAttributeWithMultipleClasses(t *testing.T) {
 
 func TestExtractMermaidSources_IgnoresNonMermaidDivs(t *testing.T) {
 	html := `<div class="not-mermaid-at-all">graph TD; A-->B</div>`
-	sources := review.ExtractMermaidSources(html)
+	sources := forum.ExtractMermaidSources(html)
 	if len(sources) != 0 {
 		t.Fatalf("expected 0 sources for a div whose class only contains 'mermaid' as a substring of another word, got %d", len(sources))
 	}
@@ -69,7 +69,7 @@ func TestExtractMermaidSources_IgnoresNonMermaidDivs(t *testing.T) {
 
 func TestExtractMermaidSources_UnescapesHTMLEntities(t *testing.T) {
 	html := `<div class="mermaid">graph TD; A--&gt;B</div>`
-	sources := review.ExtractMermaidSources(html)
+	sources := forum.ExtractMermaidSources(html)
 	if len(sources) != 1 {
 		t.Fatalf("expected 1 source, got %d", len(sources))
 	}
@@ -80,7 +80,7 @@ func TestExtractMermaidSources_UnescapesHTMLEntities(t *testing.T) {
 
 func TestExtractMermaidSources_SameSourceSameHash(t *testing.T) {
 	html := `<div class="mermaid">graph TD; A-->B</div><div class="mermaid">graph TD; A-->B</div>`
-	sources := review.ExtractMermaidSources(html)
+	sources := forum.ExtractMermaidSources(html)
 	if len(sources) != 2 {
 		t.Fatalf("expected 2 sources, got %d", len(sources))
 	}
@@ -91,7 +91,7 @@ func TestExtractMermaidSources_SameSourceSameHash(t *testing.T) {
 
 func TestExtractMermaidSources_DifferentSourceDifferentHash(t *testing.T) {
 	html := `<div class="mermaid">graph TD; A-->B</div><div class="mermaid">graph TD; A-->C</div>`
-	sources := review.ExtractMermaidSources(html)
+	sources := forum.ExtractMermaidSources(html)
 	if len(sources) != 2 {
 		t.Fatalf("expected 2 sources, got %d", len(sources))
 	}

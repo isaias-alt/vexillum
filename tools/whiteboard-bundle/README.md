@@ -1,7 +1,7 @@
 # whiteboard-bundle (dev-only)
 
-Builds `internal/review/assets/whiteboard/{whiteboard.js.gz,whiteboard.css,fonts/}`,
-the browser bundle that `vexillum review`'s whiteboard feature go:embeds.
+Builds `internal/forum/assets/whiteboard/{whiteboard.js.gz,whiteboard.css,fonts/}`,
+the browser bundle that `vexillum forum`'s whiteboard feature go:embeds.
 
 **Never runs in `go build`, `go install`, or the brew/curl install path.**
 This directory has its own `package.json`; `node_modules/` and `dist/` are
@@ -20,7 +20,7 @@ npm run build
 ```
 
 This writes the compiled output straight into
-`internal/review/assets/whiteboard/`. Review the diff and commit it like any
+`internal/forum/assets/whiteboard/`. Review the diff and commit it like any
 other vendor update.
 
 ## What's vendored, and from where

@@ -1,4 +1,4 @@
-package review
+package forum
 
 import (
 	"encoding/base64"
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Server serves a single artifact file for one `vexillum review` process
+// Server serves a single artifact file for one `vexillum forum` process
 // lifetime - see the package doc for why there is no session id in any
 // route.
 type Server struct {

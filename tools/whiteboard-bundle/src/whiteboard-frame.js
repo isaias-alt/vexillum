@@ -8,8 +8,8 @@
 // message types and the data-forum-* dataset attributes to data-vexillum-*:
 //   - Dropped the channelToken/authenticateWhiteboardChannel HTTP round trip.
 //     Upstream's chrome is a persistent multi-session server, so it binds a
-//     postMessage channel to a session server-side. vexillum review's server
-//     only ever serves the one artifact given to `vexillum review <file>`
+//     postMessage channel to a session server-side. vexillum forum's server
+//     only ever serves the one artifact given to `vexillum forum <file>`
 //     for that process's lifetime, so there is no session to confuse a
 //     channel with at the HTTP layer - the frame generates its own random
 //     channelId and the chrome binds it on the first "ready" message, same

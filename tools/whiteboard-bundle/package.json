@@ -2,7 +2,7 @@
   "name": "whiteboard-bundle",
   "private": true,
   "type": "module",
-  "description": "Dev-only build for vexillum review's whiteboard.js browser bundle. Never installed or run at vexillum's install path or runtime - see README.md.",
+  "description": "Dev-only build for vexillum forum's whiteboard.js browser bundle. Never installed or run at vexillum's install path or runtime - see README.md.",
   "scripts": {
     "build": "node build.js"
   },
