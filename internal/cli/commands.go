@@ -13,7 +13,9 @@ import (
 type Command struct {
 	// Name is the word typed after "vexillum".
 	Name string
-	// Summary is the one-line description shown in the command list.
+	// Summary is the one-line description shown in the command list. It
+	// must be the opening words of Usage's first paragraph (a test
+	// enforces it), so the two cannot drift apart.
 	Summary string
 	// Usage is the full help text printed by `vexillum <Name> -h`.
 	Usage string
@@ -24,17 +26,17 @@ type Command struct {
 // there fails if the two drift.
 var commands = []Command{
 	{"init", "Prepare the current project to be orchestrated by vexillum", initUsage},
-	{"upgrade", "Refresh an already-initialized project's scaffold to the latest", upgradeUsage},
+	{"upgrade", "Refresh an already-initialized project's vexillum scaffold", upgradeUsage},
 	{"doctor", "Report on the health of the vexillum environment", doctorUsage},
 	{"dispatch", "Dispatch a soldier (mission or scout) into an isolated camp", dispatchUsage},
 	{"redispatch", "Re-dispatch an interrupted task from its original prompt", redispatchUsage},
 	{"decide", "Answer a blocked task's open question so it can continue", decideUsage},
-	{"status", "Report the current project's fleet of tasks (read-only)", statusUsage},
-	{"land", "Land a finished mission's work into the base branch", landUsage},
-	{"ship", "Push a finished mission through vexillum's own tribunal pipeline for a real PR", shipUsage},
-	{"release", "Release a soldier's camp back to the pool", releaseUsage},
+	{"status", "Report the current project's fleet of tasks", statusUsage},
+	{"land", "Land a finished mission's work into this project's base branch", landUsage},
+	{"ship", "Ship a finished mission through vexillum's own tribunal pipeline, opening a real pull request", shipUsage},
+	{"release", "Release a soldier's camp back to the pool once its work has landed", releaseUsage},
 	{"sentinel", "Watch dispatched soldiers and record status changes", sentinelUsage},
-	{"forum", "Open an HTML artifact for visual review and collect the user's feedback", forumUsage},
+	{"forum", "Open a local HTML artifact for visual review and collect the user's feedback", forumUsage},
 	{"banner", "Publish an HTML artifact to a public URL, or update one already published", bannerUsage},
 }
 
