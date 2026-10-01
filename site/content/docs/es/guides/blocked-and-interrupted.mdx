@@ -1,0 +1,40 @@
+---
+title: Blocked e interrupted
+description: Qué hacer cuando un soldier hace una pregunta, o desaparece.
+---
+
+## Blocked: el soldier preguntó algo
+
+Un soldier que se detiene a hacerte una pregunta termina como `blocked`. La pregunta se guarda como un `decision` estructurado en la tarea (la pregunta, las opciones si las ofreció, y cuándo se hizo) y se despierta al commander.
+
+```bash
+vexillum status
+vexillum decide <task-id> "Use the existing helper"
+```
+
+`decide` entrega tu respuesta al pane todavía abierto del soldier y la registra contra la decision. Si la pregunta vino del selector de preguntas de Claude Code, pasá el texto exacto de una opción o su número (desde 1); se entrega como una sola pulsación de tecla, como si la hubieras elegido vos. La tarea vuelve a `running`, o termina de nuevo si el soldier acaba o hace otra pregunta enseguida.
+
+Solo una tarea `blocked` puede responderse. Si su pane en realidad ya no está, `decide` la marca `interrupted` y se niega.
+
+## Interrupted: el soldier desapareció
+
+`interrupted` significa que vexillum perdió al soldier mismo - se cerró su pane, o herdr se reinició - mientras seguía trabajando. No significa que el soldier haya fallado. Antes de hacer cualquier otra cosa, mirá dentro de su camp:
+
+```bash
+git -C <camp path> log --oneline
+git -C <camp path> status
+```
+
+El trabajo que ya había commiteado sigue ahí. Si importa, aterrizalo primero con `vexillum land <task-id>`.
+
+Después, solo si querés rehacer la tarea:
+
+```bash
+vexillum redispatch <task-id>
+```
+
+Esto es re-dispatch, **no reanudación**. Descarta el camp viejo - cambios sin commitear y commits sin aterrizar incluidos -, crea uno nuevo y relanza el prompt original. No se recupera nada del trabajo parcial ni de la sesión del soldier muerto. Como es destructivo, el commander te cuenta lo que encontró en el camp y pregunta antes de correrlo. Solo las tareas `interrupted` pueden re-despacharse. Si el soldier tenía un navegador abierto, redispatch también detiene ese navegador huérfano.
+
+## Unconfirmed: idle sin prueba
+
+`unconfirmed` significa que el soldier quedó idle sin ningún commit por delante de su base (o sin reporte, para un scout) y sin una pausa válida declarada. El pane sigue ahí, así que mirá el camp o el pane vos mismo.

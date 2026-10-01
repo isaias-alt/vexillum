@@ -1,0 +1,59 @@
+---
+title: Instalación
+description: Instalá el binario de vexillum con Homebrew o el script de curl, y verificá tu entorno.
+---
+
+vexillum soporta macOS y Linux, en amd64 y arm64.
+
+## Instalá el binario
+
+<CodeBlockTabs defaultValue="brew">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="brew">brew</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="curl">curl</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="brew">
+```bash
+brew install isaias-alt/tap/vexillum
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="curl">
+```bash
+curl -fsSL https://vexillum.lucasco.dev/install | bash
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+`/install` redirige a `scripts/install.sh` del repositorio, así que el script que corrés es el del árbol de código. Este script:
+
+1. detecta tu sistema operativo y arquitectura;
+2. usa Homebrew si `brew` está en tu PATH (`brew install isaias-alt/tap/vexillum`);
+3. si no, descarga el archivo del release para tu plataforma y **verifica su checksum sha256** contra el `checksums.txt` del release, y se niega a instalar si no coincide;
+4. instala el binario en `/usr/local/bin`, o en `~/.local/bin` cuando no podés escribir en `/usr/local/bin` (avisa si ese directorio no está en tu PATH).
+
+Comprobá que funcionó:
+
+```bash
+vexillum --version
+```
+
+## Instalá lo que vexillum orquesta
+
+vexillum no instala sus herramientas; las verifica.
+
+| Herramienta | Para qué | Requerida |
+| --- | --- | --- |
+| [Claude Code](https://claude.com/claude-code) | el commander y cada soldier | sí |
+| [herdr](https://herdr.dev) | los panes donde corren los soldiers | sí |
+| `gh` (GitHub CLI) | `vexillum ship`, y aterrizar un PR enviado | solo para eso |
+| `tmux` | backend de control opcional | no |
+
+Corré la verificación cuando quieras:
+
+```bash
+vexillum doctor
+```
+
+`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y cuáles [Agent Skills](/es/docs/guides/muster-skill) opcionales están instalados. Sale con código distinto de cero cuando falla un chequeo requerido.
+
+Siguiente: el [Quickstart](/es/docs/get-started/quickstart).

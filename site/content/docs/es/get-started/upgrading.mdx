@@ -1,0 +1,33 @@
+---
+title: Actualización
+description: Actualizá el binario y después refrescá el scaffold de cada proyecto.
+---
+
+Actualizar tiene dos partes independientes: el binario, y los archivos que vexillum creó en tus proyectos.
+
+## El binario
+
+Usá el mismo canal con el que instalaste:
+
+```bash
+brew upgrade vexillum
+```
+
+o volvé a correr el [script de curl](/es/docs/get-started/install); instala el último release.
+
+## El scaffold de un proyecto
+
+Un binario nuevo puede traer un archivo de reglas o un hook más nuevos. Refrescá un proyecto con:
+
+```bash
+vexillum upgrade
+```
+
+`upgrade` refresca `.claude/rules/vexillum.md` y el hook `Stop` del sentinel sin volver a correr `init` desde cero. Protege tus ediciones: vexillum guarda un hash del contenido del archivo de reglas cada vez que lo escribe, y solo lo refresca si su contenido actual todavía coincide con ese hash. Un archivo que editaste, o uno anterior al seguimiento por hash, se deja intacto y se reporta.
+
+| Flag | Efecto |
+| --- | --- |
+| `--force` | Sobrescribe `.claude/rules/vexillum.md` con la última plantilla sin importar nada, descartando ediciones locales. Usalo solo después de confirmar que no hay nada que valga la pena conservar. |
+| `--global` | Refresca el scaffold global (`~/.claude/rules/vexillum.md`, escrito por `vexillum init --global`) en lugar del del proyecto. |
+
+Un hook sincrónico viejo, `vexillum sentinel drain`, se actualiza en el lugar al hook asíncrono `vexillum sentinel await`, sin duplicarse.

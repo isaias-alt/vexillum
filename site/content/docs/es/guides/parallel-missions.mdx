@@ -1,0 +1,37 @@
+---
+title: Missions en paralelo
+description: Corré varios soldiers a la vez, y aterrizá su trabajo de a uno.
+---
+
+Cada soldier tiene su propio camp, así que podés pedir varias cosas a la vez:
+
+```text
+> have one soldier add rate limiting to the API, another migrate the logging
+  library, and a scout map where we parse dates
+```
+
+El commander despacha tres tareas. Corren en paralelo; el sentinel despierta al commander a medida que cada una termina.
+
+## Seguí la flota
+
+```bash
+vexillum status
+```
+
+imprime una línea por tarea, la actualizada más recientemente primero: id, kind, status, branch del camp y el comienzo del prompt. Una tarea blocked también imprime su pregunta en una línea con sangría. Para una vista más rica, usá el [skill muster](/es/docs/guides/muster-skill).
+
+## Aterrizar varias missions
+
+Aterrizar es un fast-forward y vexillum nunca hace rebase por vos. Entonces, cuando varias missions hermanas se despacharon desde el mismo punto de partida, aterrizar la primera mueve tu branch base, y todas las demás dejan de ser un fast-forward limpio. Eso es esperable, no es un error:
+
+1. Aterrizá la primera: `vexillum land <task-id>`.
+2. Para la siguiente, pedile a **su propio soldier** (re-promptá su pane todavía abierto) que haga rebase de su branch sobre la base actualizada. Tiene todo el contexto de su cambio.
+3. Reintentá `vexillum land`.
+
+Si el pane del soldier ya se cerró, ningún soldier nuevo puede hacer rebase de una branch que nunca tocó; el commander te avisa en lugar de adivinar.
+
+## Buenos hábitos
+
+- **Commiteá el scaffold primero.** `land` se niega con el checkout sucio, y `init` deja archivos nuevos sin commitear.
+- **Mantené las missions independientes.** Dos missions que editan las mismas líneas van a tener conflicto en el rebase.
+- **Ajustá el modelo a la tarea.** Las [reglas](/es/docs/concepts/agents-md-and-rules) eligen `haiku` para ediciones mecánicas y `sonnet` con effort alto para las grandes.

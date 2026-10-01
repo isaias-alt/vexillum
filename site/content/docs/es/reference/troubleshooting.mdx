@@ -1,0 +1,32 @@
+---
+title: Solución de problemas
+description: Los errores que más probablemente encuentres, y qué significan.
+---
+
+Empezá con `vexillum doctor`: te dice qué falta. Los mensajes de error de vexillum están en inglés y se citan tal cual.
+
+| Mensaje | Causa y solución |
+| --- | --- |
+| `project not initialized, run 'vexillum init' first` | `dispatch` no encontró `.vexillum/config.json`. Corré `vexillum init` en la raíz del proyecto. |
+| `current directory is not a git repository` | `init` necesita un repositorio git. |
+| `HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane` | Iniciá Claude Code en un pane que herdr administre; `dispatch` y `redispatch` se niegan en otro lado. |
+| `running from inside ... which looks like a vexillum-managed camp` | Estás en una ruta bajo `~/.vexillum`. Volvé con `cd` a la raíz real del proyecto. |
+| `a sentinel is already running (pid N)` | Está bien: hay uno por máquina. No inicies otro. |
+| `.claude/settings.json has invalid JSON, leaving it untouched` | Arreglá el JSON y volvé a correr `vexillum init` para agregar el hook. |
+| `no tasks yet in this project.` después de mover el proyecto | La clave de estado sigue a la ruta; ver [Estado](/es/docs/concepts/state). |
+
+## Landing y release
+
+| Situación | Qué hacer |
+| --- | --- |
+| `land refused` | Tu checkout está sucio, o la branch divergió de la base. Commiteá o hacé stash, o pedile al soldier que haga rebase. Ver [Missions en paralelo](/es/docs/guides/parallel-missions). Un checkout sucio suele ser solo el scaffold de `init` sin commitear. |
+| `landed, but automatic release failed` | El merge no se deshace. Corré `vexillum release <task-id>` a mano. |
+| `release refused` | El camp tiene cambios sin commitear o commits sin aterrizar. Aterrizá o descartá el trabajo primero. |
+| `release refused: scout task ... has no report` | El reporte es el producto del scout. Hacé que lo escriba, o pasá `--force`. |
+| `'gh' is not installed` | `ship`, y aterrizar un PR enviado, necesitan el GitHub CLI. |
+| `vexillum failed at <step>, refusing to push` | Falló un paso del tribunal; no se hizo push de nada. Arreglalo en el camp y volvé a hacer ship. |
+| `task ... is running, not interrupted` | Solo una tarea `interrupted` puede re-despacharse. |
+
+## Un soldier parece atascado
+
+Mirá `vexillum status`. `blocked` te está esperando: usá [`decide`](/es/docs/reference/cli/decide). `unconfirmed` o `interrupted` requieren mirar el camp; ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted). Si el commander nunca reporta un soldier que terminó, confirmá que el sentinel corre (`~/.vexillum/sentinel.log`) y que `.claude/settings.json` tiene el hook `vexillum sentinel await`.

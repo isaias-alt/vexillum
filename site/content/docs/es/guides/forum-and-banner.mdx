@@ -1,0 +1,39 @@
+---
+title: Forum y banner
+description: Revisá un artefacto HTML en tu navegador, y publicá uno en una URL pública.
+---
+
+Dos comandos permiten a los agentes mostrarte algo más rico que texto de terminal.
+
+## forum: revisar en tu navegador
+
+```bash
+vexillum forum plan.html
+```
+
+Sirve un archivo HTML que escribió el agente a tu navegador y le lleva tu feedback de vuelta. Un servidor local por usuario corre en `127.0.0.1` y se detiene solo cuando no hay nada conectado. Podés chatear, encolar mensajes, completar formularios de decisión y anotar elementos, y mandarlo todo al agente. Un diagrama Mermaid se convierte en una pizarra editable.
+
+Del lado del agente:
+
+| Comando | Hace |
+| --- | --- |
+| `vexillum forum <file>` | abre o retoma la sesión y vuelve enseguida |
+| `vexillum forum poll <file>` | se bloquea hasta que mandás feedback; `--reply` muestra una respuesta en el panel |
+| `vexillum forum end <file>` | termina la sesión |
+| `vexillum forum stop` | apaga el servidor en segundo plano |
+
+Las sesiones se identifican por la ruta absoluta del archivo. forum viene dentro del binario: sin Node, sin `npx`, sin red.
+
+Instalá el playbook del agente con `npx skills add isaias-alt/vexillum --skill forum`.
+
+## banner: publicar públicamente
+
+```bash
+vexillum banner report.html
+```
+
+<Callout type="warn" title="Esto publica en un tercero">
+  `banner` incrusta los assets locales en el HTML y lo envía por POST a un servicio de hosting de terceros (ht-ml.app por defecto). La página es pública salvo que pases `--private` o `--password`. Publicar es una decisión tuya, página por página.
+</Callout>
+
+Imprime la URL de la página y una `update_key`, mostrada **una sola vez** y nunca guardada por vexillum. Es la única credencial que puede actualizar o despublicar la página; si la perdés, la página no podrá modificarse nunca más. `--unpublish` reemplaza la página por un placeholder detrás de una contraseña descartada, ya que no existe un borrado real. Ver la [referencia de `banner`](/es/docs/reference/cli/banner) para cada flag y límite de tamaño.

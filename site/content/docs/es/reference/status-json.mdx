@@ -1,0 +1,58 @@
+---
+title: status --json
+description: El snapshot de la flota legible por máquinas, y el schema de tarea que hay detrás.
+---
+
+```bash
+vexillum status --json
+```
+
+imprime un único objeto JSON. Es de solo lectura y no agrega nada a la tarea persistida: `tasks` es exactamente el schema `Task` que vexillum mismo lee de `<project root>/tasks/*.json`, así un consumidor como el [skill muster](/es/docs/guides/muster-skill) nunca trabaja con una reinterpretación aparte. El agrupamiento, el filtrado y los juicios (qué cuenta como "needs attention", el enriquecimiento con GitHub) le corresponden al consumidor.
+
+```json
+{
+  "schema_version": 3,
+  "generated_at": "2026-09-24T12:00:00Z",
+  "project_root": "/abs/path/to/this project's ~/.vexillum namespace",
+  "tasks": []
+}
+```
+
+Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actualizada más recientemente primero.
+
+## Campos de una tarea
+
+| Campo | Tipo | Notas |
+| --- | --- | --- |
+| `schema_version` | number | hoy `3` |
+| `id` | string | 16 caracteres hexadecimales |
+| `kind` | `"mission"` o `"scout"` | |
+| `prompt` | string | el prompt original |
+| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; ver [Missions y scouts](/es/docs/concepts/missions-and-scouts) |
+| `created_at`, `updated_at` | hora RFC 3339 | |
+| `camp_slot`, `camp_path`, `camp_branch` | number, string, string | se definen cuando se adquiere un camp |
+| `camp_base` | string | branch de la que se bifurcó el camp; puede estar vacío en tareas viejas |
+| `exit_code`, `output` | number, string | `output` es el transcript capturado |
+| `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | el pane de herdr del soldier |
+| `agent_not_found_since`, `idle_unconfirmed_since` | hora | cuándo el sentinel vio la condición por primera vez |
+| `redispatches` | number | cuántas veces se re-despachó la tarea |
+| `model`, `effort` | string | la elección del soldier; vacío significa el default de claude |
+| `decision` | object | presente una vez que la tarea quedó blocked al menos una vez |
+
+Los campos opcionales se omiten cuando están vacíos.
+
+## decision
+
+| Campo | Notas |
+| --- | --- |
+| `question` | lo que preguntó el soldier |
+| `options` | opciones que ofreció, si hubo |
+| `asked_at` | cuándo quedó blocked |
+| `answer`, `answered_at` | se definen después de [`vexillum decide`](/es/docs/reference/cli/decide) |
+| `kind` | cómo debe responderse: un overlay selector se responde con una tecla, cualquier otro como texto |
+
+Una tarea en `blocked` siempre lleva su pregunta acá, no solo la palabra "blocked".
+
+## Compatibilidad
+
+Los campos nuevos se agregan sin subir `schema_version` cuando un archivo viejo todavía puede leerse; la versión cambia solo cuando la forma rompe la lectura de estado anterior. Tratá los campos desconocidos como aditivos.

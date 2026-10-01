@@ -1,0 +1,43 @@
+---
+title: Estado
+description: Todo lo que vexillum recuerda es JSON plano en disco, escrito de forma atómica.
+---
+
+vexillum no guarda memoria en un daemon. Cada dato en el que se apoya es un archivo, así que un reinicio - de vexillum, de herdr o de tu máquina - no pierde nada de lo que sabía.
+
+## Estructura
+
+```text
+~/.vexillum/
+  config.json              solo después de `vexillum init --global`
+  sentinel.pid  sentinel.log
+  projects/
+    <repo>-<hash>/         un namespace por proyecto
+      tasks/<id>.json      un archivo por tarea
+      wakes/<id>.json      wakes pendientes del sentinel
+      camps/               el pool de worktrees
+      reports/             reportes de scouts
+      pauses/              pausas declaradas por soldiers
+```
+
+En el proyecto mismo, `init` escribe `.vexillum/config.json` y `.claude/`. Ver [Archivos](/es/docs/reference/files) para la lista completa.
+
+## La clave del proyecto
+
+El namespace de un proyecto es `<repo>-<hash>`: el nombre del directorio más los primeros 8 caracteres hexadecimales del sha256 de su ruta absoluta, después de resolver symlinks. Dos proyectos nunca ven las tareas, wakes o camps del otro.
+
+<Callout type="warn" title="Mover un proyecto deja huérfano su estado">
+  La clave se deriva de la ruta. Si renombrás o movés el proyecto, lo registrado bajo la clave vieja queda invisible para los comandos corridos desde la nueva ubicación. vexillum no lo migra ni lo detecta.
+</Callout>
+
+## Tareas
+
+Un archivo de tarea es el schema `Task` (hoy versión 3): id, kind, prompt, status, timestamps, el slot, la ruta, la branch y la base del camp, los identificadores del pane de herdr, el modelo y el effort, y, una vez bloqueada, un `decision` estructurado. `vexillum status --json` imprime exactamente este schema; ver [status --json](/es/docs/reference/status-json).
+
+## Escrituras atómicas
+
+El estado se escribe en un archivo temporal y se renombra a su lugar, así un lector (el sentinel, un segundo dispatch, `status`) nunca ve un archivo a medio escribir.
+
+## Después de un reinicio
+
+herdr restaura el layout de panes pero no el proceso dentro de ellos. vexillum reconcilia desde disco: las tareas que estaban `running` y cuyo agente de herdr se confirma desaparecido pasan a `interrupted`. Cualquier trabajo que el soldier hubiera commiteado sigue en su camp.

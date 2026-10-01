@@ -1,0 +1,35 @@
+---
+title: Cómo funciona vexillum
+description: Los roles, y la vida de una tarea desde el dispatch hasta el release.
+---
+
+## Los roles
+
+| Término | Qué es |
+| --- | --- |
+| **general** | Vos, el humano. Le hablás solo al commander. |
+| **commander** | La sesión de Claude Code con la que hablás. Lee tu pedido y las reglas del proyecto, y despacha y sigue a los soldiers. |
+| **soldier** | Una sesión de Claude Code que el commander inicia para hacer una tarea, en su propio camp. |
+| **camp** | El git worktree aislado de un soldier, en su propia branch. |
+| **mission** | Una tarea que cambia código y entrega algo para aterrizar. |
+| **scout** | Una tarea que solo investiga y reporta. Nunca hace commit ni push. |
+| **sentinel** | Un proceso en segundo plano que vigila a los soldiers y despierta al commander cuando uno termina. |
+
+## La vida de una tarea
+
+1. **Pedís.** En Claude Code decís qué querés.
+2. **El commander despacha.** Siguiendo las reglas del proyecto corre `vexillum dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
+3. **Se adquiere un camp.** vexillum toma un worktree limpio del [pool](/es/docs/concepts/camps) del proyecto (o crea uno) en una branch nueva, `vexillum/<task-id>`, bifurcada de tu branch actual.
+4. **Arranca un soldier.** Se abre una sesión real e interactiva de Claude Code en un pane de herdr dentro de ese camp. El comando vuelve rápido: solo espera un breve probe para los prompts triviales que terminan enseguida.
+5. **El sentinel vigila.** Consulta el estado en vivo del soldier y registra el resultado en disco. Ver [Sentinel](/es/docs/concepts/sentinel).
+6. **Se despierta al commander.** Un hook `Stop` muestra el cambio, así el commander te reporta aunque su turno ya hubiera terminado.
+7. **Decidís vos.** Para una mission, [la aterrizás o la enviás](/es/docs/guides/land-vs-ship). Para un scout, el commander transmite el reporte.
+8. **Se hace release del camp** de vuelta al pool, una vez que no queda nada por perder.
+
+<Callout type="warn" title="Qué te da el aislamiento y qué no">
+  Un camp aísla los *commits y el working tree* del soldier de los tuyos. No pone el proceso en un sandbox: un soldier tiene acceso total al host con tu usuario del sistema. El control de seguridad real es la aprobación antes de aterrizar.
+</Callout>
+
+## Dónde vive la inteligencia
+
+El binario es plomería determinista - estado en disco, worktrees, panes, rechazos. Elegir un modelo, decidir si preguntarte, redactar un reporte: eso es criterio del commander, guiado por markdown. Ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).

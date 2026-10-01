@@ -1,0 +1,32 @@
+---
+title: Missions y scouts
+description: Los dos tipos de tarea, y los estados por los que pasa una tarea.
+---
+
+## Dos tipos
+
+| | Mission | Scout |
+| --- | --- | --- |
+| Propósito | cambiar código, entregar algo para aterrizar | investigar y reportar |
+| Escribe en su camp | sí, commits en su branch | nunca hace commit ni push |
+| Entrega | commits en `vexillum/<task-id>`, aterrizados con [`land`](/es/docs/reference/cli/land) o abiertos como PR con [`ship`](/es/docs/reference/cli/ship) | un reporte en markdown |
+| Done significa | produjo commits por delante de su base | existe su archivo de reporte |
+
+`vexillum dispatch` usa `--kind mission` por defecto. Un scout escribe su reporte en `~/.vexillum/projects/<repo>-<hash>/reports/<agent-name>-<task-id>.md`, fuera del camp, así sobrevive al `release`. Nunca uses un scout para trabajo que deba cambiar código.
+
+`--model` y `--effort` se pasan directo al CLI `claude`; vexillum solo verifica que Claude Code acepte el valor. Elegirlos es trabajo del commander, ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).
+
+## Estados de una tarea
+
+| Status | Significado |
+| --- | --- |
+| `pending` | creada, todavía no iniciada |
+| `running` | el soldier está trabajando |
+| `blocked` | el soldier hizo una pregunta y espera; la pregunta está en el `decision` de la tarea. Ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted) |
+| `done` | terminó con prueba de finalización |
+| `failed` | terminó sin éxito |
+| `interrupted` | vexillum perdió al soldier mismo (su pane de herdr desapareció), no necesariamente porque haya fallado; el trabajo ya commiteado sigue en el camp |
+| `unconfirmed` | el soldier quedó idle sin prueba de finalización y sin una pausa válida declarada, así que vexillum no distingue éxito de atascado; una persona tiene que mirar |
+| `shipped` | enviada por el pipeline tribunal y abierta como pull request real |
+
+`done` nunca se infiere solo de la inactividad. Para una mission vexillum exige un commit nuevo por delante de la base del camp; para un scout, el archivo de reporte. Un soldier que espera a propósito un job en segundo plano puede declarar una pausa en `pauses/<agent-name>.md` para que un turno quieto no se confunda con haber terminado.

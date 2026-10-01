@@ -1,0 +1,40 @@
+---
+title: FAQ
+description: Respuestas cortas a las primeras preguntas de la gente.
+---
+
+## ¿Por qué Go?
+
+Por distribución, no por preferencia. Un binario estático de Go se instala con Homebrew o curl sin necesitar ningún runtime en tu máquina.
+
+## ¿Por qué solo Claude Code?
+
+Soportar varios harnesses desde el día uno obligaría a una abstracción de supervisión antes de haberla ganado. Un segundo harness queda como una costura, no construido.
+
+## ¿Tengo que aprender comandos?
+
+No. Le hablás al commander en Claude Code y él corre `vexillum` por vos. La [referencia del CLI](/es/docs/reference/cli) es para cuando quieras manejarlo a mano.
+
+## ¿vexillum abre pull requests?
+
+No por defecto. `vexillum land` mergea localmente. `vexillum ship` corre el pipeline tribunal y después abre un PR real. Ver [Land vs ship](/es/docs/guides/land-vs-ship).
+
+## ¿Es seguro dejar correr a los soldiers?
+
+Tratalos como una sesión desatendida con tus credenciales. Corren con `--dangerously-skip-permissions`, sin sandbox. El camp aísla sus commits; tu aprobación antes de aterrizar es el control. No despaches donde leer secretos sea un problema.
+
+## ¿Qué pasa si un soldier se cae, o se reinicia mi máquina?
+
+El estado es JSON en disco. Una tarea cuyo pane se confirma desaparecido pasa a `interrupted`, con su trabajo commiteado todavía en el camp. Ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted).
+
+## ¿Pueden correr dos proyectos a la vez?
+
+Sí. El estado tiene un namespace por proyecto, y un sentinel por máquina los atiende a todos.
+
+## ¿De dónde sale el comportamiento del commander?
+
+De `.claude/rules/vexillum.md`, un archivo markdown de tu proyecto que podés editar. Ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).
+
+## ¿Hay un segundo commander, u otros agentes?
+
+No en esta versión.

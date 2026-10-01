@@ -1,0 +1,26 @@
+---
+title: Skill muster
+description: Un skill first-party de Claude Code que convierte vexillum status en un tablero de la flota.
+---
+
+`muster` es un Agent Skill de Claude Code que viene en el repositorio de vexillum. Lee `vexillum status --json` y agrupa las tareas del proyecto para que veas de un vistazo qué te necesita.
+
+## Instalación
+
+```bash
+npx skills add isaias-alt/vexillum --skill muster
+```
+
+`vexillum doctor` informa si está instalado. Nunca lo instala por vos.
+
+## Uso
+
+| Comando | Resultado |
+| --- | --- |
+| `/muster` | la flota completa, abierta como un tablero interactivo |
+| `/muster pr` | missions con un PR real de GitHub, enriquecidas con el estado en vivo del PR |
+| `/muster sitrep` | un resumen solo en terminal de los dispatches de esta sesión; nunca abre un tablero |
+
+El tablero tiene cinco secciones: **Needs attention** (blocked, interrupted, failed), **Awaiting land approval** (missions done todavía no aterrizadas), **In flight**, **Finished** y **Shipped**. Una tarea blocked muestra su pregunta en el tablero.
+
+muster es de solo lectura: nunca aterriza, hace release ni re-despacha nada. Nunca infiere un status que vexillum no reportó, y clasifica "aterrizada" con git, ya que vexillum no registra el landing en la tarea.

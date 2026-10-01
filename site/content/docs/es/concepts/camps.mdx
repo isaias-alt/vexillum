@@ -1,0 +1,33 @@
+---
+title: Camps
+description: Git worktrees aislados, en un pool por proyecto y reutilizados solo cuando es seguro.
+---
+
+Un **camp** es el git worktree en el que trabaja un soldier. Tiene su propio checkout y su propia branch, así que un soldier puede editar, commitear y correr tests sin tocar tu working tree, y varios soldiers nunca se pisan.
+
+## Dónde viven los camps
+
+Los camps están en un pool por proyecto, dentro del [directorio de estado](/es/docs/concepts/state) de ese proyecto:
+
+```text
+~/.vexillum/projects/<repo>-<hash>/camps/
+  pool.json          qué slots existen, y qué tarea ocupa cada uno
+  1/<repo>/          un worktree
+  2/<repo>/
+```
+
+La branch de cada camp es `vexillum/<task-id>`, bifurcada de la branch que tu proyecto tenía activa cuando se despachó la tarea (se registra como la base de la tarea).
+
+## Adquirir y reutilizar
+
+Una tarea nueva toma del pool un slot **libre, limpio y ya aterrizado** cuando existe, y lo resetea a una branch nueva. Si no, vexillum crea un worktree y un slot nuevos. La asignación de slots se serializa con un lock, así que dos dispatches simultáneos nunca reciben el mismo slot.
+
+## Release
+
+Un camp vuelve al pool solo cuando es seguro reutilizarlo: el worktree no tiene cambios sin commitear y, para una mission, sus commits ya están en la branch base. `vexillum release <task-id>` lo exige y se niega en caso contrario. A un scout además se le exige que exista su reporte; `--force` se salta solo ese chequeo del reporte, nunca el de limpio-y-aterrizado.
+
+`vexillum land` hace el release del camp por vos después de un fast-forward local exitoso. Una mission enviada con ship es la excepción: su pull request es la fuente de verdad, así que su camp queda hasta que mergees el PR. Ver [Land vs ship](/es/docs/guides/land-vs-ship).
+
+<Callout title="Corré vexillum desde la raíz del proyecto">
+  vexillum se niega a correr desde dentro de un camp (cualquier ruta bajo `~/.vexillum`). Un segundo dispatch desde ahí crearía un pool separado, con clave en la ruta del propio camp, invisible para todos los comandos posteriores.
+</Callout>

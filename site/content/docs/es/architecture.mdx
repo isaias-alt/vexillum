@@ -1,0 +1,53 @@
+---
+title: Arquitectura
+description: Cómo encajan las piezas, y las decisiones que están cerradas.
+---
+
+## Las piezas
+
+```text
+ general ──► commander (Claude Code, rules en .claude/rules/vexillum.md)
+                │  vexillum dispatch
+                ▼
+         ┌── vexillum (binario Go) ─┐
+         │  pool de camps  estado   │         ┌─────────────┐
+         │  worktrees      wakes    │◄────────│  sentinel   │ consulta cada 5s
+         └──────┬───────────────────┘         └──────┬──────┘
+                │ pane de herdr                      │ hook Stop
+                ▼                                    ▼
+         soldier (Claude Code) en un camp ──► se despierta al commander
+```
+
+## Capas
+
+vexillum se construye por capas, cada una probada antes de la siguiente:
+
+1. **CLI base** - `init` y `doctor`.
+2. **Estado en disco** - structs como JSON bajo `~/.vexillum`, escritos de forma atómica.
+3. **Un proceso** - un soldier en un camp.
+4. **Concurrencia** - N soldiers, y el sentinel sobre la socket API de herdr, a prueba de reinicios.
+
+## Decisiones cerradas
+
+- **Go**, distribuido como binario por Homebrew y curl, sin dependencias de runtime.
+- **Un solo harness**, Claude Code, con una costura dejada para otro.
+- **herdr es el backend primario; tmux queda como backend de control.**
+- **La inteligencia es markdown, no Go.** El binario hace plomería determinista; el ruteo y el criterio viven en el archivo de reglas.
+- **El vocabulario del dominio se queda en inglés** - commander, soldier, mission, scout, camp, sentinel - en todos los idiomas.
+- **Sin segundo commander** en esta versión.
+
+## Modelo de seguridad
+
+| Capa | Garantía |
+| --- | --- |
+| camp | los commits y el working tree están aislados de los tuyos |
+| `land` | solo fast-forward; se niega con checkout sucio o branch divergida; nunca fuerza |
+| `release` | se niega mientras el camp tenga trabajo sin commitear o sin aterrizar |
+| `ship` | hace push solo después de que pasan todos los pasos del tribunal, de forma determinista |
+| `redispatch` | la única operación que descarta un camp, por eso el commander pregunta primero |
+
+El proceso en sí no está en un sandbox. Ver la [advertencia de la introducción](/es/docs).
+
+## Contribuir
+
+El código, el tracker de issues y la guía CONTRIBUTING están en [GitHub](https://github.com/isaias-alt/vexillum). La referencia de comandos se genera desde el registro en `internal/cli`, así que no puede desfasarse del binario.
