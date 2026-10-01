@@ -69,7 +69,7 @@ export default async function Home({
 
       <main>
         {/* hero */}
-        <section className="site-container pt-16 pb-12 text-center">
+        <section className="site-container pt-16 pb-24 text-center max-sm:pb-16">
           <div className="mb-5 text-[11px] tracking-[0.08em] text-text-muted uppercase">
             {t.hero.eyebrow}
           </div>
@@ -106,13 +106,11 @@ export default async function Home({
               {t.minute.motto}
             </p>
           </div>
-          <div className="mx-auto max-w-(--content-wide)">
-            <MinuteSteps
-              steps={t.minute.steps}
-              docsLabel={t.minute.docsLink}
-              docsRoot={`${prefix}/docs`}
-            />
-          </div>
+          <MinuteSteps
+            steps={t.minute.steps}
+            docsLabel={t.minute.docsLink}
+            docsRoot={`${prefix}/docs`}
+          />
         </section>
 
         {/* vocabulary */}
@@ -124,18 +122,19 @@ export default async function Home({
                 {t.vocab.title}
               </h2>
             </div>
+            {/* the only section narrower than the shared container */}
             <div className="mx-auto max-w-(--content-wide)">
-            {t.vocab.items.map((item) => (
-              <div
-                key={item.term}
-                className="grid grid-cols-[150px_minmax(0,1fr)] gap-5 border-t border-border py-[18px] max-sm:grid-cols-1 max-sm:gap-1.5"
-              >
-                <div className="text-[13.5px] text-accent">{item.term}</div>
-                <div className="text-[13px] leading-[1.7] text-text-secondary">
-                  {item.def}
+              {t.vocab.items.map((item) => (
+                <div
+                  key={item.term}
+                  className="grid grid-cols-[150px_minmax(0,1fr)] gap-5 border-t border-border py-[18px] max-sm:grid-cols-1 max-sm:gap-1.5"
+                >
+                  <div className="text-[13.5px] text-accent">{item.term}</div>
+                  <div className="text-[13px] leading-[1.7] text-text-secondary">
+                    {item.def}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
             </div>
           </div>
         </section>

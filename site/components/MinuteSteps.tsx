@@ -7,6 +7,8 @@ import type { Step } from "@/lib/strings";
 
 const NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII"];
 const STEP_MS = 3200;
+// Distance from the top of a step row to the middle of its marker.
+const MARKER_CENTER = 29.5;
 
 // "A minute with vexillum" (design/Vexillum Landing.dc.html): a numbered
 // timeline on the left, the active step's command and output in a terminal
@@ -52,15 +54,23 @@ export function MinuteSteps({
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <ol className="relative m-0 min-w-0 list-none p-0 pl-1">
-        <span
-          aria-hidden
-          className="absolute top-[26px] bottom-[26px] left-[25px] w-px bg-border"
-        />
+      <ol className="m-0 min-w-0 list-none p-0">
         {steps.map((step, i) => {
           const isActive = i === active;
           return (
-            <li key={step.title}>
+            <li key={step.title} className="relative">
+              {/* The line through the markers, drawn per step so it always
+                  meets the marker centers: the row's 2px border + 16px padding
+                  + half the 27px marker puts that center at 31.5px from the
+                  left and 29.5px from the top, however tall the row grows. */}
+              <span
+                aria-hidden
+                className="absolute left-[31px] w-px bg-border"
+                style={{
+                  top: i === 0 ? MARKER_CENTER : 0,
+                  bottom: i === steps.length - 1 ? `calc(100% - ${MARKER_CENTER}px)` : 0,
+                }}
+              />
               <div
                 role="button"
                 tabIndex={0}
@@ -80,7 +90,7 @@ export function MinuteSteps({
               >
                 <div className="relative z-[1] w-[42px] shrink-0">
                   <span
-                    className={`flex h-[26px] w-[26px] items-center justify-center rounded-full font-serif text-[12.5px] ${
+                    className={`flex h-[27px] w-[27px] items-center justify-center rounded-full font-serif text-[12.5px] ${
                       isActive
                         ? "bg-accent text-accent-contrast"
                         : "border border-border bg-bg text-text-muted"
