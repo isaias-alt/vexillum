@@ -30,7 +30,7 @@ export function SiteNav({ lang }: { lang: Lang }) {
           {t.github}
         </ExternalLink>
         <Link
-          href={`${prefix}/docs/get-started`}
+          href={`${prefix}/docs/get-started/install`}
           className="btn btn-secondary max-md:hidden"
           style={{ fontSize: 12.5, padding: "7px 14px" }}
         >
