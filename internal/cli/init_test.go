@@ -629,3 +629,48 @@ func TestInitGlobal_DoesNotWriteProjectScaffold(t *testing.T) {
 		t.Error("expected global init not to write a project-shaped .vexillum/ under home")
 	}
 }
+
+func TestInit_IgnoresForumArtifacts(t *testing.T) {
+	projectDir := t.TempDir()
+	initGitRepo(t, projectDir)
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+
+	var buf bytes.Buffer
+	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
+		t.Fatalf("init exit = %d, output: %s", code, buf.String())
+	}
+	ignorePath := filepath.Join(projectDir, ".vexillum", ".gitignore")
+	got, err := os.ReadFile(ignorePath)
+	if err != nil {
+		t.Fatalf("expected .vexillum/.gitignore: %v", err)
+	}
+	if string(got) != "forum/\n" {
+		t.Errorf(".vexillum/.gitignore = %q", got)
+	}
+	// config.json stays committed; only forum artifacts are ignored.
+	if out, err := exec.Command("git", "-C", projectDir, "check-ignore", ".vexillum/forum/plan.html").CombinedOutput(); err != nil {
+		t.Errorf("forum artifact not ignored: %v %s", err, out)
+	}
+	if err := exec.Command("git", "-C", projectDir, "check-ignore", "-q", ".vexillum/config.json").Run(); err == nil {
+		t.Error(".vexillum/config.json must not be ignored")
+	}
+
+	// A user-edited .gitignore is never overwritten, and re-running init
+	// heals a project initialized before this file existed.
+	if err := os.WriteFile(ignorePath, []byte("custom\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
+		t.Fatalf("second init exit = %d", code)
+	}
+	if got, _ := os.ReadFile(ignorePath); string(got) != "custom\n" {
+		t.Errorf("edited .vexillum/.gitignore overwritten: %q", got)
+	}
+	os.Remove(ignorePath)
+	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
+		t.Fatalf("healing init exit = %d", code)
+	}
+	if _, err := os.Stat(ignorePath); err != nil {
+		t.Errorf("init did not restore .vexillum/.gitignore: %v", err)
+	}
+}

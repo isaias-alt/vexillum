@@ -8,8 +8,10 @@ Two commands let agents show you something richer than terminal text.
 ## forum: review in your browser
 
 ```bash
-vexillum forum plan.html
+vexillum forum .vexillum/forum/plan.html
 ```
+
+Agents write their artifacts to `.vexillum/forum/` in the project. `vexillum init` adds a `.vexillum/.gitignore` that keeps that folder out of git; any path you pass on the command line still works, including an old `.forum/` folder.
 
 Serves an HTML file the agent wrote to your browser and carries your feedback back to it. One local server per user runs on `127.0.0.1` and stops itself when nothing is connected. You can chat, queue messages, fill in decision forms and annotate elements, then send it all to the agent. A Mermaid diagram becomes an editable whiteboard.
 

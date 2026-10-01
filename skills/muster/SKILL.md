@@ -126,8 +126,8 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    prompt, and camp branch), rendered and kept alive with `vexillum forum`.
    Read the `forum` skill (`skills/forum/SKILL.md`) first - don't assume this
    file's idea of forum's workflow is still accurate. For the board:
-   - Write one HTML file, by default `.forum/muster.html` in the project root
-     (`.forum/` is gitignored). No CDN, no Tailwind, no daisyUI, no `<style>`
+   - Write one HTML file, by default `.vexillum/forum/muster.html` in the project root
+     (`.vexillum/forum/` is gitignored). No CDN, no Tailwind, no daisyUI, no `<style>`
      block and no `<link rel="stylesheet">`: any of those switches forum's own
      styles off. Use plain semantic HTML plus forum's `fr-*` classes so forum
      gives the board its identity: `fr-page fr-stack` for the page, one
@@ -138,18 +138,18 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
      a blocked task's `decision.question`, `fr-table-wrap` around any table.
      Never raw hex; use `--fr-*` tokens through `style="..."` attributes if a
      tweak is unavoidable.
-   - Open it with `vexillum forum .forum/muster.html` (add `--no-open` if the
+   - Open it with `vexillum forum .vexillum/forum/muster.html` (add `--no-open` if the
      general is already looking at the browser). It returns at once.
    - Both fleet mode and pr mode always reach this step - there's no
      "board-less" variant of either.
    - Then keep the standard forum loop going: tell the general the board is
-     open, and run `vexillum forum poll .forum/muster.html` in the foreground
+     open, and run `vexillum forum poll .vexillum/forum/muster.html` in the foreground
      (never `&`/`nohup`, never leave a poll hanging when nothing is waiting on
      it). Answer questions the general sends with `--reply`; if they ask for a
      change to the board, edit the file (the browser reloads by itself) and
      poll again. On `status: ended`, stop polling. When you're done and the
      session is still open, close it with `vexillum forum end
-     .forum/muster.html`. The board is a read-only snapshot, so if the fleet
+     .vexillum/forum/muster.html`. The board is a read-only snapshot, so if the fleet
      changes while it's open, rewrite the file from a fresh `vexillum status
      --json` rather than patching it by hand.
    - Feedback on the board (annotations, messages) is conversation, not

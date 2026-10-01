@@ -207,3 +207,18 @@ func UpgradeFile(dir, name, latest, storedHash string, force bool) (FileResult, 
 	}
 	return FileResult{Changed: true, Status: status}, nil
 }
+
+// forumIgnore is the content of .vexillum/.gitignore: forum artifacts (the
+// HTML pages an agent writes for human review) are scratch, while the rest of
+// .vexillum/ (config.json) is committed.
+const forumIgnore = "forum/\n"
+
+// EnsureForumIgnore makes sure .vexillum/forum/ is git-ignored by writing
+// configDir/.gitignore when it is missing. An existing file is left alone,
+// whatever it contains. Returns whether it created the file.
+func EnsureForumIgnore(configDir string) (created bool, err error) {
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return false, err
+	}
+	return WriteFileIfMissing(configDir, ".gitignore", forumIgnore)
+}

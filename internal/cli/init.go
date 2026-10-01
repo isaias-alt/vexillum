@@ -113,6 +113,17 @@ func runInit(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "Created .vexillum/config.json")
 	}
 
+	// forum artifacts live in .vexillum/forum/ and are scratch; ignore them
+	// without touching the user's own root .gitignore.
+	ignoreCreated, err := scaffold.EnsureForumIgnore(configDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "vexillum: cannot write .vexillum/.gitignore: %v\n", err)
+		return 1
+	}
+	if ignoreCreated {
+		fmt.Fprintln(stdout, "Created .vexillum/.gitignore (ignores .vexillum/forum/)")
+	}
+
 	ruleDir := filepath.Join(projectDir, ".claude", "rules")
 	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		fmt.Fprintf(stderr, "vexillum: cannot create %s: %v\n", ruleDir, err)

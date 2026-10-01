@@ -30,30 +30,30 @@ what to visualize from the conversation.
 
 ## The flow
 
-1. **Write the artifact** as one HTML file, by default under `.forum/` in the
-   current directory (add it to `.gitignore` if the project does not already
-   ignore it). Open the matching playbook first (below). Assets (images, CSS,
+1. **Write the artifact** as one HTML file, by default under `.vexillum/forum/` in the
+   current directory (`vexillum init` makes `.vexillum/.gitignore` ignore it; in a
+   project without that file, add `.vexillum/forum/` to `.gitignore`). Open the matching playbook first (below). Assets (images, CSS,
    scripts) go next to the HTML file and are referenced by **relative** paths -
    never start a path with `/`. Only files in the artifact's own directory are
    served, and dot-files never are.
-2. **Open it**: `vexillum forum .forum/plan.html`. It opens (or resumes) the
+2. **Open it**: `vexillum forum .vexillum/forum/plan.html`. It opens (or resumes) the
    session, opens the browser, **returns immediately**, and prints the session
    URL and the next step. A background server (one per user, 127.0.0.1 only)
    keeps running and stops itself when nothing is connected. `--no-open` skips
    opening the browser.
 3. **Tell the user** the review is open and what you need from them.
-4. **Poll in a loop**: `vexillum forum poll .forum/plan.html`. It blocks until
+4. **Poll in a loop**: `vexillum forum poll .vexillum/forum/plan.html`. It blocks until
    there is feedback. Never kill it, never background it with `&`/`nohup`, and
    do not tell the user it is being watched unless a poll is actually running
    in your harness's tracked foreground/background-job facility.
    After every response, act on it and poll again, until the session ends.
 5. **Answer in the browser** while you keep waiting:
-   `vexillum forum poll .forum/plan.html --reply "Done: switched to the Pro plan"`
+   `vexillum forum poll .vexillum/forum/plan.html --reply "Done: switched to the Pro plan"`
    shows your markdown message in the conversation panel, then waits again.
    Use `--reply-file <path>` (or `-` for stdin) for long or multi-line replies.
 6. **Edit the artifact** when feedback asks for changes. The browser reloads
    it by itself when the file changes.
-7. **End** when you are done: `vexillum forum end .forum/plan.html`. The user
+7. **End** when you are done: `vexillum forum end .vexillum/forum/plan.html`. The user
    can also end it from the browser (**Send & End** delivers their final
    feedback once, then ends).
 

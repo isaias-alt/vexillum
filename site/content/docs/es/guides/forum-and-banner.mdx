@@ -8,8 +8,10 @@ Dos comandos permiten a los agentes mostrarte algo más rico que texto de termin
 ## forum: revisar en tu navegador
 
 ```bash
-vexillum forum plan.html
+vexillum forum .vexillum/forum/plan.html
 ```
+
+Los agentes escriben sus artifacts en `.vexillum/forum/` dentro del proyecto. `vexillum init` agrega un `.vexillum/.gitignore` que mantiene esa carpeta fuera de git; cualquier ruta que pases por la línea de comandos sigue funcionando, incluida una carpeta `.forum/` vieja.
 
 Sirve un archivo HTML que escribió el agente a tu navegador y le lleva tu feedback de vuelta. Un servidor local por usuario corre en `127.0.0.1` y se detiene solo cuando no hay nada conectado. Podés chatear, encolar mensajes, completar formularios de decisión y anotar elementos, y mandarlo todo al agente. Un diagrama Mermaid se convierte en una pizarra editable.
 
