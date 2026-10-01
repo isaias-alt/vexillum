@@ -259,9 +259,13 @@ func TestAttachments_ServeRemoveAndSecurity(t *testing.T) {
 
 	// Same guarantees as every browser route: token, same origin.
 	for name, mutate := range map[string]func(*http.Request){
-		"no token":     func(r *http.Request) { r.Header.Set("Origin", env.ts.URL) },
-		"wrong token":  func(r *http.Request) { r.Header.Set("X-Forum-Token", "nope"); r.Header.Set("Origin", env.ts.URL) },
-		"cross origin": func(r *http.Request) { tok, _ := env.hub.Token(key); r.Header.Set("X-Forum-Token", tok); r.Header.Set("Origin", "http://evil.example") },
+		"no token":    func(r *http.Request) { r.Header.Set("Origin", env.ts.URL) },
+		"wrong token": func(r *http.Request) { r.Header.Set("X-Forum-Token", "nope"); r.Header.Set("Origin", env.ts.URL) },
+		"cross origin": func(r *http.Request) {
+			tok, _ := env.hub.Token(key)
+			r.Header.Set("X-Forum-Token", tok)
+			r.Header.Set("Origin", "http://evil.example")
+		},
 	} {
 		for _, method := range []string{"GET", "DELETE"} {
 			if resp, _ := env.browserWith(method, path, nil, mutate); resp.StatusCode != 401 && resp.StatusCode != 403 {
