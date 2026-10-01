@@ -192,8 +192,29 @@ button, textarea { font: inherit; color: inherit; }
 }
 .input:focus { outline: none; border-color: var(--fr-accent); box-shadow: 0 0 0 3px var(--fr-accent-soft); }
 .input:disabled { opacity: 0.55; }
-.composer-row { display: flex; align-items: center; gap: var(--fr-space-2); }
-.composer .hint { margin: 0; }
+.composer { container-type: inline-size; }
+.composer .hint { margin: 0; font-size: var(--fr-text-size-small); color: var(--fr-text-muted); }
+/* The attach action: a link-styled button directly under the text box. */
+.link-btn {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: var(--fr-space-1);
+  padding: var(--fr-space-1) var(--fr-space-1); margin-left: calc(-1 * var(--fr-space-1));
+  border: 0; border-radius: var(--fr-radius-sm); background: none;
+  color: var(--fr-accent); font-size: var(--fr-text-size-small); font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.link-btn:hover:not(:disabled) { color: var(--fr-accent-hover); text-decoration: underline; text-underline-offset: 0.2em; }
+.link-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Three equal-height actions on one line, never wrapping their labels. */
+.composer-actions { display: flex; align-items: stretch; gap: var(--fr-space-2); }
+.composer-actions .btn { flex: 1 1 auto; min-width: 0; text-align: center; line-height: 1.2; }
+@container (max-width: 340px) {
+  .composer-actions { gap: var(--fr-space-1); }
+  .composer-actions .btn { padding-inline: 6px; font-size: var(--fr-text-size-small); }
+}
+@container (max-width: 270px) {
+  .composer-actions { gap: 2px; }
+  .composer-actions .btn { padding-inline: 3px; font-size: 11px; }
+}
 .hint { min-width: 0; color: var(--fr-text-secondary); font-size: var(--fr-text-size-small); }
 .notice { margin: 0; padding: var(--fr-space-2) var(--fr-space-3); border-radius: var(--fr-radius-sm); font-size: var(--fr-text-size-small); background: var(--fr-danger-soft); color: var(--fr-danger); }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--fr-space-2); }

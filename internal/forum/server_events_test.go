@@ -200,10 +200,16 @@ func TestEvents_SameGuaranteesAsEveryBrowserRoute(t *testing.T) {
 	path := "/api/s/" + key + "/events"
 	token, _ := env.hub.Token(key)
 	for name, mutate := range map[string]func(*http.Request){
-		"no token":     func(r *http.Request) {},
-		"wrong token":  func(r *http.Request) { r.Header.Set("X-Forum-Token", "nope") },
-		"cross origin": func(r *http.Request) { r.Header.Set("X-Forum-Token", token); r.Header.Set("Origin", "http://evil.example") },
-		"cross site":   func(r *http.Request) { r.Header.Set("X-Forum-Token", token); r.Header.Set("Sec-Fetch-Site", "cross-site") },
+		"no token":    func(r *http.Request) {},
+		"wrong token": func(r *http.Request) { r.Header.Set("X-Forum-Token", "nope") },
+		"cross origin": func(r *http.Request) {
+			r.Header.Set("X-Forum-Token", token)
+			r.Header.Set("Origin", "http://evil.example")
+		},
+		"cross site": func(r *http.Request) {
+			r.Header.Set("X-Forum-Token", token)
+			r.Header.Set("Sec-Fetch-Site", "cross-site")
+		},
 	} {
 		if resp, _ := env.browserWith("GET", path, nil, mutate); resp.StatusCode != 401 && resp.StatusCode != 403 {
 			t.Errorf("%s: status %d, want rejection", name, resp.StatusCode)
