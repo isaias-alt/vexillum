@@ -1,33 +1,35 @@
 import Link from "next/link";
 import { LogoMark } from "./Logo";
 import { ExternalLink } from "./ExternalLink";
+import { GITHUB_URL } from "@/lib/site";
+import { dictionary, localePrefix } from "@/lib/strings";
+import type { Lang } from "@/lib/i18n";
 
-const GITHUB_URL = "https://github.com/isaias-alt/vexillum";
-
-export function Footer() {
+export function Footer({ lang }: { lang: Lang }) {
+  const t = dictionary(lang).footer;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-[6vw] py-8 text-sm text-text-dim">
+    <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border px-[6vw] py-5 text-[11.5px] text-text-muted">
       <div className="flex items-center gap-2.5">
-        <LogoMark className="h-4 w-4 text-text-dim" />
-        <span>vexillum &middot; MIT licensed</span>
+        <LogoMark className="h-3.5 w-3.5 text-text-muted" />
+        <span>vexillum &middot; {t.license}</span>
       </div>
-      <div className="flex gap-6">
-        <ExternalLink
-          href={GITHUB_URL}
-          className="text-text-dim hover:text-text-muted"
-        >
-          github
+      <div className="flex gap-[18px]">
+        <ExternalLink href={GITHUB_URL} className="hover:text-text-secondary">
+          {t.github}
         </ExternalLink>
-        <Link href="/docs" className="text-text-dim hover:text-text-muted">
-          docs
+        <Link
+          href={`${localePrefix(lang)}/docs`}
+          className="hover:text-text-secondary"
+        >
+          {t.docs}
         </Link>
         <ExternalLink
           href="https://lucasco.dev"
-          className="text-text-dim hover:text-text-muted"
+          className="hover:text-text-secondary"
         >
           lucasco.dev
         </ExternalLink>
       </div>
-    </div>
+    </footer>
   );
 }

@@ -1,64 +1,69 @@
 "use client";
 
 import { useState } from "react";
+import { INSTALL_COMMANDS } from "@/lib/site";
 
-const COMMANDS = {
-  curl: "curl -fsSL https://vexillum.lucasco.dev/install | bash",
-  brew: "brew install isaias-alt/tap/vexillum",
-} as const;
+const TABS = ["curl", "brew"] as const;
 
-export function InstallCommand({ className }: { className?: string }) {
-  const [tab, setTab] = useState<"curl" | "brew">("curl");
-  const [copyLabel, setCopyLabel] = useState("copy");
+// design/Vexillum Landing.dc.html: a segmented curl|brew switch above a
+// sunken command box with a copy button.
+export function InstallCommand({
+  className,
+  copy = "copy",
+  copied = "copied",
+}: {
+  className?: string;
+  copy?: string;
+  copied?: string;
+}) {
+  const [tab, setTab] = useState<(typeof TABS)[number]>("curl");
+  const [done, setDone] = useState(false);
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(COMMANDS[tab]);
+      await navigator.clipboard.writeText(INSTALL_COMMANDS[tab]);
     } catch {
-      // clipboard API unavailable - the label still gives feedback
+      // clipboard unavailable (insecure context, blocked): the label still
+      // answers the click.
     }
-    setCopyLabel("copied");
-    setTimeout(() => setCopyLabel("copy"), 1600);
+    setDone(true);
+    setTimeout(() => setDone(false), 1600);
   }
 
   return (
-    <div
-      className={`overflow-hidden rounded-lg border border-border bg-bg-elevated text-left ${className ?? ""}`}
-    >
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <div className="flex gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-dot-red" />
-          <span className="h-3 w-3 rounded-full bg-dot-yellow" />
-          <span className="h-3 w-3 rounded-full bg-dot-green" />
-        </div>
-        <div className="flex gap-5 text-[13px] tracking-wide">
+    <div className={className}>
+      <div
+        role="tablist"
+        aria-label="Install method"
+        className="mb-3.5 inline-flex overflow-hidden rounded-md border border-border"
+      >
+        {TABS.map((t) => (
           <button
-            onClick={() => setTab("curl")}
-            className={`cursor-pointer ${
-              tab === "curl" ? "text-text" : "text-text-faint hover:text-text-muted"
+            key={t}
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={`cursor-pointer px-[18px] py-[9px] text-[12.5px] ${
+              tab === t
+                ? "bg-sunken text-text"
+                : "bg-transparent text-text-muted hover:text-text-secondary"
             }`}
           >
-            CURL
+            {t}
           </button>
-          <button
-            onClick={() => setTab("brew")}
-            className={`cursor-pointer ${
-              tab === "brew" ? "text-text" : "text-text-faint hover:text-text-muted"
-            }`}
-          >
-            BREW
-          </button>
-        </div>
+        ))}
       </div>
-      <div className="flex items-center justify-between gap-4 px-5 py-4">
-        <div className="overflow-x-auto text-[15px] whitespace-nowrap text-text">
-          <span className="text-accent">$</span> {COMMANDS[tab]}
-        </div>
+      <div className="mx-auto flex max-w-[480px] items-center gap-2.5 rounded-md border border-border bg-sunken px-[18px] py-3 text-[13px] text-text">
+        <span className="text-text-muted">$</span>
+        <code className="min-w-0 flex-1 overflow-x-auto text-left whitespace-nowrap">
+          {INSTALL_COMMANDS[tab]}
+        </code>
         <button
           onClick={handleCopy}
-          className="shrink-0 cursor-pointer rounded border border-border px-3 py-1.5 text-[13px] tracking-wide text-text-dim hover:border-accent hover:text-text"
+          className="btn btn-secondary shrink-0"
+          style={{ fontSize: 11, padding: "4px 10px" }}
         >
-          {copyLabel}
+          {done ? copied : copy}
         </button>
       </div>
     </div>
