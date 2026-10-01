@@ -175,6 +175,88 @@
     return rpc("send");
   }
 
+  // ----------------------------------------------------------- queue state
+
+  // The chrome reports the queue keys of everything waiting in the user's
+  // queue (added, removed, or sent). A form that carries
+  // data-forum-queue-key="<key>" (or data-forum-question="<q>", whose key is
+  // "question:<q>", what queuePrompt derives for it) has its submit buttons
+  // disabled while that key is queued, and re-enabled when the message leaves
+  // the queue by being removed or sent. data-forum-queued="true" mirrors the
+  // state on the form for styling. Only buttons this code disabled are
+  // re-enabled, so an artifact's own disabled buttons are left alone.
+  // A prompt queued again under the same key replaces the earlier one and
+  // stays queued, so the button stays disabled.
+  const FORM_SELECTOR = "form[data-forum-queue-key],form[data-forum-question]";
+  const SUBMITTERS = "button[type=submit],button:not([type]),input[type=submit]";
+  const queueListeners = new Set();
+  let queuedKeys = null; // null until the chrome has reported
+
+  function formQueueKey(form) {
+    const explicit = attr(form, "data-forum-queue-key").trim();
+    if (explicit) return explicit;
+    const question = attr(form, "data-forum-question").trim();
+    return question ? "question:" + question : "";
+  }
+
+  function syncForms() {
+    if (!queuedKeys) return;
+    for (const form of document.querySelectorAll(FORM_SELECTOR)) {
+      const queued = queuedKeys.has(formQueueKey(form));
+      if (queued) form.setAttribute("data-forum-queued", "true");
+      else form.removeAttribute("data-forum-queued");
+      for (const button of form.querySelectorAll(SUBMITTERS)) {
+        if (queued && !button.disabled) {
+          button.disabled = true;
+          button.setAttribute("data-forum-queue-disabled", "");
+        } else if (!queued && button.hasAttribute("data-forum-queue-disabled")) {
+          button.disabled = false;
+          button.removeAttribute("data-forum-queue-disabled");
+        }
+      }
+    }
+  }
+
+  function setQueuedKeys(keys) {
+    queuedKeys = new Set(Array.isArray(keys) ? keys.map(str) : []);
+    syncForms();
+    for (const listener of [...queueListeners]) {
+      try {
+        listener([...queuedKeys]);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  }
+
+  // onQueueChange(fn) calls fn(keys) now (once the chrome has reported) and on
+  // every change, with the queue keys currently waiting. Returns an unsubscribe.
+  function onQueueChange(listener) {
+    if (typeof listener !== "function") throw new TypeError("onQueueChange needs a function");
+    queueListeners.add(listener);
+    if (queuedKeys) listener([...queuedKeys]);
+    return () => queueListeners.delete(listener);
+  }
+
+  // isQueued(key) is true while an unsent prompt with that queueKey waits.
+  function isQueued(key) {
+    return !!queuedKeys && queuedKeys.has(str(key));
+  }
+
+  // Forms that appear after the report (rendered by the artifact's own script)
+  // get the state too.
+  if (typeof MutationObserver === "function") {
+    let pendingSync = false;
+    new MutationObserver(() => {
+      if (pendingSync || !queuedKeys) return;
+      pendingSync = true;
+      queueMicrotask(() => {
+        pendingSync = false;
+        syncForms();
+      });
+    }).observe(document, { childList: true, subtree: true });
+  }
+
   // ------------------------------------------------------------ annotation
 
   // Ring colors: the two --fr-selection (tyrian) values of the design system,
@@ -428,6 +510,8 @@
       mode = !!message.on;
       if (!mode) hoverEl = null;
       schedule();
+    } else if (message.type === "forum:queue") {
+      setQueuedKeys(message.keys);
     } else if (message.type === "forum:theme") {
       // The artifact follows the chrome's theme; the server already rendered
       // the right one, this keeps it in step when the user flips the switch.
@@ -445,6 +529,8 @@
   window.forum = Object.freeze({
     queuePrompt,
     sendQueuedPrompts,
+    onQueueChange,
+    isQueued,
     // Internal: used by the whiteboard embed to reach the server through the chrome.
     __rpc: rpc,
     // Internal: the pure DOM helpers, exposed for tests.

@@ -269,6 +269,18 @@ the whole API. There is no `window.forum`.
     explicitly to override (`""` disables replacement).
   - `element` - a DOM element to derive `selector`, `text` and `queueKey`
     from (default: the focused element).
+- `window.forum.onQueueChange(fn)` - calls `fn(keys)` with the `queueKey`s of
+  everything now waiting in the user's queue, once the page has them and on
+  every change (queued, removed, sent). Returns an unsubscribe function.
+  `window.forum.isQueued(key)` answers for one key.
+  Forms need no code for the common case: a `<form>` with
+  `data-forum-question="<id>"` (queue key `question:<id>`) or
+  `data-forum-queue-key="<key>"` has its submit buttons disabled while its
+  answer is queued and re-enabled once that message is removed from the queue
+  or sent; `data-forum-queued="true"` mirrors the state on the form. If you
+  pass a custom `queueKey` to `queuePrompt`, put the same value in
+  `data-forum-queue-key`. Only buttons forum disabled are re-enabled; your
+  own `disabled` buttons are left alone.
 - `window.forum.sendQueuedPrompts()` - sends everything queued right away,
   instead of waiting for the user to press Send to Agent. Use it only for a
   control whose whole purpose is "submit this to the agent now".
@@ -329,8 +341,12 @@ message (see "Images") and layout issues arrive only when the user queues them
 Build choices from native controls and call `window.forum.queuePrompt` **once,
 on submit** - never from `change` or `click` handlers of radios, checkboxes or
 selects, because the user may still change their mind. A submit button then
-queues the final answer; the `queueKey` makes a re-submission replace the
-previous one. Full patterns (single choice, tracked batch, free text) are in
+queues the final answer. While that answer is queued, forum disables the
+form's submit button by itself (the form carries `data-forum-question`), and
+enables it again if the user removes the message from the queue or sends it, so
+a changed mind goes through the queue, not a second submit. A re-submission
+under the same `queueKey` (only possible from code) replaces the queued answer
+in place and it stays queued. Full patterns (single choice, tracked batch, free text) are in
 `playbooks/input.md`.
 
 ```html

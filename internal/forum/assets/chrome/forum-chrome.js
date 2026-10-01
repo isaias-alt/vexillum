@@ -216,6 +216,7 @@
 
     renderLog(snap.transcript || []);
     renderQueue(snap.queued || [], ended);
+    syncQueueKeys(queueKeys(snap.queued || []));
     renderLayout(snap.layout_warnings || [], ended);
     syncEndedDialog(snap);
 
@@ -643,7 +644,12 @@
   // The only operations the sandboxed artifact may ask for. Anything else is
   // refused, so a hostile artifact cannot reach the rest of the API.
   const operations = {
-    queue: async (payload) => (await api("POST", "/queue", payload)).prompt,
+    queue: async (payload) => {
+      const prompt = (await api("POST", "/queue", payload)).prompt;
+      // Tell the form right away; the snapshot that follows is authoritative.
+      if (prompt && prompt.queue_key) syncQueueKeys(queueKeys([...((snapshot && snapshot.queued) || []), prompt]));
+      return prompt;
+    },
     send: async () => api("POST", "/send", { end: false }),
     "whiteboard.sources": async () => api("GET", "/mermaid-sources"),
     "whiteboard.load": async (payload) => api("GET", "/whiteboard/" + sceneIndex(payload)),
@@ -707,6 +713,19 @@
 
   function toFrame(message) {
     if (frame.contentWindow) frame.contentWindow.postMessage(message, "*");
+  }
+
+  // The artifact learns which of its queue keys are waiting in the queue, so a
+  // decision form can show that its answer is already queued (forum-sdk.js
+  // onQueueChange and the data-forum-queue-key attribute). Sent whenever the
+  // set changes, and again when a (re)loaded artifact announces itself.
+  let sentQueueKeys = null;
+  const queueKeys = (queued) => [...new Set(queued.map((p) => p.queue_key).filter(Boolean))].sort();
+  function syncQueueKeys(keys, force) {
+    const encoded = JSON.stringify(keys);
+    if (!force && encoded === sentQueueKeys) return;
+    sentQueueKeys = encoded;
+    toFrame({ type: "forum:queue", keys });
   }
 
   // The switch and the artifact follow the user's choice, except that a
@@ -837,6 +856,7 @@
     const rect = isRect(message.rect) ? message.rect : null;
     switch (message.type) {
       case "forum:ready":
+        syncQueueKeys(queueKeys((snapshot && snapshot.queued) || []), true);
         syncMode();
         syncThemeButton();
         break;
