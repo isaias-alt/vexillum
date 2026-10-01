@@ -49,8 +49,13 @@ Tailwind or daisyUI. Safety rules, each covered by a test:
 - Bare elements get skin only (color, type, borders, radius). Layout (page
   width and padding, grids) is opt-in through classes (`fr-page`, `fr-grid`,
   ...), so a self-styled layout is never moved.
-- `<meta name="forum-style" content="none">` opts an artifact out entirely;
-  `window.forum` keeps working.
+- The stylesheet is injected only into artifacts with no styling of their own:
+  no `<style>` block, no `<link rel="stylesheet">`, no CSS-framework CDN
+  (Tailwind, daisyUI, Bootstrap and the like count as styling). Inline
+  `style=""` attributes do not count. Three branches, each tested:
+  automatic (that rule), `<meta name="forum-style" content="on">` (force it,
+  the artifact's own CSS still wins in the layer) and `content="none"` (never;
+  it wins over `on`). `window.forum` is injected in every case.
 - The tyrian selection color is never used in content.
 - The theme follows the chrome's switch: the iframe is loaded with
   `?theme=dark|light`, the server renders `<html data-fr-theme>` (no flash), and

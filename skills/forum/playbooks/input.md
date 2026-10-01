@@ -83,6 +83,8 @@ Use `window.forum.queuePrompt` for user intent, not for analytics or UI-only sta
 
 Style decision forms with forum's classes, not Tailwind or daisyUI from a CDN. `fr-choice` turns a radio or checkbox into a selectable row that highlights when checked, and a `submit` button is the primary action. The same form as above, styled:
 
+The forum styles are injected only while the artifact has no `<style>`, stylesheet `<link>` or CSS-framework CDN of its own; for tweaks use `style="..."` attributes, or add `<meta name="forum-style" content="on">` to keep the forum look next to your own `<style>` (SKILL.md, "When the forum styles apply").
+
 ```html
 <form class="fr-form" data-forum-question="plan" onsubmit="event.preventDefault();
   const choice = new FormData(event.currentTarget).get('plan');

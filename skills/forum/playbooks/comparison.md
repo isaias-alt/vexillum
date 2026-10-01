@@ -42,6 +42,8 @@ Use when: show options, tradeoffs, and current vs target behavior.
 
 Use forum's classes, not Tailwind or daisyUI from a CDN. Option cards in a grid, the recommended one accented, each with badges for its cost and benefit:
 
+The forum styles are injected only while the artifact has no `<style>`, stylesheet `<link>` or CSS-framework CDN of its own; for tweaks use `style="..."` attributes, or add `<meta name="forum-style" content="on">` to keep the forum look next to your own `<style>` (SKILL.md, "When the forum styles apply").
+
 ```html
 <section class="fr-grid">
   <article class="fr-card">

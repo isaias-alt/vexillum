@@ -41,6 +41,8 @@ Use when: explain a product or technical plan before implementation.
 
 Build the plan from forum's own classes (details in SKILL.md, "Design: use forum's own styles"); no Tailwind or daisyUI from a CDN. A minimal plan skeleton: a page container, a status badge, a callout for the decision needed, and cards for the approach and risks.
 
+The forum styles are injected only while the artifact has no `<style>`, stylesheet `<link>` or CSS-framework CDN of its own; for tweaks use `style="..."` attributes, or add `<meta name="forum-style" content="on">` to keep the forum look next to your own `<style>` (SKILL.md, "When the forum styles apply").
+
 ```html
 <main class="fr-page fr-stack">
   <h1>Plan: bounded prompt queue <span class="fr-badge fr-badge--accent">proposal</span></h1>

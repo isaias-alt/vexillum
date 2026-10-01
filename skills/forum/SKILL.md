@@ -292,7 +292,8 @@ they bring a different look, need the network, and fight the theme. Write plain
 semantic HTML and use the classes below. The stylesheet is injected for you
 (`/forum-assets/forum-tokens.css` and `/forum-assets/forum-artifact.css`, linked
 ahead of your markup), follows the user's dark/light switch (dark by default),
-and needs no `<link>` from you.
+and needs no `<link>` from you. **It is applied only to an artifact that brings
+no styling of its own** (see "When the forum styles apply" below).
 
 - **Bare elements are already styled**: `h1`-`h6`, `p`, `a`, `ul`/`ol`,
   `blockquote`, `code`, `pre`, `table`, `button`, `input`, `select`,
@@ -339,14 +340,33 @@ A page skeleton:
 </html>
 ```
 
-**Your own CSS still wins.** The forum stylesheet sits in a low-priority
-cascade layer, so any `<style>` you write (or any CSS file you link) overrides
-it whatever the specificity; small tweaks for one artifact are fine. If an
-artifact needs a completely different look (a mock of the user's product in
-its own design system, a styled slide deck), opt out of the forum stylesheet
-with `<meta name="forum-style" content="none">` in `<head>` and style the page
-yourself; `window.forum` keeps working. When you mock another app's UI, that is
-the one place to bring that app's own styles. Either way: give the page no
-external CDN dependencies, and check the result in the dark and the light
-theme and at a narrow width. No horizontal overflow at any width. Say in your
-handoff whether you used the forum styles or opted out, and why.
+### When the forum styles apply
+
+The stylesheet is injected **only if the artifact has none of its own**. Any of
+these makes the artifact "self-styled", and forum leaves its look alone:
+
+- a `<style>` block, anywhere in the document;
+- a `<link rel="stylesheet">` (a local file, Google Fonts CSS, anything);
+- a CSS framework loaded from a CDN: a `<script src>` or stylesheet link whose
+  address names Tailwind, daisyUI, Bootstrap, Bulma, UnoCSS, Twind, Windi,
+  Materialize, Semantic UI, Pico, water.css or mvp.css. A CDN framework counts
+  as the artifact's own style (it sets the whole look), which is also why you
+  must not use one: you would opt out of the identity by accident.
+
+Inline `style="..."` attributes do **not** count, so for a one-off tweak on a
+forum-styled page (a width, a margin) write `style="..."` and keep the rest.
+Adding a `<style>` block "just for a small tweak" turns the forum styles off
+for the whole page: if you want both, say so explicitly.
+
+Override the default with a meta in `<head>` (`none` wins if both appear):
+
+| Meta | Effect |
+|---|---|
+| *(none)* | automatic: forum styles only when the artifact brings no style of its own |
+| `<meta name="forum-style" content="on">` | always inject, even with your own `<style>`/stylesheet. Your CSS still wins on any conflict: the forum sheet sits in a low-priority cascade layer, so a small `<style>` of tweaks can sit on top of the forum look |
+| `<meta name="forum-style" content="none">` | never inject: the page is entirely yours (a mock of the user's product in its own design system, a styled slide deck) |
+
+`window.forum` is injected in every case. Whatever you choose: no external CDN
+dependencies for styling, check dark and light theme and a narrow width, no
+horizontal overflow. Say in your handoff whether the page uses the forum styles
+or its own, and why.

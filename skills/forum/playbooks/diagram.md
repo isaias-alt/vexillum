@@ -49,6 +49,8 @@ Use when: explain relationships, flows, state, architecture, and concepts with i
 
 Draw the figure with forum's SVG classes instead of hard-coded colors, so it follows the dark and light themes, and wrap it in `fr-figure`. No Tailwind, daisyUI or external CSS from a CDN.
 
+The forum styles are injected only while the artifact has no `<style>`, stylesheet `<link>` or CSS-framework CDN of its own; for tweaks use `style="..."` attributes, or add `<meta name="forum-style" content="on">` to keep the forum look next to your own `<style>` (SKILL.md, "When the forum styles apply").
+
 ```html
 <figure class="fr-figure">
   <svg viewBox="0 0 360 80" width="100%" role="img" aria-labelledby="t1">

@@ -41,6 +41,8 @@ Use when: turn dense records into scan-friendly review surfaces.
 
 Use the forum classes, not Tailwind or daisyUI from a CDN. Wrap the table so a wide one scrolls instead of overflowing, and show status as a text badge (never color alone):
 
+The forum styles are injected only while the artifact has no `<style>`, stylesheet `<link>` or CSS-framework CDN of its own; for tweaks use `style="..."` attributes, or add `<meta name="forum-style" content="on">` to keep the forum look next to your own `<style>` (SKILL.md, "When the forum styles apply").
+
 ```html
 <div class="fr-table-wrap">
   <table>
