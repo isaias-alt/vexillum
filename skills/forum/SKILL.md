@@ -16,10 +16,10 @@ with `vexillum forum poll`. The loop and the idea are inspired by
 THIRD-PARTY-NOTICES.md); forum is built into the vexillum binary and needs no
 Node, no `npx`, no network.
 
-> The visual identity of the review chrome (palette, type, spacing) is
-> **provisional**: it is a neutral placeholder and will be replaced. Do not
-> describe it to the user as final, and never design your artifacts to match
-> the chrome. Your artifact has its own look.
+> The review chrome has its own fixed look (dark by default, with a light
+> theme the user can switch to from the top bar) and your artifact sits on a
+> white canvas inside it. Never design your artifacts to match the chrome:
+> your artifact has its own look.
 
 ## Request
 
@@ -110,6 +110,9 @@ prompts[<n>]:
 next_step: <what to do now>
 ```
 
+`tag`, `selector` and `text` are how an **annotation** arrives; see
+"Annotations" below.
+
 - A multi-line value is written as `key: |` followed by its lines indented two
   spaces deeper than the key. Everything else is `key: value` on one line.
 - `prompts[0]:` means no prompts. Prompts arrive in the order the user queued
@@ -126,8 +129,9 @@ next_step: <what to do now>
   do neither on your own, and do not tight-loop on this status.
 - `status: timeout` - only with `--timeout`; poll again.
 - Common `tag` values: `message` (typed in the composer), `feedback` (default
-  for `queuePrompt`), `whiteboard` (see below), plus whatever tag your artifact
-  passes.
+  for `queuePrompt`), `whiteboard` (see below), `text` (an annotated text
+  selection), an HTML tag name such as `button` or `p` (an annotated element),
+  plus whatever tag your artifact passes.
 
 If the server went away (stopped, crashed, idle), `poll` restarts it and keeps
 waiting; everything queued is on disk.
@@ -167,11 +171,45 @@ the whole API. There is no `window.forum`.
   instead of waiting for the user to press Send to Agent. Use it only for a
   control whose whole purpose is "submit this to the agent now".
 
-The SDK installs no click, change or submit handlers: native controls (radios,
+Outside annotation mode the SDK intercepts nothing: native controls (radios,
 checkboxes, inputs, selects, textareas, buttons, forms, `<details>`, links)
-behave exactly as authored. `window.forum` only exists when the page is opened
+behave exactly as authored. In annotation mode a click annotates the control
+instead of firing it (see "Annotations"). `window.forum` only exists when the page is opened
 through `vexillum forum`; a copy opened from disk has no `window.forum`, so
 guard calls or tell the user how to open it.
+
+## Annotations
+
+Every artifact can be annotated by the user with no work on your side:
+
+- **Annotate** (top bar, or Ctrl/Cmd+I): hover outlines an element, a click
+  selects it and opens a note card; Enter queues the note, Esc cancels. Every
+  element is annotatable, controls included: in this mode a click on a radio,
+  checkbox, button or form annotates it without toggling or submitting it.
+- **Selecting text** (in or out of annotation mode) offers an
+  **Annotate selection** action that opens the same card.
+
+Each annotation joins the user's queue (removable there) and reaches you with
+the next poll, like any prompt. The note is `prompt`; what it is about is in
+the other fields:
+
+```
+  - uid: pr_...
+    tag: button                         # the element's tag, or `text` for a selection
+    prompt: Make this button larger     # the user's note
+    selector: button[data-testid="save"]  # unique CSS selector of the element
+                                          # (for a selection: the element that contains it)
+    text: Save changes                  # the element's text (<= 240 chars) or the selected text (<= 500)
+```
+
+A long selection also carries `target: {"type":"text-range","selector":...,"text":...}`
+with up to 2000 characters of it. The selector prefers a unique `id`, then
+`data-testid`/`data-forum-question`/`name`, then a `:nth-of-type` path; use it
+to find the element in your source (`querySelector` semantics), and the
+`text` to find it by content when the markup is generated. Stable
+`id`/`data-testid` attributes in your artifact make annotations land exactly.
+Reply with `--reply` as usual: say what you changed and where. Annotations
+never carry images or layout diagnostics.
 
 ## Decision forms
 

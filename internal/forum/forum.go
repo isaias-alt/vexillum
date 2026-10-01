@@ -3,24 +3,15 @@
 // the same authoring convention forum-tool already uses) render as
 // editable Excalidraw whiteboards in the browser.
 //
-// This package intentionally does not implement the rest of the general
-// "vexillum forum" product (element annotation, a comment/feedback prompt
-// queue, long-poll session semantics, end/reopen) - see the scout report
-// this feature was dispatched from
-// (vx-sos-un-scout-en-el-rep-7f53b1-7f53b1b8ae1c4a54.md) for that larger
-// design, which explicitly scoped the whiteboard out of its own v1 for lack
-// of a concrete need at the time. That larger loop is a separate,
-// not-yet-built mission; this package only needs to serve one artifact for
-// one process's lifetime, so it deliberately skips the multi-session
-// server, lock file, and background-daemon machinery that loop would need.
-//
-// A Server instance is created per `vexillum forum <file>` invocation and
-// serves exactly that one file: there is no session key or artifact id in
-// any URL. The session key that does exist (SessionKey, below) is an
-// on-disk namespacing detail only - it keys where a diagram's whiteboard
-// state lives under ~/.vexillum/<project>/forums/<key>/whiteboards/, so
-// that re-running `vexillum forum` against the same file later finds its
-// autosaved scenes again.
+// Beyond the whiteboards it carries the review loop: sessions keyed by the
+// artifact's path, a prompt queue the user fills from the browser (typed
+// messages, decision forms through window.forum, and annotations of elements
+// or selected text, all the same Prompt), a long-poll the agent drains, and
+// replies back into the browser. Annotation capture lives in the artifact
+// script (assets/chrome/forum-sdk.js) and its note card in the chrome
+// (forum-chrome.js); everything reaches the queue through the same
+// same-origin, session-token API. Attachments, multi-tab sync and layout
+// diagnostics are not implemented.
 package forum
 
 import (
