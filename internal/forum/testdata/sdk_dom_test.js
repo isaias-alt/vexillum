@@ -20,10 +20,15 @@ class El {
   }
   getAttribute(name) { return name in this.attrs ? this.attrs[name] : null; }
   closest(selector) {
-    // Only the forum-ui marker is needed.
-    for (let el = this; el; el = el.parentElement) if (selector === "[data-forum-ui]" && el.getAttribute("data-forum-ui") !== null) return el;
+    // The forum-ui marker, or a comma list of plain tag names.
+    const tags = selector.split(",");
+    for (let el = this; el; el = el.parentElement) {
+      if (selector === "[data-forum-ui]" ? el.getAttribute("data-forum-ui") !== null : tags.includes(el.tagName.toLowerCase())) return el;
+    }
     return null;
   }
+  getBoundingClientRect() { return { left: 10, top: 20, width: 100, height: 30 }; }
+  get isConnected() { return true; }
 }
 
 function walk(el, out = []) { out.push(el); el.children.forEach((c) => walk(c, out)); return out; }
@@ -55,10 +60,22 @@ function load(root) {
     querySelectorAll: (selector) => { const segs = selector.split(" > "); return all.filter((e) => matchChain(e, segs, segs.length - 1)); },
     documentElement: root,
   };
-  const win = { document, addEventListener() {}, requestAnimationFrame() { return 1; }, setTimeout() {}, getSelection: () => null };
-  win.parent = win;
+  // Listeners are recorded so a test can dispatch events; the parent window
+  // is a recorder, which is where the SDK posts its messages to the chrome.
+  const handlers = { document: {}, window: {} };
+  const record = (where) => (type, fn) => { (handlers[where][type] = handlers[where][type] || []).push(fn); };
+  document.addEventListener = record("document");
+  const posts = [];
+  const parent = { postMessage: (message) => posts.push(message) };
+  const win = { document, addEventListener: record("window"), requestAnimationFrame() { return 1; }, setTimeout() { return 1; }, getSelection: () => null, parent };
   vm.runInNewContext(fs.readFileSync(process.argv[2], "utf8"), { window: win, document, CSS: { escape: (s) => s }, Object, Promise, Map, Error, JSON, setTimeout() {}, clearTimeout() {} });
-  return win.forum.__dom;
+  const dispatch = (type, event) => {
+    const e = Object.assign({ type, altKey: false, defaultPrevented: false, stopped: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } }, event);
+    for (const fn of handlers.document[type] || []) fn(e);
+    return e;
+  };
+  const sendToSDK = (message) => (handlers.window.message || []).forEach((fn) => fn({ source: parent, data: message }));
+  return { dom: win.forum.__dom, posts, dispatch, sendToSDK };
 }
 
 const li = (t) => new El("li", {}, [], t);
@@ -77,7 +94,7 @@ const tree = new El("html", {}, [
     new El("div", { "data-forum-ui": "annotation" }, [new El("p", {}, [], "overlay")]),
   ]),
 ]);
-const dom = load(tree);
+const { dom, posts, dispatch, sendToSDK } = load(tree);
 
 // Every element resolves back to itself through its own selector.
 for (const el of walk(tree)) assert.deepStrictEqual(walkResolve(el), [el], "round trip " + el.tagName);
@@ -119,5 +136,42 @@ assert.strictEqual(dom.selectionContext(selection("   ", text(items[0]))), null,
 const overlay = walk(tree).find((e) => e.getAttribute("data-forum-ui"));
 assert.strictEqual(dom.selectionContext(selection("overlay", text(overlay.children[0]))), null, "forum ui is never annotated");
 assert.strictEqual(dom.selectionContext(null), null);
+
+// Annotation mode: off leaves the artifact alone; on annotates instead of
+// acting; Alt/Option held opts out of the interception.
+const save = main.children[1];
+const click = (extra) => dispatch("click", Object.assign({ target: save }, extra));
+let e = click();
+assert.ok(!e.defaultPrevented && !e.stopped, "annotation off: a click must reach the artifact untouched");
+assert.strictEqual(posts.filter((m) => m.type === "forum:annotate").length, 0);
+
+sendToSDK({ type: "forum:mode", on: true });
+e = click();
+assert.ok(e.defaultPrevented && e.stopped, "annotation on: the click annotates instead of acting");
+const annotate = posts.filter((m) => m.type === "forum:annotate");
+assert.strictEqual(annotate.length, 1);
+// Compared as JSON: the SDK runs in its own vm realm, so prototypes differ.
+assert.strictEqual(JSON.stringify(annotate[0].context), JSON.stringify({ tag: "button", selector: 'button[data-testid="save"]', text: "Save" }));
+assert.strictEqual(JSON.stringify(Object.keys(annotate[0].rect).sort()), JSON.stringify(["h", "w", "x", "y"]));
+for (const type of ["mousedown", "pointerdown", "pointerup", "dblclick", "submit"]) {
+  const ev = dispatch(type, { target: save });
+  assert.ok(ev.stopped, type + " must not reach the artifact in annotation mode");
+}
+
+e = click({ altKey: true });
+assert.ok(!e.defaultPrevented && !e.stopped, "Alt+click acts on the control natively");
+assert.strictEqual(posts.filter((m) => m.type === "forum:annotate").length, 1, "Alt+click does not annotate");
+assert.ok(!dispatch("mousedown", { target: save, altKey: true }).stopped);
+
+// Overlay clicks are never annotated.
+const overlayClick = dispatch("click", { target: overlay.children[0] });
+assert.ok(!overlayClick.defaultPrevented);
+
+sendToSDK({ type: "forum:mode", on: false });
+assert.ok(!click().defaultPrevented, "switching annotation off restores normal clicks");
+
+// Ctrl/Cmd+I asks the chrome to toggle the mode, wherever focus is.
+dispatch("keydown", { key: "i", ctrlKey: true, metaKey: false, shiftKey: false });
+assert.ok(posts.some((m) => m.type === "forum:toggle-mode"));
 
 console.log("ok");

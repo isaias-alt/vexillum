@@ -287,16 +287,21 @@
 
   // In annotation mode a click annotates instead of acting, so none of the
   // events that would fire the control under the pointer reach the artifact.
+  // Holding Alt/Option while clicking opts out: the click goes to the artifact
+  // as if annotation mode were off.
   const SWALLOWED = ["pointerdown", "mousedown", "pointerup", "dblclick", "auxclick", "submit"];
   let ignoreClick = false;
   let pointerDown = false;
+  // A submit event carries no modifier keys: remember that the click that
+  // causes it was an Alt/Option click, for the rest of that click's dispatch.
+  let altClick = false;
 
   for (const type of SWALLOWED) {
     document.addEventListener(
       type,
       (event) => {
         if (type === "pointerdown" || type === "mousedown") pointerDown = true;
-        if (!mode || isForumUi(event.target)) return;
+        if (!mode || event.altKey || (type === "submit" && altClick) || isForumUi(event.target)) return;
         event.stopPropagation();
         if (type === "submit") event.preventDefault();
         // A press on a control would focus it, open its popup or start a drag; keep
@@ -312,7 +317,7 @@
     (event) => {
       pointerDown = false;
       window.setTimeout(checkSelection, 0);
-      if (!mode || isForumUi(event.target)) return;
+      if (!mode || event.altKey || isForumUi(event.target)) return;
       event.stopPropagation();
       // A drag that selected text ends in a click on the common ancestor: that click is not an element annotation.
       const selected = selectionContext(window.getSelection());
@@ -324,7 +329,11 @@
   document.addEventListener(
     "click",
     (event) => {
-      if (!mode || isForumUi(event.target)) return;
+      if (event.altKey) {
+        altClick = true;
+        window.setTimeout(() => (altClick = false), 0);
+      }
+      if (!mode || event.altKey || isForumUi(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
       if (ignoreClick) {

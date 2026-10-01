@@ -171,10 +171,10 @@ the whole API. There is no `window.forum`.
   instead of waiting for the user to press Send to Agent. Use it only for a
   control whose whole purpose is "submit this to the agent now".
 
-Outside annotation mode the SDK intercepts nothing: native controls (radios,
+When annotation mode is Off, or the click has Alt/Option held, the SDK intercepts nothing: native controls (radios,
 checkboxes, inputs, selects, textareas, buttons, forms, `<details>`, links)
-behave exactly as authored. In annotation mode a click annotates the control
-instead of firing it (see "Annotations"). `window.forum` only exists when the page is opened
+behave exactly as authored. With annotation mode On (the default) a plain click
+annotates the control instead of firing it (see "Annotations"). `window.forum` only exists when the page is opened
 through `vexillum forum`; a copy opened from disk has no `window.forum`, so
 guard calls or tell the user how to open it.
 
@@ -182,10 +182,15 @@ guard calls or tell the user how to open it.
 
 Every artifact can be annotated by the user with no work on your side:
 
-- **Annotate** (top bar, or Ctrl/Cmd+I): hover outlines an element, a click
-  selects it and opens a note card; Enter queues the note, Esc cancels. Every
-  element is annotatable, controls included: in this mode a click on a radio,
-  checkbox, button or form annotates it without toggling or submitting it.
+- **Annotate** (a switch in the top bar, showing On or Off; Ctrl/Cmd+I toggles
+  it): it is **On by default** in every new page load, and the user's choice is
+  remembered. While On, hover outlines an element, a click selects it and opens
+  a note card; Enter queues the note, Esc cancels. Every element is
+  annotatable, controls included: a click on a radio, checkbox, button or form
+  annotates it without toggling or submitting it. **Holding Alt/Option while
+  clicking** acts on the control normally and does not annotate. Because of
+  this, when you ask the user to fill in a decision form, tell them they can
+  switch Annotate Off or Alt/Option+click the controls.
 - **Selecting text** (in or out of annotation mode) offers an
   **Annotate selection** action that opens the same card.
 
