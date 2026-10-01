@@ -172,10 +172,53 @@ func TestTablesEscapeHostileSummaries(t *testing.T) {
 	if got := commandTable(cmds); !strings.Contains(got, escapeMarkdown(hostileSummary)) {
 		t.Errorf("README table does not use the Markdown escape:\n%s", got)
 	}
-	if got := indexPage(cmds); !strings.Contains(got, escapeMDX(hostileSummary)) {
+	if got := indexPage(cmds, localeEN); !strings.Contains(got, escapeMDX(hostileSummary)) {
 		t.Errorf("index page does not use the MDX escape:\n%s", got)
 	}
 	if got := commandPage(cmds[0]); !strings.Contains(got, "description: "+yamlString(hostileSummary)) {
 		t.Errorf("frontmatter does not use the YAML quoting:\n%s", got)
+	}
+}
+
+// The Spanish tree gets only an index (and the folder meta): it links the
+// English command pages under /es/docs, and its stale cleanup never runs.
+func TestSpanishIndexLinksUnderEsPrefix(t *testing.T) {
+	cmds := []cli.Command{{Name: "x", Summary: "do x", Usage: "Usage: vexillum x"}}
+	got := indexPage(cmds, localeES)
+	if !strings.Contains(got, "(/es/docs/reference/cli/x)") {
+		t.Errorf("Spanish index does not link under /es/docs:\n%s", got)
+	}
+	if strings.Contains(got, "(/docs/") {
+		t.Errorf("Spanish index links to the English prefix:\n%s", got)
+	}
+
+	files := map[string]string{
+		referenceDirES + "/index.mdx": "",
+		referenceDirES + "/meta.json": "",
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, filepath.FromSlash(referenceDirES))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dispatch.mdx"), []byte("traducida a mano"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := staleFiles(root, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range stale {
+		if strings.Contains(rel, "/es/") {
+			t.Errorf("generator claims a hand-translated Spanish page as stale: %s", rel)
+		}
+	}
+}
+
+func TestMetaFileKeepsRegistryOrder(t *testing.T) {
+	cmds := []cli.Command{{Name: "b"}, {Name: "a"}}
+	want := "{\n  \"title\": \"CLI\",\n  \"pages\": [\"index\", \"b\", \"a\"]\n}\n"
+	if got := metaFile(cmds); got != want {
+		t.Errorf("metaFile = %q, want %q", got, want)
 	}
 }

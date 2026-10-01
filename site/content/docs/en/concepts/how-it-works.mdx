@@ -1,0 +1,35 @@
+---
+title: How vexillum works
+description: The roles, and the life of a task from dispatch to release.
+---
+
+## The roles
+
+| Term | What it is |
+| --- | --- |
+| **general** | You, the human. You talk only to the commander. |
+| **commander** | The Claude Code session you talk to. It reads your request and the project's rules, then dispatches and tracks soldiers. |
+| **soldier** | A Claude Code session the commander starts to do one task, in its own camp. |
+| **camp** | A soldier's isolated git worktree, on its own branch. |
+| **mission** | A task that changes code and delivers something to land. |
+| **scout** | A task that only investigates and reports back. It never commits or pushes. |
+| **sentinel** | A background process that watches soldiers and wakes the commander when one settles. |
+
+## The life of a task
+
+1. **You ask.** In Claude Code you say what you want.
+2. **The commander dispatches.** Following the project's rules it runs `vexillum dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
+3. **A camp is acquired.** vexillum takes a clean worktree from the project's [pool](/docs/concepts/camps) (or creates one) on a new branch, `vexillum/<task-id>`, forked from your current branch.
+4. **A soldier starts.** A real, interactive Claude Code session opens in a herdr pane inside that camp. The command returns quickly: it only waits out a short probe for trivial prompts that settle at once.
+5. **The sentinel watches.** It polls the soldier's live status and records the outcome on disk. See [Sentinel](/docs/concepts/sentinel).
+6. **The commander is woken.** A `Stop` hook surfaces the change, so the commander reports to you even if its turn had already ended.
+7. **You decide.** For a mission, you [land it or ship it](/docs/guides/land-vs-ship). For a scout, the commander relays the report.
+8. **The camp is released** back to the pool, once there is nothing left to lose.
+
+<Callout type="warn" title="What isolation does and does not give you">
+  A camp isolates the soldier's *commits and working tree* from yours. It does not sandbox the process: a soldier has full host access under your OS user. The real safety control is approval before landing.
+</Callout>
+
+## Where the intelligence lives
+
+The binary is deterministic plumbing - state on disk, worktrees, panes, refusals. Choosing a model, deciding to ask you, phrasing a report: that is the commander's judgment, steered by markdown. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).

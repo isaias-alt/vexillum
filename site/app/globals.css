@@ -174,3 +174,116 @@ body {
     width: 100%;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Docs: the re-theme of Fumadocs' notebook layout to design/Vexillum
+   Docs.dc.html. Structure and behaviour (sidebar, toc, search, mobile
+   drawer) are Fumadocs'; type, rules and surfaces are the design's.
+   ------------------------------------------------------------------------ */
+#nd-notebook-layout {
+  --fd-sidebar-width: 244px;
+  --fd-toc-width: 220px;
+}
+
+/* page header: breadcrumb as the design's small caps eyebrow */
+#nd-page > nav,
+#nd-page nav[aria-label="breadcrumb"] {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fr-text-muted);
+}
+#nd-page h1 {
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--fr-text);
+}
+#nd-page h1 + p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--fr-text-secondary);
+}
+.prose {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--fr-text-secondary);
+}
+.prose :where(h2, h3, h4) {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--fr-text);
+}
+.prose h2 {
+  font-size: 20px;
+  margin-top: 36px;
+  margin-bottom: 14px;
+}
+.prose h3 {
+  font-size: 16px;
+}
+.prose :where(strong) {
+  color: var(--fr-text);
+}
+.prose a:not([data-card]) {
+  color: var(--fr-accent);
+  font-weight: 400;
+  text-decoration: none;
+}
+.prose a:not([data-card]):hover {
+  color: var(--fr-accent-hover);
+}
+.prose :not(pre) > code {
+  background: var(--fr-bronze-soft);
+  color: var(--fr-text);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 0;
+  font-size: 0.92em;
+}
+.prose :where(table) {
+  font-size: 13px;
+}
+.prose :where(th, td) {
+  border-color: var(--fr-border);
+}
+
+/* code blocks are the design's .fr-artifact-frame */
+figure.shiki,
+.prose figure {
+  border-radius: var(--fr-radius-lg);
+  background: var(--fr-surface);
+  border-color: var(--fr-border);
+}
+figure.shiki pre,
+.prose pre {
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+/* empty lines (usage text has paragraph breaks) must keep their height */
+pre .line {
+  min-height: 1lh;
+}
+
+/* the design's note: a rule on the left, quiet frame */
+.prose [role="alert"],
+.prose div[class*="callout"] {
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+/* sidebar: small-caps group headings, active item with an accent rule */
+#nd-sidebar {
+  font-size: 13px;
+}
+#nd-sidebar a[data-active="true"] {
+  font-weight: 600;
+  color: var(--fr-text);
+  background: transparent;
+}
+
+/* prev/next at the foot of a page */
+#nd-page > div:last-child a {
+  border-color: var(--fr-border);
+}

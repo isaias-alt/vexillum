@@ -1,0 +1,40 @@
+---
+title: FAQ
+description: Short answers to the questions people ask first.
+---
+
+## Why Go?
+
+Distribution, not preference. A static Go binary installs by Homebrew or curl with no runtime on your machine.
+
+## Why only Claude Code?
+
+Supporting several harnesses from day one would force a supervision abstraction before it has been earned. A second harness is left as a seam, not built.
+
+## Do I have to learn commands?
+
+No. You talk to the commander in Claude Code and it runs `vexillum` for you. The [CLI reference](/docs/reference/cli) is for when you want to drive it by hand.
+
+## Does vexillum open pull requests?
+
+Not by default. `vexillum land` merges locally. `vexillum ship` runs the tribunal pipeline and then opens a real PR. See [Land vs ship](/docs/guides/land-vs-ship).
+
+## Is it safe to let soldiers run?
+
+Treat soldiers as you would an unattended session with your credentials. They run with `--dangerously-skip-permissions`, with no sandbox. The camp isolates their commits; your approval before landing is the control. Do not dispatch where reading secrets would be a problem.
+
+## What happens if a soldier crashes, or my machine restarts?
+
+State is JSON on disk. A task whose pane is confirmed gone becomes `interrupted`, with its committed work still in the camp. See [Blocked and interrupted](/docs/guides/blocked-and-interrupted).
+
+## Can two projects run at once?
+
+Yes. State is namespaced per project, and one sentinel per machine serves them all.
+
+## Where does the commander's behavior come from?
+
+From `.claude/rules/vexillum.md`, a markdown file in your project that you can edit. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
+
+## Is there a second commander, or other agents?
+
+Not in this version.

@@ -1,0 +1,4 @@
+{
+  "title": "CLI",
+  "pages": ["index", "init", "upgrade", "doctor", "dispatch", "redispatch", "decide", "status", "land", "ship", "release", "sentinel", "forum", "banner"]
+}

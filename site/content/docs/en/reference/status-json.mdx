@@ -1,0 +1,58 @@
+---
+title: status --json
+description: The machine-readable fleet snapshot, and the task schema behind it.
+---
+
+```bash
+vexillum status --json
+```
+
+prints one JSON object. It is read-only and adds nothing to the persisted task: `tasks` is exactly the `Task` schema vexillum itself reads from `<project root>/tasks/*.json`, so a consumer such as the [muster skill](/docs/guides/muster-skill) never works from a separate reinterpretation. Grouping, filtering and judgment calls (what counts as "needs attention", GitHub enrichment) belong to the consumer.
+
+```json
+{
+  "schema_version": 3,
+  "generated_at": "2026-09-24T12:00:00Z",
+  "project_root": "/abs/path/to/this project's ~/.vexillum namespace",
+  "tasks": []
+}
+```
+
+With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently updated first.
+
+## Task fields
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `schema_version` | number | currently `3` |
+| `id` | string | 16 hex characters |
+| `kind` | `"mission"` or `"scout"` | |
+| `prompt` | string | the original prompt |
+| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; see [Missions and scouts](/docs/concepts/missions-and-scouts) |
+| `created_at`, `updated_at` | RFC 3339 time | |
+| `camp_slot`, `camp_path`, `camp_branch` | number, string, string | set once a camp is acquired |
+| `camp_base` | string | branch the camp was forked from; may be empty on older tasks |
+| `exit_code`, `output` | number, string | `output` is the captured transcript |
+| `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | the soldier's herdr pane |
+| `agent_not_found_since`, `idle_unconfirmed_since` | time | when the sentinel first saw the condition |
+| `redispatches` | number | how many times the task was re-dispatched |
+| `model`, `effort` | string | the soldier's choice; empty means claude's default |
+| `decision` | object | present once the task has blocked at least once |
+
+Optional fields are omitted when empty.
+
+## decision
+
+| Field | Notes |
+| --- | --- |
+| `question` | what the soldier asked |
+| `options` | choices it offered, if any |
+| `asked_at` | when it blocked |
+| `answer`, `answered_at` | set after [`vexillum decide`](/docs/reference/cli/decide) |
+| `kind` | how it must be answered: a selector overlay is answered with a key press, anything else as text |
+
+A task in `blocked` always carries its question here, not just the word "blocked".
+
+## Compatibility
+
+New fields are added without bumping `schema_version` when an older file can still be read; the version changes only when the shape breaks reading older state. Treat unknown fields as additive.

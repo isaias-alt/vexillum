@@ -1,0 +1,33 @@
+---
+title: Camps
+description: Isolated git worktrees, pooled per project and reused only when safe.
+---
+
+A **camp** is the git worktree a soldier works in. It has its own checkout and its own branch, so a soldier can edit, commit and run tests without touching your working tree, and several soldiers never step on each other.
+
+## Where camps live
+
+Camps are pooled per project, under that project's [state directory](/docs/concepts/state):
+
+```text
+~/.vexillum/projects/<repo>-<hash>/camps/
+  pool.json          which slots exist, and which task holds each
+  1/<repo>/          a worktree
+  2/<repo>/
+```
+
+Each camp's branch is `vexillum/<task-id>`, forked from the branch your project had checked out when the task was dispatched (recorded as the task's base).
+
+## Acquire and reuse
+
+A new task takes an **idle, clean, already-landed** slot from the pool when one exists, resetting it to a fresh branch. Otherwise vexillum creates a new worktree and slot. Slot assignment is serialized with a lock, so two simultaneous dispatches never get the same slot.
+
+## Release
+
+A camp returns to the pool only when it is safe to reuse: the worktree has no uncommitted changes and, for a mission, its commits are already on the base branch. `vexillum release <task-id>` enforces this and refuses otherwise. A scout is also gated on its report existing; `--force` skips only that report check, never the clean-and-landed check.
+
+`vexillum land` releases the camp for you after a successful local fast-forward. A shipped mission is the exception: its pull request is the source of truth, so its camp stays until you merge the PR. See [Land vs ship](/docs/guides/land-vs-ship).
+
+<Callout title="Run vexillum from the project root">
+  vexillum refuses to run from inside a camp (any path under `~/.vexillum`). A second dispatch from there would create a separate pool keyed on the camp's own path, invisible to every later command.
+</Callout>

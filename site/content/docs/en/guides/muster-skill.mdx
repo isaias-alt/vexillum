@@ -1,0 +1,26 @@
+---
+title: Muster skill
+description: A first-party Claude Code skill that turns vexillum status into a fleet board.
+---
+
+`muster` is a Claude Code Agent Skill that ships in the vexillum repository. It reads `vexillum status --json` and groups the project's tasks so you can see, at a glance, what needs you.
+
+## Install
+
+```bash
+npx skills add isaias-alt/vexillum --skill muster
+```
+
+`vexillum doctor` reports whether it is installed. It never installs it for you.
+
+## Use
+
+| Command | Result |
+| --- | --- |
+| `/muster` | the full fleet, opened as an interactive board |
+| `/muster pr` | missions with a real GitHub PR, enriched with live PR status |
+| `/muster sitrep` | a terminal-only recap of this session's own dispatches; never opens a board |
+
+The board has five sections: **Needs attention** (blocked, interrupted, failed), **Awaiting land approval** (done missions not yet landed), **In flight**, **Finished** and **Shipped**. A blocked task shows its question on the board.
+
+muster is read-only: it never lands, releases or redispatches anything. It never infers a status vexillum did not report, and it classifies "landed" with git, since vexillum does not record landing on the task.

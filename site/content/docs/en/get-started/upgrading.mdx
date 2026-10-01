@@ -1,0 +1,33 @@
+---
+title: Upgrading
+description: Upgrade the binary, then refresh each project's scaffold.
+---
+
+Upgrading has two independent parts: the binary, and the files vexillum scaffolded into your projects.
+
+## The binary
+
+Use the same channel you installed with:
+
+```bash
+brew upgrade vexillum
+```
+
+or run the [curl install script](/docs/get-started/install) again; it installs the latest release.
+
+## A project's scaffold
+
+A new binary may ship a newer commander rules file or hook. Refresh a project with:
+
+```bash
+vexillum upgrade
+```
+
+`upgrade` refreshes `.claude/rules/vexillum.md` and the sentinel `Stop` hook without re-running `init` from scratch. It protects your edits: vexillum stores a content hash of the rules file whenever it writes it, and only refreshes the file if its current content still matches that hash. A file you edited, or one from before hash tracking existed, is left untouched and reported.
+
+| Flag | Effect |
+| --- | --- |
+| `--force` | Overwrite `.claude/rules/vexillum.md` with the latest template regardless, discarding local edits. Use it only after confirming there is nothing worth keeping. |
+| `--global` | Refresh the global scaffold (`~/.claude/rules/vexillum.md`, written by `vexillum init --global`) instead of the project's. |
+
+An older synchronous `vexillum sentinel drain` hook is upgraded in place to the async `vexillum sentinel await` hook, not duplicated.

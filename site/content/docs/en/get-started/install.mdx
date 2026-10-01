@@ -1,0 +1,59 @@
+---
+title: Install
+description: Install the vexillum binary with Homebrew or the curl script, and check your environment.
+---
+
+vexillum supports macOS and Linux, on amd64 and arm64.
+
+## Install the binary
+
+<CodeBlockTabs defaultValue="brew">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="brew">brew</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="curl">curl</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="brew">
+```bash
+brew install isaias-alt/tap/vexillum
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="curl">
+```bash
+curl -fsSL https://vexillum.lucasco.dev/install | bash
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+`/install` redirects to `scripts/install.sh` in the repository, so the script you run is the one in the source tree. It:
+
+1. detects your OS and architecture;
+2. uses Homebrew if `brew` is on your PATH (`brew install isaias-alt/tap/vexillum`);
+3. otherwise downloads the release archive for your platform and **verifies its sha256 checksum** against the release's `checksums.txt`, refusing to install on a mismatch;
+4. installs the binary into `/usr/local/bin`, or into `~/.local/bin` when you cannot write to `/usr/local/bin` (it warns if that directory is not on your PATH).
+
+Check it worked:
+
+```bash
+vexillum --version
+```
+
+## Install what vexillum orchestrates
+
+vexillum does not install its tools; it checks for them.
+
+| Tool | Needed for | Required |
+| --- | --- | --- |
+| [Claude Code](https://claude.com/claude-code) | the commander and every soldier | yes |
+| [herdr](https://herdr.dev) | the panes soldiers run in | yes |
+| `gh` (GitHub CLI) | `vexillum ship`, and landing a shipped PR | only for those |
+| `tmux` | optional control backend | no |
+
+Run the check any time:
+
+```bash
+vexillum doctor
+```
+
+`doctor` is read-only. It prints `[ok]` or `[missing]` for each tool, the herdr version, `~/.vexillum/`, whether the current project is initialized and is a git repository, and which optional [Agent Skills](/docs/guides/muster-skill) are installed. It exits non-zero when a required check fails.
+
+Next: the [Quickstart](/docs/get-started/quickstart).

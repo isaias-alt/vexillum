@@ -58,7 +58,7 @@ have a feature request? Open an issue using the templates in
 
 The command list is defined once, in the registry in `internal/cli/commands.go`
 (name, one-line summary, full usage). `vexillum --help`, the table above, and
-the per-command pages under `site/content/docs/reference/cli/` are all derived
+the per-command pages under `site/content/docs/en/reference/cli/` are all derived
 from it - do not edit the generated parts by hand. After adding or changing a
 command, regenerate and commit the result:
 

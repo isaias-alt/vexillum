@@ -1,0 +1,43 @@
+---
+title: State
+description: Everything vexillum remembers is plain JSON on disk, written atomically.
+---
+
+vexillum keeps no daemon memory. Every fact it relies on is a file, so a restart - of vexillum, herdr, or your machine - loses nothing it knew.
+
+## Layout
+
+```text
+~/.vexillum/
+  config.json              only after `vexillum init --global`
+  sentinel.pid  sentinel.log
+  projects/
+    <repo>-<hash>/         one namespace per project
+      tasks/<id>.json      one file per task
+      wakes/<id>.json      pending sentinel wakes
+      camps/               the worktree pool
+      reports/             scout reports
+      pauses/              declared soldier pauses
+```
+
+In the project itself, `init` writes `.vexillum/config.json` and `.claude/`. See [Files](/docs/reference/files) for the full list.
+
+## The project key
+
+A project's namespace is `<repo>-<hash>`: the directory name plus the first 8 hex characters of the sha256 of its absolute path, after resolving symlinks. Two projects never see each other's tasks, wakes or camps.
+
+<Callout type="warn" title="Moving a project orphans its state">
+  The key is derived from the path. If you rename or move the project, what was recorded under the old key becomes invisible to commands run from the new location. vexillum does not migrate or detect it.
+</Callout>
+
+## Tasks
+
+A task file is the `Task` schema (currently version 3): id, kind, prompt, status, timestamps, the camp slot, path, branch and base, the herdr pane identifiers, the model and effort, and, once blocked, a structured `decision`. `vexillum status --json` prints exactly this schema; see [status --json](/docs/reference/status-json).
+
+## Atomic writes
+
+State is written to a temporary file and renamed into place, so a reader (the sentinel, a second dispatch, `status`) never sees a half-written file.
+
+## After a restart
+
+herdr restores a pane layout but not the process inside it. vexillum reconciles from disk: tasks that were `running` and whose herdr agent is confirmed gone become `interrupted`. Any work the soldier had committed is still in its camp.

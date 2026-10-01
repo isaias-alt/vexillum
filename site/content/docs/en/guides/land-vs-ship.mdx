@@ -1,0 +1,48 @@
+---
+title: Land vs ship
+description: Merge a mission locally, or push it through the tribunal pipeline into a real pull request.
+---
+
+A finished mission leaves its camp in one of two ways. Both are explicit, and neither is silent.
+
+| | `vexillum land` | `vexillum ship` |
+| --- | --- | --- |
+| Result | local fast-forward of your checkout | a real GitHub pull request |
+| Review pipeline | none; you reviewed it | lint, tests, a soldier-driven review, a docs check |
+| Needs | a clean checkout | `gh` installed |
+| Leaves the machine | no | yes, it pushes to `origin` |
+
+By default the commander asks before landing. Once you tell it to land without asking, it can skip that step for the project.
+
+## Land
+
+```bash
+vexillum land <task-id>
+```
+
+Fast-forwards your project's own checkout to the mission's branch, then releases the camp and closes its pane. It refuses, leaving everything untouched, if your checkout is dirty or the branch has diverged from the base. It never forces or rebases.
+
+## Ship
+
+```bash
+vexillum ship <task-id>
+```
+
+Runs, in order, inside the mission's camp, stopping at the first failure without pushing anything:
+
+1. **lint** - `go vet ./...` for a Go project, `npm run lint --if-present` for a Node one;
+2. **tests** - `go test ./...` or `npm run test --if-present`;
+3. **review** - a soldier-driven review of the diff;
+4. **docs** - for Go projects, new exported declarations must carry a doc comment.
+
+With neither `go.mod` nor `package.json`, lint and tests pass with a note that nothing was detected. It is synchronous: when `ship` returns, the whole pipeline has settled. Only after every step passes does it push the camp branch to `origin` and run `gh pr create`. No agent decides whether or when that happens: it is the one action with an irreversible effect outside the machine.
+
+A mission in `done` or `shipped` can be shipped again to push follow-ups onto the same PR; it re-runs the full pipeline first.
+
+## Landing a shipped mission
+
+```bash
+vexillum land <task-id>
+```
+
+For a shipped task, `land` merges the **real pull request** instead. It requires `gh` and refuses unless the PR is open, not a draft, mergeable and every check is green; the merge is bound to the exact head it just verified. It does not release the camp: the branch is still in flight until the PR is actually merged.

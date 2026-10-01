@@ -1,0 +1,32 @@
+---
+title: Missions and scouts
+description: The two kinds of task, and the states a task moves through.
+---
+
+## Two kinds
+
+| | Mission | Scout |
+| --- | --- | --- |
+| Purpose | change code, deliver something to land | investigate and report back |
+| Writes to its camp | yes, commits on its branch | never commits or pushes |
+| Delivers | commits on `vexillum/<task-id>`, landed with [`land`](/docs/reference/cli/land) or opened as a PR with [`ship`](/docs/reference/cli/ship) | a markdown report |
+| Done means | it produced commits ahead of its base | its report file exists |
+
+`vexillum dispatch` defaults to `--kind mission`. A scout writes its report to `~/.vexillum/projects/<repo>-<hash>/reports/<agent-name>-<task-id>.md`, outside the camp, so it survives `release`. Never use a scout for work that must change code.
+
+`--model` and `--effort` are passed straight to the `claude` CLI; vexillum only checks that Claude Code accepts the value. Choosing them is the commander's job, see [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
+
+## Task states
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | created, not started yet |
+| `running` | the soldier is working |
+| `blocked` | the soldier asked a question and is waiting; the question is in the task's `decision`. See [Blocked and interrupted](/docs/guides/blocked-and-interrupted) |
+| `done` | settled with proof of completion |
+| `failed` | settled unsuccessfully |
+| `interrupted` | vexillum lost the soldier itself (its herdr pane vanished), not necessarily because it failed; work already committed is still in the camp |
+| `unconfirmed` | the soldier went idle without proof of completion and without a valid declared pause, so vexillum cannot tell success from stuck; a human needs to look |
+| `shipped` | pushed through the tribunal pipeline and opened as a real pull request |
+
+`done` is never inferred from idleness alone. For a mission vexillum requires a new commit ahead of the camp's base; for a scout, the report file. A soldier that deliberately waits on a background job can declare a pause in `pauses/<agent-name>.md` so a quiet turn is not mistaken for completion.

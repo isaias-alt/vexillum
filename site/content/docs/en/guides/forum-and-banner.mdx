@@ -1,0 +1,39 @@
+---
+title: Forum and banner
+description: Review an HTML artifact in your browser, and publish one to a public URL.
+---
+
+Two commands let agents show you something richer than terminal text.
+
+## forum: review in your browser
+
+```bash
+vexillum forum plan.html
+```
+
+Serves an HTML file the agent wrote to your browser and carries your feedback back to it. One local server per user runs on `127.0.0.1` and stops itself when nothing is connected. You can chat, queue messages, fill in decision forms and annotate elements, then send it all to the agent. A Mermaid diagram becomes an editable whiteboard.
+
+On the agent's side:
+
+| Command | Does |
+| --- | --- |
+| `vexillum forum <file>` | opens or resumes the session and returns right away |
+| `vexillum forum poll <file>` | blocks until you send feedback; `--reply` shows an answer in the panel |
+| `vexillum forum end <file>` | ends the session |
+| `vexillum forum stop` | shuts the background server down |
+
+Sessions are identified by the file's absolute path. forum is built into the binary: no Node, no `npx`, no network.
+
+Install the agent's playbook with `npx skills add isaias-alt/vexillum --skill forum`.
+
+## banner: publish publicly
+
+```bash
+vexillum banner report.html
+```
+
+<Callout type="warn" title="This publishes to a third party">
+  `banner` inlines local assets into the HTML and POSTs it to a third-party hosting service (ht-ml.app by default). The page is public unless you pass `--private` or `--password`. It is your decision, per page, to publish.
+</Callout>
+
+It prints the page URL and an `update_key`, shown **once** and never stored by vexillum. It is the only credential that can update or unpublish the page; lose it and the page can never be changed. `--unpublish` replaces the page with a placeholder behind a discarded password, since there is no real delete. See the [`banner` reference](/docs/reference/cli/banner) for every flag and size cap.

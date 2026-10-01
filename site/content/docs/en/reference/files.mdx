@@ -1,0 +1,32 @@
+---
+title: Files
+description: Every file vexillum reads or writes, and where.
+---
+
+## In your project
+
+| Path | Written by | Purpose |
+| --- | --- | --- |
+| `.vexillum/config.json` | `init` | marks the project initialized; stores a content hash of the rules file so `upgrade` can tell whether you edited it |
+| `.claude/rules/vexillum.md` | `init` (once), `upgrade` | the commander rules; yours to edit. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules) |
+| `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook `vexillum sentinel await`; existing content is merged, never overwritten. Invalid JSON is left untouched and reported |
+
+Your own `AGENTS.md` and `CLAUDE.md` are never touched. These files are git-tracked, so commit them.
+
+## In `~/.vexillum`
+
+| Path | Purpose |
+| --- | --- |
+| `config.json` | only after `init --global` |
+| `sentinel.pid`, `sentinel.log` | the single per-machine sentinel |
+| `projects/<repo>-<hash>/tasks/<id>.json` | one task |
+| `projects/<repo>-<hash>/wakes/<id>.json` | a pending sentinel wake |
+| `projects/<repo>-<hash>/camps/` | the worktree pool: `pool.json` and `<slot>/<repo>/` |
+| `projects/<repo>-<hash>/reports/<agent>-<id>.md` | a scout's final report |
+| `projects/<repo>-<hash>/pauses/<agent>.md` | a soldier's declared pause |
+
+## Global
+
+With `init --global`, the rules go to `~/.claude/rules/vexillum.md` and apply to every Claude Code session on the machine.
+
+See [State](/docs/concepts/state) for how the project key is derived.

@@ -1,0 +1,53 @@
+---
+title: Architecture
+description: How the pieces fit together, and the decisions that are settled.
+---
+
+## The pieces
+
+```text
+ general ──► commander (Claude Code, rules in .claude/rules/vexillum.md)
+                │  vexillum dispatch
+                ▼
+         ┌── vexillum (Go binary) ──┐
+         │  camp pool   state/JSON  │         ┌─────────────┐
+         │  worktrees   wakes       │◄────────│  sentinel   │ polls every 5s
+         └──────┬───────────────────┘         └──────┬──────┘
+                │ herdr pane                         │ Stop hook
+                ▼                                    ▼
+         soldier (Claude Code) in a camp ───► commander is woken
+```
+
+## Layers
+
+vexillum is built in layers, each proven before the next:
+
+1. **CLI base** - `init` and `doctor`.
+2. **State on disk** - structs as JSON under `~/.vexillum`, written atomically.
+3. **One process** - a soldier in a camp.
+4. **Concurrency** - N soldiers, and the sentinel over herdr's socket API, safe across restarts.
+
+## Decisions that are settled
+
+- **Go**, shipped as a binary by Homebrew and curl, with no runtime dependencies.
+- **One harness**, Claude Code, with a seam left for another.
+- **herdr is the primary backend; tmux stays as the control backend.**
+- **Intelligence is markdown, not Go.** The binary does deterministic plumbing; routing and judgment live in the rules file.
+- **Domain vocabulary stays in English** - commander, soldier, mission, scout, camp, sentinel - in every language.
+- **No second commander** in this version.
+
+## Safety model
+
+| Layer | Guarantee |
+| --- | --- |
+| camp | commits and working tree are isolated from yours |
+| `land` | fast-forward only; refuses a dirty checkout or a diverged branch; never forces |
+| `release` | refuses while the camp has uncommitted or unlanded work |
+| `ship` | pushes only after every tribunal step passes, deterministically |
+| `redispatch` | the only operation that discards a camp, so the commander asks first |
+
+The process itself is not sandboxed. See the [warning on the introduction](/docs).
+
+## Contributing
+
+The source, issue tracker and CONTRIBUTING guide are on [GitHub](https://github.com/isaias-alt/vexillum). The command reference is generated from the registry in `internal/cli`, so it cannot drift from the binary.

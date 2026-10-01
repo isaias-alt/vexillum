@@ -1,0 +1,40 @@
+---
+title: Blocked and interrupted
+description: What to do when a soldier asks a question, or disappears.
+---
+
+## Blocked: the soldier asked something
+
+A soldier that stops to ask you a question settles as `blocked`. The question is stored as a structured `decision` on the task (question, options if it offered any, and when it was asked) and the commander is woken.
+
+```bash
+vexillum status
+vexillum decide <task-id> "Use the existing helper"
+```
+
+`decide` delivers your answer to the soldier's still-open pane and records it against the decision. If the question came from Claude Code's question selector, pass an option's exact text or its 1-based number; it is delivered as a single key press, as if you had picked it. The task returns to `running`, or settles again if the soldier finishes or asks another question right away.
+
+Only a `blocked` task can be answered. If its pane is actually gone, `decide` marks it `interrupted` and refuses.
+
+## Interrupted: the soldier vanished
+
+`interrupted` means vexillum lost the soldier itself - its pane was closed, or herdr restarted - while it was still working. It does not mean the soldier failed. Before doing anything else, look inside its camp:
+
+```bash
+git -C <camp path> log --oneline
+git -C <camp path> status
+```
+
+Work it already committed is still there. If it matters, land it first with `vexillum land <task-id>`.
+
+Then, only if you want the task redone:
+
+```bash
+vexillum redispatch <task-id>
+```
+
+This is re-dispatch, **not resumption**. It discards the old camp - uncommitted changes and unlanded commits included - creates a fresh one and relaunches the original prompt. Nothing of the dead soldier's partial work or session is recovered. Because it is destructive, the commander tells you what it found in the camp and asks before running it. Only `interrupted` tasks can be re-dispatched. If the soldier had a browser open, redispatch stops that orphaned browser too.
+
+## Unconfirmed: idle without proof
+
+`unconfirmed` means the soldier went idle with no commit ahead of its base (or no report, for a scout) and no valid declared pause. The pane is still there, so look at the camp or the pane yourself.

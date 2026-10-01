@@ -4,8 +4,16 @@
 // It is a dev-only tool, like tools/whiteboard-bundle: run it by hand when a
 // command changes, never as part of the installed binary. It writes:
 //
-//   - site/content/docs/reference/cli/<command>.mdx, one page per command
-//     (usage verbatim in a code block), plus an index.mdx, and
+//   - site/content/docs/en/reference/cli/<command>.mdx, one page per command
+//     (usage verbatim in a code block), plus an index.mdx and a meta.json
+//     that keeps the pages in registry order,
+//   - site/content/docs/es/reference/cli/index.mdx and meta.json: the
+//     Spanish tree gets only the index. A command's usage is the binary's
+//     own English output, so the Spanish site reuses the English command
+//     pages (the docs loader falls back to English for a page a locale
+//     does not have) and this index links to them under /es/docs. Nothing
+//     else in the Spanish tree is generated or ever removed, so a command
+//     page translated by hand there is safe, and
 //   - the command table in README.md, between the docgen:commands markers.
 //
 // Usage, from the repository root:
@@ -30,8 +38,9 @@ import (
 )
 
 const (
-	referenceDir = "site/content/docs/reference/cli"
-	readmePath   = "README.md"
+	referenceDir   = "site/content/docs/en/reference/cli"
+	referenceDirES = "site/content/docs/es/reference/cli"
+	readmePath     = "README.md"
 
 	readmeStart = "<!-- docgen:commands:start -->"
 	readmeEnd   = "<!-- docgen:commands:end -->"
@@ -57,7 +66,10 @@ func generate(root string) (map[string]string, error) {
 	for _, c := range cmds {
 		files[referenceDir+"/"+c.Name+".mdx"] = commandPage(c)
 	}
-	files[referenceDir+"/index.mdx"] = indexPage(cmds)
+	files[referenceDir+"/index.mdx"] = indexPage(cmds, localeEN)
+	files[referenceDir+"/meta.json"] = metaFile(cmds)
+	files[referenceDirES+"/index.mdx"] = indexPage(cmds, localeES)
+	files[referenceDirES+"/meta.json"] = metaFile(cmds)
 
 	readme, err := os.ReadFile(filepath.Join(root, readmePath))
 	if err != nil {
@@ -74,8 +86,8 @@ func generate(root string) (map[string]string, error) {
 // write generates everything in memory first, so a generation error leaves
 // the tree untouched, then writes each file atomically (temp + rename) and
 // finally removes stale pages. Stale cleanup covers only what the generator
-// owns: .mdx files directly inside referenceDir. Nothing else under site/
-// is ever deleted.
+// owns: .mdx files directly inside referenceDir (the English tree).
+// Nothing else under site/ is ever deleted, the Spanish tree included.
 func write(root string) error {
 	files, err := generate(root)
 	if err != nil {
@@ -144,20 +156,57 @@ func commandPage(c cli.Command) string {
 	return b.String()
 }
 
-func indexPage(cmds []cli.Command) string {
+// locale holds the few strings, and the URL prefix, that differ between the
+// generated index pages. The command summaries and usage are the binary's
+// own English text in every locale.
+type locale struct {
+	urlPrefix, title, description, intro, commandHeader, descriptionHeader string
+}
+
+var (
+	localeEN = locale{
+		urlPrefix:         "/docs",
+		title:             "CLI reference",
+		description:       "Every vexillum command, with its full usage.",
+		intro:             "Run `vexillum --help` for this list, or `vexillum <command> -h` for a single command.",
+		commandHeader:     "Command",
+		descriptionHeader: "Description",
+	}
+	localeES = locale{
+		urlPrefix:   "/es/docs",
+		title:       "Referencia del CLI",
+		description: "Todos los comandos de vexillum, con su uso completo.",
+		intro: "Esta referencia se genera desde el binario y se mantiene en inglés: cada página es la salida literal de `vexillum <command> -h`. " +
+			"Ejecutá `vexillum --help` para esta lista, o `vexillum <command> -h` para un solo comando.",
+		commandHeader:     "Comando",
+		descriptionHeader: "Descripción",
+	}
+)
+
+func indexPage(cmds []cli.Command, l locale) string {
 	var b strings.Builder
 	b.WriteString("---\n")
-	b.WriteString("title: \"CLI reference\"\n")
-	b.WriteString("description: \"Every vexillum command, with its full usage.\"\n")
+	fmt.Fprintf(&b, "title: %s\n", yamlString(l.title))
+	fmt.Fprintf(&b, "description: %s\n", yamlString(l.description))
 	b.WriteString("---\n\n")
 	b.WriteString(generatedNotice + "\n\n")
-	b.WriteString("Run `vexillum --help` for this list, or `vexillum <command> -h` for a single command.\n\n")
-	b.WriteString("| Command | Description |\n| --- | --- |\n")
+	b.WriteString(l.intro + "\n\n")
+	fmt.Fprintf(&b, "| %s | %s |\n| --- | --- |\n", l.commandHeader, l.descriptionHeader)
 	for _, c := range cmds {
-		fmt.Fprintf(&b, "| [`vexillum %s`](/docs/reference/cli/%s) | %s |\n",
-			c.Name, c.Name, escapeMDX(c.Summary))
+		fmt.Fprintf(&b, "| [`vexillum %s`](%s/reference/cli/%s) | %s |\n",
+			c.Name, l.urlPrefix, c.Name, escapeMDX(c.Summary))
 	}
 	return b.String()
+}
+
+// metaFile is the Fumadocs folder metadata: it keeps the sidebar in
+// registry order (the index first) instead of alphabetical.
+func metaFile(cmds []cli.Command) string {
+	pages := []string{strconv.Quote("index")}
+	for _, c := range cmds {
+		pages = append(pages, strconv.Quote(c.Name))
+	}
+	return "{\n  \"title\": \"CLI\",\n  \"pages\": [" + strings.Join(pages, ", ") + "]\n}\n"
 }
 
 func commandTable(cmds []cli.Command) string {
