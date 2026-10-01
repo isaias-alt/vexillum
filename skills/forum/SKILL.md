@@ -107,11 +107,15 @@ prompts[<n>]:
     selector: <css selector>      (omitted when empty)
     text: <element text or label> (omitted when empty)
     target: <compact JSON>        (omitted when empty)
+    attachments[<n>]:             (omitted when the user attached no images)
+      - path: <absolute local path of an image>
+        type: image/png | image/jpeg | image/gif | image/webp
+        bytes: <size>
 next_step: <what to do now>
 ```
 
 `tag`, `selector` and `text` are how an **annotation** arrives; see
-"Annotations" below.
+"Annotations" below. `attachments` is how **images** arrive; see "Images".
 
 - A multi-line value is written as `key: |` followed by its lines indented two
   spaces deeper than the key. Everything else is `key: value` on one line.
@@ -129,9 +133,10 @@ next_step: <what to do now>
   do neither on your own, and do not tight-loop on this status.
 - `status: timeout` - only with `--timeout`; poll again.
 - Common `tag` values: `message` (typed in the composer), `feedback` (default
-  for `queuePrompt`), `whiteboard` (see below), `text` (an annotated text
-  selection), an HTML tag name such as `button` or `p` (an annotated element),
-  plus whatever tag your artifact passes.
+  for `queuePrompt`), `whiteboard` (see below), `layout-warnings` (layout
+  issues the user chose to send, see "Layout issues"), `text` (an annotated
+  text selection), an HTML tag name such as `button` or `p` (an annotated
+  element), plus whatever tag your artifact passes.
 
 If the server went away (stopped, crashed, idle), `poll` restarts it and keeps
 waiting; everything queued is on disk.
@@ -144,6 +149,103 @@ messages, **Send to Agent** and **Send & End**, and an indicator of whether
 your agent is listening. When no poll is running the panel tells the user:
 "Your agent is not listening. Ask it to poll for updates." - so keep a poll
 running whenever the session is open.
+
+**Several tabs.** The same session can be open in more than one browser tab or
+window; every tab shows the same queue, transcript, listening state and end
+state, live, and any of them can send. You need do nothing: there is still one
+session and one poll. A tab whose connection drops reconnects by itself, and
+nothing the user queued or sent is ever lost, because it is all on disk.
+
+**The transcript is bounded.** The conversation panel keeps the newest 500
+messages and at most 5 MB of transcript per session; older ones scroll off for
+good (and their images are freed once nothing references them). This never
+costs you feedback: a prompt the user sent is delivered by `poll` from its own
+outbox no matter what the transcript has evicted, and a prompt still waiting in
+the queue is untouched. If you reply with very large markdown, expect it to
+push older messages out sooner; prefer `--reply` summaries over dumps.
+
+## When the session ends
+
+When the session ends (the user pressed **Send & End**, or you ran
+`vexillum forum end`) the browser shows a **Session ended** dialog that cannot
+be dismissed: it says who ended it, shows the artifact's absolute path with a
+**Copy path** button, and tells the user they can close the tab. Everything
+behind it is inert, so nothing typed afterwards can reach you. What you do:
+
+- On `status: ended` from `poll`: apply the final prompts (if any), then
+  **stop polling**. Do not reopen the session on your own, and do not run
+  `vexillum forum <file> --reopen` unless the user asks for further review.
+- When the user asks you to review again, reopen it (`vexillum forum <file>
+  --reopen`); the dialog goes away in their open tab by itself and the queue and
+  transcript are still there.
+- If you ended it yourself, say so in your final message so the user is not
+  surprised by the dialog, and give them the path to the artifact.
+
+## Images
+
+The user can **attach images** to a message: paste a screenshot into the
+composer, drop image files onto the panel, or press **Attach image** (PNG,
+JPEG, GIF or WebP; up to 10 MB each and 4 per message, 256 MB per session).
+They are shown as thumbnails in the queue and the conversation and stored
+under `~/.vexillum/forums/<key>/attachments/`.
+
+They reach you in the `poll` output as **absolute local file paths** in the
+prompt's `attachments`:
+
+```
+  - uid: pr_...
+    tag: message
+    prompt: The header looks wrong, see the screenshot
+    attachments[1]:
+      - path: /Users/me/.vexillum/forums/<key>/attachments/at_3f9c....png
+        type: image/png
+        bytes: 48211
+```
+
+Read each image from its `path` with your file-reading tool (it can open
+images) **before acting**; do not guess from the text alone. A message that is
+only images arrives with the prompt `(see the attached image)`. The file stays
+on disk while the session exists and a prompt or the transcript refers to it;
+copy it elsewhere if you need it longer. An artifact cannot attach images
+itself: `queuePrompt` has no image option, and annotations carry none.
+
+## Layout issues
+
+While the artifact is open, the browser passively audits it for **severe,
+provable layout failures**: text cut off by its container, a control the user
+cannot reach, text almost entirely covered by another element, content that
+makes the page scroll sideways. Hidden elements, deliberate ellipsis or
+line-clamp truncation, intentional scrollers, masked and screen-reader-only
+content and anything mid-animation are ignored, and a finding must show up in
+two samples a moment apart. What it finds goes to a **Layout issues** tray in
+the top bar (with a count) and **nowhere else**:
+
+- It **never wakes you** and **never appears in `poll`**. Do not go looking for
+  layout problems the user has not sent you, and never edit the artifact to
+  chase one on your own initiative.
+- Only if the user opens the tray, selects issues and presses **Queue selected
+  fixes** (then Send to Agent) do they arrive, as an ordinary prompt:
+
+```
+  - uid: pr_...
+    tag: layout-warnings
+    prompt: |
+      Fix these 2 layout issues the browser detected in this artifact:
+      1. [42eb3759445106dc] Text cut off by its container - Rendered text crosses its container's right edge by 550px and is hidden. Target: div#bad-clip. Viewport: Desktop (1106px). Status: Open.
+      2. ...
+      Apply every listed fix in one pass before saving ...
+    text: Layout issues: 2 selected
+    target: {"type":"layout-warnings","warnings":[{"id":"...","rule":"clipped-text","selector":"div#bad-clip","axis":"horizontal","overflow_px":549.9,"viewport_class":"desktop","viewport_width":1106}]}
+```
+
+Apply every listed fix in **one** edit, then `--reply` saying what changed. A
+queued issue is a request, not a resolved issue: it is marked resolved only
+after the browser reloads the edited artifact and a complete audit no longer
+finds it, and it comes back as "Still present" if your fix did not work (the
+user may queue it again). Issues are per viewport width class (mobile up to 640
+px, compact up to 1024 px, desktop above): fixing the desktop layout does not
+clear a phone-width issue. The audit only sees what the user's window shows, so
+check dark and light and a narrow width yourself.
 
 ## Browser API inside the artifact: `window.forum`
 
@@ -217,8 +319,10 @@ with up to 2000 characters of it. The selector prefers a unique `id`, then
 to find the element in your source (`querySelector` semantics), and the
 `text` to find it by content when the markup is generated. Stable
 `id`/`data-testid` attributes in your artifact make annotations land exactly.
-Reply with `--reply` as usual: say what you changed and where. Annotations
-never carry images or layout diagnostics.
+Reply with `--reply` as usual: say what you changed and where. An annotation
+carries only the note and what it is about; images are attached to a composer
+message (see "Images") and layout issues arrive only when the user queues them
+(see "Layout issues").
 
 ## Decision forms
 

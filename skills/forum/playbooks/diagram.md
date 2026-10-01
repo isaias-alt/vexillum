@@ -44,6 +44,7 @@ Use when: explain relationships, flows, state, architecture, and concepts with i
 
 - Make modules, edges and captions easy to discuss: when a relationship is uncertain, label it as a question and add a small decision form so the user can resolve it (input playbook).
 - A whiteboard's edits arrive as a `tag: whiteboard` prompt with a bounded summary and two file paths: read the summary, then update the Mermaid source in the artifact.
+- The browser audits the page for layout failures (text clipped by a fixed-width `overflow: hidden` box, controls pushed past the viewport, text covered by an opaque sibling, a page that scrolls sideways) and shows them to the user, who may send them to you as a `layout-warnings` prompt. Avoid them up front: let text wrap, keep fixed widths off containers that clip, and check a narrow width.
 
 ## Styles (forum-artifact.css)
 

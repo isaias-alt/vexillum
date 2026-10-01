@@ -37,6 +37,7 @@ Use when: show options, tradeoffs, and current vs target behavior.
 
 - If the goal is selection, give each option a native radio in one `<form data-forum-question="...">` plus a field for the rationale, and queue the chosen option with its rationale once, on submit (input playbook).
 - A re-submission replaces the previous unsent answer thanks to the question key.
+- The browser audits the page for layout failures (text clipped by a fixed-width `overflow: hidden` box, controls pushed past the viewport, text covered by an opaque sibling, a page that scrolls sideways) and shows them to the user, who may send them to you as a `layout-warnings` prompt. Avoid them up front: let text wrap, keep fixed widths off containers that clip, and check a narrow width.
 
 ## Styles (forum-artifact.css)
 

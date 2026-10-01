@@ -36,6 +36,7 @@ Use when: explain a product or technical plan before implementation.
 
 - Make the plan and its uncertainties easy to react to: the user can write messages in the panel and answer your open questions through decision forms (see the input playbook), then press Send to Agent.
 - After each round of feedback, edit the artifact (the browser reloads it) and `--reply` with what changed.
+- The browser audits the page for layout failures (text clipped by a fixed-width `overflow: hidden` box, controls pushed past the viewport, text covered by an opaque sibling, a page that scrolls sideways) and shows them to the user, who may send them to you as a `layout-warnings` prompt. Avoid them up front: let text wrap, keep fixed widths off containers that clip, and check a narrow width.
 
 ## Styles (forum-artifact.css)
 

@@ -36,6 +36,7 @@ Use when: turn dense records into scan-friendly review surfaces.
 
 - If a row implies a follow-up change, give it an action control that queues a specific prompt: `window.forum.queuePrompt('Rename foo to bar in src/a.go', { tag: 'row-action', text: 'foo', selector: '#row-12', target: { row: 12 } })`. `target` and `selector` tell you exactly which row the prompt is about.
 - When one action covers several rows and completeness matters, use the tracked batch pattern from the input playbook so the user submits one explicit set of IDs and you account for each of them.
+- The browser audits the page for layout failures (text clipped by a fixed-width `overflow: hidden` box, controls pushed past the viewport, text covered by an opaque sibling, a page that scrolls sideways) and shows them to the user, who may send them to you as a `layout-warnings` prompt. Avoid them up front: let text wrap, keep fixed widths off containers that clip, and check a narrow width.
 
 ## Styles (forum-artifact.css)
 

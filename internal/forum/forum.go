@@ -10,8 +10,13 @@
 // replies back into the browser. Annotation capture lives in the artifact
 // script (assets/chrome/forum-sdk.js) and its note card in the chrome
 // (forum-chrome.js); everything reaches the queue through the same
-// same-origin, session-token API. Attachments, multi-tab sync and layout
-// diagnostics are not implemented.
+// same-origin, session-token API. Images pasted or dropped into the
+// conversation are stored per session and reach the agent as local file paths
+// (attachments.go); every open tab of a session stays in step over a
+// server-sent-events feed (server_browser.go); the transcript is bounded (500
+// messages, 5 MB) without ever dropping anything not yet delivered (hub.go);
+// and the browser's passive layout audit fills a per-session inbox the user
+// triages, which only becomes a prompt when the user queues it (layout.go).
 package forum
 
 import (

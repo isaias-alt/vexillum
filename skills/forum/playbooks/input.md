@@ -34,6 +34,11 @@ Use when: you need to collect user input on decisions, choices, preferences, tri
 - Call `window.forum.sendQueuedPrompts()` only when a control should immediately send committed feedback instead of waiting for the user to press Send to Agent.
 - Make queued prompts specific enough to act on without a follow-up question. Keep controls accessible and readable on mobile.
 
+## Images
+
+- The user can attach screenshots to their own messages (paste, drop, **Attach image**); your artifact cannot, and `window.forum.queuePrompt` has no image option. When the answer you need is "show me", ask for it in the artifact's text ("paste a screenshot of the broken state into the conversation") instead of building an upload control.
+- Images arrive in `poll` as local `attachments[].path`: open them before acting on the message.
+
 ## Pitfalls
 
 - Do not queue one prompt per radio change, checkbox toggle, dropdown change or choice-button click while the user can still change their mind.

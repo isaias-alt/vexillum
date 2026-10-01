@@ -52,6 +52,25 @@ a plain click.
 Buttons never wrap their label (`white-space: nowrap`); when the panel is too
 narrow it is the hint text or the button row that wraps, not a label.
 
+## Tray, attachments and the ended dialog
+
+The design system's reserved components are used as named, re-expressed over
+the chrome's own selectors in `forum.css` with `--fr-*` tokens only:
+
+- **Layout issues**: a top-bar button (the `.switch` pill with a count) opens a
+  tray of `.fr-notice-item`s in a `.fr-notice-tray`, one per issue (checkbox,
+  `.fr-notice-item-icon`, title, explanation, selector, viewport, Dismiss). Open
+  issues use the danger pair, a queued one the accent pair, a resolved one the
+  quiet border. The tray is detection-only: nothing in it reaches the agent
+  until the user queues the selection.
+- **Attachments**: `.fr-attachments-tray` and `.fr-attachment-chip` under the
+  composer, thumbnails (`.thumb`) in the queue and the transcript.
+- **Session ended**: a modal `.fr-dialog` with no way out.
+- **Disabled** is one look for every button variant (`.btn`, `.btn-primary`,
+  `.btn-danger`): sunken surface, muted text, one opacity. The textarea and
+  the attach link use the same opacity, so a finished session greys the whole
+  composer equally.
+
 ## Artifact content
 
 `vexillum forum` links `forum-tokens.css` and `forum-artifact.css` ahead of an

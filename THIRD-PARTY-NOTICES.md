@@ -100,6 +100,14 @@ copyright notice as above):
   semantics (`feedback`, `ended`, `browser_disconnected`, user-ended sessions
   needing `--reopen`) follow `src/server.js` and `src/session-store.js`,
   reimplemented in Go.
+- `internal/forum/assets/chrome/forum-layout.js`: the passive layout audit
+  (the severe-failure classifiers and the audit passes) of
+  `src/artifact-sdk.js`, and `internal/forum/layout.go`: the warning
+  lifecycle of `src/layout-warnings.js` (a warning is cleared only by a newer
+  load plus a complete pass), reimplemented in Go.
+- `internal/forum/attachments.go` and `internal/forum/hub.go`: the attachment
+  size, count and disk limits of `src/attachment-store.js`, the transcript cap
+  of `src/chat-messages.js` and the SSE live feed of `src/server.js`.
 - `skills/forum/playbooks/*.md` (plan, comparison, input, diagram, table):
   rewritten for `window.forum` and the `vexillum forum` commands from
   `src/playbooks.js`.
