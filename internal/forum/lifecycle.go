@@ -55,6 +55,7 @@ type RunOptions struct {
 const (
 	defaultIdleTimeout   = 5 * time.Minute
 	defaultCheckInterval = time.Second
+	respawnAfter         = 1500 * time.Millisecond
 )
 
 // Run starts the one forum server for opts.Home and blocks until ctx is
@@ -237,12 +238,24 @@ func EnsureServer(ctx context.Context, home string, spawn func() error, wait tim
 		return nil, fmt.Errorf("starting forum server: %w", err)
 	}
 	deadline := time.Now().Add(wait)
+	nextSpawn := time.Now().Add(respawnAfter)
 	for {
 		if c, err := Discover(home); err == nil {
 			return c, nil
 		}
-		if time.Now().After(deadline) {
+		now := time.Now()
+		if now.After(deadline) {
 			return nil, fmt.Errorf("forum server did not come up within %s (see %s)", wait, LogPath(home))
+		}
+		// A server that was shutting down at the instant ours started still
+		// held the lock, so ours exited as "already running" and then the
+		// old one went away. Spawning again is harmless (the lock admits
+		// only one) and closes that window.
+		if now.After(nextSpawn) {
+			if err := spawn(); err != nil {
+				return nil, fmt.Errorf("starting forum server: %w", err)
+			}
+			nextSpawn = now.Add(respawnAfter)
 		}
 		select {
 		case <-ctx.Done():

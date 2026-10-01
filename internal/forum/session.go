@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -129,13 +130,24 @@ func clip(s string, max int) string {
 	return s
 }
 
+// errBadPrompt marks a prompt the server refuses as malformed (a client
+// error, unlike the hub's state errors).
+type errBadPrompt struct{ reason string }
+
+func (e *errBadPrompt) Error() string { return e.reason }
+
+func isBadPrompt(err error) bool {
+	var bad *errBadPrompt
+	return errors.As(err, &bad)
+}
+
 // normalizePrompt validates and bounds in, returning the prompt to store
 // (without uid/queued_at, which the hub assigns). An empty prompt is an
 // error; an unusable tag falls back to the default instead of failing.
 func normalizePrompt(in PromptInput) (Prompt, error) {
 	text := strings.TrimSpace(in.Prompt)
 	if text == "" {
-		return Prompt{}, fmt.Errorf("prompt is empty")
+		return Prompt{}, &errBadPrompt{reason: "prompt is empty"}
 	}
 	tag := strings.TrimSpace(in.Tag)
 	if tag == "" || len(tag) > maxTagChars || !tagPattern.MatchString(tag) {

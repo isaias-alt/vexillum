@@ -269,8 +269,7 @@ func TestRun_StaysAliveWhileABrowserIsConnected(t *testing.T) {
 
 func TestRun_StopRouteShutsDownAndPendingSurvivesRestart(t *testing.T) {
 	home := t.TempDir()
-	st, _ := startServer(t, home, forum.RunOptions{})
-	_ = st
+	st, stopFirst := startServer(t, home, forum.RunOptions{})
 	client, err := forum.Discover(home)
 	if err != nil {
 		t.Fatal(err)
@@ -285,15 +284,12 @@ func TestRun_StopRouteShutsDownAndPendingSurvivesRestart(t *testing.T) {
 	if err := client.Stop(ctx); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, err := forum.Discover(home); errors.Is(err, forum.ErrNoServer) {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("server still discoverable after stop")
-		}
-		time.Sleep(20 * time.Millisecond)
+	// Stop makes Run return on its own; stopFirst just waits for that.
+	if err := stopFirst(); err != nil {
+		t.Fatalf("first server: %v", err)
+	}
+	if _, err := forum.Discover(home); !errors.Is(err, forum.ErrNoServer) {
+		t.Fatalf("server still discoverable after stop: %v", err)
 	}
 
 	// A new server resumes the same session from disk, reusing the port.

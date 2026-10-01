@@ -77,6 +77,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/agent/reply", s.agentOnly(s.handleAgentReply))
 	s.mux.HandleFunc("POST /api/agent/end", s.agentOnly(s.handleAgentEnd))
 	s.mux.HandleFunc("POST /api/agent/stop", s.agentOnly(s.handleAgentStop))
+	s.browserRoutes()
 }
 
 // SessionURL is the page the reviewer opens for key.
