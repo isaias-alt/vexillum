@@ -1,6 +1,6 @@
 ---
 name: muster
-description: Snapshot vexillum's fleet of missions and scouts for this project into a categorized digest (needs attention, awaiting land approval, in flight, finished, shipped), opened as an interactive board. Use /muster for the full fleet, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
+description: Snapshot vexillum's fleet of missions and scouts for this project into a categorized digest (needs attention, awaiting land approval, in flight, finished, shipped), opened as a board in the browser with vexillum forum. Use /muster for the full fleet, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
 license: MIT
 metadata:
   argument-hint: "[pr|sitrep]"
@@ -121,18 +121,40 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    on the board (in that PR state's own group) - don't silently drop it. If
    `gh` isn't installed, say so once, and fall back to plain fleet mode
    instead of refusing outright.
-4. Build the digest as an HTML board (grouped by the sections above; each
-   task shows at least its id, kind, status or live PR state, prompt, and
-   camp branch). Before writing it, get current guidance from the `forum`
-   skill the way its own file says to - don't assume this file's own idea of
-   forum's workflow is still accurate:
-   ```
-   npx -y forum-tool --help
-   npx -y forum-tool design
-   ```
-   Then render the HTML and open it with `npx -y forum-tool <file>`. Both
-   fleet mode and pr mode always reach this step - there's no "board-less"
-   variant of either.
+4. Build the digest as a self-contained HTML board (grouped by the sections
+   above; each task shows at least its id, kind, status or live PR state,
+   prompt, and camp branch), rendered and kept alive with `vexillum forum`.
+   Read the `forum` skill (`skills/forum/SKILL.md`) first - don't assume this
+   file's idea of forum's workflow is still accurate. For the board:
+   - Write one HTML file, by default `.forum/muster.html` in the project root
+     (`.forum/` is gitignored). No CDN, no Tailwind, no daisyUI, no `<style>`
+     block and no `<link rel="stylesheet">`: any of those switches forum's own
+     styles off. Use plain semantic HTML plus forum's `fr-*` classes so forum
+     gives the board its identity: `fr-page fr-stack` for the page, one
+     `<section>` per heading with `fr-stat` counts, `fr-card` per task (use
+     `fr-card--accent` for **Needs attention**), `fr-badge` for kind and
+     status (`--danger` blocked/failed/interrupted, `--bronze` needs rebase,
+     `--success` ready to land / merged, `--accent` running), `fr-callout` for
+     a blocked task's `decision.question`, `fr-table-wrap` around any table.
+     Never raw hex; use `--fr-*` tokens through `style="..."` attributes if a
+     tweak is unavoidable.
+   - Open it with `vexillum forum .forum/muster.html` (add `--no-open` if the
+     general is already looking at the browser). It returns at once.
+   - Both fleet mode and pr mode always reach this step - there's no
+     "board-less" variant of either.
+   - Then keep the standard forum loop going: tell the general the board is
+     open, and run `vexillum forum poll .forum/muster.html` in the foreground
+     (never `&`/`nohup`, never leave a poll hanging when nothing is waiting on
+     it). Answer questions the general sends with `--reply`; if they ask for a
+     change to the board, edit the file (the browser reloads by itself) and
+     poll again. On `status: ended`, stop polling. When you're done and the
+     session is still open, close it with `vexillum forum end
+     .forum/muster.html`. The board is a read-only snapshot, so if the fleet
+     changes while it's open, rewrite the file from a fresh `vexillum status
+     --json` rather than patching it by hand.
+   - Feedback on the board (annotations, messages) is conversation, not
+     commands: never turn it into a `land`, `release` or `redispatch` on your
+     own. See "Scope".
 
 ### Sitrep mode - terminal/chat only, never opens a board
 
@@ -156,7 +178,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 ## Scope
 
 This is Phase A: a read-only board. Do not add a click-to-act path (e.g.
-routing a board click to `vexillum land <task-id>`) on your own judgment even
-if it looks easy - that was left as an explicit open question for the
+a board button that runs, or queues a prompt that runs, `vexillum land
+<task-id>`) on your own judgment even if it looks easy - that was left as an explicit open question for the
 general to decide, not something to resolve unilaterally from inside this
 skill.
