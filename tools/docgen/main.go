@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/isaias-alt/vexillum/internal/atomicfile"
 	"github.com/isaias-alt/vexillum/internal/cli"
 )
 
@@ -70,10 +71,17 @@ func generate(root string) (map[string]string, error) {
 	return files, nil
 }
 
-// write generates everything and writes it under root, removing any stale
-// page for a command that no longer exists.
+// write generates everything in memory first, so a generation error leaves
+// the tree untouched, then writes each file atomically (temp + rename) and
+// finally removes stale pages. Stale cleanup covers only what the generator
+// owns: .mdx files directly inside referenceDir. Nothing else under site/
+// is ever deleted.
 func write(root string) error {
 	files, err := generate(root)
+	if err != nil {
+		return err
+	}
+	stale, err := staleFiles(root, files)
 	if err != nil {
 		return err
 	}
@@ -83,14 +91,9 @@ func write(root string) error {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("create directory for %s: %w", rel, err)
 		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		if err := atomicfile.Write(path, []byte(content)); err != nil {
 			return fmt.Errorf("write %s: %w", rel, err)
 		}
-	}
-
-	stale, err := staleFiles(root, files)
-	if err != nil {
-		return err
 	}
 	for _, rel := range stale {
 		if err := os.Remove(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
@@ -100,8 +103,8 @@ func write(root string) error {
 	return nil
 }
 
-// staleFiles lists .mdx files in the reference directory that the
-// generator no longer produces.
+// staleFiles lists the .mdx files directly in referenceDir (the only files
+// the generator owns there) that it no longer produces.
 func staleFiles(root string, files map[string]string) ([]string, error) {
 	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(referenceDir)))
 	if err != nil {
@@ -112,6 +115,9 @@ func staleFiles(root string, files map[string]string) ([]string, error) {
 	}
 	var stale []string
 	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
 		rel := referenceDir + "/" + e.Name()
 		if _, ok := files[rel]; !ok && strings.HasSuffix(e.Name(), ".mdx") {
 			stale = append(stale, rel)

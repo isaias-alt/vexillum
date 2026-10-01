@@ -76,6 +76,52 @@ func TestWriteIsIdempotentAndRemovesStalePages(t *testing.T) {
 	}
 }
 
+func TestWriteFailureLeavesTreeUntouched(t *testing.T) {
+	root := t.TempDir()
+	// A README without markers makes generation fail.
+	if err := os.WriteFile(filepath.Join(root, readmePath), []byte("no markers"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stalePath := filepath.Join(root, filepath.FromSlash(referenceDir), "gone.mdx")
+	if err := os.MkdirAll(filepath.Dir(stalePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stalePath, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := write(root); err == nil {
+		t.Fatal("want an error for a README without markers")
+	}
+	entries, err := os.ReadDir(filepath.Dir(stalePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "gone.mdx" {
+		t.Errorf("tree was modified despite the failure: %v", entries)
+	}
+}
+
+func TestStaleCleanupOnlyTouchesOwnedMDX(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, filepath.FromSlash(referenceDir))
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"notes.md", "gone.mdx"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stale, err := staleFiles(root, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 1 || stale[0] != referenceDir+"/gone.mdx" {
+		t.Errorf("stale = %v, want only gone.mdx", stale)
+	}
+}
+
 func TestSpliceReadmeRequiresMarkers(t *testing.T) {
 	if _, err := spliceReadme("no markers", "t"); err == nil {
 		t.Error("want an error when markers are missing")
