@@ -38,7 +38,7 @@ changelog:
       - "^docs:"
 
 brews:
-  - name: vx
+  - name: vexillum
     repository:
       owner: isaias-alt
       name: homebrew-tap
