@@ -112,6 +112,83 @@ func TestReprompt_AcceptsUnconfirmed(t *testing.T) {
 	}
 }
 
+// A shipped soldier waits open until its PR merges, so follow-up work is a
+// prompt away: the task goes running with the text recorded as an amendment,
+// and when the soldier settles it is done again, not shipped, with exactly one
+// wake for that transition.
+func TestReprompt_ShippedTaskGoesRunningThenDoneWithOneWake(t *testing.T) {
+	project, home, projectRoot, task := repromptFixture(t, state.StatusShipped, true)
+
+	client := &fakeHerdr{promptStatus: "done", promptErr: &herdr.APIError{Code: "timeout", Message: "still working"}}
+	var out, errOut bytes.Buffer
+	if code := runReprompt(project, home, task.ID, "address the review comments", client, &out, &errOut); code != 0 {
+		t.Fatalf("expected success, got %d: %s%s", code, out.String(), errOut.String())
+	}
+	if len(client.promptCalls) != 1 || client.promptCalls[0] != "address the review comments" {
+		t.Errorf("expected the text delivered verbatim, got %v", client.promptCalls)
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Fatalf("expected the shipped task running, got %s", got.Status)
+	}
+	if len(got.Amendments) != 1 || got.Amendments[0].Text != "address the review comments" || got.Amendments[0].Source != state.AmendmentSourcePrompt {
+		t.Fatalf("expected the prompt recorded as an amendment, got %+v", got.Amendments)
+	}
+
+	// Past the grace period the soldier is seen settled: running -> done,
+	// one wake, and no wake for anything else on later ticks.
+	got.UpdatedAt = time.Now().Add(-time.Minute)
+	if err := state.Save(projectRoot, got); err != nil {
+		t.Fatal(err)
+	}
+	for i, wantWoke := range []int{1, 0} {
+		woke, err := sentinel.Tick(home, client)
+		if err != nil || woke != wantWoke {
+			t.Fatalf("tick %d: expected woke=%d, got woke=%d err=%v", i+1, wantWoke, woke, err)
+		}
+	}
+	wakes, err := sentinel.Drain(projectRoot)
+	if err != nil || len(wakes) != 1 || wakes[0].OldStatus != state.StatusRunning || wakes[0].NewStatus != state.StatusDone {
+		t.Fatalf("expected one running -> done wake, got %+v err=%v", wakes, err)
+	}
+	settled, _ := state.Load(projectRoot, task.ID)
+	if settled.Status != state.StatusDone {
+		t.Errorf("expected done after the follow-up (not shipped: the PR lacks the new commits), got %s", settled.Status)
+	}
+}
+
+func TestReprompt_ShippedTaskFastSettleIsDone(t *testing.T) {
+	project, home, projectRoot, task := repromptFixture(t, state.StatusShipped, true)
+
+	client := &fakeHerdr{promptStatus: "done", readOutput: "all done"}
+	var out, errOut bytes.Buffer
+	if code := runReprompt(project, home, task.ID, "tweak", client, &out, &errOut); code != 0 {
+		t.Fatalf("expected success, got %d: %s%s", code, out.String(), errOut.String())
+	}
+	got, _ := state.Load(projectRoot, task.ID)
+	if got.Status != state.StatusDone {
+		t.Errorf("expected done, got %s", got.Status)
+	}
+}
+
+// A follow-up that never reached the soldier leaves the shipped task shipped.
+func TestReprompt_ShippedTaskFailedDeliveryStaysShipped(t *testing.T) {
+	project, home, projectRoot, task := repromptFixture(t, state.StatusShipped, true)
+
+	client := &fakeHerdr{promptErr: &herdr.APIError{Code: "agent_not_running", Message: "pane closed"}}
+	var out, errOut bytes.Buffer
+	if code := runReprompt(project, home, task.ID, "tweak", client, &out, &errOut); code == 0 {
+		t.Fatal("expected a failure")
+	}
+	got, _ := state.Load(projectRoot, task.ID)
+	if got.Status != state.StatusShipped || len(got.Amendments) != 0 {
+		t.Errorf("expected shipped with no amendment, got %s %+v", got.Status, got.Amendments)
+	}
+}
+
 func TestReprompt_RefusesStatusesThatCannotBePrompted(t *testing.T) {
 	cases := []struct {
 		status state.Status
@@ -120,9 +197,8 @@ func TestReprompt_RefusesStatusesThatCannotBePrompted(t *testing.T) {
 		{state.StatusRunning, "already running"},
 		{state.StatusBlocked, "--dismiss"},
 		{state.StatusInterrupted, "redispatch"},
-		{state.StatusFailed, "only a done or unconfirmed"},
-		{state.StatusShipped, "only a done or unconfirmed"},
-		{state.StatusPending, "only a done or unconfirmed"},
+		{state.StatusFailed, "only a done, shipped or unconfirmed"},
+		{state.StatusPending, "only a done, shipped or unconfirmed"},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.status), func(t *testing.T) {

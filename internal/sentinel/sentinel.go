@@ -235,12 +235,14 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 }
 
 // reopenable reports whether a task in status s can be put back to Running
-// by reopenActiveTasks: a soldier that settled (done, unconfirmed) or asked
-// a question (blocked) and whose pane is still open can be prompted again.
-// interrupted, failed and shipped are deliberately absent: their pane is
-// gone or the PR, not the soldier, is the source of truth.
+// by reopenActiveTasks: a soldier that settled (done, unconfirmed), asked a
+// question (blocked) or was shipped (its pane stays open until the pull
+// request merges) and whose pane is still open can be prompted again.
+// interrupted and failed are deliberately absent: their pane is gone. A
+// reopened shipped task settles back to done, not shipped: the new work is
+// not on the pull request until it is shipped again.
 func reopenable(s state.Status) bool {
-	return s == state.StatusDone || s == state.StatusBlocked || s == state.StatusUnconfirmed
+	return s == state.StatusDone || s == state.StatusBlocked || s == state.StatusUnconfirmed || s == state.StatusShipped
 }
 
 // reopenActiveTasks puts a settled task back to Running when its herdr

@@ -1389,8 +1389,8 @@ func TestTick_ReopensSettledTaskWhenItsAgentIsWorkingAgain(t *testing.T) {
 	}
 }
 
-func TestTick_ReopensBlockedAndUnconfirmedTasksToo(t *testing.T) {
-	for _, status := range []state.Status{state.StatusBlocked, state.StatusUnconfirmed} {
+func TestTick_ReopensBlockedUnconfirmedAndShippedTasksToo(t *testing.T) {
+	for _, status := range []state.Status{state.StatusBlocked, state.StatusUnconfirmed, state.StatusShipped} {
 		t.Run(string(status), func(t *testing.T) {
 			home := t.TempDir()
 			proj := projectRoot(home, "proj1")
@@ -1406,6 +1406,42 @@ func TestTick_ReopensBlockedAndUnconfirmedTasksToo(t *testing.T) {
 				t.Errorf("expected %s reopened to running, got %s", status, got.Status)
 			}
 		})
+	}
+}
+
+// A shipped soldier prompted by hand reopens like a done one, and settles
+// back to done (the PR lacks its new work until shipped again) with one wake.
+func TestTick_ReopenedShippedTaskSettlesToDoneWithOneWake(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := savedTask(t, proj, state.StatusShipped)
+	leaseCamp(t, proj, task.ID)
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("reopening must not wake, woke=%d err=%v", woke, err)
+	}
+	got, _ := state.Load(proj, task.ID)
+	if got.Status != state.StatusRunning {
+		t.Fatalf("expected the shipped task reopened to running, got %s", got.Status)
+	}
+
+	client.statuses["vx-do-the-thing"] = "done"
+	got.UpdatedAt = time.Now().Add(-time.Minute)
+	if err := state.Save(proj, got); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	for i, want := range []int{1, 0} {
+		if woke, err := sentinel.Tick(home, client); err != nil || woke != want {
+			t.Fatalf("tick %d: expected woke=%d, got %d err=%v", i+1, want, woke, err)
+		}
+	}
+	wakes, err := sentinel.Drain(proj)
+	if err != nil || len(wakes) != 1 || wakes[0].OldStatus != state.StatusRunning || wakes[0].NewStatus != state.StatusDone {
+		t.Fatalf("expected one running -> done wake, got %+v err=%v", wakes, err)
+	}
+	if final, _ := state.Load(proj, task.ID); final.Status != state.StatusDone {
+		t.Errorf("expected done, got %s", final.Status)
 	}
 }
 
@@ -1447,8 +1483,8 @@ func TestTick_DoesNotProbeReleasedTasks(t *testing.T) {
 	}
 }
 
-func TestTick_ReopenNeverTouchesInterruptedFailedOrShipped(t *testing.T) {
-	for _, status := range []state.Status{state.StatusInterrupted, state.StatusFailed, state.StatusShipped} {
+func TestTick_ReopenNeverTouchesInterruptedOrFailed(t *testing.T) {
+	for _, status := range []state.Status{state.StatusInterrupted, state.StatusFailed} {
 		t.Run(string(status), func(t *testing.T) {
 			home := t.TempDir()
 			proj := projectRoot(home, "proj1")

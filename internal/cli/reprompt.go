@@ -26,8 +26,12 @@ and wakes the commander again. A re-prompt that bypasses it can finish
 without any notice, because the sentinel only reports a task leaving
 "running".
 
-Only a task in status "done" or "unconfirmed" whose camp has not been
-released can be prompted. A "blocked" task is answered with '` + cmdname.Name + ` decide'
+Only a task in status "done", "shipped" or "unconfirmed" whose camp has not
+been released can be prompted. A shipped task's soldier is still open, waiting
+for its pull request to be merged: prompting it asks for follow-up work. The
+task goes to running while the soldier works and comes back as done, not
+shipped, since the new commits are not on the pull request yet; run
+'` + cmdname.Name + ` ship <task-id>' again to push them to the same pull request. A "blocked" task is answered with '` + cmdname.Name + ` decide'
 (or, if it was marked blocked by mistake, cleared with '` + cmdname.Name + ` decide <task-id> --dismiss'), an "interrupted" one needs '` + cmdname.Name + ` redispatch', and a "running" one is already
 working - wait for it to settle.
 
@@ -127,7 +131,7 @@ func runReprompt(projectDir, vexillumHome, taskID, text string, client herdr.Cli
 // when it can.
 func repromptRefusal(task state.Task) string {
 	switch task.Status {
-	case state.StatusDone, state.StatusUnconfirmed:
+	case state.StatusDone, state.StatusShipped, state.StatusUnconfirmed:
 		if task.HerdrAgentName == "" {
 			return fmt.Sprintf("task %s has no herdr agent to prompt", task.ID)
 		}
@@ -139,7 +143,7 @@ func repromptRefusal(task state.Task) string {
 	case state.StatusInterrupted:
 		return fmt.Sprintf("task %s is interrupted, its herdr pane is gone - use '%s redispatch %s' instead", task.ID, cmdname.Name, task.ID)
 	default:
-		return fmt.Sprintf("task %s is %s - only a done or unconfirmed task can be prompted again", task.ID, task.Status)
+		return fmt.Sprintf("task %s is %s - only a done, shipped or unconfirmed task can be prompted again", task.ID, task.Status)
 	}
 }
 
