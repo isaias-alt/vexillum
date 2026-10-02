@@ -16,9 +16,9 @@ labels: bug
 
 **Environment**
 
-- `vexillum --version`:
+- `vx --version`:
 - OS / arch:
-- `vexillum doctor` output (if relevant):
+- `vx doctor` output (if relevant):
 
 **Additional context**
 
