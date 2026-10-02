@@ -196,10 +196,10 @@
     // Relayed: the listener forwarded the latest round to the commander and
     // nobody has answered yet. The listener's own polling says nothing about the
     // commander, so this state wins over "listening" and shows how long ago it
-    // was forwarded (re-rendered every 30s to keep that fresh).
+    // was forwarded (re-rendered every 15s to keep that fresh).
     const relayed = !ended && snap.relayed ? snap.relayed : null;
     const forwarding = !ended && !relayed && !snap.listening && !!snap.forwarding;
-    const windowMs = relayed ? 30000 : working ? workingMs : waiting ? waitingMs : 0;
+    const windowMs = relayed ? 15000 : working ? workingMs : waiting ? waitingMs : 0;
     if (windowMs > 0) workingTimer = setTimeout(() => snapshot && render(snapshot), windowMs + 250);
     if (ended) {
       presence.dataset.state = "ended";
@@ -229,7 +229,8 @@
     const relayBanner = $("relayBanner");
     relayBanner.hidden = !relayed;
     if (relayed) {
-      const ago = elapsedText(Date.now() - Date.parse(relayed.since)) + " ago";
+      const sinceMs = Date.now() - Date.parse(relayed.since);
+      const ago = sinceMs < 10000 ? "just now" : elapsedText(sinceMs) + " ago";
       relayBanner.dataset.commander = relayed.commander;
       relayBanner.textContent =
         relayed.commander === "connected"
