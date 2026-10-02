@@ -129,7 +129,7 @@ func contentFiles(files map[string]string) error {
 			return err
 		}
 		files[l.dir+"/index.mdx"] = idx
-		files[l.dir+"/meta.json"] = skillsMeta(names)
+		files[l.dir+"/meta.json"] = skillsMeta(names, l.skillsIndexTitle)
 	}
 	for l, p := range map[string]contentLocale{slotPageEN: contentEN, slotPageES: contentES} {
 		page, err := slotBlockPage(p)
@@ -210,12 +210,12 @@ func skillsIndexPage(names []string, l contentLocale) (string, error) {
 	return b.String(), nil
 }
 
-func skillsMeta(names []string) string {
+func skillsMeta(names []string, title string) string {
 	pages := []string{strconv.Quote("index")}
 	for _, n := range names {
 		pages = append(pages, strconv.Quote(n))
 	}
-	return "{\n  \"title\": \"Skills content\",\n  \"pages\": [" + strings.Join(pages, ", ") + "]\n}\n"
+	return "{\n  \"title\": " + strconv.Quote(title) + ",\n  \"pages\": [" + strings.Join(pages, ", ") + "]\n}\n"
 }
 
 func slotBlockPage(l contentLocale) (string, error) {
