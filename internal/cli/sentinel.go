@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
@@ -44,6 +46,13 @@ happens to already be pending at the exact moment a turn is ending.
 (no HERDR_WORKSPACE_ID) - the hook is committed into the project and so
 reaches any other tool's own Claude Code turns too, which have no task
 for the sentinel to track.
+
+Each "await" records itself under ~/.vexillum/sentinel-awaiters/ and never
+outlives the hook that launched it: it exits as soon as its parent process
+is gone, and a newer "await" from the same session and project replaces the
+previous turn's. Starting "vx sentinel" or any "await" also stops orphaned
+ones left behind by a dead session. A process is only ever signaled after
+it is verified to be a "vx sentinel await" - never by name.
 `
 
 const (
@@ -107,6 +116,10 @@ func Sentinel(args []string) int {
 	}
 	defer release()
 
+	if n := sentinel.ReapAwaiters(vexillumHome); n > 0 {
+		fmt.Fprintf(os.Stdout, "sentinel: stopped %d orphaned await process(es)\n", n)
+	}
+
 	fmt.Fprintf(os.Stdout, "sentinel: polling %s every %s (ctrl-c to stop)\n", vexillumHome, sentinelPollInterval)
 	sentinel.Run(vexillumHome, herdr.CLI{}, sentinelPollInterval, os.Stdout)
 	return 0
@@ -150,7 +163,64 @@ func runSentinelDrainOrAwait(mode string) int {
 	if projectRoot == "" {
 		return 0
 	}
-	return runSentinelAwaitGuarded(projectRoot, sentinelAwaitMaxWait, sentinelAwaitPollInterval, os.Stderr, os.Getenv("HERDR_WORKSPACE_ID"))
+	return runSentinelAwaitGuarded(os.Getenv("HERDR_WORKSPACE_ID"), func() int {
+		return runSentinelAwaitRegistered(vexillumHome, projectRoot)
+	})
+}
+
+// runSentinelAwaitGuarded is the actual entry point the async Stop hook
+// reaches. It only makes sense for a genuine vexillum-managed turn - the
+// commander's own interactive session, or a dispatched soldier's - both
+// of which always run inside a herdr-managed pane (vx dispatch and
+// redispatch already require the same HERDR_WORKSPACE_ID from their
+// caller; see cli/dispatch.go). workspaceID is that same env var, read
+// by the caller, and run is the real await to start when it is set.
+//
+// The Stop hook itself is registered in .claude/settings.json, which
+// ensureSentinelHook writes into the project directory and which git
+// then tracks like any other file - so it travels into every checkout
+// of the repo, including a mission's own camp. A headless Claude Code
+// turn run there outside a herdr pane - internal/tribunal's review
+// step, which shells out to "claude -p ..." directly from "vx
+// ship", is the case that surfaced this - inherits the hook too, with no
+// HERDR_WORKSPACE_ID in its environment. Without this guard, that turn
+// would sit blocked in runSentinelAwait for up to maxWait: the sentinel
+// has no task tracking an invocation it never dispatched, so a wake for
+// it can never arrive. An empty workspaceID means exactly that - exit 0
+// immediately, the same "let the turn end quietly" result runSentinelAwait
+// itself returns on a real timeout, just without waiting first.
+func runSentinelAwaitGuarded(workspaceID string, run func() int) int {
+	if workspaceID == "" {
+		return 0
+	}
+	return run()
+}
+
+// runSentinelAwaitRegistered runs the real await: registered under
+// vexillumHome (see sentinel.RegisterAwaiter), tied to the lifetime of the
+// process that launched it, and quietly exiting 0 on SIGTERM/SIGHUP/SIGINT
+// (what a superseding or reaping newer await sends, or the hook runner
+// closing us down).
+func runSentinelAwaitRegistered(vexillumHome, projectRoot string) int {
+	ownerPID := os.Getppid()
+	if ownerPID <= 1 {
+		// Already orphaned at birth: nobody is listening.
+		return 0
+	}
+
+	release, err := sentinel.RegisterAwaiter(vexillumHome, projectRoot, ownerPID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
+		return 1
+	}
+	defer release()
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
+	defer signal.Stop(interrupt)
+
+	return runSentinelAwait(projectRoot, sentinelAwaitMaxWait, sentinelAwaitPollInterval, os.Stderr,
+		func() bool { return !sentinel.OwnerGone(ownerPID) }, interrupt)
 }
 
 // resolveDrainTarget finds the project "drain"/"await" should act on,
@@ -224,34 +294,6 @@ func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// runSentinelAwaitGuarded is the actual entry point the async Stop hook
-// reaches. It only makes sense for a genuine vexillum-managed turn - the
-// commander's own interactive session, or a dispatched soldier's - both
-// of which always run inside a herdr-managed pane (vx dispatch and
-// redispatch already require the same HERDR_WORKSPACE_ID from their
-// caller; see cli/dispatch.go). workspaceID is that same env var, read
-// by the caller.
-//
-// The Stop hook itself is registered in .claude/settings.json, which
-// ensureSentinelHook writes into the project directory and which git
-// then tracks like any other file - so it travels into every checkout
-// of the repo, including a mission's own camp. A headless Claude Code
-// turn run there outside a herdr pane - internal/tribunal's review
-// step, which shells out to "claude -p ..." directly from "vx
-// ship", is the case that surfaced this - inherits the hook too, with no
-// HERDR_WORKSPACE_ID in its environment. Without this guard, that turn
-// would sit blocked in runSentinelAwait for up to maxWait: the sentinel
-// has no task tracking an invocation it never dispatched, so a wake for
-// it can never arrive. An empty workspaceID means exactly that - exit 0
-// immediately, the same "let the turn end quietly" result runSentinelAwait
-// itself returns on a real timeout, just without waiting first.
-func runSentinelAwaitGuarded(projectRoot string, maxWait, pollInterval time.Duration, stderr io.Writer, workspaceID string) int {
-	if workspaceID == "" {
-		return 0
-	}
-	return runSentinelAwait(projectRoot, maxWait, pollInterval, stderr)
-}
-
 // runSentinelAwait is what the async Stop hook actually invokes
 // (registered with "asyncRewake": true - see ensureSentinelHook). Unlike
 // runSentinelDrain's instant check, it blocks, re-checking for a wake
@@ -263,7 +305,7 @@ func runSentinelAwaitGuarded(projectRoot string, maxWait, pollInterval time.Dura
 // "Stop hook feedback" with no new user prompt - exit 2 + stderr is the
 // block signal here, not runSentinelDrain's JSON on stdout, matching
 // that verified mechanism exactly.
-func runSentinelAwait(projectRoot string, maxWait, pollInterval time.Duration, stderr io.Writer) int {
+func runSentinelAwait(projectRoot string, maxWait, pollInterval time.Duration, stderr io.Writer, stillWanted func() bool, interrupt <-chan os.Signal) int {
 	deadline := time.Now().Add(maxWait)
 	for {
 		wakes, err := sentinel.Drain(projectRoot)
@@ -271,10 +313,14 @@ func runSentinelAwait(projectRoot string, maxWait, pollInterval time.Duration, s
 			fmt.Fprintln(stderr, wakeReason(wakes))
 			return 2
 		}
-		if time.Now().After(deadline) {
+		if time.Now().After(deadline) || !stillWanted() {
 			return 0
 		}
-		time.Sleep(pollInterval)
+		select {
+		case <-time.After(pollInterval):
+		case <-interrupt:
+			return 0
+		}
 	}
 }
 

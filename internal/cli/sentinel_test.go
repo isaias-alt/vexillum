@@ -165,6 +165,10 @@ func TestRunSentinelDrain_PendingWakeBlocksStop(t *testing.T) {
 	}
 }
 
+// stillWanted is the await loop's "my launching hook is alive" check for
+// tests that are not about it.
+func stillWanted() bool { return true }
+
 // runSentinelAwait is what the async Stop hook actually calls. A wake
 // already pending when it's invoked is found on its very first check -
 // exit 2 with the reason on stderr, the block signal a real asyncRewake
@@ -180,7 +184,7 @@ func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	code := runSentinelAwait(proj, time.Hour, time.Millisecond, &stderr)
+	code := runSentinelAwait(proj, time.Hour, time.Millisecond, &stderr, stillWanted, nil)
 	if code != 2 {
 		t.Fatalf("expected exit 2, got %d: %s", code, stderr.String())
 	}
@@ -196,7 +200,7 @@ func TestRunSentinelAwait_TimesOutWithNothingPending(t *testing.T) {
 	proj := projectRoot(t.TempDir(), "proj1")
 
 	var stderr bytes.Buffer
-	code := runSentinelAwait(proj, 20*time.Millisecond, 5*time.Millisecond, &stderr)
+	code := runSentinelAwait(proj, 20*time.Millisecond, 5*time.Millisecond, &stderr, stillWanted, nil)
 	if code != 0 {
 		t.Fatalf("expected exit 0 on timeout, got %d: %s", code, stderr.String())
 	}
@@ -220,7 +224,7 @@ func TestRunSentinelAwait_FindsWakeThatArrivesMidWait(t *testing.T) {
 	}()
 
 	var stderr bytes.Buffer
-	code := runSentinelAwait(proj, time.Second, 5*time.Millisecond, &stderr)
+	code := runSentinelAwait(proj, time.Second, 5*time.Millisecond, &stderr, stillWanted, nil)
 	if code != 2 {
 		t.Fatalf("expected exit 2 once the wake appeared, got %d: %s", code, stderr.String())
 	}
@@ -249,7 +253,9 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 
 	start := time.Now()
 	var stderr bytes.Buffer
-	code := runSentinelAwaitGuarded(proj, time.Hour, 5*time.Millisecond, &stderr, "")
+	code := runSentinelAwaitGuarded("", func() int {
+		return runSentinelAwait(proj, time.Hour, 5*time.Millisecond, &stderr, stillWanted, nil)
+	})
 	elapsed := time.Since(start)
 
 	if code != 0 {
@@ -277,7 +283,9 @@ func TestRunSentinelAwaitGuarded_WithWorkspaceFindsWake(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	code := runSentinelAwaitGuarded(proj, time.Hour, time.Millisecond, &stderr, "ws-123")
+	code := runSentinelAwaitGuarded("ws-123", func() int {
+		return runSentinelAwait(proj, time.Hour, time.Millisecond, &stderr, stillWanted, nil)
+	})
 	if code != 2 {
 		t.Fatalf("expected exit 2 with a workspace id set, got %d: %s", code, stderr.String())
 	}
@@ -434,5 +442,72 @@ func TestDrainFromCamp_DoesNotDrainProjectWakes(t *testing.T) {
 	}
 	if len(pending) != 1 || pending[0].TaskID != task.ID {
 		t.Errorf("expected the project's wake to still be pending after the camp drain attempt, got %+v", pending)
+	}
+}
+
+// The await process must not outlive the hook that launched it: once its
+// owner is gone it exits 0 on the next check, even with a wake never coming
+// and the full timeout still ahead.
+func TestRunSentinelAwait_ExitsWhenItsOwnerIsGone(t *testing.T) {
+	proj := projectRoot(t.TempDir(), "proj1")
+
+	owners := 0
+	var stderr bytes.Buffer
+	start := time.Now()
+	code := runSentinelAwait(proj, time.Hour, 5*time.Millisecond, &stderr, func() bool {
+		owners++
+		return owners < 3 // alive for two checks, then the hook dies
+	}, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, stderr.String())
+	}
+	if owners != 3 {
+		t.Errorf("expected it to keep checking until the owner was gone, got %d checks", owners)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Errorf("expected a prompt exit, took %s", time.Since(start))
+	}
+	if stderr.String() != "" {
+		t.Errorf("expected no output, got: %s", stderr.String())
+	}
+}
+
+// A termination signal (what a newer await or a reaper sends) makes it
+// exit 0 immediately instead of sleeping out the poll interval.
+func TestRunSentinelAwait_ExitsQuietlyOnInterrupt(t *testing.T) {
+	proj := projectRoot(t.TempDir(), "proj1")
+
+	interrupt := make(chan os.Signal, 1)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		interrupt <- os.Interrupt
+	}()
+
+	var stderr bytes.Buffer
+	start := time.Now()
+	code := runSentinelAwait(proj, time.Hour, time.Hour, &stderr, stillWanted, interrupt)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, stderr.String())
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Errorf("expected an immediate exit on the signal, took %s", time.Since(start))
+	}
+}
+
+// A wake still wins over the owner check: a hook that is about to die with
+// a wake already pending still hands it over.
+func TestRunSentinelAwait_PendingWakeBeatsOwnerGone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newSettledMissionTask(t, proj)
+	client := &fakeHerdr{promptStatus: "done"}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("sentinel.Tick: %v", err)
+	}
+
+	var stderr bytes.Buffer
+	code := runSentinelAwait(proj, time.Hour, time.Millisecond, &stderr, func() bool { return false }, nil)
+	if code != 2 || !strings.Contains(stderr.String(), task.ID) {
+		t.Fatalf("expected the pending wake delivered (exit 2), got %d: %s", code, stderr.String())
 	}
 }
