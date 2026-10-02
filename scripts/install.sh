@@ -113,7 +113,7 @@ install_via_binary() {
 }
 
 # Refuse to clobber a `vx` that is not vexillum (another tool may own that name).
-# Ours identifies itself as "vexillum <version>" on --version.
+# Ours identifies itself as "vx <version>" on --version.
 check_existing_binary() {
     local existing out
     existing="$(command -v "$BINARY_NAME" 2>/dev/null || true)"
@@ -121,11 +121,11 @@ check_existing_binary() {
 
     out="$("$existing" --version 2>/dev/null | head -1 || true)"
     case "$out" in
-        vexillum\ *) return 0 ;;
+        vx\ *) return 0 ;;
     esac
 
     warn "A different '${BINARY_NAME}' executable is already on your PATH: ${existing}"
-    warn "It does not identify itself as vexillum, so nothing was installed or overwritten."
+    warn "It does not identify itself as vx (vexillum), so nothing was installed or overwritten."
     warn "Rename or remove it, then re-run this script."
     exit 1
 }
