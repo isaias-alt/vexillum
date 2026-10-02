@@ -13,6 +13,7 @@ pnpm build      # production build, includes the static search index
 pnpm lint
 pnpm typecheck
 pnpm seo:audit  # after pnpm build: serves the build and audits every page's SEO
+pnpm links:check  # after pnpm build: serves the build and checks every link (needs lychee)
 ```
 
 ## Layout
