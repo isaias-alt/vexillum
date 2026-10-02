@@ -1,9 +1,13 @@
 /* Adapted from upstream (MIT License, Copyright (c) 2026 the upstream author), src/whiteboard-frame.css at v0.1.80 (commit a2a199c). See
-   THIRD-PARTY-NOTICES.md at the vexillum repo root. Ported unchanged except
-   for the data-forum-whiteboard-* attribute names, renamed to
-   data-vexillum-whiteboard-* to match whiteboard-frame.js. */
+   THIRD-PARTY-NOTICES.md at the vexillum repo root. Restyled for vexillum
+   forum: every colour in this file is a forum --fr-* design token (the frame
+   page links /forum-assets/forum-tokens.css), dark by default and light when
+   <html data-fr-theme="light">, which whiteboard-frame.js sets from the
+   embedder's theme. Do not hard-code a colour here: the whiteboard has to
+   follow the forum chrome in both themes (a test greps the built bundle for
+   the old Forum values). */
 /* Shell chrome for the whiteboard frame. Bundled into dist/whiteboard/whiteboard.css
-   together with Excalidraw's own stylesheet by scripts/build.js. */
+   together with Excalidraw's own stylesheet by build.js. */
 
 html,
 body {
@@ -12,20 +16,9 @@ body {
 }
 
 body {
-  font-family:
-    Geist,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  background: #fffbf3;
-  color: #17130a;
-}
-
-body[data-vexillum-whiteboard-theme="dark"] {
-  background: #0f1115;
-  color: #f7f3ea;
+  font-family: var(--fr-font-sans, system-ui, sans-serif);
+  background: var(--fr-bg);
+  color: var(--fr-text);
 }
 
 #wbShell {
@@ -39,13 +32,12 @@ body[data-vexillum-whiteboard-theme="dark"] {
   display: flex;
   align-items: center;
   gap: 10px;
-  /* Right padding reserves room for the embedder's "× Close" button (about
-     70px wide at 10px from the edge), which floats above this header from
-     outside the iframe. */
+  /* Right padding reserves room for the embedder's "Close" button, which
+     floats above this header from outside the iframe. */
   padding: 8px 92px 8px 12px;
-  border-bottom: 1px solid var(--fr-border-strong, #3a3f47);
-  background: var(--fr-surface-sunken, #20242a);
-  color: var(--fr-text, #e9eaec);
+  border-bottom: 1px solid var(--fr-border-strong);
+  background: var(--fr-surface-sunken);
+  color: var(--fr-text);
   flex: none;
 }
 
@@ -58,53 +50,54 @@ body[data-vexillum-whiteboard-theme="dark"] {
   flex: 1;
   min-width: 0;
   padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(128, 128, 128, 0.45);
-  background: transparent;
-  color: inherit;
+  border-radius: var(--fr-radius-md);
+  border: 1px solid var(--fr-border-strong);
+  background: var(--fr-surface);
+  color: var(--fr-text);
   font: inherit;
   font-size: 13px;
 }
 
-/* The frame's own actions are forum buttons: small, on the --fr-* tokens
-   (the frame page links forum-tokens.css, dark by default), the same size and
-   look as the embedder's "Close" button. Queue feedback is the primary one.
-   The frame has no <html data-fr-theme>, so the light values follow the
-   frame's own theme attribute. */
-body[data-vexillum-whiteboard-theme="light"] {
-  --fr-surface: #ffffff;
-  --fr-surface-sunken: #ecebe4;
-  --fr-border-strong: #c2c0b8;
-  --fr-text: #1a1d22;
-  --fr-accent: #1f4e79;
-  --fr-accent-hover: #173e61;
-  --fr-accent-contrast: #ffffff;
+#wbNote::placeholder {
+  color: var(--fr-text-muted);
 }
 
+#wbNote:focus-visible,
+#wbHeader button:focus-visible,
+.wb-banner button:focus-visible,
+.wb-link-confirm-actions button:focus-visible,
+.wb-activate:focus-visible {
+  outline: 2px solid var(--fr-accent);
+  outline-offset: 1px;
+}
+
+/* The frame's own actions are forum buttons: small, on the --fr-* tokens, the
+   same size and look as the embedder's "Close" button. Queue feedback is the
+   primary one. */
 #wbHeader button {
   flex: none;
-  border: 1px solid var(--fr-border-strong, #3a3f47);
-  border-radius: var(--fr-radius-sm, 4px);
+  border: 1px solid var(--fr-border-strong);
+  border-radius: var(--fr-radius-sm);
   padding: 4px 10px;
   font: 500 13px/1.3 var(--fr-font-sans, system-ui, sans-serif);
   cursor: pointer;
-  background: var(--fr-surface, #1c1f24);
-  color: var(--fr-text, #e9eaec);
+  background: var(--fr-surface);
+  color: var(--fr-text);
 }
 
 #wbHeader button:hover:not(:disabled) {
-  background: var(--fr-surface-sunken, #20242a);
+  background: var(--fr-surface-sunken);
 }
 
 #wbHeader #wbQueue {
-  background: var(--fr-accent, #6fa1cb);
-  border-color: var(--fr-accent, #6fa1cb);
-  color: var(--fr-accent-contrast, #0f2233);
+  background: var(--fr-accent);
+  border-color: var(--fr-accent);
+  color: var(--fr-accent-contrast);
 }
 
 #wbHeader #wbQueue:hover:not(:disabled) {
-  background: var(--fr-accent-hover, #8bb6d9);
-  border-color: var(--fr-accent-hover, #8bb6d9);
+  background: var(--fr-accent-hover);
+  border-color: var(--fr-accent-hover);
 }
 
 #wbHeader button:disabled {
@@ -116,21 +109,21 @@ body[data-vexillum-whiteboard-theme="light"] {
   flex: none;
   padding: 8px 12px;
   font-size: 13px;
-  background: rgba(96, 165, 250, 0.16);
-  border-bottom: 1px solid rgba(96, 165, 250, 0.4);
+  background: var(--fr-accent-soft);
+  border-bottom: 1px solid var(--fr-accent);
 }
 
 .wb-banner-warn {
-  background: var(--fr-bronze-soft, rgba(201, 161, 90, 0.18));
-  border-bottom-color: var(--fr-bronze, #c9a15a);
+  background: var(--fr-bronze-soft);
+  border-bottom-color: var(--fr-border-strong);
 }
 
 .wb-banner button {
   margin-left: 8px;
-  border: 1px solid rgba(128, 128, 128, 0.5);
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--fr-border-strong);
+  border-radius: var(--fr-radius-sm);
+  background: var(--fr-surface);
+  color: var(--fr-text);
   font-size: 12px;
   padding: 4px 8px;
   cursor: pointer;
@@ -140,8 +133,8 @@ body[data-vexillum-whiteboard-theme="light"] {
   flex: none;
   padding: 8px 12px;
   font-size: 13px;
-  background: rgba(52, 211, 153, 0.14);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.4);
+  background: var(--fr-success-soft);
+  border-bottom: 1px solid var(--fr-success);
 }
 
 #wbEditor {
@@ -156,7 +149,7 @@ body[data-vexillum-whiteboard-theme="light"] {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(23, 19, 10, 0.42);
+  background: var(--fr-scrim);
 }
 
 .wb-link-confirm[hidden] {
@@ -167,10 +160,11 @@ body[data-vexillum-whiteboard-theme="light"] {
   width: min(100%, 440px);
   box-sizing: border-box;
   padding: 18px;
-  border: 1px solid rgba(128, 128, 128, 0.45);
-  border-radius: 12px;
-  background: #fffbf3;
-  box-shadow: 0 16px 42px rgba(23, 19, 10, 0.26);
+  border: 1px solid var(--fr-border-strong);
+  border-radius: var(--fr-radius-lg);
+  background: var(--fr-surface);
+  color: var(--fr-text);
+  box-shadow: var(--fr-shadow-md);
 }
 
 .wb-link-confirm-title {
@@ -188,9 +182,9 @@ body[data-vexillum-whiteboard-theme="light"] {
   overflow: auto;
   overflow-wrap: anywhere;
   padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(128, 128, 128, 0.12);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  border-radius: var(--fr-radius-md);
+  background: var(--fr-surface-sunken);
+  font-family: var(--fr-font-mono, ui-monospace, monospace);
 }
 
 .wb-link-confirm-actions {
@@ -201,34 +195,29 @@ body[data-vexillum-whiteboard-theme="light"] {
 }
 
 .wb-link-confirm-actions button {
-  border: 1px solid rgba(128, 128, 128, 0.5);
-  border-radius: 8px;
-  padding: 8px 12px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  border: 1px solid var(--fr-border-strong);
+  border-radius: var(--fr-radius-sm);
+  padding: 4px 10px;
+  background: var(--fr-surface);
+  color: var(--fr-text);
+  font: 500 13px/1.3 var(--fr-font-sans, system-ui, sans-serif);
   cursor: pointer;
 }
 
 .wb-link-confirm-actions button:hover {
-  background: rgba(128, 128, 128, 0.15);
+  background: var(--fr-surface-sunken);
 }
 
-#wbLinkConfirmOpen {
-  border-color: var(--fr-accent, #6fa1cb);
-  background: var(--fr-accent, #6fa1cb);
-  color: var(--fr-accent-contrast, #0f2233);
+#wbLinkConfirmOpen,
+#wbLinkConfirmOpen:hover {
+  border-color: var(--fr-accent);
+  background: var(--fr-accent);
+  color: var(--fr-accent-contrast);
 }
 
 #wbLinkConfirmOpen:hover {
-  background: var(--fr-accent-hover, #8bb6d9);
-}
-
-body[data-vexillum-whiteboard-theme="dark"] .wb-link-confirm-card {
-  background: #1a1d23;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.45);
+  border-color: var(--fr-accent-hover);
+  background: var(--fr-accent-hover);
 }
 
 /* Inline placement: no chrome close control floats over the header, so drop
@@ -257,13 +246,101 @@ body[data-vexillum-whiteboard-mode="inline"] #wbHeader {
   letter-spacing: 0.04em;
   padding: 6px 12px;
   border-radius: 999px;
-  background: var(--fr-surface, #1c1f24);
-  color: var(--fr-text, #e9eaec);
-  border: 1px solid var(--fr-border-strong, #3a3f47);
+  background: var(--fr-surface);
+  color: var(--fr-text);
+  border: 1px solid var(--fr-border-strong);
   opacity: 0.85;
 }
 
 .wb-activate:hover .wb-activate-label,
 .wb-activate:focus-visible .wb-activate-label {
   opacity: 1;
+  border-color: var(--fr-accent);
+}
+
+/* Excalidraw's own UI (toolbar, library, properties panel, menus, dialogs,
+   selection) is themed through its CSS custom properties: every colour it
+   owns is repointed at a forum token, so it follows the same dark/light
+   switch as the rest of the forum and its accent is the lapis blue instead
+   of Excalidraw's periwinkle. The `body` prefix outranks Excalidraw's own
+   .excalidraw / .excalidraw.theme--dark blocks wherever the stylesheet
+   order puts them. The diagram canvas is transparent (see
+   whiteboard-frame.js) so the container's --fr-bg shows through it. */
+body .excalidraw,
+body .excalidraw.theme--dark {
+  --default-bg-color: var(--fr-bg);
+  --island-bg-color: var(--fr-surface);
+  --popup-bg-color: var(--fr-surface);
+  --popup-secondary-bg-color: var(--fr-surface-sunken);
+  --popup-text-color: var(--fr-text);
+  --popup-text-inverted-color: var(--fr-bg);
+  --sidebar-bg-color: var(--fr-surface);
+  --sidebar-border-color: var(--fr-border);
+  --dialog-border-color: var(--fr-border-strong);
+  --default-border-color: var(--fr-border);
+  --input-bg-color: var(--fr-surface-sunken);
+  --input-border-color: var(--fr-border-strong);
+  --input-hover-bg-color: var(--fr-surface-sunken);
+  --input-label-color: var(--fr-text-secondary);
+  --keybinding-color: var(--fr-text-muted);
+  --overlay-bg-color: var(--fr-scrim);
+  --shadow-island: var(--fr-shadow-sm);
+  --modal-shadow: var(--fr-shadow-md);
+  --sidebar-shadow: var(--fr-shadow-md);
+  --library-dropdown-shadow: var(--fr-shadow-md);
+  --scrollbar-thumb: var(--fr-border-strong);
+  --scrollbar-thumb-hover: var(--fr-text-muted);
+  --avatar-border-color: var(--fr-border);
+  --color-slider-track: var(--fr-border-strong);
+  --color-slider-thumb: var(--fr-accent);
+  --button-gray-1: var(--fr-surface-sunken);
+  --button-gray-2: var(--fr-border);
+  --button-gray-3: var(--fr-border-strong);
+  --button-destructive-bg-color: var(--fr-danger-soft);
+  --button-destructive-color: var(--fr-danger);
+  --button-special-active-bg-color: var(--fr-success-soft);
+  --icon-fill-color: var(--fr-text);
+  --icon-green-fill-color: var(--fr-success);
+  --text-primary-color: var(--fr-text);
+  --link-color: var(--fr-accent);
+  --focus-highlight-color: var(--fr-accent);
+  --select-highlight-color: var(--fr-accent);
+  --color-selection: var(--fr-accent);
+  --color-icon-white: var(--fr-accent-contrast);
+  --color-primary: var(--fr-accent);
+  --color-primary-darker: var(--fr-accent-hover);
+  --color-primary-darkest: var(--fr-accent-hover);
+  --color-primary-hover: var(--fr-accent-hover);
+  --color-primary-light: var(--fr-accent-soft);
+  --color-primary-light-darker: var(--fr-accent-soft);
+  --color-brand-hover: var(--fr-accent-hover);
+  --color-brand-active: var(--fr-accent-hover);
+  --color-on-primary-container: var(--fr-accent);
+  --color-surface-primary-container: var(--fr-accent-soft);
+  --color-logo-text: var(--fr-text);
+  --color-surface-lowest: var(--fr-bg);
+  --color-surface-low: var(--fr-surface);
+  --color-surface-mid: var(--fr-surface-sunken);
+  --color-surface-high: var(--fr-border);
+  --color-on-surface: var(--fr-text);
+  --color-border-outline: var(--fr-border-strong);
+  --color-border-outline-variant: var(--fr-border);
+  --color-danger: var(--fr-danger);
+  --color-danger-text: var(--fr-danger);
+  --color-danger-background: var(--fr-danger-soft);
+  --color-warning: var(--fr-bronze-soft);
+  --color-warning-dark: var(--fr-bronze);
+  --color-warning-darker: var(--fr-bronze);
+  --color-warning-darkest: var(--fr-bronze);
+  --color-text-warning: var(--fr-text);
+}
+
+body .excalidraw {
+  background: var(--fr-bg);
+  font-family: var(--fr-font-sans, system-ui, sans-serif);
+}
+
+/* Excalidraw's own focus ring and the selected-tool border. */
+body .excalidraw :focus-visible {
+  outline-color: var(--fr-accent);
 }

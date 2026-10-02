@@ -56,6 +56,17 @@
   let overlayChannelId = "";
   let overlayReady = false;
 
+  // Every colour below is a forum --fr-* token with the design system's own
+  // value as the fallback, because the embed runs in artifacts that bring
+  // their own styles and may carry no tokens at all.
+  function themed(name, darkValue, lightValue) {
+    return "var(--fr-" + name + ", " + (theme() === "dark" ? darkValue : lightValue) + ")";
+  }
+
+  function frameUrl(index) {
+    return "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index)) + "&theme=" + theme();
+  }
+
   function theme() {
     // The chrome's theme switch wins (the server renders it on <html>); the
     // OS preference only decides when the artifact carries no forum theme.
@@ -124,7 +135,7 @@
     statusTimers.delete(index);
     record.status.textContent = text || "";
     record.status.style.display = text ? "flex" : "none";
-    record.status.style.color = isError ? "#b91c1c" : "inherit";
+    record.status.style.color = isError ? themed("danger", "#E08268", "#A8341F") : themed("text-secondary", "#A0A3A9", "#5A5E66");
   }
 
   function watchStart(index) {
@@ -146,12 +157,14 @@
 
   function makeIframe(index) {
     const iframe = document.createElement("iframe");
-    iframe.src = "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index));
+    iframe.src = frameUrl(index);
     iframe.sandbox = "allow-scripts allow-popups";
     iframe.style.width = "100%";
     iframe.style.height = "480px";
-    iframe.style.border = "1px solid rgba(128, 128, 128, 0.35)";
-    iframe.style.borderRadius = "10px";
+    iframe.style.border = "1px solid " + themed("border-strong", "#3A3F47", "#C2C0B8");
+    iframe.style.borderRadius = "var(--fr-radius-lg, 12px)";
+    iframe.style.background = themed("bg", "#15171A", "#F2F1EC");
+    iframe.style.colorScheme = theme();
     iframe.title = "Whiteboard · diagram " + (index + 1);
     return iframe;
   }
@@ -302,7 +315,7 @@
       position: "fixed",
       inset: "0",
       zIndex: "2147483000",
-      background: "rgba(0, 0, 0, 0.5)",
+      background: themed("scrim", "rgba(0,0,0,0.6)", "rgba(26,29,34,0.45)"),
       display: "none",
     });
     overlayIframe = document.createElement("iframe");
@@ -314,7 +327,7 @@
       width: "100%",
       height: "100%",
       border: "0",
-      background: "var(--fr-bg, " + (theme() === "dark" ? "#15171A" : "#F2F1EC") + ")",
+      background: themed("bg", "#15171A", "#F2F1EC"),
     });
     overlayCloseButton = document.createElement("button");
     overlayCloseButton.type = "button";
@@ -322,8 +335,7 @@
     // Looks like a forum secondary button: the --fr-* design tokens when the
     // artifact has them, the same palette values otherwise (the embed runs in
     // artifacts that bring their own styles and no tokens).
-    const dark = theme() === "dark";
-    const color = (name, darkValue, lightValue) => "var(--fr-" + name + ", " + (dark ? darkValue : lightValue) + ")";
+    const color = themed;
     Object.assign(overlayCloseButton.style, {
       position: "absolute",
       top: "8px",
@@ -346,7 +358,9 @@
     ensureOverlay();
     overlay.style.display = "block";
     overlayIframe.srcdoc =
-      '<p style="font-family:sans-serif;padding:16px;color:#b91c1c;">Could not open the whiteboard: ' +
+      '<p style="font-family:sans-serif;padding:16px;color:' +
+      themed("danger", "#E08268", "#A8341F") +
+      ';">Could not open the whiteboard: ' +
       String(text || "unknown error").replace(/</g, "&lt;") +
       "</p>";
   }
@@ -364,7 +378,7 @@
       overlayReady = false;
       overlayChannelId = "";
       overlay.style.display = "block";
-      overlayIframe.src = "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index));
+      overlayIframe.src = frameUrl(index);
     });
   }
 

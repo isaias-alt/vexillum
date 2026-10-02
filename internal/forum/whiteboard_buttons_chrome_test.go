@@ -67,6 +67,14 @@ func TestWhiteboard_RealChrome_ButtonsAreSmallForumButtonsInBothThemes(t *testin
 			reports := map[string]string{}
 			inner := env.ts.Config.Handler
 			env.ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/forum-assets/forum-theme.js" {
+					// The chrome keeps its theme in localStorage, so seed the choice
+					// the way the user's toggle would, before the real script reads it.
+					w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+					_, _ = w.Write([]byte(`try { localStorage.setItem("forum-theme", "` + theme + `"); } catch (e) {}` + "\n"))
+					inner.ServeHTTP(w, r)
+					return
+				}
 				if r.URL.Path == "/__report" {
 					v := r.URL.Query().Get("v")
 					name, body, _ := strings.Cut(v, " ")
@@ -77,8 +85,8 @@ func TestWhiteboard_RealChrome_ButtonsAreSmallForumButtonsInBothThemes(t *testin
 				}
 				inner.ServeHTTP(w, r)
 			})
-			cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1500,900",
-				"--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+key+"?theme="+theme)
+			cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--window-size=1500,900",
+				"--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+key)
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 			if err := cmd.Start(); err != nil {
 				t.Fatalf("chrome: %v", err)

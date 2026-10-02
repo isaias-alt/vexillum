@@ -123,7 +123,15 @@ function setBanner(id, text) {
   banner.hidden = !text;
 }
 
+// The forum design tokens (forum-tokens.css) pick their dark or light values
+// from <html data-fr-theme>, so the frame's theme is set there: the whole
+// frame (shell, Excalidraw's own UI) then follows the same switch as the forum.
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-fr-theme", theme === "light" ? "light" : "dark");
+}
+
 function buildShell(theme, mode) {
+  applyTheme(theme);
   document.body.dataset.vexillumWhiteboardTheme = theme;
   document.body.dataset.vexillumWhiteboardMode = mode;
   const shell = el("div", { id: "wbShell" });
@@ -351,7 +359,14 @@ function EditorApp({ elements, appState, files, theme, startLocked }) {
     "div",
     { style: { position: "relative", width: "100%", height: "100%" } },
     React.createElement(Excalidraw, {
-      initialData: { elements, appState, files: files || undefined, scrollToContent: true },
+      // The canvas is transparent so the frame's --fr-bg shows through it
+      // (see whiteboard-frame.css); exports paint their own white paper.
+      initialData: {
+        elements,
+        appState: { ...appState, viewBackgroundColor: "transparent" },
+        files: files || undefined,
+        scrollToContent: true,
+      },
       theme,
       viewModeEnabled: locked,
       onChange: scheduleSave,
@@ -608,7 +623,7 @@ async function queueFeedback() {
       elements: state.api.getSceneElements(),
       appState: {
         exportBackground: true,
-        viewBackgroundColor: appState.viewBackgroundColor || "#ffffff",
+        viewBackgroundColor: "#ffffff",
       },
       files: state.api.getFiles() || null,
       mimeType: "image/png",
@@ -696,6 +711,9 @@ function main() {
   const frameUrl = new URL(location.href);
   const diagramIndex = Number(frameUrl.searchParams.get("diagramIndex"));
   state.diagramIndex = Number.isInteger(diagramIndex) && diagramIndex >= 0 && diagramIndex <= 999 ? diagramIndex : 0;
+  // The embedder passes its theme in the URL so the very first paint (before
+  // the init message arrives) already has the right one.
+  applyTheme(frameUrl.searchParams.get("theme") === "light" ? "light" : "dark");
   state.diagramId = String(frameUrl.searchParams.get("diagramId") || "");
   state.channelId = randomChannelId();
   let initialized = false;

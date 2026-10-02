@@ -58,4 +58,10 @@ await cp(`${outDir}/whiteboard.js.gz`, `${finalDir}/whiteboard.js.gz`);
 await cp(`${outDir}/whiteboard.css`, `${finalDir}/whiteboard.css`);
 await cp(`${outDir}/fonts`, `${finalDir}/fonts`, { recursive: true });
 
+// The embed script (injected into artifacts; no bundling needed) lives in
+// src/ with the rest of the whiteboard source and is copied next to the
+// bundle, so there is one place to edit it and the committed copy cannot
+// drift from it.
+await cp("src/whiteboard-embed.js", `${finalDir}/../whiteboard-embed.js`);
+
 console.log(`Whiteboard bundle written to ${finalDir}`);

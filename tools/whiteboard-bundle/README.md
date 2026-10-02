@@ -1,6 +1,6 @@
 # whiteboard-bundle (dev-only)
 
-Builds `internal/forum/assets/whiteboard/{whiteboard.js.gz,whiteboard.css,fonts/}`,
+Builds `internal/forum/assets/whiteboard/{whiteboard.js.gz,whiteboard.css,fonts/}` and copies `src/whiteboard-embed.js` to `internal/forum/assets/whiteboard-embed.js`,
 the browser bundle that `vexillum forum`'s whiteboard feature go:embeds.
 
 **Never runs in `go build`, `go install`, or the brew/curl install path.**

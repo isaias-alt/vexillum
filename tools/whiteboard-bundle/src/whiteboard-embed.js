@@ -8,34 +8,32 @@
 // whiteboard-frame.js's header for why):
 //   - Upstream's chrome hosts a *separate* artifact iframe and reaches into it
 //     to find `.mermaid` containers, so inline whiteboard iframes are two
-//     levels deep (chrome -> artifact iframe -> whiteboard iframe) and it
-//     validates senders via `source.parent === artifactFrame.contentWindow`.
-//     vexillum forum serves the artifact page directly at `/` with this
-//     script injected into it - there is no separate chrome/artifact split -
-//     so whiteboard iframes are direct children of `window`, and the sender
-//     check is `source.parent === window`.
-//   - No `key`/session id in any URL or endpoint: this server only ever
-//     serves the single artifact given to `vexillum forum <file>` for its
-//     process lifetime, so every request already implicitly belongs to that
-//     one forum - see internal/forum's package doc.
-//   - No prompt queue / poll loop exists yet in vexillum forum (that is a
-//     separate, not-yet-built feature - see the design scout report this
-//     mission was dispatched from). "Queue feedback" here simply persists
-//     the edited scene plus a `.excalidraw`/PNG snapshot to disk and reports
-//     success in the frame's own status line; it does not enqueue anything
-//     for an agent to read.
-//   - No live-reload / chrome-restart flushing: vexillum forum does not
-//     hot-reload the served artifact, so that upstream machinery (relevant
-//     only to forum-tool's editor-in-the-loop workflow) is dropped. Closing
-//     the fullscreen overlay reloads the inline iframe from disk instead, so
-//     it picks up whatever the overlay just saved.
+//     levels deep and it validates senders via
+//     `source.parent === artifactFrame.contentWindow`. Here this script is
+//     injected into the artifact page itself, so whiteboard iframes are
+//     direct children of `window`, and the sender check is
+//     `source.parent === window`.
+//   - The artifact runs in a sandboxed iframe (an opaque origin) under the
+//     forum chrome, and the whiteboard iframes are direct children of it.
+//     This script holds no server credentials: every round trip goes through
+//     window.forum.__rpc (forum-sdk.js), which asks the chrome to call the
+//     session-scoped, token-guarded API on its behalf.
+//   - "Queue feedback" persists the edited scene plus a `.excalidraw`/PNG
+//     snapshot to disk and the server queues a prompt tagged "whiteboard"
+//     (a bounded edit summary and those two paths) into the same queue as
+//     every other feedback, for the user to send to the agent.
+//   - No live-reload / chrome-restart flushing: the forum chrome reloads the
+//     artifact iframe itself when the file changes, and closing the
+//     fullscreen overlay reloads the inline iframe from disk so it picks up
+//     whatever the overlay just saved.
 //
 // Runs inside the artifact page (injected by internal/forum's server before
 // </body> when the page contains at least one `.mermaid` container). Finds
 // every `.mermaid` container, in document order, and replaces it with a
 // sandboxed iframe pointing at /whiteboard-frame - the editable Excalidraw
-// view of that diagram's Mermaid source. Owns every server round trip; the
-// frames themselves have no server access (see whiteboard-frame.js).
+// view of that diagram's Mermaid source. Owns every server round trip
+// (through the chrome); the frames themselves have no server access (see
+// whiteboard-frame.js).
 
 (function () {
   "use strict";
@@ -58,46 +56,58 @@
   let overlayChannelId = "";
   let overlayReady = false;
 
+  // Every colour below is a forum --fr-* token with the design system's own
+  // value as the fallback, because the embed runs in artifacts that bring
+  // their own styles and may carry no tokens at all.
+  function themed(name, darkValue, lightValue) {
+    return "var(--fr-" + name + ", " + (theme() === "dark" ? darkValue : lightValue) + ")";
+  }
+
+  function frameUrl(index) {
+    return "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index)) + "&theme=" + theme();
+  }
+
   function theme() {
+    // The chrome's theme switch wins (the server renders it on <html>); the
+    // OS preference only decides when the artifact carries no forum theme.
+    const forced = document.documentElement.getAttribute("data-fr-theme");
+    if (forced === "dark" || forced === "light") return forced;
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
+  const rpc = (op, payload) => window.forum.__rpc(op, payload);
+
   async function fetchMermaidSources() {
-    const response = await fetch("/api/mermaid-sources");
-    if (!response.ok) throw new Error("could not read the page's Mermaid sources");
-    const data = await response.json();
+    const data = await rpc("whiteboard.sources");
     return Array.isArray(data.sources) ? data.sources : [];
   }
 
   async function fetchSavedScene(index) {
-    const response = await fetch("/api/whiteboard/" + index);
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.whiteboard || null;
+    try {
+      const data = await rpc("whiteboard.load", { index });
+      return data.whiteboard || null;
+    } catch {
+      return null;
+    }
   }
 
   async function persistScene(index, message) {
-    const response = await fetch("/api/whiteboard/" + index, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+    await rpc("whiteboard.save", {
+      index,
+      body: {
         source_hash: String(message.sourceHash || ""),
         text_metrics_version: Number(message.textMetricsVersion) || 0,
         scene: message.scene || null,
         baseline: message.baseline || null,
-      }),
+      },
     });
-    if (!response.ok) throw new Error("failed to save whiteboard scene");
   }
 
-  async function publishFeedback(index, scene, pngDataUrl) {
-    const response = await fetch("/api/whiteboard/" + index + "/feedback-files", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scene: scene || null, pngDataUrl: String(pngDataUrl || "") }),
+  async function publishFeedback(index, scene, pngDataUrl, summaryLines) {
+    return rpc("whiteboard.feedback", {
+      index,
+      body: { scene: scene || null, pngDataUrl: String(pngDataUrl || ""), summaryLines: boundedLines(summaryLines) },
     });
-    if (!response.ok) throw new Error("failed to write whiteboard feedback files");
-    return response.json();
   }
 
   function post(record, message) {
@@ -111,14 +121,50 @@
     }
   }
 
+  // A frame that has not rendered yet is an empty box, which is
+  // indistinguishable from a broken one. Every inline frame therefore sits in a
+  // wrapper with a status line over it: "Loading", or the reason it did not
+  // start (the frame never reported ready, or the init round trip failed).
+  const START_TIMEOUT_MS = 20000;
+  const statusTimers = new Map();
+
+  function setStatus(index, text, isError) {
+    const record = inlineFrames.get(index);
+    if (!record || !record.status) return;
+    window.clearTimeout(statusTimers.get(index));
+    statusTimers.delete(index);
+    record.status.textContent = text || "";
+    record.status.style.display = text ? "flex" : "none";
+    record.status.style.color = isError ? themed("danger", "#E08268", "#A8341F") : themed("text-secondary", "#A0A3A9", "#5A5E66");
+  }
+
+  function watchStart(index) {
+    setStatus(index, "Loading whiteboard...", false);
+    statusTimers.set(
+      index,
+      window.setTimeout(() => {
+        const record = inlineFrames.get(index);
+        if (record && !record.ready) {
+          setStatus(
+            index,
+            "The whiteboard did not start: its frame never reported ready. Reload the page; if it persists, run `vx forum stop` and open the session again so the server restarts with the current build.",
+            true,
+          );
+        }
+      }, START_TIMEOUT_MS),
+    );
+  }
+
   function makeIframe(index) {
     const iframe = document.createElement("iframe");
-    iframe.src = "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index));
+    iframe.src = frameUrl(index);
     iframe.sandbox = "allow-scripts allow-popups";
     iframe.style.width = "100%";
     iframe.style.height = "480px";
-    iframe.style.border = "1px solid rgba(128, 128, 128, 0.35)";
-    iframe.style.borderRadius = "10px";
+    iframe.style.border = "1px solid " + themed("border-strong", "#3A3F47", "#C2C0B8");
+    iframe.style.borderRadius = "var(--fr-radius-lg, 12px)";
+    iframe.style.background = themed("bg", "#15171A", "#F2F1EC");
+    iframe.style.colorScheme = theme();
     iframe.title = "Whiteboard · diagram " + (index + 1);
     return iframe;
   }
@@ -127,8 +173,25 @@
     const containers = Array.from(document.querySelectorAll(MERMAID_SELECTOR));
     containers.forEach((container, index) => {
       const iframe = makeIframe(index);
-      container.replaceWith(iframe);
-      inlineFrames.set(index, { iframe, channelId: "", ready: false, suspended: false });
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "relative";
+      const status = document.createElement("div");
+      status.setAttribute("role", "status");
+      Object.assign(status.style, {
+        position: "absolute",
+        inset: "0",
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        textAlign: "center",
+        font: "14px/1.5 system-ui, sans-serif",
+        pointerEvents: "none",
+      });
+      wrapper.append(iframe, status);
+      container.replaceWith(wrapper);
+      inlineFrames.set(index, { iframe, status, channelId: "", ready: false, suspended: false });
+      watchStart(index);
     });
     return containers.length;
   }
@@ -156,10 +219,14 @@
         channelId,
       };
       if (mode === "overlay") postOverlay(message);
-      else post(target, message);
+      else {
+        post(target, message);
+        setStatus(index, "", false);
+      }
       return true;
     } catch (error) {
       if (mode === "overlay") showOverlayError(describeError(error));
+      else setStatus(index, "Could not start the whiteboard: " + describeError(error), true);
       return false;
     }
   }
@@ -219,33 +286,24 @@
     );
   }
 
-  function summaryText(lines) {
+  function boundedLines(lines) {
     return (Array.isArray(lines) ? lines : [])
       .filter((line) => typeof line === "string")
       .slice(0, 50)
-      .map((line) => line.slice(0, 300))
-      .join("\n");
+      .map((line) => line.slice(0, 300));
   }
 
   async function handleQueueFeedback(index, message, placement) {
+    const reply = (result) => {
+      if (placement === "overlay") postOverlay(result);
+      else post(inlineFrames.get(index), result);
+    };
     try {
       await persistScene(index, message);
-      const files = await publishFeedback(index, message.scene, message.pngDataUrl);
-      const result = { type: "vx-whiteboard:queueResult", ok: true };
-      if (placement === "overlay") postOverlay(result);
-      else post(inlineFrames.get(index), result);
-      // eslint-disable-next-line no-console
-      console.info(
-        "[vexillum forum] whiteboard feedback saved: diagram " + (index + 1),
-        "\n" + summaryText(message.summaryLines),
-        "\nscene:",
-        files.scene_path,
-        files.preview_path ? "\npreview: " + files.preview_path : "",
-      );
+      await publishFeedback(index, message.scene, message.pngDataUrl, message.summaryLines);
+      reply({ type: "vx-whiteboard:queueResult", ok: true });
     } catch (error) {
-      const result = { type: "vx-whiteboard:queueResult", ok: false, error: describeError(error) };
-      if (placement === "overlay") postOverlay(result);
-      else post(inlineFrames.get(index), result);
+      reply({ type: "vx-whiteboard:queueResult", ok: false, error: describeError(error) });
     }
   }
 
@@ -257,7 +315,7 @@
       position: "fixed",
       inset: "0",
       zIndex: "2147483000",
-      background: "rgba(0, 0, 0, 0.5)",
+      background: themed("scrim", "rgba(0,0,0,0.6)", "rgba(26,29,34,0.45)"),
       display: "none",
     });
     overlayIframe = document.createElement("iframe");
@@ -269,23 +327,27 @@
       width: "100%",
       height: "100%",
       border: "0",
-      background: "#fffbf3",
+      background: themed("bg", "#15171A", "#F2F1EC"),
     });
     overlayCloseButton = document.createElement("button");
     overlayCloseButton.type = "button";
-    overlayCloseButton.textContent = "× Close";
+    overlayCloseButton.textContent = "\u00d7 Close";
+    // Looks like a forum secondary button: the --fr-* design tokens when the
+    // artifact has them, the same palette values otherwise (the embed runs in
+    // artifacts that bring their own styles and no tokens).
+    const color = themed;
     Object.assign(overlayCloseButton.style, {
       position: "absolute",
-      top: "10px",
+      top: "8px",
       right: "10px",
       zIndex: "1",
-      border: "0",
-      borderRadius: "8px",
-      padding: "8px 12px",
-      fontWeight: "700",
+      padding: "4px 10px",
+      font: "500 13px/1.3 var(--fr-font-sans, system-ui, sans-serif)",
       cursor: "pointer",
-      background: "#f4c95d",
-      color: "#17130a",
+      color: color("text", "#E9EAEC", "#1A1D22"),
+      background: color("surface", "#1C1F24", "#FFFFFF"),
+      border: "1px solid " + color("border-strong", "#3A3F47", "#C2C0B8"),
+      borderRadius: "var(--fr-radius-sm, 4px)",
     });
     overlayCloseButton.onclick = closeOverlay;
     overlay.append(overlayIframe, overlayCloseButton);
@@ -296,7 +358,9 @@
     ensureOverlay();
     overlay.style.display = "block";
     overlayIframe.srcdoc =
-      '<p style="font-family:sans-serif;padding:16px;color:#b91c1c;">Could not open the whiteboard: ' +
+      '<p style="font-family:sans-serif;padding:16px;color:' +
+      themed("danger", "#E08268", "#A8341F") +
+      ';">Could not open the whiteboard: ' +
       String(text || "unknown error").replace(/</g, "&lt;") +
       "</p>";
   }
@@ -314,7 +378,7 @@
       overlayReady = false;
       overlayChannelId = "";
       overlay.style.display = "block";
-      overlayIframe.src = "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index));
+      overlayIframe.src = frameUrl(index);
     });
   }
 
@@ -344,6 +408,7 @@
       // just saved, instead of trying to reconcile two live in-memory scenes.
       record.ready = false;
       record.channelId = "";
+      watchStart(index);
       record.iframe.src = record.iframe.src;
     }
   }
