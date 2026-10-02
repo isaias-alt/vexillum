@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useNotebookLayout } from "fumadocs-ui/layouts/notebook";
 import { PanelLeft } from "lucide-react";
 import { Navbar } from "./Navbar";
+import { SearchTrigger } from "./SearchTrigger";
 import { i18n, type Lang } from "@/lib/i18n";
 
 // Fumadocs' header slot, replaced by the shared Navbar. The docs add only
@@ -26,14 +27,7 @@ export function DocsHeader() {
       // contain keeps the bar's content from inflating the grid's outer
       // columns (they are minmax(min-content, 1fr)).
       style={{ gridArea: "1 / 1 / 2 / -1", contain: "inline-size" }}
-      center={
-        Search && (
-          <Search.full
-            hideIfDisabled
-            className="my-auto w-full max-w-[280px] max-md:hidden"
-          />
-        )
-      }
+      center={<SearchTrigger />}
       trailing={
         <>
           {Search && <Search.sm hideIfDisabled className="md:hidden" />}

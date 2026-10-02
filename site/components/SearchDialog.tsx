@@ -33,7 +33,16 @@ export default function StaticSearchDialog(props: SharedProps) {
       {...props}
     >
       <SearchDialogOverlay />
-      <SearchDialogContent>
+      <SearchDialogContent
+        // The field is the whole point of opening the dialog: focus it
+        // explicitly instead of relying on the first tabbable element.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement)
+            .querySelector<HTMLInputElement>("input[role='combobox']")
+            ?.focus();
+        }}
+      >
         <SearchDialogHeader>
           <SearchDialogIcon />
           <SearchDialogInput />

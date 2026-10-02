@@ -36,13 +36,15 @@ export function Navbar({
       className={`sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur ${className ?? ""}`}
       style={style}
     >
-      <div className="site-container flex h-(--site-header-height) items-center gap-4">
+      <div
+        className={`site-container h-(--site-header-height) items-center gap-4 ${center ? "navbar-grid" : "flex"}`}
+      >
         <Link href={`${prefix}/`} className="flex shrink-0 items-center gap-[9px]">
           <LogoMark className="h-[22px] w-[22px] shrink-0" />
           <span className="text-[13.5px] text-text">vexillum</span>
         </Link>
         {center}
-        <nav className="ml-auto flex items-center gap-2 text-[12.5px] text-text-secondary sm:gap-[26px]">
+        <nav className="ml-auto flex justify-end items-center gap-2 text-[12.5px] text-text-secondary sm:gap-[26px]">
           <Link
             href={`${prefix}/docs`}
             className="hover:text-text max-sm:hidden"
