@@ -28,7 +28,7 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 | `id` | string | 16 caracteres hexadecimales |
 | `kind` | `"mission"` o `"scout"` | |
 | `prompt` | string | el prompt original |
-| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; ver [Missions y scouts](/es/docs/concepts/missions-and-scouts) |
+| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; ver [Missions y scouts](/es/docs/concepts/missions-and-scouts). Una tarea `shipped` espera que se mergee su pull request, no está trabada |
 | `created_at`, `updated_at` | hora RFC 3339 | |
 | `camp_slot`, `camp_path`, `camp_branch` | number, string, string | se definen cuando se adquiere un camp |
 | `camp_base` | string | branch de la que se bifurcó el camp; puede estar vacío en tareas viejas |

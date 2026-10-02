@@ -27,6 +27,6 @@ description: Los dos tipos de tarea, y los estados por los que pasa una tarea.
 | `failed` | terminó sin éxito |
 | `interrupted` | vexillum perdió al soldier mismo (su pane de herdr desapareció), no necesariamente porque haya fallado; el trabajo ya commiteado sigue en el camp |
 | `unconfirmed` | el soldier quedó idle sin prueba de finalización y sin una pausa válida declarada, así que vexillum no distingue éxito de atascado; una persona tiene que mirar |
-| `shipped` | enviada por el pipeline tribunal y abierta como pull request real |
+| `shipped` | enviada por el pipeline tribunal y abierta como pull request real; el soldier y su camp quedan abiertos a propósito hasta que se mergee el PR. Ver [Land vs ship](/es/docs/guides/land-vs-ship) |
 
 `done` nunca se infiere solo de la inactividad. Para una mission vexillum exige un commit nuevo por delante de la base del camp; para un scout, el archivo de reporte. Un soldier que espera a propósito un job en segundo plano puede declarar una pausa en `pauses/<agent-name>.md` para que un turno quieto no se confunda con haber terminado.

@@ -14,6 +14,10 @@ Una mission terminada sale de su camp de dos maneras. Las dos son explícitas, y
 
 Por defecto el commander pregunta antes de aterrizar. Una vez que le decís que aterrice sin preguntar, puede saltear ese paso en el proyecto.
 
+<Callout title="A shipped soldier waits on purpose">
+  Después de un `vx ship` exitoso, el pane y el camp del soldier quedan abiertos hasta que mergees el pull request. Es a propósito, no es un soldier trabado. Mirá [Por qué un soldier shipped sigue abierto](#por-qué-un-soldier-shipped-sigue-abierto) más abajo.
+</Callout>
+
 ## Land
 
 ```bash
@@ -86,3 +90,20 @@ vx land <task-id>
 ```
 
 Para una tarea enviada, `land` mergea el **pull request real**. Requiere `gh` y se niega salvo que el PR esté abierto, no sea draft, sea mergeable y todos los checks estén en verde; el merge queda atado al head exacto que acaba de verificar. No hace release del camp: la branch sigue en vuelo hasta que el PR realmente se mergee.
+
+## Por qué un soldier shipped sigue abierto
+
+Después de un `vx ship` exitoso el status de la mission es `shipped`: la branch está pusheada y hay un pull request real abierto, pero el trabajo **no está aterrizado localmente**, así que `vx ship` no hace release del camp. El pane del soldier y su camp (worktree) quedan abiertos a propósito hasta que el pull request se mergee. No está trabado ni varado: aparece como `shipped` en `vx status`, y en **Shipped** del tablero de [muster](/es/docs/guides/muster-skill).
+
+El motivo es práctico. Si el CI, un reviewer o vos piden cambios en el pull request, el mismo soldier todavía tiene todo el contexto y la branch montada. Hoy `vx prompt` acepta solo tareas `done` y `unconfirmed` y se niega con una `shipped`, así que el follow-up se le da en el pane del propio soldier (no queda registrado como amendment). Cuando el soldier commitee el arreglo, corré `vx ship <task-id>` de nuevo: `shipped` es un estado de partida válido, el pipeline completo corre otra vez y los commits de seguimiento se pushean al mismo pull request.
+
+### Cómo termina
+
+Mergeá el pull request, sea en GitHub o con `vx land <task-id>`. Después, desde el checkout de tu proyecto, en la branch base:
+
+```bash
+git pull
+vx release <task-id>
+```
+
+`vx release` nunca hace fetch. Compara el camp solo contra tu branch base **local**: el worktree no debe tener cambios sin commitear y los commits del camp ya deben estar en esa branch. Justo después de un merge en GitHub, y antes del pull, tu base local todavía no los tiene, así que `vx release` se niega ("has commits not yet landed") y deja el camp y el pane intactos. Después de `git pull` funciona, también con un merge squash o rebase: además del chequeo de ancestro simple, acepta un camp cuyo contenido la base ya tiene bajo otros SHAs de commit. Entonces devuelve el camp al pool y cierra el pane.

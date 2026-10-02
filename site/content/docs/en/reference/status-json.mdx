@@ -28,7 +28,7 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 | `id` | string | 16 hex characters |
 | `kind` | `"mission"` or `"scout"` | |
 | `prompt` | string | the original prompt |
-| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; see [Missions and scouts](/docs/concepts/missions-and-scouts) |
+| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; see [Missions and scouts](/docs/concepts/missions-and-scouts). A `shipped` task is waiting for its pull request to be merged, not stuck |
 | `created_at`, `updated_at` | RFC 3339 time | |
 | `camp_slot`, `camp_path`, `camp_branch` | number, string, string | set once a camp is acquired |
 | `camp_base` | string | branch the camp was forked from; may be empty on older tasks |

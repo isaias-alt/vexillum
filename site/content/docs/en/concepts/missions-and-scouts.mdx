@@ -27,6 +27,6 @@ description: The two kinds of task, and the states a task moves through.
 | `failed` | settled unsuccessfully |
 | `interrupted` | vexillum lost the soldier itself (its herdr pane vanished), not necessarily because it failed; work already committed is still in the camp |
 | `unconfirmed` | the soldier went idle without proof of completion and without a valid declared pause, so vexillum cannot tell success from stuck; a human needs to look |
-| `shipped` | pushed through the tribunal pipeline and opened as a real pull request |
+| `shipped` | pushed through the tribunal pipeline and opened as a real pull request; the soldier and its camp stay open on purpose until the PR is merged. See [Land vs ship](/docs/guides/land-vs-ship#why-a-shipped-soldier-stays-open) |
 
 `done` is never inferred from idleness alone. For a mission vexillum requires a new commit ahead of the camp's base; for a scout, the report file. A soldier that deliberately waits on a background job can declare a pause in `pauses/<agent-name>.md` so a quiet turn is not mistaken for completion.
