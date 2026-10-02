@@ -37,6 +37,7 @@ script verifies the release checksum before installing.
 | `vx models` | List the model and effort profiles a dispatch can use |
 | `vx redispatch` | Re-dispatch an interrupted task from its original prompt |
 | `vx decide` | Answer a blocked task's open question so it can continue |
+| `vx prompt` | Send a follow-up prompt to a soldier that already finished |
 | `vx status` | Report the troop: every mission and scout in the current project |
 | `vx land` | Land a finished mission's work into this project's base branch |
 | `vx ship` | Ship a finished mission through vexillum's own tribunal pipeline, opening a real pull request |

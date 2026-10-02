@@ -32,6 +32,34 @@ status word alone.
   anything else: any work it had already committed is still there. If that work
   matters, land it normally first (`vx land <task-id>`).
 
+## Sending a soldier a follow-up
+
+To give a soldier that already finished more to do (a fix after review, an
+extra step), use `vx prompt <task-id> "<text>"`. It sets the task back to
+`running` before delivering the text and makes sure a sentinel is watching, so
+the soldier's next finish is a transition the sentinel records and wakes you
+for. Only a `done` or `unconfirmed` task with its camp still in place can be
+prompted (a `blocked` one is answered with `vx decide`, an `interrupted` one
+needs `vx redispatch`). It waits a few seconds for a trivial prompt to settle,
+otherwise leaves the task running, like a fresh dispatch.
+
+Do not prompt the soldier's pane by hand with `herdr agent prompt`: the task
+would stay `done` and a second finish would never notify you. The sentinel does
+reopen a settled task it later sees working again, but only on a poll, so a
+short follow-up that finishes between two polls could still slip past.
+`vx prompt` is the supported path.
+
+## Stray `vx sentinel await` processes
+
+The Stop hook runs `vx sentinel await` on every turn end. Each one records
+itself in `~/.vexillum/sentinel-awaiters/`, exits by itself when the hook that
+launched it is gone, and a newer one from the same session replaces the
+previous turn's. Starting `vx sentinel` (or any new `await`) also stops
+orphans left by a dead session, only ever after verifying the pid is a
+`vx sentinel await`. If you still see leftovers, restarting the sentinel
+(`vx sentinel`, after stopping the old one) reaps them; never `pkill` by name,
+that would also kill the main sentinel and other sessions' hooks.
+
 ## Redispatch is destructive
 
 `vx redispatch <task-id>` relaunches the mission from its original prompt in a

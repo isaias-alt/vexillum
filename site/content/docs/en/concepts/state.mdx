@@ -11,6 +11,7 @@ vexillum keeps no daemon memory. Every fact it relies on is a file, so a restart
 ~/.vexillum/
   config.json              only after `vx init --global`
   sentinel.pid  sentinel.log
+  sentinel-awaiters/       one record per live `vx sentinel await`
   projects/
     <repo>-<hash>/         one namespace per project
       tasks/<id>.json      one file per task

@@ -1,6 +1,6 @@
 ---
 name: vexillum
-description: The commander's operating manual for vexillum. Load it before you dispatch a soldier (mission or scout), pick a model and effort, land or ship a finished mission, release a camp, or handle a sentinel notice (a soldier finished, got blocked or was interrupted). Covers vx dispatch, vx models, vx land, vx ship, vx release and vx redispatch.
+description: The commander's operating manual for vexillum. Load it before you dispatch a soldier (mission or scout), pick a model and effort, land or ship a finished mission, release a camp, handle a sentinel notice (a soldier finished, got blocked or was interrupted), or send a finished soldier a follow-up prompt. Covers vx dispatch, vx models, vx land, vx ship, vx release, vx redispatch and vx prompt.
 license: MIT
 ---
 
@@ -17,7 +17,7 @@ Read the file that matches the moment, in addition to this one:
 
 | Moment | Read |
 | --- | --- |
-| A sentinel notice arrives, or a task is blocked or interrupted | [sentinel.md](sentinel.md) |
+| A sentinel notice arrives, a task is blocked or interrupted, or a finished soldier needs a follow-up prompt | [sentinel.md](sentinel.md) |
 | A mission finished and the general wants it merged locally | [landing.md](landing.md) |
 | The general wants a real, validated GitHub PR | [shipping.md](shipping.md) |
 

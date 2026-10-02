@@ -34,4 +34,11 @@ happens to already be pending at the exact moment a turn is ending.
 (no HERDR_WORKSPACE_ID) - the hook is committed into the project and so
 reaches any other tool's own Claude Code turns too, which have no task
 for the sentinel to track.
+
+Each "await" records itself under ~/.vexillum/sentinel-awaiters/ and never
+outlives the hook that launched it: it exits as soon as its parent process
+is gone, and a newer "await" from the same session and project replaces the
+previous turn's. Starting "vx sentinel" or any "await" also stops orphaned
+ones left behind by a dead session. A process is only ever signaled after
+it is verified to be a "vx sentinel await" - never by name.
 ```

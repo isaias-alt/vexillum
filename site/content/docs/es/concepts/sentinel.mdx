@@ -9,6 +9,8 @@ El sentinel es lo que te deja alejarte. Vigila a cada soldier despachado e inter
 
 Corre un sentinel por máquina. Cada 5 segundos consulta el estado en vivo de herdr de cada tarea en `running`, en todos los proyectos que vexillum haya visto. Cuando una tarea termina (done o blocked) persiste el nuevo status y escribe un **wake** durable bajo el proyecto de esa tarea (`wakes/<task-id>.json`). También detecta tareas que pasaron a `interrupted` o `unconfirmed`, y solo después de confirmarlo durante una ventana, no por una sola observación.
 
+También vigila a los soldiers ya terminados cuyo camp sigue en su lugar: si uno vuelve a trabajar (le mandaron un prompt después de terminar), el sentinel devuelve su tarea a `running` sin un wake, así que su próximo fin es una transición como cualquier otra. Ver [Dar seguimiento a un soldier terminado](#dar-seguimiento-a-un-soldier-terminado).
+
 `vx dispatch` inicia un sentinel automáticamente si no hay uno corriendo. Si eso falla avisa por stderr, y podés correr `vx sentinel` vos mismo en segundo plano. Un segundo sentinel se niega a arrancar y nombra el pid del primero. Su pid y su log están en `~/.vexillum/sentinel.pid` y `~/.vexillum/sentinel.log`.
 
 ## Cómo se despierta al commander
@@ -28,5 +30,19 @@ registrado con `asyncRewake` y un timeout de una hora. `await` se bloquea, revis
 | `vx sentinel drain` | revisa una vez, al instante: una decisión `block` si hay algo pendiente, `{}` si no |
 
 Fuera de un pane administrado por herdr (sin `HERDR_WORKSPACE_ID`), `await` y `drain` salen en silencio: el hook se commitea con el proyecto, así que también se dispara en turnos de Claude Code ajenos, como la revisión headless de un camp, que no tienen ningún soldier que esperar.
+
+Cada `await` se registra en `~/.vexillum/sentinel-awaiters/` y nunca sobrevive al hook que lo lanzó. Sale solo cuando su proceso padre desaparece, y un `await` más nuevo de la misma sesión y proyecto reemplaza al del turno anterior, así que una sesión deja un proceso esperando, no uno por turno. Arrancar `vx sentinel` o cualquier `await` también detiene a los huérfanos que dejó una sesión muerta. A un proceso solo se le manda una señal después de verificar, por su archivo de pid y su línea de comando, que es un `vx sentinel await`, nunca por nombre.
+
+## Dar seguimiento a un soldier terminado
+
+El sentinel reporta una tarea que *sale* de `running`, así que un soldier al que se le manda otro prompt después de terminar necesita que su tarea se reabra primero. Usá [`vx prompt`](/es/docs/reference/cli/prompt):
+
+```bash
+vx prompt <task-id> "agregá también una entrada al changelog"
+```
+
+Devuelve la tarea a `running`, entrega el texto y se asegura de que haya un sentinel vigilando, así que el próximo fin del soldier vuelve a despertar al commander. Solo se puede mandar un prompt a una tarea `done` o `unconfirmed` cuyo camp no fue liberado; una tarea `blocked` se responde con `vx decide` y una `interrupted` con `vx redispatch`.
+
+Mandarle el prompt al pane a mano (`herdr agent prompt`) sigue funcionando como respaldo: el sentinel reabre una tarea terminada que ve trabajando otra vez. Esa detección es por polling, así que un seguimiento muy corto que termina entre dos polls puede escapársele, por eso `vx prompt` es el camino soportado.
 
 Ver la [referencia de `sentinel`](/es/docs/reference/cli/sentinel) para el uso completo.
