@@ -18,8 +18,12 @@ and wakes the commander again. A re-prompt that bypasses it can finish
 without any notice, because the sentinel only reports a task leaving
 "running".
 
-Only a task in status "done" or "unconfirmed" whose camp has not been
-released can be prompted. A "blocked" task is answered with 'vx decide'
+Only a task in status "done", "shipped" or "unconfirmed" whose camp has not
+been released can be prompted. A shipped task's soldier is still open, waiting
+for its pull request to be merged: prompting it asks for follow-up work. The
+task goes to running while the soldier works and comes back as done, not
+shipped, since the new commits are not on the pull request yet; run
+'vx ship <task-id>' again to push them to the same pull request. A "blocked" task is answered with 'vx decide'
 (or, if it was marked blocked by mistake, cleared with 'vx decide <task-id> --dismiss'), an "interrupted" one needs 'vx redispatch', and a "running" one is already
 working - wait for it to settle.
 

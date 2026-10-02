@@ -119,8 +119,30 @@ It refuses (leaving the camp and pane untouched) if the worktree still has
 uncommitted changes or unlanded commits, so it is safe by construction. Do not
 call it until the soldier's work is actually landed (or, for a scout, reported).
 It is not a "give up on this soldier" command. A mission shipped through
-`vx ship` is not released: its branch is still in flight until the general merges
-the real PR.
+`vx ship` is not released until the general merges the real PR: its branch is
+still in flight until then.
+
+Once the PR is merged, release the shipped mission the same way. Merge the PR
+first, then run `git pull` in the project's own checkout on the base branch, then
+`vx release <task-id>`. If you release before the pull, the refusal says so: merge
+the pull request, run `git pull` on the base branch, then retry. For a shipped
+task, and only then, `vx release` also asks `gh` whether the PR merged (best
+effort, never required: it needs `gh` installed and logged in). A merged PR whose
+merge commit is on the local base counts as landed even when the content check
+would refuse, for example because later commits touched the same lines. Until the
+base has been pulled it keeps refusing and tells you to pull.
+
+### Never `--discard` without the general's approval
+
+`vx release <task-id> --discard` releases the camp even when the landed check
+fails, or when the worktree has uncommitted changes, and throws that work away.
+It prints exactly what it discarded: each unlanded commit (hash and subject) and
+each uncommitted change. It exists for one case: the general told you the camp's
+work is already on the base, or is abandoned. Never use it on your own judgment,
+to get past a refusal, or because a release looks stuck. Ask the general first,
+name what would be discarded (`git log <base>..<branch>` in the camp), and run it
+only after an explicit yes. If the refusal is "merge the pull request and pull",
+do that instead.
 
 ## Recording pending decisions
 

@@ -79,9 +79,12 @@ To give a soldier that already finished more to do (a fix after review, an
 extra step), use `vx prompt <task-id> "<text>"`. It sets the task back to
 `running` before delivering the text and makes sure a sentinel is watching, so
 the soldier's next finish is a transition the sentinel records and wakes you
-for. Only a `done` or `unconfirmed` task with its camp still in place can be
-prompted (a `blocked` one is answered with `vx decide`, an `interrupted` one
-needs `vx redispatch`). It waits a few seconds for a trivial prompt to settle,
+for. Only a `done`, `shipped` or `unconfirmed` task with its camp still in place
+can be prompted (a `blocked` one is answered with `vx decide`, an `interrupted`
+one needs `vx redispatch`). Prompting a `shipped` task is how you ask for a fix
+on an open PR: it goes `running` while the soldier works and settles as `done`,
+not `shipped`, with one notice for that settle; then `vx ship <task-id>` pushes
+the fix to the same PR. It waits a few seconds for a trivial prompt to settle,
 otherwise leaves the task running, like a fresh dispatch.
 
 What you send with `vx prompt` (and the answer text you send with `vx decide`,

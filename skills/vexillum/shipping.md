@@ -78,8 +78,10 @@ Everything that comes from the camp, the reviewer or your own `--body` is
 sanitized first: lines with an absolute home path, a localhost port or something
 that looks like a secret are dropped, as is any line quoting the mission prompt.
 `vx ship` says how many lines it dropped. An unsafe `--title` is refused before
-the tribunal runs. Re-shipping a mission whose PR is already open leaves the
-PR's text alone, so fix a PR by hand with `gh pr edit` if it needs it.
+the tribunal runs. Shipping a mission whose branch already has an open PR (see
+below) reuses that PR and refreshes its title and description from the new
+review, or from `--title` and `--body`, so a text you edited by hand on GitHub is
+replaced.
 
 ## After the PR opens
 
@@ -95,11 +97,16 @@ context and the branch mounted. It is not stuck or stranded. It shows as
 `shipped` in `vx status` and under Shipped on the muster board, so never
 release it, redispatch it or report it as a problem just because it is idle.
 
-To ask it for a fix, note that `vx prompt` only accepts `done` or `unconfirmed`
-tasks and refuses a `shipped` one. The follow-up has to be given in the soldier's
-own pane, and it is not recorded as an amendment. Once the soldier has committed
-the fix, run `vx ship <task-id>` again: `shipped` is a valid starting state, the
-full tribunal runs again and the follow-up commits are pushed to the same PR.
+To ask it for a fix, use `vx prompt <task-id> "<text>"`: it accepts a `shipped`
+task like any finished one, delivers the text to the soldier's pane and records it
+as an amendment. The task goes `running` while the soldier works, and when it
+settles it is `done` again, not `shipped`, because the new commits are not on the
+PR yet. You get one notice for that settle. Then run `vx ship <task-id>` again:
+the full tribunal runs, the commits are pushed to the same branch, and because a
+PR for the branch already exists `vx ship` reuses it (it never opens a second
+one) and refreshes its title and description. If that PR is already merged or was
+closed, `vx ship` refuses before running anything: a merged one needs `git pull`,
+`vx release` and a new mission for the follow-up.
 
 To finish it, merge the PR (the general on GitHub, or `vx land <task-id>`, which
 merges the real PR once it is open, not a draft, mergeable and green). Then, in
@@ -112,7 +119,26 @@ vx release <task-id>
 
 Run `git pull` in the project's own checkout, on the base branch. `vx release`
 never fetches: it compares the camp against the local base branch only, so right
-after a remote merge and before the pull it refuses with "has commits not yet
-landed" and leaves the camp and pane untouched. After the pull it passes, even
-for a squash or rebase merge, because it also accepts a camp whose content the
-base already contains. It still refuses a camp with uncommitted changes.
+after a remote merge and before the pull it refuses, and the refusal says to
+merge the pull request and run `git pull` on the base branch, then retry. It
+leaves the camp and pane untouched. After the pull it passes, even for a squash
+or rebase merge, because it also accepts a camp whose content the base already
+contains. It still refuses a camp with uncommitted changes.
+
+For a shipped task only, `vx release` also asks `gh` about the PR, best effort
+(`gh` installed and logged in, otherwise it silently relies on the local checks).
+When the PR is `MERGED` it trusts that over the content check, which can refuse
+forever after a remote merge when later commits touched the same lines, provided
+the PR's merge commit is on the local base branch. If it is not yet, the refusal
+says to `git pull`. A camp holding commits the merged PR never carried is still
+refused. A task that is not shipped never triggers a network call.
+
+## When release still refuses: `--discard`
+
+If the check cannot pass and the general confirmed that the camp's work is
+already on the base or is abandoned, `vx release <task-id> --discard` releases the
+camp anyway. It prints each unlanded commit (hash and subject) and each
+uncommitted change it threw away, and resets the worktree so the slot can be
+reused. **Never use `--discard` without the general's approval**: ask first, say
+what would be lost, and run it only after an explicit yes. A refusal that says to
+merge and pull is answered by merging and pulling, not by `--discard`.

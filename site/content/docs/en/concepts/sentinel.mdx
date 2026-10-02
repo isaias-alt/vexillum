@@ -76,7 +76,7 @@ The sentinel reports a task *leaving* `running`, so a soldier prompted again aft
 vx prompt <task-id> "also add a changelog entry"
 ```
 
-It sets the task back to `running`, delivers the text, and makes sure a sentinel is watching, so the soldier's next finish wakes the commander again. Only a `done` or `unconfirmed` task whose camp has not been released can be prompted; a `blocked` task is answered with `vx decide`, and an `interrupted` one with `vx redispatch`.
+It sets the task back to `running`, delivers the text, and makes sure a sentinel is watching, so the soldier's next finish wakes the commander again. Only a `done`, `shipped` or `unconfirmed` task whose camp has not been released can be prompted (a shipped one goes to `running`, and settles as `done`, not `shipped`, since the new commits are not on its pull request until `vx ship` runs again); a `blocked` task is answered with `vx decide`, and an `interrupted` one with `vx redispatch`.
 
 Prompting the pane by hand (`herdr agent prompt`) still works as a fallback: the sentinel reopens a settled task it sees working again. That detection is poll-based, so a very short follow-up that finishes between two polls can slip past it, which is why `vx prompt` is the supported path.
 

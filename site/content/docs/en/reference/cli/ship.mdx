@@ -79,13 +79,19 @@ Optional overrides, only when the proposed text is not what you want:
                         cannot be combined with --body
 
 A supplied body is sanitized like everything else; the diff stat,
-Verification, Tribunal notes and footer stay. A supplied title or body only
-matters when the pull request is opened; re-shipping a mission whose PR
-already exists leaves the PR's text alone.
+Verification, Tribunal notes and footer stay.
 
 A mission already shipped can be shipped again, to push follow-up commits
-onto the same open PR - only "done" and "shipped" are valid starting
-states; a re-ship still runs the full tribunal pipeline first. Once
-shipped, land the PR with 'vx land <task-id>' rather than 'vx
-land'-ing the camp locally.
+onto the same open PR - "done" and "shipped" are the valid starting states,
+and a re-ship still runs the full tribunal pipeline first. A shipped
+mission's soldier stays open until the PR is merged, so follow-up work is
+requested with 'vx prompt <task-id> <text>' (the task goes
+running, then back to done) and delivered with 'vx ship
+<task-id>' again. Whenever a PR for the branch already exists, whether the
+task is done or shipped, ship reuses it instead of opening a second one: it
+pushes to the same branch and refreshes the PR's title and description from
+the new review (or from --title and --body). A PR that is already merged or
+closed is not reused: ship refuses before running anything. Once shipped,
+land the PR with 'vx land <task-id>' rather than
+'vx land'-ing the camp locally.
 ```

@@ -65,7 +65,7 @@ Without `--fix`, a blocking review only rejects the ship and prints the findings
 
 With neither `go.mod` nor `package.json`, lint and tests pass with a note that nothing was detected. It is synchronous: when `ship` returns, the whole pipeline has settled. Only after every step passes does it push the camp branch to `origin` and run `gh pr create`. No agent decides whether or when that happens: it is the one action with an irreversible effect outside the machine.
 
-A mission in `done` or `shipped` can be shipped again to push follow-ups onto the same PR; it re-runs the full pipeline first.
+A mission in `done` or `shipped` can be shipped again to push follow-ups onto the same PR; it re-runs the full pipeline first. Whenever a pull request for the branch already exists, `vx ship` reuses it instead of opening a second one: it pushes to the same branch and refreshes the pull request's title and description from the new review (see below). A pull request that is already merged or closed cannot take more commits, so `vx ship` refuses before running anything.
 
 ### The pull request text
 
@@ -81,7 +81,7 @@ Overrides are optional:
 vx ship <task-id> --title "feat: concise title" --body-file description.md
 ```
 
-`--title` replaces the title. `--body "<text>"` or `--body-file <path>` (`-` reads standard input; the two cannot be combined) replaces the What section; Changes, Verification, Tribunal notes and the footer stay. A `--title` that fails the safety check is refused before the tribunal runs. Re-shipping a mission whose pull request is already open leaves the pull request's text alone.
+`--title` replaces the title. `--body "<text>"` or `--body-file <path>` (`-` reads standard input; the two cannot be combined) replaces the What section; Changes, Verification, Tribunal notes and the footer stay. A `--title` that fails the safety check is refused before the tribunal runs. When the pull request already exists, the overrides apply to the refresh; without them the refreshed text comes from the new review, so a text edited by hand on GitHub is replaced.
 
 ## Landing a shipped mission
 
@@ -95,7 +95,13 @@ For a shipped task, `land` merges the **real pull request** instead. It requires
 
 After a successful `vx ship` the mission's status is `shipped`: the branch is pushed and a real pull request is open, but the work is **not landed locally**, so `vx ship` does not release the camp. The soldier's pane and its camp (worktree) stay open on purpose until the pull request is merged. It is not stuck or stranded: it appears as `shipped` in `vx status`, and under **Shipped** on the [muster](/docs/guides/muster-skill) board.
 
-The reason is practical. If CI, a reviewer or you ask for changes on the pull request, the same soldier still has the full context and the branch mounted. Today `vx prompt` accepts only `done` and `unconfirmed` tasks and refuses a `shipped` one, so the follow-up is given in the soldier's own pane (it is not recorded as an amendment). Once the soldier has committed the fix, run `vx ship <task-id>` again: `shipped` is a valid starting state, the full pipeline runs again and the follow-up commits are pushed to the same pull request.
+The reason is practical. If CI, a reviewer or you ask for changes on the pull request, the same soldier still has the full context and the branch mounted. `vx prompt` accepts a `shipped` task like any finished one:
+
+```bash
+vx prompt <task-id> "address the review comments"
+```
+
+The text goes to the soldier's pane and is recorded as an amendment, like any other `vx prompt`. The task goes to `running` while the soldier works, and when it settles it is `done` again, **not** `shipped`, because the new commits are not on the pull request yet. The commander gets one notice for that settle. Then run `vx ship <task-id>` again: the full pipeline runs, the commits are pushed to the same branch, and since a pull request for the branch already exists it is reused and its title and description refreshed, never a second one.
 
 ### How it ends
 
@@ -106,4 +112,20 @@ git pull
 vx release <task-id>
 ```
 
-`vx release` never fetches. It checks the camp against your **local** base branch only: the worktree must have no uncommitted changes, and the camp's commits must already be on that branch. Right after a merge on GitHub, and before the pull, your local base does not have them yet, so `vx release` refuses ("has commits not yet landed") and leaves the camp and pane untouched. After `git pull` it succeeds, also for a squash or rebase merge: besides the plain ancestor check, it accepts a camp whose content the base already contains under different commit SHAs. It then returns the camp to the pool and closes the pane.
+`vx release` never fetches. It checks the camp against your **local** base branch only: the worktree must have no uncommitted changes, and the camp's commits must already be on that branch. Right after a merge on GitHub, and before the pull, your local base does not have them yet, so `vx release` refuses and leaves the camp and pane untouched. The refusal says what to do: merge the pull request, run `git pull` on the base branch, then retry. After `git pull` it succeeds, also for a squash or rebase merge: besides the plain ancestor check, it accepts a camp whose content the base already contains under different commit SHAs. It then returns the camp to the pool and closes the pane.
+
+### When GitHub says it merged
+
+For a shipped task, and only then, `vx release` also asks `gh` whether the pull request for the camp's branch is `MERGED`. This is best effort and never required: it needs `gh` installed and logged in, and without it release relies on the local checks alone. A task that is not shipped makes no network call.
+
+A merged pull request counts as landed once its merge commit is reachable from your local base branch, and GitHub's word is trusted over the content check. That matters because the content check can refuse forever after a remote merge when later commits on the base touched the same lines. If the merge commit is not on the local base yet, release tells you to `git pull`. A camp that holds commits the merged pull request never carried is still refused.
+
+### Releasing anyway with `--discard`
+
+```bash
+vx release <task-id> --discard
+```
+
+`--discard` releases the camp even when that check fails or the worktree has uncommitted changes, and it throws that work away. It prints exactly what it discarded: each unlanded commit (hash and subject) and each uncommitted change, and it resets the worktree so the slot can be reused. The commits stay reachable from the camp's branch until the slot is reused.
+
+It is for one case: the camp's work is already on the base, or is abandoned, and the general confirmed it. The commander never uses it without the general's approval. A refusal that says to merge the pull request and pull is answered by merging and pulling, not by `--discard`.

@@ -24,7 +24,7 @@ Una tarea nueva toma del pool un slot **libre, limpio y ya aterrizado** cuando e
 
 ## Release
 
-Un camp vuelve al pool solo cuando es seguro reutilizarlo: el worktree no tiene cambios sin commitear y, para una mission, sus commits ya están en la branch base. `vx release <task-id>` lo exige y se niega en caso contrario. A un scout además se le exige que exista su reporte; `--force` se salta solo ese chequeo del reporte, nunca el de limpio-y-aterrizado.
+Un camp vuelve al pool solo cuando es seguro reutilizarlo: el worktree no tiene cambios sin commitear y, para una mission, sus commits ya están en la branch base. `vx release <task-id>` lo exige y se niega en caso contrario. A un scout además se le exige que exista su reporte; `--force` se salta solo ese chequeo del reporte, nunca el de limpio-y-aterrizado. Para una mission enviada con ship, `vx release` también le pregunta a `gh` (de mejor esfuerzo, nunca obligatorio) si el pull request mergeó, y confía en un merge cuyo commit está en la base local. `--discard` es la salida explícita para un camp cuyo trabajo el general confirmó que ya está en la base o abandonado: hace release igual e imprime lo que descartó. Ver [Cómo termina](/es/docs/guides/land-vs-ship#cómo-termina).
 
 `vx land` hace el release del camp por vos después de un fast-forward local exitoso. Una mission enviada con ship es la excepción: su pull request es la fuente de verdad, así que su camp queda abierto a propósito hasta que mergees el PR, y después `git pull` y `vx release <task-id>`. Ver [Por qué un soldier shipped sigue abierto](/es/docs/guides/land-vs-ship#por-qué-un-soldier-shipped-sigue-abierto).
 

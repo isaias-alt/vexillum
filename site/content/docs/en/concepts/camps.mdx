@@ -24,7 +24,7 @@ A new task takes an **idle, clean, already-landed** slot from the pool when one 
 
 ## Release
 
-A camp returns to the pool only when it is safe to reuse: the worktree has no uncommitted changes and, for a mission, its commits are already on the base branch. `vx release <task-id>` enforces this and refuses otherwise. A scout is also gated on its report existing; `--force` skips only that report check, never the clean-and-landed check.
+A camp returns to the pool only when it is safe to reuse: the worktree has no uncommitted changes and, for a mission, its commits are already on the base branch. `vx release <task-id>` enforces this and refuses otherwise. A scout is also gated on its report existing; `--force` skips only that report check, never the clean-and-landed check. For a shipped mission, `vx release` also asks `gh` (best effort, never required) whether the pull request merged, and trusts a merge whose commit is on the local base. `--discard` is the explicit escape hatch for a camp whose work the general confirmed is already on the base or abandoned: it releases anyway and prints what it threw away. See [How it ends](/docs/guides/land-vs-ship#how-it-ends).
 
 `vx land` releases the camp for you after a successful local fast-forward. A shipped mission is the exception: its pull request is the source of truth, so its camp stays open on purpose until you merge the PR, then `git pull` and `vx release <task-id>`. See [Why a shipped soldier stays open](/docs/guides/land-vs-ship#why-a-shipped-soldier-stays-open).
 

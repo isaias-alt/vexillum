@@ -76,7 +76,7 @@ El sentinel reporta una tarea que *sale* de `running`, así que un soldier al qu
 vx prompt <task-id> "agregá también una entrada al changelog"
 ```
 
-Devuelve la tarea a `running`, entrega el texto y se asegura de que haya un sentinel vigilando, así que el próximo fin del soldier vuelve a despertar al commander. Solo se puede mandar un prompt a una tarea `done` o `unconfirmed` cuyo camp no fue liberado; una tarea `blocked` se responde con `vx decide` y una `interrupted` con `vx redispatch`.
+Devuelve la tarea a `running`, entrega el texto y se asegura de que haya un sentinel vigilando, así que el próximo fin del soldier vuelve a despertar al commander. Solo se puede mandar un prompt a una tarea `done`, `shipped` o `unconfirmed` cuyo camp no fue liberado (una shipped pasa a `running` y se asienta como `done`, no `shipped`, porque los commits nuevos no están en su pull request hasta que `vx ship` corra de nuevo); una tarea `blocked` se responde con `vx decide` y una `interrupted` con `vx redispatch`.
 
 Mandarle el prompt al pane a mano (`herdr agent prompt`) sigue funcionando como respaldo: el sentinel reabre una tarea terminada que ve trabajando otra vez. Esa detección es por polling, así que un seguimiento muy corto que termina entre dos polls puede escapársele, por eso `vx prompt` es el camino soportado.
 

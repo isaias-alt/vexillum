@@ -26,7 +26,9 @@ Empezá con `vx doctor`: te dice qué falta. Los mensajes de error de vexillum e
 | --- | --- |
 | `land refused` | Tu checkout está sucio, o la branch divergió de la base. Commiteá o hacé stash, o pedile al soldier que haga rebase. Ver [Missions en paralelo](/es/docs/guides/parallel-missions). Un checkout sucio suele ser solo el scaffold de `init` sin commitear. |
 | `landed, but automatic release failed` | El merge no se deshace. Corré `vx release <task-id>` a mano. |
-| `release refused` | El camp tiene cambios sin commitear o commits sin aterrizar. Aterrizá o descartá el trabajo primero. |
+| `release refused` | El camp tiene cambios sin commitear o commits sin aterrizar. Aterrizá el trabajo primero. Para una mission enviada con ship, el rechazo dice que mergees el pull request y corras `git pull` en la branch base, y reintentes. Con `gh` con sesión iniciada, un PR mergeado cuyo commit de merge está en la base local cuenta como aterrizado. Ver [Cómo termina](/es/docs/guides/land-vs-ship#cómo-termina). |
+| `release refused: ... merge commit is not on <base> yet` | El PR mergeó en GitHub pero tu base local todavía no lo tiene. Corré `git pull` en la branch base y después `vx release` de nuevo. |
+| El general confirmó que el trabajo del camp ya está en la base o abandonado, y release igual se niega | `vx release <task-id> --discard` hace release igual e imprime cada commit y cambio que descartó. Solo con la aprobación del general. |
 | `release refused: scout task ... has no report` | El reporte es el producto del scout. Hacé que lo escriba, o pasá `--force`. |
 | `'gh' is not installed` | `ship`, y aterrizar un PR enviado, necesitan el GitHub CLI. |
 | `vexillum failed at <step>, refusing to push` | Falló un paso del tribunal; no se hizo push de nada. Arreglalo en el camp y volvé a hacer ship. |
