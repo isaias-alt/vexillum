@@ -1,0 +1,131 @@
+---
+title: models.json
+description: La tabla editable de perfiles de modelo y effort con la que el commander despacha. Es tuya para cambiar.
+---
+
+<Callout title="Este archivo es tuyo para editar">
+  `.vexillum/models.json` está **pensado para que lo edites vos**. Guarda los valores (qué modelo y effort para qué tipo de tarea); el criterio de qué perfil encaja con una tarea sigue siendo del commander. `vx init` escribe los valores por defecto una vez y nunca pisa el archivo, y `vx upgrade` nunca toca tus cambios.
+</Callout>
+
+## Dónde vive
+
+Se combinan tres capas, y las posteriores ganan:
+
+| Capa | Ubicación | Notas |
+| --- | --- | --- |
+| valores por defecto embebidos | dentro del binario | lo que `vx init` escribe en un proyecto nuevo |
+| base global | `~/.vexillum/models.json` | opcional; aplica a todos los proyectos |
+| proyecto | `.vexillum/models.json` | por proyecto; pisa a la base global |
+
+Un archivo que falta se omite. Corré `vx models` para ver el resultado combinado y qué archivos se leyeron.
+
+## Formato
+
+El archivo es JSON, en inglés:
+
+```json
+{
+  "profiles": {
+    "<name>": { "model": "sonnet", "effort": "high", "when": "..." }
+  },
+  "default": { "model": "sonnet", "effort": "medium" }
+}
+```
+
+| Campo | Significado |
+| --- | --- |
+| `profiles.<name>` | Un perfil con nombre. El nombre no tiene espacios y no puede ser `default`. |
+| `profiles.<name>.model` | El modelo que se le pasa a Claude Code: `haiku`, `sonnet`, `opus` o `fable`. |
+| `profiles.<name>.effort` | El effort que se le pasa a Claude Code: `low`, `medium`, `high`, `xhigh` o `max`. |
+| `profiles.<name>.when` | Texto libre que le dice al commander cuándo aplica el perfil. No puede estar vacío. |
+| `default.model`, `default.effort` | El valor de respaldo cuando ningún perfil encaja. Mismos valores válidos. |
+
+Los campos desconocidos se rechazan, así que un error de tipeo no queda sin efecto en silencio. Un valor que Claude Code no aceptaría es un error que nombra el archivo y el campo.
+
+Los perfiles incluidos, en orden de prioridad (gana el primero que coincide):
+
+| Perfil | Modelo, effort | Cuándo |
+| --- | --- | --- |
+| `scout-facts` | `haiku`, `low` | un scout cuya pregunta se reduce a hechos verificables |
+| `scout-judgment` | `sonnet`, `medium` | un scout que requiere criterio |
+| `mission-mechanical` | `haiku`, `low` | una edición mecánica trivial |
+| `mission-big` | `sonnet`, `high` | una mission grande, ambigua o riesgosa |
+| `opus-on-request` | `opus`, `high` | solo cuando pedís Opus explícitamente |
+| default | `sonnet`, `medium` | nada de lo anterior aplica |
+
+## Cómo se combinan las capas
+
+La combinación es **por campo**, no por archivo:
+
+- Una capa puede pisar un solo campo de un perfil existente, como `effort`, y el resto se hereda.
+- Un perfil **nuevo** tiene que definir `model`, `effort` y `when`, porque no hay de dónde heredar.
+- Un perfil no se puede borrar, solo redefinir.
+- `default` se puede cambiar de a un campo.
+- `default` es un **nombre reservado**: no se puede usar como nombre de perfil. Selecciona la entrada por defecto en `vx dispatch --profile default`.
+
+## Leerlo con `vx models`
+
+`vx models` es de solo lectura. Imprime cada perfil como `name  (model, effort)` seguido de su línea `when`, después el default, y al final los archivos que se combinaron:
+
+```text
+scout-facts  (haiku, low)
+  Scout whose question reduces to verifiable facts ...
+...
+default  (sonnet, medium)
+  Nothing above fits. Fall back to it, do not reach for it on purpose.
+
+Source: built-in defaults only
+```
+
+Mirá [`vx models`](/es/docs/reference/cli/models).
+
+## Despachar con un perfil
+
+```bash
+vx dispatch "update the changelog wording" --kind mission --profile mission-mechanical
+```
+
+`--profile <name>` busca el modelo y el effort. Un `--model` o `--effort` explícito **gana** sobre el perfil, campo por campo. Un perfil desconocido es un error que lista los válidos, y `--profile default` selecciona la entrada por defecto. Mirá [`vx dispatch`](/es/docs/reference/cli/dispatch).
+
+## Cómo lo usa el commander
+
+La [skill](/es/docs/concepts/skills) `vexillum` le indica al commander que corra `vx models`, lea las líneas `when` y elija el perfil que encaja con la tarea, y después despache con `--profile`. Elegir sigue siendo criterio, escrito en markdown. El archivo solo guarda los valores, así que cambiás un número en vez de reescribir prosa.
+
+## Un ejemplo completo
+
+Supongamos que querés que las missions grandes corran con effort `xhigh`, un perfil barato para trabajo solo de documentación, y Opus como respaldo. Escribí esto en `.vexillum/models.json`:
+
+```json
+{
+  "profiles": {
+    "mission-big": { "effort": "xhigh" },
+    "docs-sweep": {
+      "model": "haiku",
+      "effort": "medium",
+      "when": "Mission that only touches documentation or comments, no behavior change."
+    }
+  },
+  "default": { "model": "opus" }
+}
+```
+
+`mission-big` pisa solo su `effort`, así que conserva `sonnet` y su `when` incluido. `docs-sweep` es nuevo, así que define los tres campos. `default` cambia solo su modelo. `vx models` entonces muestra:
+
+```text
+mission-big  (sonnet, xhigh)
+  Mission that is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.
+opus-on-request  (opus, high)
+  Only when the general explicitly asks for Opus on this task. Never chosen on your own.
+docs-sweep  (haiku, medium)
+  Mission that only touches documentation or comments, no behavior change.
+default  (opus, medium)
+  Nothing above fits. Fall back to it, do not reach for it on purpose.
+```
+
+El perfil nuevo aparece después de los incluidos, y el commander ya puede elegirlo a partir de su línea `when`.
+
+## Relacionado
+
+- [Skills](/es/docs/concepts/skills) y el [contenido de la skill `vexillum`](/es/docs/reference/skills/vexillum).
+- [Missions y scouts](/es/docs/concepts/missions-and-scouts).
+- [Archivos](/es/docs/reference/files).

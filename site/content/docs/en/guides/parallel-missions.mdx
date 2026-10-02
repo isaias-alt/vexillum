@@ -34,4 +34,4 @@ If the soldier's pane already closed, no fresh soldier can rebase a branch it ne
 
 - **Commit the scaffold first.** `land` refuses a dirty checkout, and `init` leaves new files uncommitted.
 - **Keep missions independent.** Two missions editing the same lines will conflict at rebase time.
-- **Match model to task.** The [rules](/docs/concepts/agents-md-and-rules) pick `haiku` for mechanical edits and `sonnet` with high effort for large ones.
+- **Match model to task.** The commander picks a [profile from `models.json`](/docs/reference/models-json): `haiku` for mechanical edits and `sonnet` with high effort for large ones, unless you changed them.

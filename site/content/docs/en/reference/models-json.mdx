@@ -1,0 +1,131 @@
+---
+title: models.json
+description: The editable table of model and effort profiles the commander dispatches with. Yours to change.
+---
+
+<Callout title="This file is yours to edit">
+  `.vexillum/models.json` is **meant to be edited by you**. It holds the values (which model and effort for which kind of task); the judgment of which profile fits a task stays with the commander. `vx init` writes the defaults once and never overwrites the file, and `vx upgrade` never touches your changes.
+</Callout>
+
+## Where it lives
+
+Three layers are merged, later ones winning:
+
+| Layer | Location | Notes |
+| --- | --- | --- |
+| built-in defaults | embedded in the binary | what `vx init` writes to a new project |
+| global base | `~/.vexillum/models.json` | optional; applies to every project |
+| project | `.vexillum/models.json` | per project; overrides the global base |
+
+A missing file is skipped. Run `vx models` to see the merged result and which files were read.
+
+## Format
+
+The file is JSON, in English:
+
+```json
+{
+  "profiles": {
+    "<name>": { "model": "sonnet", "effort": "high", "when": "..." }
+  },
+  "default": { "model": "sonnet", "effort": "medium" }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `profiles.<name>` | A named profile. The name has no whitespace and is not `default`. |
+| `profiles.<name>.model` | The model passed to Claude Code: `haiku`, `sonnet`, `opus` or `fable`. |
+| `profiles.<name>.effort` | The effort passed to Claude Code: `low`, `medium`, `high`, `xhigh` or `max`. |
+| `profiles.<name>.when` | Free text that tells the commander when the profile applies. It must not be empty. |
+| `default.model`, `default.effort` | The fallback when no profile fits. Same valid values. |
+
+Unknown fields are rejected, so a typo does not silently do nothing. A value Claude Code would not accept is an error that names the file and the field.
+
+The built-in profiles, in priority order (the first that matches wins):
+
+| Profile | Model, effort | When |
+| --- | --- | --- |
+| `scout-facts` | `haiku`, `low` | a scout whose question reduces to verifiable facts |
+| `scout-judgment` | `sonnet`, `medium` | a scout that needs judgment |
+| `mission-mechanical` | `haiku`, `low` | a trivial mechanical edit |
+| `mission-big` | `sonnet`, `high` | a big, ambiguous or risky mission |
+| `opus-on-request` | `opus`, `high` | only when you explicitly ask for Opus |
+| default | `sonnet`, `medium` | nothing above fits |
+
+## How layers merge
+
+The merge is **per field**, not per file:
+
+- A layer can override just one field of an existing profile, such as `effort`, and the rest is inherited.
+- A **new** profile must set `model`, `effort` and `when`, because there is nothing to inherit from.
+- A profile cannot be deleted, only redefined.
+- `default` can be changed one field at a time.
+- `default` is a **reserved name**: it cannot be used as a profile name. It selects the default entry in `vx dispatch --profile default`.
+
+## Reading it with `vx models`
+
+`vx models` is read-only. It prints every profile as `name  (model, effort)` followed by its `when` line, then the default, then the files that were merged:
+
+```text
+scout-facts  (haiku, low)
+  Scout whose question reduces to verifiable facts ...
+...
+default  (sonnet, medium)
+  Nothing above fits. Fall back to it, do not reach for it on purpose.
+
+Source: built-in defaults only
+```
+
+See [`vx models`](/docs/reference/cli/models).
+
+## Dispatching with a profile
+
+```bash
+vx dispatch "update the changelog wording" --kind mission --profile mission-mechanical
+```
+
+`--profile <name>` looks up the model and effort. An explicit `--model` or `--effort` **wins** over the profile, field by field. An unknown profile is an error that lists the valid ones, and `--profile default` selects the default entry. See [`vx dispatch`](/docs/reference/cli/dispatch).
+
+## How the commander uses it
+
+The `vexillum` [skill](/docs/concepts/skills) tells the commander to run `vx models`, read the `when` lines and pick the profile that fits the task, then dispatch with `--profile`. Choosing is still judgment, written in markdown. The file only holds the values, so you change a number instead of rewriting prose.
+
+## A worked example
+
+Say you want large missions to run at `xhigh` effort, a cheap profile for documentation-only work, and Opus as the fallback. Write this to `.vexillum/models.json`:
+
+```json
+{
+  "profiles": {
+    "mission-big": { "effort": "xhigh" },
+    "docs-sweep": {
+      "model": "haiku",
+      "effort": "medium",
+      "when": "Mission that only touches documentation or comments, no behavior change."
+    }
+  },
+  "default": { "model": "opus" }
+}
+```
+
+`mission-big` overrides only its `effort`, so it keeps `sonnet` and its built-in `when`. `docs-sweep` is new, so it sets all three fields. `default` changes only its model. `vx models` then shows:
+
+```text
+mission-big  (sonnet, xhigh)
+  Mission that is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.
+opus-on-request  (opus, high)
+  Only when the general explicitly asks for Opus on this task. Never chosen on your own.
+docs-sweep  (haiku, medium)
+  Mission that only touches documentation or comments, no behavior change.
+default  (opus, medium)
+  Nothing above fits. Fall back to it, do not reach for it on purpose.
+```
+
+The new profile is listed after the built-in ones, and the commander can now pick it from its `when` line.
+
+## Related
+
+- [Skills](/docs/concepts/skills) and the [`vexillum` skill content](/docs/reference/skills/vexillum).
+- [Missions and scouts](/docs/concepts/missions-and-scouts).
+- [Files](/docs/reference/files).

@@ -1,0 +1,115 @@
+---
+title: The AGENTS.md slot
+description: The block vexillum keeps inside your own AGENTS.md, what each part of its markers means, and how it is protected from overwriting your edits.
+---
+
+<Callout type="warn" title="vx init modifies your AGENTS.md (and CLAUDE.md)">
+  `vx init` writes a block into **your own** `AGENTS.md`, and makes sure your `CLAUDE.md` imports it. Both files are yours, so `init` first lists the files it is about to touch and **asks for your consent** before writing anything. Answer no and nothing is changed. See [`vx init`](/docs/reference/cli/init) and [Quickstart](/docs/get-started/quickstart).
+</Callout>
+
+## What the slot is
+
+The slot is a block that vexillum owns inside a file you own: your project's `AGENTS.md`. It carries the **always-on core** of the commander's rules, the few things that must be in context on every turn. Everything operational (how to dispatch, pick a model, land, ship, release, react to the sentinel) lives in [skills](/docs/concepts/skills) that Claude Code loads only when the moment calls for them.
+
+Why a slot, and not a rules file of its own:
+
+- **One short block instead of a 15 KB file.** The old `.claude/rules/vexillum.md` was loaded whole in every session. The core is small and the detail is on demand.
+- **It lives in the file the ecosystem already reads.** `AGENTS.md` is where your project's agent instructions go. vexillum adds to it instead of creating a parallel convention.
+- **It is safe to share the file.** Everything outside the markers is yours and is never reordered or rewritten.
+
+The block is rendered by the binary, in English or Spanish. You can see the exact text on [AGENTS.md block](/docs/reference/slot-block), generated from the binary so it cannot drift.
+
+## The marker format
+
+```markdown
+<!-- BEGIN VEXILLUM v:1 hash:ab12cd34 -->
+...the commander core...
+<!-- END VEXILLUM -->
+```
+
+### The BEGIN marker
+
+`<!-- BEGIN VEXILLUM v:1 hash:<8hex> -->` carries two pieces of metadata:
+
+| Part | Meaning |
+| --- | --- |
+| `v:1` | The version of the **marker format**, not of vexillum. A future binary that changes the format bumps it, so it can still recognize a block written by an older one. |
+| `hash:<8hex>` | The first 8 hex characters of the SHA-256 of the block **body**: the text between the two markers, with line endings normalized to LF and trailing newlines dropped (the marker lines themselves are not hashed). It is how vexillum tells a block it wrote and you left alone from one you edited. |
+
+### The body
+
+Between the markers is the commander core. It holds:
+
+- **Role check.** The rules apply only to the commander. A soldier that reads them by accident (every camp is a checkout of your project, so it will) must follow its dispatch prompt and never dispatch more soldiers.
+- **Vocabulary.** general, commander, soldier, mission, scout, camp, sentinel. These stay in English in every language.
+- **Authority.** An explicit instruction from you overrides a rule, but the commander says which rule it set aside.
+- **Tone.** How to address you, and to drop the flavor when the news is bad.
+- **The instruction to load the `vexillum` skill.** Before dispatching, picking a model, landing, shipping, releasing or handling a sentinel notice, the commander must load the skill and follow it, not work from memory. This is the hard link between the always-on core and the on-demand detail.
+
+### The END marker
+
+`<!-- END VEXILLUM -->` closes the block. Everything after it is yours again.
+
+### Why the markers sit on their own lines
+
+Each marker is alone on its line. Claude Code strips block-level HTML comments from the files it loads into context, so a marker on its own line costs no tokens and cannot confuse the model. Detection is also anchored to the start of a line and ignores markers inside fenced code blocks, so a page that merely *quotes* the markers (like this one) is never mistaken for a block.
+
+## The states
+
+`vx doctor` reports the slot's state, and `init` and `upgrade` act on it.
+
+| State | What it means for you |
+| --- | --- |
+| absent | There are no vexillum markers in `AGENTS.md`. `init` appends the block after a blank line (or creates the file with only the block). |
+| current | The block matches what this binary would write, marker included. Nothing to do. |
+| stale | You did not touch the block, but it differs from this binary's version (a newer binary, or another language). `upgrade` refreshes it safely. |
+| drifted | You edited **inside** the block: the body no longer matches its hash. vexillum will not overwrite it silently. |
+| malformed | The markers are broken: a BEGIN without an END, an END before the BEGIN, or more than one block. Nothing is written until it is fixed. |
+
+## When you edit the block
+
+The block is meant to be managed, but it is your file. If you change something inside the markers:
+
+- vexillum **never overwrites it without `--force`**;
+- it shows you the **diff** between your version and its own;
+- with `--force`, your version is first saved to `.vexillum/agents-md-slot.backup.md`, then replaced. An earlier backup is overwritten.
+
+If you want different always-on rules, edit your own text *outside* the markers, or edit the [skill](/docs/concepts/skills) copy in `.claude/skills/vexillum/`, which `upgrade` also protects.
+
+## Malformed markers and repair
+
+A malformed block is never fixed automatically. When you confirm, the repair is deliberately narrow:
+
+- it keeps the **first** well-formed BEGIN/END pair;
+- it deletes every other duplicate pair, contents included;
+- it deletes an orphan BEGIN or END **marker line only**, never the text around it.
+
+After repair the result may still be drifted. Repair never judges the body; that stays your decision.
+
+## Uninstalling
+
+Removing the block takes out exactly the two marker lines, the body between them and one adjacent blank line, and leaves the rest of your file as it was. The file itself is deleted only when vexillum created it and nothing else is left in it.
+
+## Language
+
+The slot ships in English and Spanish. The domain vocabulary stays in English in both.
+
+`init` and `upgrade` detect the language of your existing `AGENTS.md` with a simple, deterministic, offline check: they count frequent function words of each language, ignoring code, URLs and the vexillum block itself. It needs at least 8 hits and a 70% share to decide; otherwise, and when there is no `AGENTS.md`, it defaults to English. The detected language is shown before anything is written so you can correct it.
+
+Override it with `--lang en` or `--lang es`. The hash is per language, so switching language is an ordinary update of the block.
+
+## Why CLAUDE.md must import AGENTS.md
+
+Claude Code reads `CLAUDE.md`, not `AGENTS.md`. For the slot to reach the commander, `CLAUDE.md` has to import it with one line:
+
+```markdown
+@AGENTS.md
+```
+
+`init` checks this. If `CLAUDE.md` does not exist it proposes creating it with that line. If it exists without the import it proposes appending the line. A `CLAUDE.md` that is a symlink to `AGENTS.md` already counts. It is the second file of yours that `init` touches, so it is listed in the notice and covered by the same consent.
+
+## Related
+
+- [Skills](/docs/concepts/skills): what loads on demand.
+- [AGENTS.md block](/docs/reference/slot-block): the exact text, in both languages.
+- [`vx init`](/docs/reference/cli/init), [`vx upgrade`](/docs/reference/cli/upgrade) and [`vx doctor`](/docs/reference/cli/doctor).

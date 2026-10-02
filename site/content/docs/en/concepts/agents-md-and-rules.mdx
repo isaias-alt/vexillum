@@ -1,42 +1,37 @@
 ---
 title: AGENTS.md and rules
-description: The commander's behavior is markdown scaffolded into your project, not code in the binary.
+description: The commander's behavior is markdown in your project, not code in the binary - a short always-on core in your AGENTS.md, and the operations in skills.
 ---
 
 ## Two different files
 
 - **vexillum's own `AGENTS.md`** (in the vexillum repository) governs how vexillum itself is built. It is not what you get.
-- **`.claude/rules/vexillum.md`** is the *product* rules file. `vx init` scaffolds it into your project. Claude Code loads it every session, unconditionally - alongside whatever `AGENTS.md` or `CLAUDE.md` the project already has, which vexillum never touches.
+- **Your project's `AGENTS.md`** is where `vx init` writes the commander core, inside a block it manages (the [slot](/docs/concepts/agents-md-slot)). The file is yours; only what sits between the markers is vexillum's.
 
 This is the product's central design decision: the commander's intelligence is markdown, the binary is plumbing.
 
-## What the rules cover
+<Callout title="The rules file is gone">
+  Older versions scaffolded `.claude/rules/vexillum.md`, loaded whole in every session. It is no longer created. The core now lives in the AGENTS.md slot and the operational detail in [skills](/docs/concepts/skills). `vx upgrade` migrates an existing project: see [Migrating from the rules file](/docs/get-started/upgrading#migrating-from-the-rules-file-to-the-slot).
+</Callout>
 
-| Section | Subject |
-| --- | --- |
-| Role check | The rules apply only to the commander. A soldier reading them by accident must follow its dispatch prompt instead, and never dispatch further soldiers. |
-| Vocabulary, Authority | The terms; an explicit instruction from you overrides a rule, but the commander must say which rule it set aside. |
-| Tone | How to address you and when to drop the flavor (bad news is reported plainly). |
-| The sentinel | What the `Stop` hook means and how to react to `interrupted`. |
-| Dispatching a soldier | Always `vx dispatch`, never the commander's own subagent tool. |
-| Choosing a model and effort | The decision table below. |
-| Landing, Shipping, Releasing | Ask before landing; release right after. |
+## What goes where
+
+| Where | Always loaded | Subject |
+| --- | --- | --- |
+| AGENTS.md slot | yes | Role check, vocabulary, authority, tone, and one hard instruction: load the `vexillum` skill before any operational step. |
+| `vexillum` skill | on demand | Dispatching a soldier (always `vx dispatch`, never the commander's own subagent tool), choosing a model and effort, landing, shipping, releasing, and the sentinel. |
+| [`models.json`](/docs/reference/models-json) | read by `vx models` | The values for each model and effort profile. |
+
+Splitting them keeps the always-on cost small: the commander pays for the detail only at the moment it dispatches, lands, ships or releases. The risk of any on-demand design is that the model forgets to load the detail, which is why the slot carries that one instruction as a hard rule.
 
 ### Choosing a model and effort
 
-The first matching rule wins. vexillum validates the values but never picks them.
-
-| # | Situation | Model and effort |
-| --- | --- | --- |
-| 1 | Scout whose question is verifiable facts from an authoritative source | `haiku`, `low` |
-| 2 | Scout that needs judgment | `sonnet`, `medium` |
-| 3 | Mission that is a trivial mechanical edit | `haiku`, `low` |
-| 4 | Big or ambiguous multi-file mission, risky refactor | `sonnet`, `high` |
-| 5 | You explicitly ask for Opus | `opus`, `high` |
-| 6 | Nothing above fits | `sonnet`, `medium` |
+The table is no longer prose. It is data in [`models.json`](/docs/reference/models-json): the commander runs `vx models`, reads each profile's `when` line, picks the one that fits and dispatches with `--profile`. Which profile fits a task is judgment, which stays in markdown; the model and effort values are yours to edit. vexillum validates the values but never picks them.
 
 ## Editing and upgrading
 
-The file is yours to edit: tune the table, the tone, the landing posture. `init` writes it once and never overwrites it; [`upgrade`](/docs/get-started/upgrading) refreshes it only when it is unmodified, or with `--force`.
+- The slot is protected by a hash: if you edit inside it, `upgrade` shows you the diff and does not overwrite it without `--force`. See [The AGENTS.md slot](/docs/concepts/agents-md-slot).
+- The skills are refreshed by `upgrade` and an edited one is reported, not replaced. See [Skills](/docs/concepts/skills).
+- `models.json` is yours: `init` never overwrites it and `upgrade` never touches it.
 
-`vx init --global` writes the rules to `~/.claude/rules/vexillum.md` instead, applying the commander persona to every Claude Code session on the machine. It is opt-in for that reason.
+`vx init --global` installs for every Claude Code session on the machine instead of one project. See [Install globally](/docs/get-started/install#install-globally).

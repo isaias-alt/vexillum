@@ -1,0 +1,115 @@
+---
+title: El slot de AGENTS.md
+description: El bloque que vexillum mantiene dentro de tu propio AGENTS.md, qué significa cada parte de sus marcadores y cómo se protege de pisar tus ediciones.
+---
+
+<Callout type="warn" title="vx init modifica tu AGENTS.md (y tu CLAUDE.md)">
+  `vx init` escribe un bloque en **tu propio** `AGENTS.md`, y se asegura de que tu `CLAUDE.md` lo importe. Los dos archivos son tuyos, así que `init` primero lista los archivos que va a tocar y **te pide consentimiento** antes de escribir nada. Si respondés que no, no se cambia nada. Mirá [`vx init`](/es/docs/reference/cli/init) y el [Quickstart](/es/docs/get-started/quickstart).
+</Callout>
+
+## Qué es el slot
+
+El slot es un bloque que vexillum administra dentro de un archivo que es tuyo: el `AGENTS.md` de tu proyecto. Lleva el **núcleo siempre activo** de las reglas del commander, lo poco que tiene que estar en contexto en cada turno. Todo lo operativo (cómo despachar, elegir modelo, aterrizar, hacer ship, liberar, reaccionar al sentinel) vive en [skills](/es/docs/concepts/skills) que Claude Code carga solo cuando hace falta.
+
+Por qué un slot y no un archivo de reglas propio:
+
+- **Un bloque corto en vez de un archivo de 15 KB.** El viejo `.claude/rules/vexillum.md` se cargaba entero en cada sesión. El núcleo es chico y el detalle va a pedido.
+- **Vive en el archivo que el ecosistema ya lee.** `AGENTS.md` es donde van las instrucciones de agentes de tu proyecto. vexillum agrega ahí en vez de crear una convención paralela.
+- **Es seguro compartir el archivo.** Todo lo que está fuera de los marcadores es tuyo y nunca se reordena ni se reescribe.
+
+El bloque lo renderiza el binario, en inglés o en español. Podés ver el texto exacto en [Bloque de AGENTS.md](/es/docs/reference/slot-block), generado desde el binario para que no se desfase.
+
+## El formato de los marcadores
+
+```markdown
+<!-- BEGIN VEXILLUM v:1 hash:ab12cd34 -->
+...el núcleo del commander...
+<!-- END VEXILLUM -->
+```
+
+### El marcador BEGIN
+
+`<!-- BEGIN VEXILLUM v:1 hash:<8hex> -->` lleva dos datos:
+
+| Parte | Significado |
+| --- | --- |
+| `v:1` | La versión del **formato del marcador**, no de vexillum. Un binario futuro que cambie el formato la sube, así todavía puede reconocer un bloque escrito por uno anterior. |
+| `hash:<8hex>` | Los primeros 8 caracteres hexadecimales del SHA-256 del **cuerpo** del bloque: el texto entre los dos marcadores, con los fines de línea normalizados a LF y sin saltos de línea finales (las líneas de los marcadores no entran en el hash). Es lo que le permite a vexillum distinguir un bloque que escribió y dejaste en paz de uno que editaste. |
+
+### El cuerpo
+
+Entre los marcadores está el núcleo del commander. Contiene:
+
+- **Role check.** Las reglas aplican solo al commander. Un soldier que las lea por accidente (cada camp es un checkout de tu proyecto, así que le va a pasar) tiene que seguir su prompt de dispatch y nunca despachar más soldiers.
+- **Vocabulary.** general, commander, soldier, mission, scout, camp, sentinel. Estos términos quedan en inglés en todos los idiomas.
+- **Authority.** Una instrucción explícita tuya anula una regla, pero el commander dice cuál dejó de lado.
+- **Tone.** Cómo dirigirse a vos, y dejar el color cuando las noticias son malas.
+- **La instrucción de cargar la skill `vexillum`.** Antes de despachar, elegir modelo, aterrizar, hacer ship, liberar o atender un aviso del sentinel, el commander tiene que cargar la skill y seguirla, no trabajar de memoria. Es el vínculo duro entre el núcleo siempre activo y el detalle a pedido.
+
+### El marcador END
+
+`<!-- END VEXILLUM -->` cierra el bloque. Todo lo que sigue es tuyo de nuevo.
+
+### Por qué los marcadores van en su propia línea
+
+Cada marcador está solo en su línea. Claude Code quita los comentarios HTML de bloque de los archivos que carga en contexto, así que un marcador en su propia línea no cuesta tokens ni confunde al modelo. Además, la detección se ancla al inicio de la línea e ignora los marcadores dentro de bloques de código con cercas, así que una página que solo *cita* los marcadores (como esta) nunca se confunde con un bloque.
+
+## Los estados
+
+`vx doctor` reporta el estado del slot, y `init` y `upgrade` actúan según él.
+
+| Estado | Qué significa para vos |
+| --- | --- |
+| absent | No hay marcadores de vexillum en `AGENTS.md`. `init` agrega el bloque después de una línea en blanco (o crea el archivo con solo el bloque). |
+| current | El bloque coincide con lo que escribiría este binario, marcador incluido. No hay nada que hacer. |
+| stale | No tocaste el bloque, pero difiere de la versión de este binario (un binario más nuevo, u otro idioma). `upgrade` lo refresca sin riesgo. |
+| drifted | Editaste **dentro** del bloque: el cuerpo ya no coincide con su hash. vexillum no lo pisa en silencio. |
+| malformed | Los marcadores están rotos: un BEGIN sin END, un END antes del BEGIN, o más de un bloque. No se escribe nada hasta arreglarlo. |
+
+## Cuando editás el bloque
+
+El bloque está pensado para ser administrado, pero el archivo es tuyo. Si cambiás algo dentro de los marcadores:
+
+- vexillum **nunca lo sobrescribe sin `--force`**;
+- te muestra el **diff** entre tu versión y la suya;
+- con `--force`, tu versión se guarda primero en `.vexillum/agents-md-slot.backup.md` y después se reemplaza. Un backup anterior se sobrescribe.
+
+Si querés otras reglas siempre activas, editá tu propio texto *fuera* de los marcadores, o la copia de la [skill](/es/docs/concepts/skills) en `.claude/skills/vexillum/`, que `upgrade` también protege.
+
+## Marcadores malformados y reparación
+
+Un bloque malformado nunca se arregla solo. Cuando confirmás, la reparación es deliberadamente acotada:
+
+- conserva el **primer** par BEGIN/END bien formado;
+- borra cualquier otro par duplicado, contenido incluido;
+- borra un marcador BEGIN o END huérfano **solo en esa línea**, nunca el texto que lo rodea.
+
+Después de reparar, el resultado todavía puede estar drifted. La reparación nunca juzga el cuerpo; eso sigue siendo decisión tuya.
+
+## Desinstalar
+
+Quitar el bloque saca exactamente las dos líneas de marcadores, el cuerpo entre ellas y una línea en blanco adyacente, y deja el resto de tu archivo como estaba. El archivo en sí se borra solo cuando lo creó vexillum y no queda nada más en él.
+
+## Idioma
+
+El slot viene en inglés y en español. El vocabulario del dominio queda en inglés en ambos.
+
+`init` y `upgrade` detectan el idioma de tu `AGENTS.md` existente con una verificación simple, determinista y offline: cuentan palabras funcionales frecuentes de cada idioma, ignorando código, URLs y el propio bloque de vexillum. Necesita al menos 8 coincidencias y un 70% de participación para decidir; si no, y cuando no hay `AGENTS.md`, usa inglés. El idioma detectado se muestra antes de escribir para que lo puedas corregir.
+
+Forzalo con `--lang en` o `--lang es`. El hash es por idioma, así que cambiar de idioma es una actualización normal del bloque.
+
+## Por qué CLAUDE.md tiene que importar AGENTS.md
+
+Claude Code lee `CLAUDE.md`, no `AGENTS.md`. Para que el slot llegue al commander, `CLAUDE.md` tiene que importarlo con una línea:
+
+```markdown
+@AGENTS.md
+```
+
+`init` lo verifica. Si `CLAUDE.md` no existe, propone crearlo con esa línea. Si existe sin el import, propone agregar la línea al final. Un `CLAUDE.md` que es un symlink a `AGENTS.md` ya cuenta. Es el segundo archivo tuyo que toca `init`, así que figura en el aviso y lo cubre el mismo consentimiento.
+
+## Relacionado
+
+- [Skills](/es/docs/concepts/skills): lo que se carga a pedido.
+- [Bloque de AGENTS.md](/es/docs/reference/slot-block): el texto exacto, en los dos idiomas.
+- [`vx init`](/es/docs/reference/cli/init), [`vx upgrade`](/es/docs/reference/cli/upgrade) y [`vx doctor`](/es/docs/reference/cli/doctor).

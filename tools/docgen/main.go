@@ -14,6 +14,10 @@
 //     does not have) and this index links to them under /es/docs. Nothing
 //     else in the Spanish tree is generated or ever removed, so a command
 //     page translated by hand there is safe, and
+//   - the skills content pages (reference/skills/<name>.mdx plus an index
+//     and meta.json) and reference/slot-block.mdx, in both locales: the
+//     embedded skills and the rendered AGENTS.md block, shown verbatim so
+//     the docs cannot drift from what `vx init` installs, and
 //   - the command table in README.md, between the docgen:commands markers.
 //
 // Usage, from the repository root:
@@ -72,6 +76,10 @@ func generate(root string) (map[string]string, error) {
 	files[referenceDirES+"/index.mdx"] = indexPage(cmds, localeES)
 	files[referenceDirES+"/meta.json"] = metaFile(cmds)
 
+	if err := contentFiles(files); err != nil {
+		return nil, err
+	}
+
 	readme, err := os.ReadFile(filepath.Join(root, readmePath))
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", readmePath, err)
@@ -86,9 +94,8 @@ func generate(root string) (map[string]string, error) {
 
 // write generates everything in memory first, so a generation error leaves
 // the tree untouched, then writes each file atomically (temp + rename) and
-// finally removes stale pages. Stale cleanup covers only what the generator
-// owns: .mdx files directly inside referenceDir (the English tree).
-// Nothing else under site/ is ever deleted, the Spanish tree included.
+// finally removes stale pages. Nothing else under site/ is ever deleted: only .mdx files directly inside
+// ownedDirs, never the hand-translated Spanish command pages.
 func write(root string) error {
 	files, err := generate(root)
 	if err != nil {
@@ -116,24 +123,31 @@ func write(root string) error {
 	return nil
 }
 
-// staleFiles lists the .mdx files directly in referenceDir (the only files
-// the generator owns there) that it no longer produces.
+// ownedDirs are the directories whose .mdx files the generator owns, so a
+// page it no longer produces is removed. The Spanish command-reference
+// directory is deliberately absent: hand-translated pages live there.
+var ownedDirs = []string{referenceDir, skillsDirEN, skillsDirES}
+
+// staleFiles lists the .mdx files directly in an owned directory that the
+// generator no longer produces.
 func staleFiles(root string, files map[string]string) ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(referenceDir)))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("read %s: %w", referenceDir, err)
-	}
 	var stale []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	for _, dir := range ownedDirs {
+		entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir)))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read %s: %w", dir, err)
 		}
-		rel := referenceDir + "/" + e.Name()
-		if _, ok := files[rel]; !ok && strings.HasSuffix(e.Name(), ".mdx") {
-			stale = append(stale, rel)
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			rel := dir + "/" + e.Name()
+			if _, ok := files[rel]; !ok && strings.HasSuffix(e.Name(), ".mdx") {
+				stale = append(stale, rel)
+			}
 		}
 	}
 	sort.Strings(stale)

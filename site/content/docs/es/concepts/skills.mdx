@@ -1,0 +1,53 @@
+---
+title: Skills
+description: Las tres skills de Claude Code que trae vexillum, para qué sirve cada una, dónde se instalan y cómo upgrade las mantiene al día.
+---
+
+## Qué es una skill
+
+Una skill es un directorio con un `SKILL.md` (y archivos de apoyo opcionales) que Claude Code carga **a pedido**: al arrancar lee la descripción corta de cada skill, y carga el texto completo solo cuando la tarea coincide. Por eso vexillum saca el detalle operativo del [slot de AGENTS.md](/es/docs/concepts/agents-md-slot), que siempre está activo, y lo pone en skills: el commander paga el detalle solo cuando despacha, aterriza, hace ship o libera.
+
+El slot termina con una instrucción dura de cargar la skill `vexillum` antes de cualquiera de esos pasos, para que el detalle a pedido no quede librado al azar.
+
+## Las tres skills
+
+| Skill | Para qué sirve |
+| --- | --- |
+| `vexillum` | El manual de operación del commander: despachar un soldier, elegir modelo y effort desde [`models.json`](/es/docs/reference/models-json), aterrizar, hacer ship, liberar un camp y atender al sentinel. Además de `SKILL.md` trae `landing.md`, `shipping.md` y `sentinel.md`, que se leen en el momento que corresponde. |
+| `forum` | El bucle de revisión en el navegador detrás de [`vx forum`](/es/docs/guides/forum-and-banner): abrir un plan, comparación, diagrama, tabla o formulario de decisión en HTML, esperar tu feedback y responder en el navegador. Trae playbooks para cada tipo de artefacto. |
+| `muster` | Un resumen de la tropa de missions y scouts, agrupada por lo que necesita de vos. Mirá [Skill muster](/es/docs/guides/muster-skill). |
+
+El texto completo de cada archivo está en [Contenido de las skills](/es/docs/reference/skills), generado desde los archivos embebidos en el binario, así que siempre coincide con lo que se instala:
+
+- [`vexillum`](/es/docs/reference/skills/vexillum)
+- [`forum`](/es/docs/reference/skills/forum)
+- [`muster`](/es/docs/reference/skills/muster)
+
+## Dónde se instalan
+
+Las skills están embebidas en el binario `vx`, así que instalarlas no necesita Node, ni `npx`, ni red. `vx init` las escribe en:
+
+| Alcance | Ubicación |
+| --- | --- |
+| proyecto (por defecto) | `.claude/skills/<name>/` |
+| global (`vx init --global`) | `~/.claude/skills/<name>/` |
+
+`init` **pregunta antes de instalarlas**: es una de las preguntas del [flujo de init](/es/docs/reference/cli/init), y en ejecuciones no interactivas se decide con `--skills` o `--no-skills`. Si decís que no, te quedás con el slot de AGENTS.md, el hook del sentinel y tu config.
+
+<Callout title="Sin las skills el commander solo tiene el núcleo">
+  El slot por sí solo le indica al commander que cargue la skill `vexillum`. Si no la instalaste, el commander no tiene un manual que cargar. Instalá las skills con `vx init`, o volvelas a escribir con `vx upgrade`.
+</Callout>
+
+## Cómo las mantiene al día upgrade
+
+Cada skill tiene un hash de contenido calculado sobre todos sus archivos (ruta y contenido, en orden de ruta). `vx upgrade` compara la copia instalada con la embebida en el binario nuevo:
+
+- una skill instalada que está **vigente** se deja como está;
+- una **desactualizada** y sin editar se refresca;
+- una que **editaste** no se pisa en silencio: se reporta, y solo se reemplaza con `--force`.
+
+`vx doctor` reporta los mismos estados para cada skill. Mirá [Actualización](/es/docs/get-started/upgrading).
+
+## Editar una skill
+
+Las copias instaladas son archivos comunes de tu proyecto, así que las podés leer y ajustar. Esperá que `upgrade` marque una skill editada en vez de reemplazarla. Para los valores que cambiás seguido, preferí el archivo dedicado que nunca se pisa: la tabla de modelo y effort vive en [`models.json`](/es/docs/reference/models-json), no en la skill.

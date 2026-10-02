@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/cli"
+	"github.com/isaias-alt/vexillum/internal/commander"
+	"github.com/isaias-alt/vexillum/internal/slot"
+	"github.com/isaias-alt/vexillum/skills"
 )
 
 const repoRoot = "../.."
@@ -220,5 +223,68 @@ func TestMetaFileKeepsRegistryOrder(t *testing.T) {
 	want := "{\n  \"title\": \"CLI\",\n  \"pages\": [\"index\", \"b\", \"a\"]\n}\n"
 	if got := metaFile(cmds); got != want {
 		t.Errorf("metaFile = %q, want %q", got, want)
+	}
+}
+
+// The skills pages carry the embedded files verbatim in both locales, so the
+// docs show exactly what `vx init` installs.
+func TestSkillPagesShowEmbeddedContentVerbatim(t *testing.T) {
+	files, err := generate(repoRoot)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, name := range skills.Names() {
+		skillFiles, err := skills.Files(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, dir := range []string{skillsDirEN, skillsDirES} {
+			page, ok := files[dir+"/"+name+".mdx"]
+			if !ok {
+				t.Fatalf("no generated page for skill %s under %s", name, dir)
+			}
+			for _, f := range skillFiles {
+				if !strings.Contains(page, strings.TrimRight(string(f.Content), "\n")) {
+					t.Errorf("%s/%s.mdx does not contain %s verbatim", dir, name, f.Path)
+				}
+			}
+		}
+	}
+}
+
+func TestSlotBlockPageShowsRenderedBlocks(t *testing.T) {
+	files, err := generate(repoRoot)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, lang := range commander.Languages() {
+		body, err := commander.Core(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := strings.TrimRight(slot.Render(body), "\n")
+		for _, p := range []string{slotPageEN, slotPageES} {
+			if !strings.Contains(files[p], want) {
+				t.Errorf("%s lacks the rendered %s block", p, lang)
+			}
+		}
+	}
+}
+
+func TestStaleCleanupCoversGeneratedSkillPages(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, filepath.FromSlash(skillsDirES))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "removed.mdx"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := staleFiles(root, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 1 || stale[0] != skillsDirES+"/removed.mdx" {
+		t.Errorf("stale = %v, want the removed skill page", stale)
 	}
 }

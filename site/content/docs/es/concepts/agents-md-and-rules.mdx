@@ -1,42 +1,37 @@
 ---
 title: AGENTS.md y rules
-description: El comportamiento del commander es markdown creado en tu proyecto, no código del binario.
+description: El comportamiento del commander es markdown en tu proyecto, no código del binario - un núcleo corto siempre activo en tu AGENTS.md, y las operaciones en skills.
 ---
 
 ## Dos archivos distintos
 
 - **El `AGENTS.md` propio de vexillum** (en el repositorio de vexillum) gobierna cómo se construye vexillum. No es lo que recibís.
-- **`.claude/rules/vexillum.md`** es el archivo de reglas del *producto*. `vx init` lo crea en tu proyecto. Claude Code lo carga en cada sesión, de forma incondicional - junto con el `AGENTS.md` o `CLAUDE.md` que el proyecto ya tenga, que vexillum nunca toca.
+- **El `AGENTS.md` de tu proyecto** es donde `vx init` escribe el núcleo del commander, dentro de un bloque que administra (el [slot](/es/docs/concepts/agents-md-slot)). El archivo es tuyo; solo lo que está entre los marcadores es de vexillum.
 
 Esta es la decisión central del producto: la inteligencia del commander es markdown, el binario es plomería.
 
-## Qué cubren las reglas
+<Callout title="El archivo de reglas ya no existe">
+  Las versiones anteriores creaban `.claude/rules/vexillum.md`, que se cargaba entero en cada sesión. Ya no se crea. El núcleo vive ahora en el slot de AGENTS.md y el detalle operativo en [skills](/es/docs/concepts/skills). `vx upgrade` migra un proyecto existente: mirá [Migrar del archivo de reglas](/es/docs/get-started/upgrading#migrar-del-archivo-de-reglas-al-slot).
+</Callout>
 
-| Sección | Tema |
-| --- | --- |
-| Role check | Las reglas aplican solo al commander. Un soldier que las lea por accidente debe seguir su prompt de dispatch, y nunca despachar más soldiers. |
-| Vocabulary, Authority | Los términos; una instrucción explícita tuya anula una regla, pero el commander debe decir cuál dejó de lado. |
-| Tone | Cómo dirigirse a vos y cuándo dejar el color (las malas noticias se reportan sin adornos). |
-| The sentinel | Qué significa el hook `Stop` y cómo reaccionar ante `interrupted`. |
-| Dispatching a soldier | Siempre `vx dispatch`, nunca la herramienta de subagentes propia del commander. |
-| Choosing a model and effort | La tabla de decisión de abajo. |
-| Landing, Shipping, Releasing | Preguntar antes de aterrizar; hacer release enseguida. |
+## Qué va dónde
+
+| Dónde | Siempre cargado | Tema |
+| --- | --- | --- |
+| Slot de AGENTS.md | sí | Role check, vocabulary, authority, tone, y una instrucción dura: cargar la skill `vexillum` antes de cualquier paso operativo. |
+| Skill `vexillum` | a pedido | Despachar un soldier (siempre `vx dispatch`, nunca la herramienta de subagentes propia del commander), elegir modelo y effort, aterrizar, hacer ship, liberar, y el sentinel. |
+| [`models.json`](/es/docs/reference/models-json) | lo lee `vx models` | Los valores de cada perfil de modelo y effort. |
+
+Separarlos mantiene chico el costo siempre activo: el commander paga el detalle solo en el momento en que despacha, aterriza, hace ship o libera. El riesgo de cualquier diseño a pedido es que el modelo se olvide de cargar el detalle, y por eso el slot lleva esa instrucción como regla dura.
 
 ### Elegir modelo y effort
 
-Gana la primera regla que coincide. vexillum valida los valores pero nunca los elige.
-
-| # | Situación | Modelo y effort |
-| --- | --- | --- |
-| 1 | Scout cuya pregunta son hechos verificables de una fuente autoritativa | `haiku`, `low` |
-| 2 | Scout que requiere criterio | `sonnet`, `medium` |
-| 3 | Mission que es una edición mecánica trivial | `haiku`, `low` |
-| 4 | Mission grande o ambigua de varios archivos, refactor riesgoso | `sonnet`, `high` |
-| 5 | Pedís Opus explícitamente | `opus`, `high` |
-| 6 | Nada de lo anterior aplica | `sonnet`, `medium` |
+La tabla ya no es prosa. Son datos en [`models.json`](/es/docs/reference/models-json): el commander corre `vx models`, lee la línea `when` de cada perfil, elige el que encaja y despacha con `--profile`. Qué perfil encaja con una tarea es criterio, y eso queda en markdown; los valores de modelo y effort los editás vos. vexillum valida los valores pero nunca los elige.
 
 ## Editar y actualizar
 
-El archivo es tuyo para editar: ajustá la tabla, el tono, la postura de landing. `init` lo escribe una vez y nunca lo pisa; [`upgrade`](/es/docs/get-started/upgrading) lo refresca solo cuando no fue modificado, o con `--force`.
+- El slot está protegido por un hash: si editás adentro, `upgrade` te muestra el diff y no lo pisa sin `--force`. Mirá [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot).
+- `upgrade` refresca las skills y una editada se reporta, no se reemplaza. Mirá [Skills](/es/docs/concepts/skills).
+- `models.json` es tuyo: `init` nunca lo pisa y `upgrade` nunca lo toca.
 
-`vx init --global` escribe las reglas en `~/.claude/rules/vexillum.md`, y aplica la persona del commander a cada sesión de Claude Code de la máquina. Por eso es opt-in.
+`vx init --global` instala para cada sesión de Claude Code de la máquina en vez de un solo proyecto. Mirá [Instalación global](/es/docs/get-started/install#instalación-global).

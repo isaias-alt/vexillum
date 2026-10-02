@@ -6,7 +6,7 @@ description: How the pieces fit together, and the decisions that are settled.
 ## The pieces
 
 ```text
- general ──► commander (Claude Code, rules in .claude/rules/vexillum.md)
+ general ──► commander (Claude Code, core in AGENTS.md, skills)
                 │  vx dispatch
                 ▼
          ┌── vexillum (Go binary) ──┐
@@ -32,7 +32,7 @@ vexillum is built in layers, each proven before the next:
 - **Go**, shipped as a binary by Homebrew and curl, with no runtime dependencies.
 - **One harness**, Claude Code, with a seam left for another.
 - **herdr is the primary backend; tmux stays as the control backend.**
-- **Intelligence is markdown, not Go.** The binary does deterministic plumbing; routing and judgment live in the rules file.
+- **Intelligence is markdown, not Go.** The binary does deterministic plumbing; routing and judgment live in the AGENTS.md core and the skills.
 - **Domain vocabulary stays in English** - commander, soldier, mission, scout, camp, sentinel - in every language.
 - **No second commander** in this version.
 
