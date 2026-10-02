@@ -36,6 +36,7 @@
         <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         <span class="switch-state" id="themeState">Off</span>
       </button>
+      <span class="round-chip" id="roundChip" hidden title="">Round <span id="roundNum"></span></span>
       <span class="badge" id="sessionBadge" data-state="open">Open</span>
     </div>
   </header>
@@ -61,7 +62,7 @@
         <p class="empty" id="emptyLog">Nothing here yet. Write a message or use the controls in the artifact, then press Send to Agent.</p>
         <ol class="log" id="log" aria-live="polite"></ol>
         <section class="queued" id="queuedSection" aria-label="Queued messages" hidden>
-          <h3 class="queued-title">Queued <span class="queued-count" id="queuedCount"></span></h3>
+          <h3 class="queued-title">Queued <span class="queued-count" id="queuedCount"></span> <span class="queued-round" id="queuedRound"></span></h3>
           <ul class="queued-list" id="queuedList"></ul>
         </section>
       </div>
@@ -114,6 +115,18 @@
     </div>
   </div>
 </form>
+<div class="fr-dialog-backdrop" id="workingBackdrop" hidden>
+  <div class="fr-dialog" id="workingDialog" role="dialog" aria-modal="true" aria-labelledby="workingTitle" aria-describedby="workingDesc" tabindex="-1">
+    <h3 class="working-title" id="workingTitle"><span class="working-spinner" aria-hidden="true"></span>Agent is working on your feedback</h3>
+    <p id="workingDesc">Your agent got your message and is updating the artifact. The review is paused until it answers, so nothing changes under you.</p>
+    <p class="working-elapsed" id="workingElapsed">Working for 0s</p>
+    <p class="working-slow" id="workingSlow" hidden>Taking longer than usual. Your messages stay sent; you can stop waiting and keep reviewing.</p>
+    <p class="notice" id="workingError" role="alert" hidden></p>
+    <div class="fr-dialog-actions">
+      <button type="button" class="btn" id="workingStop" hidden>Stop waiting</button>
+    </div>
+  </div>
+</div>
 <div class="fr-dialog-backdrop" id="endedBackdrop" hidden>
   <div class="fr-dialog" id="endedDialog" role="dialog" aria-modal="true" aria-labelledby="endedTitle" aria-describedby="endedDesc endedPathBox" tabindex="-1">
     <h3 id="endedTitle">Session ended</h3>

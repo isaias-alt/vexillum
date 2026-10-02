@@ -101,6 +101,12 @@ type Message struct {
 	At       time.Time `json:"at"`
 	// Attachments mirror the images the prompt carried.
 	Attachments []Attachment `json:"attachments,omitempty"`
+	// Round is the feedback round the message belongs to: the round a user
+	// message started, the round an agent reply answers (0 for a reply posted
+	// before the user ever sent anything). QueueKey is the browser-facing key
+	// the prompt was queued under, so a decision form can show it was sent.
+	Round    int    `json:"round,omitempty"`
+	QueueKey string `json:"queue_key,omitempty"`
 }
 
 // sessionRecord is the durable, restart-proof part of a session
@@ -124,6 +130,18 @@ type sessionRecord struct {
 	// listening" in the gap between the delivering poll returning and the
 	// next one starting. Persisted so it survives a server restart.
 	DeliveredAt time.Time `json:"delivered_at,omitempty"`
+	// Round counts the times the user sent feedback to the agent. AnsweredThrough
+	// is the newest round the agent has answered (a reply, or the artifact
+	// changing after the send); RoundArtifact is the artifact fingerprint when
+	// the latest round was sent, to tell that it changed.
+	Round           int    `json:"round,omitempty"`
+	AnsweredThrough int    `json:"answered_through,omitempty"`
+	RoundArtifact   string `json:"round_artifact,omitempty"`
+	// AwaitingSince is when the user last sent feedback that the agent has not
+	// yet answered, polled past, or the artifact has not yet reflected. It is
+	// what makes every tab block the review surface while the agent rewrites
+	// the artifact. Not meaningful across a server restart (see Hub.get).
+	AwaitingSince time.Time `json:"awaiting_since,omitempty"`
 }
 
 const sessionRecordVersion = 1

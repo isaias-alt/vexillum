@@ -114,3 +114,42 @@ func TestChromeLayoutPass_VersionedToItsDocumentAndRetried(t *testing.T) {
 func TestChromePresence_WorkingIsDistinctFromNotListening(t *testing.T) {
 	runChromeNodeTest(t, "chrome_working_test.js")
 }
+
+// The blocking "agent is working" overlay: shown from the server's state,
+// inert behind it, no way out before the grace period, cleared by any answer.
+func TestChromeWorkingOverlay_BlocksUntilAnsweredWithAGraceEscape(t *testing.T) {
+	runChromeNodeTest(t, "chrome_overlay_test.js")
+}
+
+// Round counter, conversation grouped by round with message status, and the
+// per-question sent report to the artifact.
+func TestChromeRounds_CounterGroupsAndStatuses(t *testing.T) {
+	runChromeNodeTest(t, "chrome_rounds_test.js")
+}
+
+// Markup contract of the overlay: an accessible modal dialog, initially
+// hidden, whose only control (Stop waiting) starts hidden too.
+func TestChromeWorkingOverlay_MarkupIsAModalWithAHiddenWayOut(t *testing.T) {
+	data, err := os.ReadFile("assets/chrome/chrome.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(data)
+	start := strings.Index(html, `id="workingBackdrop"`)
+	if start < 0 {
+		t.Fatal("chrome.html has no working overlay")
+	}
+	block := html[start : start+strings.Index(html[start:], `id="endedBackdrop"`)]
+	if !strings.Contains(html[start:start+40], "hidden") {
+		t.Error("the overlay must start hidden")
+	}
+	for _, want := range []string{`role="dialog"`, `aria-modal="true"`, `aria-labelledby="workingTitle"`, `aria-describedby=`, `tabindex="-1"`, "Agent is working on your feedback"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("overlay markup missing %s", want)
+		}
+	}
+	buttons := regexp.MustCompile(`<button\b[^>]*>`).FindAllString(block, -1)
+	if len(buttons) != 1 || !strings.Contains(buttons[0], `id="workingStop"`) || !strings.Contains(buttons[0], "hidden") {
+		t.Errorf("the only control must be the initially hidden Stop waiting button, got %v", buttons)
+	}
+}

@@ -18,6 +18,7 @@ func (s *Server) browserRoutes() {
 	s.mux.HandleFunc("DELETE /api/s/{key}/queue/{uid}", s.browserAPI(s.handleUnqueue))
 	s.mux.HandleFunc("POST /api/s/{key}/send", s.browserAPI(s.handleSend))
 	s.mux.HandleFunc("POST /api/s/{key}/end", s.browserAPI(s.handleBrowserEnd))
+	s.mux.HandleFunc("POST /api/s/{key}/stop-waiting", s.browserAPI(s.handleStopWaiting))
 	s.mux.HandleFunc("POST /api/s/{key}/attachments", s.browserAPI(s.handleAttachmentUpload))
 	s.mux.HandleFunc("POST /api/s/{key}/layout/diagnostics", s.browserAPI(s.handleLayoutDiagnostics))
 	s.mux.HandleFunc("POST /api/s/{key}/layout/queue", s.browserAPI(s.handleLayoutQueue))
@@ -143,6 +144,21 @@ func (s *Server) handleBrowserEnd(w http.ResponseWriter, r *http.Request, key st
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ended"})
+}
+
+// handleStopWaiting is the overlay's "Stop waiting": the user gives up on the
+// agent answering, and every tab gets the review surface back.
+func (s *Server) handleStopWaiting(w http.ResponseWriter, r *http.Request, key string) {
+	stopped, err := s.hub.StopWaiting(key)
+	if err != nil {
+		writeHubError(w, err)
+		return
+	}
+	status := "idle"
+	if stopped {
+		status = "stopped"
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": status})
 }
 
 // handleAttachmentUpload stores one image sent as the raw request body. The

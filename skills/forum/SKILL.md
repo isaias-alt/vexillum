@@ -160,6 +160,26 @@ your agent is listening. The indicator and a notice show one of three states:
 
 Keep a poll running whenever the session is open.
 
+**The review pauses while you work.** From the moment the user presses **Send
+to Agent**, the browser shows an **Agent is working on your feedback** overlay
+over the whole review surface (artifact and conversation, in every open tab),
+so nobody types, clicks or annotates while you rewrite the artifact. It clears
+by itself as soon as you answer in any way: post a reply (`poll --reply`), edit
+the artifact file (the page reloads), or start polling again with nothing
+pending. The poll that delivers the feedback does not clear it. So: do the work,
+then reply or poll; do not sit on a delivered message. It never traps the user:
+after 30 seconds it offers **Stop waiting** (and Escape starts working), which
+returns the panel to the "not listening" hint if nothing arrived. It is not
+shown for **Send & End**.
+
+**Rounds.** Each **Send to Agent** starts a round, shown as "Round N" in the top
+bar (it survives a reload) and as a separator in the conversation panel. The
+user's messages in a round are marked **sent** until you answer that round (a
+reply, or the artifact changing after the send), then **answered**; your replies
+are tied to the round they answer, and queued messages say which round they
+will start. A reply always answers the round in progress, so reply after the
+user's latest send, not before.
+
 **Several tabs.** The same session can be open in more than one browser tab or
 window; every tab shows the same queue, transcript, listening state and end
 state, live, and any of them can send. You need do nothing: there is still one
@@ -293,6 +313,13 @@ the whole API. There is no `window.forum`.
   works with `data-forum-question`; any other key is only matched to its form
   while the page that submitted it stays open, not after a reload). Only buttons forum disabled are re-enabled; your
   own `disabled` buttons are left alone.
+  Once the user has sent a form's answer, the form also gets
+  `data-forum-sent="sent"` (or `"answered"` once you answered that round) and
+  `data-forum-round="<n>"`; with the forum look (`forum-artifact.css`) it prints
+  "Sent in round 2" / "Answered in round 2" under the form, and a form with its
+  own look can style the attributes. A form never sent has neither.
+  `window.forum.sentStatus(key)` returns `{round, state}` or `null` for a key.
+  Nothing is added to the artifact's DOM beyond these attributes.
 - `window.forum.sendQueuedPrompts()` - sends everything queued right away,
   instead of waiting for the user to press Send to Agent. Use it only for a
   control whose whole purpose is "submit this to the agent now".

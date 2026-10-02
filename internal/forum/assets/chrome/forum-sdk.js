@@ -272,16 +272,63 @@
     return !!queuedKeys && queuedKeys.has(str(key));
   }
 
+  // ----------------------------------------------------------- sent rounds
+
+  // The chrome also reports, per queue key, the round the user's answer was
+  // sent in and whether the agent has answered that round since. A form whose
+  // key is known gets data-forum-sent="sent" or "answered" and
+  // data-forum-round="<n>" (forum-artifact.css prints "Sent in round 2" /
+  // "Answered in round 2" from them; an artifact with its own look styles the
+  // attributes itself). Nothing is added to the artifact's DOM and a form that
+  // was never sent has neither attribute. The key a form was sent under is the
+  // same one the queue state uses, so the same declaration (or question id)
+  // matches. The newest round wins when several of a form's keys were sent.
+  let sentRounds = {}; // queue key -> {round, state}
+
+  function sentStatus(key) {
+    const entry = Object.hasOwn(sentRounds, str(key)) ? sentRounds[str(key)] : null;
+    return entry ? { round: entry.round, state: entry.state } : null;
+  }
+
+  function syncSentRounds() {
+    for (const form of document.querySelectorAll(FORM_SELECTOR)) {
+      let best = null;
+      for (const key of formQueueKeys(form)) {
+        const entry = sentStatus(key);
+        if (entry && (!best || entry.round > best.round)) best = entry;
+      }
+      if (best) {
+        form.setAttribute("data-forum-sent", best.state);
+        form.setAttribute("data-forum-round", String(best.round));
+      } else {
+        form.removeAttribute("data-forum-sent");
+        form.removeAttribute("data-forum-round");
+      }
+    }
+  }
+
+  function setSentRounds(rounds) {
+    sentRounds = {};
+    if (rounds && typeof rounds === "object") {
+      for (const key of Object.keys(rounds)) {
+        const entry = rounds[key];
+        if (entry && Number.isInteger(entry.round) && entry.round > 0) sentRounds[key] = { round: entry.round, state: entry.state === "answered" ? "answered" : "sent" };
+      }
+    }
+    syncSentRounds();
+  }
+
   // Forms that appear after the report (rendered by the artifact's own script)
   // get the state too.
   if (typeof MutationObserver === "function") {
     let pendingSync = false;
     new MutationObserver(() => {
-      if (pendingSync || !queuedKeys) return;
+      if (pendingSync) return;
       pendingSync = true;
       queueMicrotask(() => {
         pendingSync = false;
         syncForms();
+        syncSentRounds();
       });
     }).observe(document, { childList: true, subtree: true });
   }
@@ -541,6 +588,8 @@
       schedule();
     } else if (message.type === "forum:queue") {
       setQueuedKeys(message.keys);
+    } else if (message.type === "forum:rounds") {
+      setSentRounds(message.rounds);
     } else if (message.type === "forum:theme") {
       // The artifact follows the chrome's theme; the server already rendered
       // the right one, this keeps it in step when the user flips the switch.
@@ -560,6 +609,7 @@
     sendQueuedPrompts,
     onQueueChange,
     isQueued,
+    sentStatus,
     // Internal: used by the whiteboard embed to reach the server through the chrome.
     __rpc: rpc,
     // Internal: the pure DOM helpers, exposed for tests.

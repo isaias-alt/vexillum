@@ -84,6 +84,8 @@ button, textarea { font: inherit; color: inherit; }
   font-weight: 600;
   background: var(--fr-success-soft); color: var(--fr-success);
 }
+.round-chip { flex: none; padding: 2px var(--fr-space-2); border: 1px solid var(--fr-border-strong); border-radius: 999px; font-size: var(--fr-text-size-small); font-weight: 600; color: var(--fr-text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.round-chip[data-state="open"] { border-color: var(--fr-bronze); color: var(--fr-text); }
 .badge[data-state="ended"] { background: var(--fr-surface-sunken); color: var(--fr-text-secondary); }
 
 /* Layout */
@@ -141,7 +143,20 @@ button, textarea { font: inherit; color: inherit; }
 .panel-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--fr-space-4); display: flex; flex-direction: column; gap: var(--fr-space-4); }
 .empty { margin: 0; color: var(--fr-text-secondary); }
 
-.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--fr-space-3); }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--fr-space-4); }
+/* One group per round: a light separator, then the round's messages with the
+   agent's replies sitting under the same rule as the feedback they answer. */
+.round-group { display: flex; flex-direction: column; gap: var(--fr-space-2); }
+.round-sep { display: flex; align-items: center; gap: var(--fr-space-2); font-size: var(--fr-text-size-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fr-text-secondary); }
+.round-sep::after { content: ""; flex: 1; height: 1px; background: var(--fr-border); }
+.round-sep-state { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--fr-text-muted); }
+.round-group[data-answered="true"] .round-sep-state { color: var(--fr-success); }
+.round-msgs { list-style: none; margin: 0; padding: 0 0 0 var(--fr-space-3); border-left: 2px solid var(--fr-border); display: flex; flex-direction: column; gap: var(--fr-space-3); }
+.round-group[data-answered="true"] .round-msgs { border-left-color: var(--fr-success); }
+.round-group[data-answered="false"] .round-msgs { border-left-color: var(--fr-bronze); }
+.msg-status { margin-left: auto; font-weight: 600; }
+.msg-user .msg-status[data-state="answered"]::before { content: "✓ "; }
+.msg-answers { color: var(--fr-text-muted); }
 .msg {
   max-width: 100%;
   padding: var(--fr-space-2) var(--fr-space-3);
@@ -170,6 +185,8 @@ button, textarea { font: inherit; color: inherit; }
 .md a { color: var(--fr-accent); }
 
 /* Queued (unsent) messages */
+.queued-state { display: inline-block; margin-right: var(--fr-space-2); padding: 0 6px; border: 1px solid var(--fr-border-strong); border-radius: 999px; font-size: var(--fr-text-size-small); color: var(--fr-text-secondary); }
+.queued-round { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--fr-text-muted); }
 .queued { border: 1px dashed var(--fr-border); border-radius: var(--fr-radius-md); padding: var(--fr-space-3); }
 .queued-title { margin: 0 0 var(--fr-space-2); font-size: var(--fr-text-size-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fr-text-secondary); }
 .queued-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--fr-space-2); }
@@ -333,6 +350,13 @@ button, textarea { font: inherit; color: inherit; }
 .fr-dialog-path-label { font-size: var(--fr-text-size-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fr-text-secondary); }
 .fr-dialog-path-value { font-family: var(--fr-font-mono); font-size: var(--fr-text-size-small); color: var(--fr-text); overflow-wrap: anywhere; user-select: all; }
 .fr-dialog-actions { display: flex; justify-content: flex-end; gap: var(--fr-space-2); }
+/* The agent-is-working overlay: a dialog like the ended one, but with a way out
+   (Stop waiting, offered only after the grace period). */
+.fr-dialog h3.working-title { display: flex; align-items: center; gap: var(--fr-space-2); }
+.working-title .working-spinner { width: 14px; height: 14px; }
+.working-elapsed { font-variant-numeric: tabular-nums; color: var(--fr-text); }
+.working-slow { color: var(--fr-text-secondary); }
+.fr-dialog .notice { margin-bottom: var(--fr-space-3); }
 
 /* Narrow screens: the panel stacks under the artifact */
 @media (max-width: 900px) {

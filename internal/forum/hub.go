@@ -147,6 +147,10 @@ func (h *Hub) get(key string) (*liveSession, error) {
 		h.logf("forum: %v", err)
 		layout = layoutState{Version: layoutStateVersion}
 	}
+	// Whether the agent is still working on the last feedback is a fact about a
+	// process this server no longer knows about: a restarted server never
+	// blocks the review surface on it.
+	rec.AwaitingSince = time.Time{}
 	l := &liveSession{
 		rec:         *rec,
 		transcript:  transcript,
@@ -465,9 +469,17 @@ func (h *Hub) Send(key string, end bool) (int, error) {
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		rec.Outbox = append(rec.Outbox, rec.Queued...)
 		rec.Queued = []Prompt{}
+		if len(sent) > 0 {
+			// Sending feedback starts a round, and until the agent answers
+			// (or the artifact changes) the review surface waits for it.
+			rec.Round++
+			rec.RoundArtifact = artifactVersion(rec.File)
+			rec.AwaitingSince = h.opts.Now().UTC()
+		}
 		if end {
 			rec.Status = StatusEnded
 			rec.EndedBy = EndedByUser
+			rec.AwaitingSince = time.Time{}
 		}
 		return nil
 	}); err != nil {
@@ -477,7 +489,7 @@ func (h *Hub) Send(key string, end bool) (int, error) {
 		msgs := make([]Message, 0, len(sent))
 		for _, p := range sent {
 			id, _ := newID("m_")
-			msgs = append(msgs, Message{ID: id, Role: RoleUser, Text: clip(p.Prompt, 4000), Tag: p.Tag, Selector: p.Selector, At: h.opts.Now().UTC(), Attachments: p.Attachments})
+			msgs = append(msgs, Message{ID: id, Role: RoleUser, Text: clip(p.Prompt, 4000), Tag: p.Tag, Selector: p.Selector, At: h.opts.Now().UTC(), Attachments: p.Attachments, Round: l.rec.Round, QueueKey: p.QueueKey})
 		}
 		_ = h.appendTranscript(l, msgs...)
 	}
@@ -500,6 +512,7 @@ func (h *Hub) End(key, by string) error {
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		rec.Status = StatusEnded
 		rec.EndedBy = by
+		rec.AwaitingSince = time.Time{}
 		return nil
 	}); err != nil {
 		return err
@@ -527,15 +540,16 @@ func (h *Hub) Reply(key, text string) error {
 	if err != nil {
 		return err
 	}
-	if !l.rec.DeliveredAt.IsZero() {
-		if err := h.commit(l, func(rec *sessionRecord) error {
-			rec.DeliveredAt = time.Time{}
-			return nil
-		}); err != nil {
-			return err
-		}
+	// A reply answers the round in progress: nothing is awaited any more.
+	if err := h.commit(l, func(rec *sessionRecord) error {
+		rec.DeliveredAt = time.Time{}
+		rec.AwaitingSince = time.Time{}
+		rec.AnsweredThrough = rec.Round
+		return nil
+	}); err != nil {
+		return err
 	}
-	if err := h.appendTranscript(l, Message{ID: id, Role: RoleAgent, Text: text, At: h.opts.Now().UTC()}); err != nil {
+	if err := h.appendTranscript(l, Message{ID: id, Role: RoleAgent, Text: text, At: h.opts.Now().UTC(), Round: l.rec.Round}); err != nil {
 		return err
 	}
 	h.bump(l)
@@ -564,10 +578,15 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 		return PollResult{}, err
 	}
 	l.pollers++
-	if !l.rec.DeliveredAt.IsZero() {
-		// Polling again: the agent is listening, not merely working.
+	// Polling again: the agent is listening, not merely working. A poll that
+	// starts with feedback already waiting is the one about to take it, so only
+	// a poll with an empty outbox means the agent is done with the last round.
+	if resumed := len(l.rec.Outbox) == 0 && !l.rec.AwaitingSince.IsZero(); resumed || !l.rec.DeliveredAt.IsZero() {
 		if err := h.commit(l, func(rec *sessionRecord) error {
 			rec.DeliveredAt = time.Time{}
+			if len(rec.Outbox) == 0 {
+				rec.AwaitingSince = time.Time{}
+			}
 			return nil
 		}); err != nil {
 			h.logf("clearing delivered_at: %v", err)
@@ -698,9 +717,17 @@ type Snapshot struct {
 	// prompts and has neither polled again nor replied: the browser shows
 	// "received your message and is working" until then.
 	WorkingUntil *time.Time `json:"working_until,omitempty"`
-	Pending      int        `json:"pending"`
-	Queued       []Prompt   `json:"queued"`
-	Transcript   []Message  `json:"transcript"`
+	// AwaitingSince is set from the user's Send until the agent answers, polls
+	// again, the artifact changes, or the user stops waiting: the browser blocks
+	// the review surface meanwhile, in every tab.
+	AwaitingSince *time.Time `json:"awaiting_since,omitempty"`
+	// Round is how many times the user has sent feedback; AnsweredThrough is the
+	// newest round the agent answered.
+	Round           int       `json:"round"`
+	AnsweredThrough int       `json:"answered_through"`
+	Pending         int       `json:"pending"`
+	Queued          []Prompt  `json:"queued"`
+	Transcript      []Message `json:"transcript"`
 	// LayoutWarnings is the passive layout inbox. It is browser-only: a poll
 	// never carries it and nothing in it reaches the agent until the user
 	// queues it as a prompt.
@@ -713,20 +740,69 @@ func (l *liveSession) snapshot(now time.Time) Snapshot {
 		!l.rec.DeliveredAt.IsZero() && now.Before(until) {
 		workingUntil = &until
 	}
+	var awaitingSince *time.Time
+	if since := l.rec.AwaitingSince; !since.IsZero() && l.rec.Status != StatusEnded {
+		awaitingSince = &since
+	}
 	return Snapshot{
-		WorkingUntil: workingUntil,
-		Version:      l.version,
-		Key:          l.rec.Key,
-		File:         l.rec.File,
-		Status:       l.rec.Status,
-		EndedBy:      l.rec.EndedBy,
-		Listening:    l.pollers > 0,
-		Pending:      len(l.rec.Outbox),
-		Queued:       append([]Prompt{}, l.rec.Queued...),
-		Transcript:   append([]Message{}, l.transcript...),
+		WorkingUntil:    workingUntil,
+		AwaitingSince:   awaitingSince,
+		Round:           l.rec.Round,
+		AnsweredThrough: l.rec.AnsweredThrough,
+		Version:         l.version,
+		Key:             l.rec.Key,
+		File:            l.rec.File,
+		Status:          l.rec.Status,
+		EndedBy:         l.rec.EndedBy,
+		Listening:       l.pollers > 0,
+		Pending:         len(l.rec.Outbox),
+		Queued:          append([]Prompt{}, l.rec.Queued...),
+		Transcript:      append([]Message{}, l.transcript...),
 
 		LayoutWarnings: layoutViews(l.layout.Warnings),
 	}
+}
+
+// snapshotOf is l's snapshot after folding in the one thing the hub does not
+// hear about on its own: the artifact file changing. A changed file answers the
+// round in progress (the agent's reply to feedback is often just the edit), so
+// it ends the wait and marks the round answered. Callers hold h.mu.
+func (h *Hub) snapshotOf(l *liveSession) Snapshot {
+	if l.rec.Round > l.rec.AnsweredThrough && l.rec.RoundArtifact != "" && artifactVersion(l.rec.File) != l.rec.RoundArtifact {
+		if err := h.commit(l, func(rec *sessionRecord) error {
+			rec.AnsweredThrough = rec.Round
+			rec.AwaitingSince = time.Time{}
+			return nil
+		}); err != nil {
+			h.logf("recording the artifact change: %v", err)
+		}
+	}
+	return l.snapshot(h.opts.Now())
+}
+
+// StopWaiting ends the wait for the agent on the user's say-so (the overlay's
+// "Stop waiting"): the review surface is usable again in every tab, and the
+// panel goes back to saying the agent is not listening. It reports whether
+// there was anything to stop.
+func (h *Hub) StopWaiting(key string) (bool, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	l, err := h.get(key)
+	if err != nil {
+		return false, err
+	}
+	if l.rec.AwaitingSince.IsZero() && l.rec.DeliveredAt.IsZero() {
+		return false, nil
+	}
+	if err := h.commit(l, func(rec *sessionRecord) error {
+		rec.AwaitingSince = time.Time{}
+		rec.DeliveredAt = time.Time{}
+		return nil
+	}); err != nil {
+		return false, err
+	}
+	h.bump(l)
+	return true, nil
 }
 
 // State returns key's snapshot. A request carrying the version it already
@@ -760,7 +836,7 @@ func (h *Hub) State(ctx context.Context, key string, since int64, wait time.Dura
 	}
 	for {
 		if l.version != since || wait <= 0 || ctx.Err() != nil {
-			snap := l.snapshot(h.opts.Now())
+			snap := h.snapshotOf(l)
 			h.mu.Unlock()
 			return snap, nil
 		}
@@ -776,7 +852,7 @@ func (h *Hub) State(ctx context.Context, key string, since int64, wait time.Dura
 		}
 		h.mu.Lock()
 		if expired {
-			snap := l.snapshot(h.opts.Now())
+			snap := h.snapshotOf(l)
 			h.mu.Unlock()
 			return snap, nil
 		}
@@ -810,7 +886,7 @@ func (h *Hub) Watch(ctx context.Context, key string, tick time.Duration, fn func
 	timer := time.NewTicker(tick)
 	defer timer.Stop()
 	for {
-		snap := l.snapshot(h.opts.Now())
+		snap := h.snapshotOf(l)
 		changed := h.changed
 		h.mu.Unlock()
 		if err := fn(snap); err != nil {

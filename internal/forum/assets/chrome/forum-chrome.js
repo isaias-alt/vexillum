@@ -226,11 +226,22 @@
       endedBanner.hidden = true;
     }
 
-    renderLog(snap.transcript || []);
-    renderQueue(snap.queued || [], ended);
+    const chip = $("roundChip");
+    chip.hidden = !snap.round;
+    $("roundNum").textContent = String(snap.round || "");
+    const answered = Math.min(snap.answered_through || 0, snap.round || 0);
+    chip.dataset.state = snap.round > answered ? "open" : "done";
+    chip.title = snap.round
+      ? "Each Send to Agent starts a round. " + answered + " of " + snap.round + (snap.round === 1 ? " round" : " rounds") + " answered."
+      : "";
+
+    renderLog(snap);
+    renderQueue(snap.queued || [], ended, (snap.round || 0) + 1);
     syncQueueKeys(queueKeys(snap.queued || []));
+    syncRoundKeys(roundKeysOf(snap));
     renderLayout(snap.layout_warnings || [], ended);
     syncEndedDialog(snap);
+    syncWorkingDialog(snap);
 
     $("annotateSwitch").disabled = ended;
     if (ended) {
@@ -254,8 +265,15 @@
     $("attachBtn").disabled = ended;
   }
 
-  function renderLog(transcript) {
-    const key = transcript.length + ":" + (transcript.length ? transcript[transcript.length - 1].id : "");
+  // The conversation is grouped by round: each Send to Agent starts one, the
+  // user's messages in it are "sent" until the agent answers (a reply, or the
+  // artifact changing), and the agent's replies sit in the round they answer.
+  // Messages before the first send (an agent greeting, or a transcript from
+  // before rounds existed) have round 0 and no header.
+  function renderLog(snap) {
+    const transcript = snap.transcript || [];
+    const answeredThrough = snap.answered_through || 0;
+    const key = transcript.length + ":" + (transcript.length ? transcript[transcript.length - 1].id : "") + ":" + (snap.round || 0) + ":" + answeredThrough;
     $("emptyLog").hidden = transcript.length > 0;
     if (key === renderedTranscriptKey) return;
     renderedTranscriptKey = key;
@@ -264,7 +282,26 @@
     const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
     const log = $("log");
     log.replaceChildren();
+    let group = null;
+    let list = null;
+    let groupRound = -1;
     for (const message of transcript) {
+      const round = message.round || 0;
+      if (round !== groupRound) {
+        groupRound = round;
+        group = el("li", "round-group");
+        group.dataset.round = String(round);
+        if (round > 0) {
+          const done = round <= answeredThrough;
+          group.dataset.answered = String(done);
+          const sep = el("div", "round-sep", "Round " + round);
+          sep.append(el("span", "round-sep-state", done ? "answered" : "waiting for the agent"));
+          group.append(sep);
+        }
+        list = el("ol", "round-msgs");
+        group.append(list);
+        log.append(group);
+      }
       const item = el("li", "msg " + (message.role === "agent" ? "msg-agent" : "msg-user"));
       const meta = el("div", "msg-meta");
       meta.append(el("span", "msg-role", message.role === "agent" ? "Agent" : "You"));
@@ -272,6 +309,14 @@
         meta.append(el("span", "msg-tag", message.tag));
       }
       meta.append(el("time", "msg-time", formatTime(message.at)));
+      if (message.role === "agent") {
+        if (round > 0) meta.append(el("span", "msg-status msg-answers", "answers round " + round));
+      } else if (round > 0) {
+        const state = round <= answeredThrough ? "answered" : "sent";
+        const status = el("span", "msg-status", state);
+        status.dataset.state = state;
+        meta.append(status);
+      }
       item.append(meta);
       if (message.role === "agent") {
         const body = el("div", "msg-text md");
@@ -283,7 +328,7 @@
         if (message.selector) item.append(el("span", "msg-where", message.selector));
         item.append(...thumbRow(message.attachments));
       }
-      log.append(item);
+      list.append(item);
     }
     if (nearBottom) scroll.scrollTop = scroll.scrollHeight;
   }
@@ -293,16 +338,18 @@
     return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
-  function renderQueue(queued, ended) {
+  function renderQueue(queued, ended, nextRound) {
     const section = $("queuedSection");
     section.hidden = queued.length === 0;
     $("queuedCount").textContent = queued.length ? "(" + queued.length + ")" : "";
+    $("queuedRound").textContent = queued.length ? "for round " + nextRound : "";
     const list = $("queuedList");
     list.replaceChildren();
     for (const prompt of queued) {
       const item = el("li", "queued-item");
       const body = el("div", "queued-body");
       const text = el("div", "queued-text");
+      text.append(el("span", "queued-state", "queued"));
       if (prompt.tag && prompt.tag !== "feedback" && prompt.tag !== "message") text.append(el("span", "queued-tag", prompt.tag));
       text.append(document.createTextNode(prompt.prompt));
       body.append(text);
@@ -400,6 +447,118 @@
   );
   document.addEventListener("focusin", (event) => {
     if (endedShown && !endedDialog.contains(event.target)) endedDialog.focus();
+  });
+
+  // ------------------------------------------------- agent is working
+
+  // From the user's Send to Agent until the agent answers, the whole review
+  // surface (artifact and conversation) is blocked by a modal, so nothing is
+  // typed, clicked or annotated while the artifact is being rewritten under
+  // the user. The state is the server's (snapshot.awaiting_since), so every tab
+  // of the session shows it, and it ends by itself when the agent replies,
+  // polls again, the artifact reloads or the session ends. It never traps: after
+  // WAIT_GRACE_MS "Stop waiting" appears (and Escape starts working), and a
+  // snapshot that no longer says awaiting - including the first one after a
+  // reconnect to a server that restarted - removes it.
+  const WAIT_GRACE_MS = 30000;
+  const workingBackdrop = $("workingBackdrop");
+  const workingDialog = $("workingDialog");
+  const inertWhileWorking = () => [document.querySelector(".app"), $("annotOffer"), $("annotCard"), $("layoutTray")].filter(Boolean);
+  let workingShown = false;
+  let focusBeforeWorking = null;
+  let workingSince = 0; // ms, from the server's awaiting_since
+  let workingSinceRaw = "";
+  let stoppedSince = ""; // the awaiting_since the user gave up on, in this tab
+  let workingClock = 0;
+
+  const elapsedText = (ms) => {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(total / 60);
+    return minutes > 0 ? minutes + "m " + String(total % 60).padStart(2, "0") + "s" : total + "s";
+  };
+  const graceOver = () => Date.now() - workingSince >= WAIT_GRACE_MS;
+
+  function tickWorking() {
+    if (!workingShown) return;
+    const elapsed = Date.now() - workingSince;
+    $("workingElapsed").textContent = "Working for " + elapsedText(elapsed);
+    const slow = graceOver();
+    $("workingSlow").hidden = !slow;
+    $("workingStop").hidden = !slow;
+  }
+
+  function syncWorkingDialog(snap) {
+    const awaiting = snap.status !== "ended" && !!snap.awaiting_since && snap.awaiting_since !== stoppedSince;
+    if (!awaiting) {
+      if (!workingShown) return;
+      workingShown = false;
+      clearInterval(workingClock);
+      workingBackdrop.hidden = true;
+      $("workingError").hidden = true;
+      if (!endedShown) {
+        for (const node of inertWhileWorking()) node.inert = false;
+        if (focusBeforeWorking && focusBeforeWorking.isConnected) focusBeforeWorking.focus();
+      }
+      focusBeforeWorking = null;
+      return;
+    }
+    const since = Date.parse(snap.awaiting_since);
+    workingSince = Number.isNaN(since) ? Date.now() : since;
+    workingSinceRaw = snap.awaiting_since;
+    $("workingDesc").textContent =
+      "Your agent got your message (round " + (snap.round || 1) + ") and is updating the artifact. The review is paused until it answers, so nothing changes under you.";
+    if (workingShown) return tickWorking();
+    workingShown = true;
+    focusBeforeWorking = document.activeElement;
+    closeCard();
+    hideOffer();
+    setTray(false);
+    workingBackdrop.hidden = false;
+    for (const node of inertWhileWorking()) node.inert = true;
+    workingDialog.focus();
+    tickWorking();
+    clearInterval(workingClock);
+    workingClock = setInterval(tickWorking, 1000);
+  }
+
+  // Giving up is local first (this tab is usable at once, even if the server is
+  // unreachable) and then told to the server, which clears the wait for every
+  // tab and puts the panel's "not listening" hint back.
+  async function stopWaiting() {
+    if (!workingShown || !graceOver()) return;
+    stoppedSince = workingSinceRaw;
+    if (snapshot) syncWorkingDialog(snapshot);
+    try {
+      await api("POST", "/stop-waiting");
+    } catch (error) {
+      notice(error.message || "Could not tell the server you stopped waiting.");
+    }
+  }
+  $("workingStop").addEventListener("click", stopWaiting);
+
+  // Capture phase, before every other key handler: while the overlay is up
+  // Escape is swallowed (it only means "stop waiting" once the grace period is
+  // over) and Tab cycles inside it.
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!workingShown || endedShown) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (graceOver()) stopWaiting();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        const items = [workingDialog, ...[...workingDialog.querySelectorAll("button:not([disabled])")].filter((b) => !b.hidden)];
+        const at = items.indexOf(document.activeElement);
+        const next = event.shiftKey ? (at <= 0 ? items.length - 1 : at - 1) : (at + 1) % items.length;
+        items[next].focus();
+      }
+    },
+    true,
+  );
+  document.addEventListener("focusin", (event) => {
+    if (workingShown && !endedShown && !workingDialog.contains(event.target)) workingDialog.focus();
   });
 
   // ------------------------------------------------------------ attachments
@@ -740,6 +899,26 @@
     toFrame({ type: "forum:queue", keys });
   }
 
+  // The artifact also learns, per queue key, the round the answer was sent in
+  // and whether the agent has answered it since, so a decision form can show
+  // "Sent in round 2" / "Answered in round 2" (forum-sdk.js, data-forum-sent).
+  let sentRoundKeys = null;
+  function roundKeysOf(snap) {
+    const answeredThrough = snap.answered_through || 0;
+    const out = {};
+    for (const message of snap.transcript || []) {
+      if (message.role === "agent" || !message.queue_key || !message.round) continue;
+      out[message.queue_key] = { round: message.round, state: message.round <= answeredThrough ? "answered" : "sent" };
+    }
+    return out;
+  }
+  function syncRoundKeys(rounds, force) {
+    const encoded = JSON.stringify(rounds);
+    if (!force && encoded === sentRoundKeys) return;
+    sentRoundKeys = encoded;
+    toFrame({ type: "forum:rounds", rounds });
+  }
+
   // The switch and the artifact follow the user's choice, except that a
   // finished session can no longer be annotated.
   function syncMode() {
@@ -869,6 +1048,7 @@
     switch (message.type) {
       case "forum:ready":
         syncQueueKeys(queueKeys((snapshot && snapshot.queued) || []), true);
+        syncRoundKeys(snapshot ? roundKeysOf(snapshot) : {}, true);
         syncMode();
         syncThemeButton();
         break;
