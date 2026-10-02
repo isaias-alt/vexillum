@@ -1,6 +1,8 @@
 package forum
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -13,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
@@ -21,6 +24,7 @@ import (
 func (s *Server) pageRoutes() {
 	s.mux.HandleFunc("GET /session/{key}", s.handleSessionPage)
 	s.mux.HandleFunc("GET /favicon.svg", s.handleFavicon)
+	s.mux.HandleFunc("GET /favicon.ico", s.handleFaviconICO)
 	s.mux.HandleFunc("GET /forum-assets/{name}", s.handleChromeAsset)
 	s.mux.HandleFunc("GET /a/{key}/{path...}", s.handleArtifactFile)
 }
@@ -38,9 +42,10 @@ type chromeBoot struct {
 }
 
 type chromeData struct {
-	Name string
-	Boot chromeBoot
-	Src  string
+	Name    string
+	Boot    chromeBoot
+	Src     string
+	Favicon string
 }
 
 // handleSessionPage serves the review chrome for one session: the artifact
@@ -73,7 +78,7 @@ func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	data := chromeData{Name: name, Src: src, Boot: chromeBoot{Key: key, Token: token, File: file, Name: name, ArtifactSrc: src}}
+	data := chromeData{Name: name, Src: src, Favicon: faviconHref(), Boot: chromeBoot{Key: key, Token: token, File: file, Name: name, ArtifactSrc: src}}
 	if err := chromeTemplate.Execute(w, data); err != nil {
 		// Headers are already out; nothing better than logging.
 		s.hub.logf("forum: rendering session page: %v", err)
@@ -83,15 +88,41 @@ func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
 // handleFavicon serves the vexillum icon for the chrome and for artifacts
 // that do not declare their own.
 func (s *Server) handleFavicon(w http.ResponseWriter, r *http.Request) {
-	data, err := fs.ReadFile(assetsFS, "assets/favicon.svg")
+	serveFavicon(w, r, "assets/favicon.svg", "image/svg+xml")
+}
+
+// handleFaviconICO serves the same mark as an .ico: browsers ask for
+// /favicon.ico on their own when a page declares no icon (an artifact opened
+// top level, a tab with no <head>), and a 404 there leaves whatever icon that
+// origin cached earlier on the tab.
+func (s *Server) handleFaviconICO(w http.ResponseWriter, r *http.Request) {
+	serveFavicon(w, r, "assets/favicon.ico", "image/x-icon")
+}
+
+func serveFavicon(w http.ResponseWriter, r *http.Request, name, contentType string) {
+	data, err := fs.ReadFile(assetsFS, name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(data)
+}
+
+// faviconHref is the address every forum page links its icon at: the SVG with
+// a hash of its content as a query. Browsers cache a favicon per URL for a long
+// time and ignore Cache-Control for it, so an unchanged address would keep
+// showing a mark served by an earlier build on the same 127.0.0.1:<port>.
+var faviconHref = sync.OnceValue(func() string {
+	data, _ := fs.ReadFile(assetsFS, "assets/favicon.svg")
+	sum := sha256.Sum256(data)
+	return "/favicon.svg?v=" + hex.EncodeToString(sum[:])[:12]
+})
+
+func faviconTag() string {
+	return `<link rel="icon" type="image/svg+xml" href="` + faviconHref() + `">`
 }
 
 func (s *Server) handleChromeAsset(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +242,6 @@ func (s *Server) serveArtifactHTML(w http.ResponseWriter, file, theme string) {
 
 const (
 	stylesTags     = `<link rel="stylesheet" href="/forum-assets/forum-tokens.css"><link rel="stylesheet" href="/forum-assets/forum-artifact.css">`
-	faviconTag     = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`
 	sdkScriptTag   = `<script src="/forum-assets/forum-sdk.js"></script>`
 	embedScriptTag = `<script src="/whiteboard-embed.js"></script>`
 )
@@ -257,16 +287,23 @@ var (
 )
 
 // injectFavicon gives an artifact the vexillum icon unless it declares its
-// own. The link goes just before </head>; a document with no head is left
-// alone (the browser then asks for /favicon.ico, as it would unreviewed).
+// own. The link goes just before </head>; a document with no head gets it
+// where injectSDK puts its scripts (after <html>, else after the doctype,
+// else first), which the parser files under an implicit head.
 func injectFavicon(doc string) string {
 	if iconLinkPattern.MatchString(doc) {
 		return doc
 	}
+	tag := faviconTag()
 	if loc := headClosePattern.FindStringIndex(doc); loc != nil {
-		return doc[:loc[0]] + faviconTag + doc[loc[0]:]
+		return doc[:loc[0]] + tag + doc[loc[0]:]
 	}
-	return doc
+	for _, re := range []*regexp.Regexp{htmlOpenPattern, doctypePattern} {
+		if loc := re.FindStringIndex(doc); loc != nil {
+			return doc[:loc[1]] + tag + doc[loc[1]:]
+		}
+	}
+	return tag + doc
 }
 
 // wantsForumStyle decides whether the artifact gets the forum content

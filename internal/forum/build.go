@@ -12,8 +12,9 @@ var buildID = sync.OnceValue(func() string {
 	h := sha256.New()
 	// The whiteboard frame bundle is large but its postMessage protocol has to
 	// match whiteboard-embed.js, so a stale server serving an old bundle breaks
-	// the whiteboard silently; the fonts and css never do, so skip those.
-	for _, root := range []string{"assets/chrome", "assets/whiteboard-embed.js", "assets/whiteboard/whiteboard.js.gz", "assets/favicon.svg"} {
+	// the whiteboard silently; the fonts never do, so skip those. The css is in: a stale server
+	// serving the old stylesheet is how the whiteboard kept its old colours.
+	for _, root := range []string{"assets/chrome", "assets/whiteboard-embed.js", "assets/whiteboard/whiteboard.js.gz", "assets/whiteboard/whiteboard.css", "assets/favicon.svg", "assets/favicon.ico"} {
 		_ = fs.WalkDir(assetsFS, root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil

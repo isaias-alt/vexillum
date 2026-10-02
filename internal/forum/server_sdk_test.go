@@ -49,14 +49,19 @@ func TestArtifact_SDKInjectedAfterDoctypeAndHead(t *testing.T) {
 func TestArtifact_SDKInjectionFallbacks(t *testing.T) {
 	env := newEnv(t, time.Minute)
 	open := env.open()
+	// A document with no <head> still gets the vexillum icon, first, where the
+	// parser files it under an implicit head (its content-hash query is
+	// normalised away here; the favicon tests pin it).
+	icon := `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`
 	cases := map[string]string{
-		`<!doctype html><p>no head</p>`: `<!doctype html>` + stylesTags + sdkTags + `<p>no head</p>`,
-		`<html><body>x</body></html>`:   `<html data-fr-theme="dark">` + stylesTags + sdkTags + `<body>x</body></html>`,
-		`<p>bare fragment</p>`:          stylesTags + sdkTags + `<p>bare fragment</p>`,
+		`<!doctype html><p>no head</p>`: `<!doctype html>` + icon + stylesTags + sdkTags + `<p>no head</p>`,
+		`<html><body>x</body></html>`:   `<html data-fr-theme="dark">` + icon + stylesTags + sdkTags + `<body>x</body></html>`,
+		`<p>bare fragment</p>`:          icon + stylesTags + sdkTags + `<p>bare fragment</p>`,
 	}
+	faviconVersion := regexp.MustCompile(`/favicon\.svg\?v=[0-9a-f]{12}`)
 	for in, want := range cases {
 		env.setArtifact(in)
-		if _, got := env.get("/a/" + open.Key + "/artifact.html"); versionless(got) != want {
+		if _, got := env.get("/a/" + open.Key + "/artifact.html"); versionless(faviconVersion.ReplaceAllString(got, "/favicon.svg")) != want {
 			t.Errorf("injection of %q\n got: %s\nwant: %s", in, got, want)
 		}
 	}
@@ -69,11 +74,11 @@ func TestFavicon_ServedAndInjectedUnlessArtifactHasOwn(t *testing.T) {
 		t.Fatalf("favicon = %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
 	open := env.open()
-	if _, page := env.get("/session/" + open.Key); !strings.Contains(page, `<link rel="icon" type="image/svg+xml" href="/favicon.svg">`) {
+	if _, page := env.get("/session/" + open.Key); !strings.Contains(page, `<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=`) {
 		t.Error("the chrome page does not reference the favicon")
 	}
 	env.setArtifact(`<!doctype html><html><head><title>t</title></head><body>x</body></html>`)
-	if _, got := env.get("/a/" + open.Key + "/artifact.html"); !strings.Contains(got, `href="/favicon.svg"></head>`) {
+	if _, got := env.get("/a/" + open.Key + "/artifact.html"); !strings.Contains(got, `<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=`) || !strings.Contains(got, `"></head>`) {
 		t.Errorf("favicon not injected into an artifact without one:\n%s", got)
 	}
 	for _, own := range []string{`<link rel="icon" href="/mine.png">`, `<link href="/mine.ico" rel='shortcut icon'>`} {
