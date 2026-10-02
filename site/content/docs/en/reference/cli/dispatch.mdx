@@ -1,5 +1,5 @@
 ---
-title: "vexillum dispatch"
+title: "vx dispatch"
 description: "Dispatch a soldier (mission or scout) into an isolated camp"
 ---
 
@@ -9,7 +9,7 @@ description: "Dispatch a soldier (mission or scout) into an isolated camp"
 Dispatch a soldier (mission or scout) into an isolated camp.
 
 Usage:
-  vexillum dispatch <prompt> [--kind mission|scout] [--model <model>] [--effort <level>]
+  vx dispatch <prompt> [--kind mission|scout] [--model <model>] [--effort <level>]
 
 A mission changes code and delivers something to land; a scout only
 investigates and reports back (default: mission).
@@ -26,7 +26,7 @@ fresh git worktree isolated from this project's own working tree, with
 the invoking OS user (no container, chroot, or other sandbox) - the
 worktree only bounds where its commits land, not what it can read,
 write, or exfiltrate elsewhere on the machine. Nothing reaches the
-project's real history until 'vexillum land' is explicitly approved;
+project's real history until 'vx land' is explicitly approved;
 never dispatch against a prompt, repository, or machine where reading
 sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID -
 run this from inside a herdr-managed pane.
@@ -35,5 +35,5 @@ Returns quickly: it only waits out a short quick-settle probe, not the
 soldier's whole task. A trivial prompt may finish within that window and
 report its result immediately; anything else is left running and
 auto-starts a sentinel (if one isn't already watching this project) to
-record its final status - see 'vexillum sentinel'.
+record its final status - see 'vx sentinel'.
 ```

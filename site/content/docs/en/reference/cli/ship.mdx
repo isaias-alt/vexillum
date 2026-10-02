@@ -1,5 +1,5 @@
 ---
-title: "vexillum ship"
+title: "vx ship"
 description: "Ship a finished mission through vexillum's own tribunal pipeline, opening a real pull request"
 ---
 
@@ -10,12 +10,12 @@ Ship a finished mission through vexillum's own tribunal pipeline,
 opening a real pull request.
 
 Usage:
-  vexillum ship <task-id> [--fix] [--max-rounds <n>] [--timeout <duration>]
+  vx ship <task-id> [--fix] [--max-rounds <n>] [--timeout <duration>]
 
 Runs, in order, inside the mission's own camp: lint, tests, an adversarial
 code review of the diff, and a docs check - stopping at the first step that
 fails and reporting it, without pushing or opening anything. Every step
-runs synchronously; "vexillum ship" doesn't return until the whole pipeline
+runs synchronously; "vx ship" doesn't return until the whole pipeline
 has settled, there's nothing external to track afterward.
 
 The review runs in a brand-new Claude Code session that has none of the
@@ -48,12 +48,12 @@ Once every step passes, pushes the mission's camp branch to the real
 remote ("origin") and opens the pull request itself with "gh pr create" -
 deterministically, no soldier or agent judgment decides whether or when
 this happens, since it's the one vexillum action with a real, irreversible
-effect outside the machine. Requires "gh" ('vexillum doctor' reports
+effect outside the machine. Requires "gh" ('vx doctor' reports
 whether it's installed).
 
 A mission already shipped can be shipped again, to push follow-up commits
 onto the same open PR - only "done" and "shipped" are valid starting
 states; a re-ship still runs the full tribunal pipeline first. Once
-shipped, land the PR with 'vexillum land <task-id>' rather than 'vexillum
+shipped, land the PR with 'vx land <task-id>' rather than 'vx
 land'-ing the camp locally.
 ```

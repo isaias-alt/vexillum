@@ -1,5 +1,5 @@
 ---
-title: "vexillum decide"
+title: "vx decide"
 description: "Answer a blocked task's open question so it can continue"
 ---
 
@@ -9,11 +9,11 @@ description: "Answer a blocked task's open question so it can continue"
 Answer a blocked task's open question so it can continue.
 
 Usage:
-  vexillum decide <task-id> <answer>
+  vx decide <task-id> <answer>
 
 Only a task in status "blocked" can be answered. Delivers <answer> to the
 soldier's still-open herdr pane and records it against the task's structured
-decision (see 'vexillum status --json', field "decision"), not just as more
+decision (see 'vx status --json', field "decision"), not just as more
 prose in the transcript. If the open question came from Claude Code's
 AskUserQuestion selector, <answer> (an option's exact text, or its 1-based
 rendered number) is delivered as a single key press - the same mechanism a
@@ -27,5 +27,5 @@ the sentinel to record the eventual settle, exactly like a fresh dispatch.
 
 If the task is actually "interrupted" (its herdr pane is gone - vexillum
 just hadn't noticed yet), this marks it interrupted and refuses: there is
-nothing left to answer against. Use 'vexillum redispatch' instead.
+nothing left to answer against. Use 'vx redispatch' instead.
 ```

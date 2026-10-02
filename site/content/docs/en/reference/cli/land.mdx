@@ -1,5 +1,5 @@
 ---
-title: "vexillum land"
+title: "vx land"
 description: "Land a finished mission's work into this project's base branch"
 ---
 
@@ -9,7 +9,7 @@ description: "Land a finished mission's work into this project's base branch"
 Land a finished mission's work into this project's base branch.
 
 Usage:
-  vexillum land <task-id>
+  vx land <task-id>
 
 Fast-forwards this project's own checkout to the mission's branch.
 Refuses (leaving everything untouched) unless this checkout is clean and
@@ -17,16 +17,16 @@ the merge is a clean fast-forward - never forces or rebases anything.
 
 Once that fast-forward merge succeeds, land automatically releases the
 mission's camp back to the pool and closes its herdr pane too - the same
-release logic 'vexillum release' itself uses, which only clears a camp
+release logic 'vx release' itself uses, which only clears a camp
 that's already clean and landed, so this doesn't relax that safeguard. A
 merge that's refused (dirty checkout, or diverged branch) never touches
 the camp at all. In the rare case the merge succeeds but that automatic
 release then fails, land reports both outcomes plainly - the merge is
-NOT undone - and leaves the camp for 'vexillum release <task-id>' to
+NOT undone - and leaves the camp for 'vx release <task-id>' to
 retry by hand.
 
 For a task already shipped through vexillum's own tribunal pipeline
-('vexillum ship'), this instead merges the real pull request on GitHub -
+('vx ship'), this instead merges the real pull request on GitHub -
 the PR, not the camp's own branch, is the source of truth once the
 general (or CI, or a reviewer) may have pushed further commits directly
 to it on GitHub. Requires "gh". Refuses unless the pull request is open,

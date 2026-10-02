@@ -1,5 +1,5 @@
 ---
-title: "vexillum upgrade"
+title: "vx upgrade"
 description: "Refresh an already-initialized project's vexillum scaffold"
 ---
 
@@ -8,11 +8,11 @@ description: "Refresh an already-initialized project's vexillum scaffold"
 ```text
 Refresh an already-initialized project's vexillum scaffold
 (.claude/rules/vexillum.md, the sentinel Stop hook) to match this binary's
-latest version, without deleting and re-running 'vexillum init' from
+latest version, without deleting and re-running 'vx init' from
 scratch.
 
 Usage:
-  vexillum upgrade [--force] [--global]
+  vx upgrade [--force] [--global]
 
 By default, .claude/rules/vexillum.md is only refreshed when vexillum can
 tell it wasn't hand-edited since it last wrote it (tracked by a stored
@@ -25,5 +25,5 @@ you've confirmed there's nothing local worth keeping in that file - it
 discards it.
 
 --global refreshes the global scaffold (~/.claude/rules/vexillum.md,
-written by 'vexillum init --global') instead of the current project's.
+written by 'vx init --global') instead of the current project's.
 ```

@@ -1,5 +1,5 @@
 ---
-title: "vexillum status"
+title: "vx status"
 description: "Report the troop: every mission and scout in the current project"
 ---
 
@@ -10,7 +10,7 @@ Report the troop: every mission and scout in the current project, in
 whatever state it's in. Read-only.
 
 Usage:
-  vexillum status [--json]
+  vx status [--json]
 
 Without --json, prints one line per task (most recently updated first).
 
@@ -32,7 +32,7 @@ in the current session, GitHub PR enrichment) are left to that consumer,
 not decided here.
 
 A task in status "blocked" carries its open question in its "decision"
-field (question, options, asked_at, and - once 'vexillum decide' has run -
+field (question, options, asked_at, and - once 'vx decide' has run -
 answer/answered_at) - not just the word "blocked". Without --json, a
 blocked task's question is also printed on its own indented line.
 ```
