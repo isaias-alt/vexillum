@@ -26,6 +26,14 @@ On the agent's side:
 
 Sessions are identified by the file's absolute path. forum is built into the binary: no Node, no `npx`, no network.
 
+### The server stays put
+
+The server tries hard not to move or disappear under an open tab:
+
+- **Same port.** It records the port it bound in `~/.vexillum/forum/last-port` and prefers it on the next start (waiting a few seconds for the previous server to release it), so an open tab keeps working. Only if that port stays taken by something else does it fall back to a free one and record that.
+- **No replacing a server in use.** After you upgrade vexillum, a running server may come from an older build. It is replaced by the new build only when it has no open session, no connected tab and no waiting poll. Otherwise the new `vx` reuses it when its protocol is compatible, and stops with an error telling you what to do when it is not (finish or end the sessions and close the tabs, or run `vx forum stop`). A server too old to report its activity is reused, never stopped.
+- **Tabs recover on their own.** When the server does restart, an open tab shows a reconnecting banner and retries on its own against the same address. Sessions, queued messages and the transcript are restored from disk, and the session link keeps working.
+
 The agent's playbook is the `forum` [skill](/docs/concepts/skills), installed by `vx init` (full text on [Skill: forum](/docs/reference/skills/forum)).
 
 ## banner: publish publicly

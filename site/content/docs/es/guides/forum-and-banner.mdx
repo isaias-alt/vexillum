@@ -26,6 +26,14 @@ Del lado del agente:
 
 Las sesiones se identifican por la ruta absoluta del archivo. forum viene dentro del binario: sin Node, sin `npx`, sin red.
 
+### El servidor se queda quieto
+
+El servidor intenta no moverse ni desaparecer debajo de una pestaña abierta:
+
+- **Mismo puerto.** Registra el puerto que ocupó en `~/.vexillum/forum/last-port` y lo prefiere en el siguiente arranque (esperando unos segundos a que el servidor anterior lo libere), así que una pestaña abierta sigue funcionando. Solo si otro proceso sigue ocupando ese puerto cae a uno libre y registra ese.
+- **No se reemplaza un servidor en uso.** Después de actualizar vexillum, un servidor en marcha puede ser de un build más viejo. El build nuevo lo reemplaza solo cuando no tiene sesión abierta, ni pestaña conectada, ni poll esperando. Si no, el nuevo `vx` lo reutiliza cuando su protocolo es compatible, y se detiene con un error que dice qué hacer cuando no lo es (terminar o cerrar las sesiones y las pestañas, o correr `vx forum stop`). Un servidor demasiado viejo para informar su actividad se reutiliza, nunca se detiene.
+- **Las pestañas se recuperan solas.** Cuando el servidor sí se reinicia, una pestaña abierta muestra un banner de reconexión y reintenta sola contra la misma dirección. Las sesiones, los mensajes encolados y la transcripción se restauran desde disco, y el enlace de la sesión sigue funcionando.
+
 El playbook del agente es la [skill](/es/docs/concepts/skills) `forum`, que instala `vx init` (el texto completo está en [Skill: forum](/es/docs/reference/skills/forum)).
 
 ## banner: publicar públicamente
