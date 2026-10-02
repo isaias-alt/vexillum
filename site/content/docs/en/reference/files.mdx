@@ -10,7 +10,7 @@ description: Every file vexillum reads or writes, and where.
 | `AGENTS.md` | `init`, `upgrade` | gains the vexillum block (between the markers); your own text is never touched. See [The AGENTS.md slot](/docs/concepts/agents-md-slot) |
 | `CLAUDE.md` | `init`, `upgrade` | created with, or given, the line `@AGENTS.md` so Claude Code sees the block |
 | `.claude/skills/<name>/` | `init`, `upgrade` | the `vexillum`, `forum` and `muster` [skills](/docs/concepts/skills), if you accepted them |
-| `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook `vx sentinel await`; existing content is merged, never overwritten. Invalid JSON is left untouched and reported |
+| `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook that runs `vx sentinel await` through a PATH-independent one-line wrapper (see [Sentinel](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path)); an older bare `vx sentinel await` is migrated, and existing content is merged, never overwritten. Invalid JSON is left untouched and reported |
 | `.vexillum/config.json` | `init`, `upgrade` | marks the project initialized; stores a content hash per installed skill so `upgrade` can tell whether you edited it |
 | `.vexillum/models.json` | `init` (once) | the model and effort profiles; **yours to edit**, never overwritten. See [`models.json`](/docs/reference/models-json) |
 | `.vexillum/.gitignore` | `init` | ignores `.vexillum/forum/`, the forum's scratch artifacts |

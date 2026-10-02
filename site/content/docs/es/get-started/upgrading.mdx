@@ -27,7 +27,7 @@ vx upgrade
 
 - escribe o actualiza el bloque de vexillum en `AGENTS.md` y se asegura de que `CLAUDE.md` lo importe. Un bloque que editaste **no** se pisa: `upgrade` imprime el diff entre el tuyo y la plantilla actual. Un bloque malformado no se toca hasta que confirmes las reparaciones que lista, y el archivo se guarda antes en `.vexillum/AGENTS.md.backup`. Mirá [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot);
 - refresca las skills instaladas que no cambiaron desde que vexillum las escribió (se guarda un hash de contenido por skill en `.vexillum/config.json`) y reporta las que editaste. Mirá [Skills](/es/docs/concepts/skills);
-- mantiene al día el hook `Stop` del sentinel. Un hook sincrónico viejo, `vx sentinel drain`, se actualiza en el lugar al hook asíncrono `vx sentinel await`, sin duplicarse;
+- mantiene al día el hook `Stop` del sentinel. Un hook sincrónico viejo, `vx sentinel drain`, se actualiza en el lugar al hook asíncrono, sin duplicarse, y lo mismo un `vx sentinel await` pelado, que solo funciona cuando `vx` está en el `PATH` del shell del hook: el comando nuevo también prueba `~/.local/bin`, Homebrew y `/usr/local/bin`. Tus propios hooks `Stop` se conservan. Ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path);
 - crea `.vexillum/models.json` si falta. Uno existente nunca se pisa: es tuyo. Mirá [`models.json`](/es/docs/reference/models-json).
 
 Sin terminal `upgrade` no pregunta nada y no cambia nada salvo que pases `--yes`.
@@ -62,6 +62,6 @@ El comando se llamaba `vexillum`. Ahora es `vx`, y el nombre viejo desapareció:
 vx upgrade
 ```
 
-Esto reescribe el hook `Stop` del sentinel (`vexillum sentinel await` pasa a `vx sentinel await`) y migra el archivo de reglas al bloque de AGENTS.md y a las skills, como se explicó arriba, para que el commander escriba `vx`. Si usás una [instalación global](/es/docs/get-started/install#instalación-global), corré también `vx upgrade --global`.
+Esto reescribe el hook `Stop` del sentinel (`vexillum sentinel await` pasa al comando de `vx` que no depende del PATH) y migra el archivo de reglas al bloque de AGENTS.md y a las skills, como se explicó arriba, para que el commander escriba `vx`. Si usás una [instalación global](/es/docs/get-started/install#instalación-global), corré también `vx upgrade --global`.
 
 3. Corré `vx doctor`. Avisa cuando otro `vx` más arriba en tu `PATH` tapa a este, lo que haría que los hooks y el commander corran el binario equivocado.

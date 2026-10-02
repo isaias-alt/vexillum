@@ -58,16 +58,19 @@ Corré la verificación cuando quieras:
 vx doctor
 ```
 
-`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y, para un proyecto inicializado, el estado del [bloque de AGENTS.md](/es/docs/concepts/agents-md-slot), si `CLAUDE.md` importa `AGENTS.md`, cada [skill](/es/docs/concepts/skills) y si [`models.json`](/es/docs/reference/models-json) es válido:
+`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y, para un proyecto inicializado, el estado del [bloque de AGENTS.md](/es/docs/concepts/agents-md-slot), si `CLAUDE.md` importa `AGENTS.md`, cada [skill](/es/docs/concepts/skills), si [`models.json`](/es/docs/reference/models-json) es válido, y el hook `Stop` del sentinel: si está registrado, si [encuentra vx desde un entorno mínimo](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path) y si hay un sentinel corriendo:
 
 ```text
 [ok] AGENTS.md vexillum block - current (en)
 [ok] CLAUDE.md imports AGENTS.md
 [ok] skill vexillum - installed, current
 [ok] models.json - valid, 5 profiles
+[ok] sentinel Stop hook - registered in .claude/settings.json
+[ok] sentinel Stop hook finds vx - found with a minimal environment
+[ok] sentinel - running, 1 Stop hook await(s) waiting
 ```
 
-Sale con código distinto de cero cuando falla un chequeo requerido.
+Sale con código distinto de cero cuando falla un chequeo requerido. Un hook `Stop` que no encuentra vx es un `[warn]` con el arreglo, nunca un fallo.
 
 ## Instalación global
 

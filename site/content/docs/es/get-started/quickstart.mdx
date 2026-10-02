@@ -31,7 +31,7 @@ vx init
 3. **El import en CLAUDE.md.** `CLAUDE.md` recibe la línea `@AGENTS.md` para que Claude Code vea el bloque. Un `CLAUDE.md` existente se edita solo después de una segunda pregunta.
 4. **Las [skills](/es/docs/concepts/skills).** `Install the vexillum, forum and muster skills? [Y/n]`. Si decís que sí, las escribe en `.claude/skills/`.
 5. **[`models.json`](/es/docs/reference/models-json).** `.vexillum/models.json` se escribe con los perfiles de modelo y effort por defecto. Uno existente nunca se pisa.
-6. **El hook del sentinel.** Un hook `Stop` asíncrono en `.claude/settings.json` (`vx sentinel await`) permite al sentinel despertar al commander. Los settings y hooks existentes se fusionan, nunca se pisan.
+6. **El hook del sentinel.** Un hook `Stop` asíncrono en `.claude/settings.json` (un comando de una línea que corre `vx sentinel await` y encuentra `vx` sin depender de tu `PATH`) permite al sentinel despertar al commander. Los settings y hooks existentes se fusionan, nunca se pisan.
 
 También crea `~/.vexillum/` si falta, y volver a correr `init` no cambia nada de lo que ya está en su lugar.
 

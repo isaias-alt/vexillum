@@ -16,6 +16,7 @@ Start with `vx doctor`: it names what is missing.
 | `AGENTS.md: the vexillum block was edited by hand, so it is left as it is` | You edited inside the block. `vx upgrade --force` replaces it after saving yours to `.vexillum/agents-md-slot.backup.md`. See [The AGENTS.md slot](/docs/concepts/agents-md-slot). |
 | `AGENTS.md: the vexillum block is malformed` | Broken markers. `vx upgrade` lists the repairs and asks first. |
 | `a sentinel is already running (pid N)` | Fine: there is one per machine. Do not start another. |
+| `vx: not found, so the sentinel Stop hook cannot wake the commander ...` (stderr of the hook) or `[warn] sentinel Stop hook finds vx` in `vx doctor` | The hook's shell has no `vx` on its `PATH` and none in `~/.local/bin`, Homebrew or `/usr/local/bin`. Install `vx` in one of those, or put its directory on `PATH`. If the hook is the older bare `vx sentinel await`, run `vx upgrade` to replace it. See [Sentinel](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path). |
 | `.claude/settings.json has invalid JSON, leaving it untouched` | Fix the JSON, then run `vx init` again to add the hook. |
 | `no tasks yet in this project.` after moving the project | The state key follows the path; see [State](/docs/concepts/state). |
 
@@ -35,4 +36,4 @@ Start with `vx doctor`: it names what is missing.
 
 ## A soldier seems stuck
 
-Check `vx status`. `blocked` is waiting on you: use [`decide`](/docs/reference/cli/decide). `unconfirmed` or `interrupted` need a look at the camp; see [Blocked and interrupted](/docs/guides/blocked-and-interrupted). If the commander never reports a settled soldier, confirm the sentinel runs (`~/.vexillum/sentinel.log`) and that `.claude/settings.json` has the `vx sentinel await` hook.
+Check `vx status`. `blocked` is waiting on you: use [`decide`](/docs/reference/cli/decide). `unconfirmed` or `interrupted` need a look at the camp; see [Blocked and interrupted](/docs/guides/blocked-and-interrupted). If the commander never reports a settled soldier, confirm the sentinel runs (`~/.vexillum/sentinel.log`) and that `vx doctor` reports the `Stop` hook as registered and finding vx (`[ok] sentinel Stop hook finds vx`).

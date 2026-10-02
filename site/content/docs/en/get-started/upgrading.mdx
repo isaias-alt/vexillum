@@ -27,7 +27,7 @@ vx upgrade
 
 - writes or updates the vexillum block in `AGENTS.md` and makes sure `CLAUDE.md` imports it. A block you edited is **not** overwritten: `upgrade` prints the diff between yours and the current template. A malformed block is not touched until you confirm the repairs it lists, and the file is saved to `.vexillum/AGENTS.md.backup` first. See [The AGENTS.md slot](/docs/concepts/agents-md-slot);
 - refreshes the installed skills that are unchanged since vexillum wrote them (a content hash per skill is kept in `.vexillum/config.json`) and reports the ones you edited. See [Skills](/docs/concepts/skills);
-- keeps the sentinel `Stop` hook current. An older synchronous `vx sentinel drain` hook is upgraded in place to the async `vx sentinel await` hook, not duplicated;
+- keeps the sentinel `Stop` hook current. An older synchronous `vx sentinel drain` hook is upgraded in place to the async hook, not duplicated, and so is a bare `vx sentinel await`, which only works when `vx` is on the `PATH` of the hook's shell: the new command also tries `~/.local/bin`, Homebrew and `/usr/local/bin`. Your own `Stop` hooks are kept. See [Sentinel](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path);
 - creates `.vexillum/models.json` if it is missing. An existing one is never overwritten: it is yours. See [`models.json`](/docs/reference/models-json).
 
 Without a terminal `upgrade` asks nothing and changes nothing unless you pass `--yes`.
@@ -62,6 +62,6 @@ The command used to be called `vexillum`. It is now `vx`, and the old name is go
 vx upgrade
 ```
 
-This rewrites the sentinel `Stop` hook (`vexillum sentinel await` becomes `vx sentinel await`) and migrates the rules file to the AGENTS.md block and the skills, as above, so the commander types `vx`. If you used a [global install](/docs/get-started/install#install-globally), also run `vx upgrade --global`.
+This rewrites the sentinel `Stop` hook (`vexillum sentinel await` becomes the PATH-independent `vx` command) and migrates the rules file to the AGENTS.md block and the skills, as above, so the commander types `vx`. If you used a [global install](/docs/get-started/install#install-globally), also run `vx upgrade --global`.
 
 3. Run `vx doctor`. It warns when another `vx` earlier in your `PATH` shadows this one, which would make hooks and the commander run the wrong binary.

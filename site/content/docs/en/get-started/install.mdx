@@ -58,16 +58,19 @@ Run the check any time:
 vx doctor
 ```
 
-`doctor` is read-only. It prints `[ok]` or `[missing]` for each tool, the herdr version, `~/.vexillum/`, whether the current project is initialized and is a git repository, and, for an initialized project, the state of the [AGENTS.md block](/docs/concepts/agents-md-slot), whether `CLAUDE.md` imports `AGENTS.md`, each [skill](/docs/concepts/skills) and whether [`models.json`](/docs/reference/models-json) is valid:
+`doctor` is read-only. It prints `[ok]` or `[missing]` for each tool, the herdr version, `~/.vexillum/`, whether the current project is initialized and is a git repository, and, for an initialized project, the state of the [AGENTS.md block](/docs/concepts/agents-md-slot), whether `CLAUDE.md` imports `AGENTS.md`, each [skill](/docs/concepts/skills), whether [`models.json`](/docs/reference/models-json) is valid, and the sentinel `Stop` hook: whether it is registered, whether it [finds vx from a bare environment](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path) and whether a sentinel is running:
 
 ```text
 [ok] AGENTS.md vexillum block - current (en)
 [ok] CLAUDE.md imports AGENTS.md
 [ok] skill vexillum - installed, current
 [ok] models.json - valid, 5 profiles
+[ok] sentinel Stop hook - registered in .claude/settings.json
+[ok] sentinel Stop hook finds vx - found with a minimal environment
+[ok] sentinel - running, 1 Stop hook await(s) waiting
 ```
 
-It exits non-zero when a required check fails.
+It exits non-zero when a required check fails. A `Stop` hook that cannot find vx is a `[warn]` with the fix, never a failure.
 
 ## Install globally
 

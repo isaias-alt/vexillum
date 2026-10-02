@@ -18,10 +18,13 @@ It also watches settled soldiers whose camp is still in place: if one is working
 `vx init` registers an async `Stop` hook in the project's `.claude/settings.json`:
 
 ```json
-{ "type": "command", "command": "vx sentinel await" }
+{
+  "type": "command",
+  "command": "sh -c 'for v in \"$(command -v vx 2>/dev/null)\" \"$HOME/.local/bin/vx\" /opt/homebrew/bin/vx /usr/local/bin/vx /home/linuxbrew/.linuxbrew/bin/vx; do [ -f \"$v\" ] && [ -x \"$v\" ] && exec \"$v\" sentinel await; done; echo \"vx: not found, so the sentinel Stop hook cannot wake the commander. Install vx (brew or curl) or put its directory on PATH, then run: vx doctor\" >&2; exit 0'"
+}
 ```
 
-registered with `asyncRewake` and a one-hour timeout. `await` blocks, re-checking every 5 seconds, until a wake for *this project* arrives, then answers `{"decision":"block","reason":...}` so Claude Code reports the change instead of quietly ending its turn - even if the turn ended before the soldier settled. The reason lists each change, for example `- mission <task-id>: running -> done`.
+registered with `asyncRewake` and a one-hour timeout. The command is a one-line POSIX `sh -c` wrapper that ends up running `vx sentinel await`; see [The hook does not depend on your PATH](#the-hook-does-not-depend-on-your-path). `await` blocks, re-checking every 5 seconds, until a wake for *this project* arrives, then answers `{"decision":"block","reason":...}` so Claude Code reports the change instead of quietly ending its turn - even if the turn ended before the soldier settled. The reason lists each change, for example `- mission <task-id>: running -> done`.
 
 | Subcommand | Behavior |
 | --- | --- |
@@ -32,6 +35,32 @@ registered with `asyncRewake` and a one-hour timeout. `await` blocks, re-checkin
 Outside a herdr-managed pane (no `HERDR_WORKSPACE_ID`), `await` and `drain` exit silently: the hook is committed with the project, so it also fires in unrelated Claude Code turns, such as a camp's own headless review, which have no soldier to wait for.
 
 Each `await` records itself in `~/.vexillum/sentinel-awaiters/` and never outlives the hook that launched it. It exits on its own once its parent process is gone, and a newer `await` from the same session and project replaces the previous turn's, so one session leaves one waiting process, not one per turn. Starting `vx sentinel` or any `await` also stops orphans left behind by a dead session. A process is signaled only after it is verified to be a `vx sentinel await` by its pid file and command line, never by name.
+
+## The hook does not depend on your PATH
+
+Claude Code runs the hook in a shell that may never have read your profile, so a bare `vx sentinel await` can fail with `command not found` when vx lives in `~/.local/bin`. The commander would then never be woken, with nothing to say so. The registered command therefore looks for vx itself, in this order:
+
+1. `command -v vx`, the first `vx` on the hook shell's `PATH`;
+2. `$HOME/.local/bin/vx` (the curl installer);
+3. `/opt/homebrew/bin/vx` (Homebrew on Apple silicon);
+4. `/usr/local/bin/vx` (Homebrew on Intel macOS, or a manual install);
+5. `/home/linuxbrew/.linuxbrew/bin/vx` (Homebrew on Linux).
+
+The first one that exists and is executable is run with `exec`, so the `await` process stays a direct child of the hook runner. No absolute path is written into `settings.json`, which is committed and shared across machines, and no extra file is added to your project.
+
+If none is found the hook does not stay silent: it prints one line to stderr, `vx: not found, so the sentinel Stop hook cannot wake the commander. Install vx (brew or curl) or put its directory on PATH, then run: vx doctor`, and exits 0 so Claude Code is not blocked.
+
+`vx doctor` checks this for real. It runs the registered command from a bare environment (`env -i` with only `HOME` and `PATH=/usr/bin:/bin`) and reports whether it found a vx, whether the hook is registered at all, and whether a sentinel is running:
+
+```text
+[ok] sentinel Stop hook - registered in .claude/settings.json
+[ok] sentinel Stop hook finds vx - found with a minimal environment
+[ok] sentinel - running, 1 Stop hook await(s) waiting
+```
+
+A hook that cannot find vx is a warning, not a failure, and the line names the fix: install vx where the hook looks (`~/.local/bin` or Homebrew) and run `vx upgrade` to rewrite an older hook.
+
+`vx init` and `vx upgrade` migrate the earlier forms, a bare `vx sentinel await`, the pre-rename `vexillum sentinel await` and the synchronous `vexillum sentinel drain`, to the command above. They ask first like the rest of `upgrade`, and any `Stop` hook of yours that is not vexillum's is kept.
 
 ## Following up on a finished soldier
 

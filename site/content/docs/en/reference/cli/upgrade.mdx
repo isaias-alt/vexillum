@@ -29,7 +29,11 @@ exactly like 'vx init' (see its help), and then:
     reports the ones you edited. When no skill is installed yet it offers to
     install them, as init does.
   - keeps the sentinel Stop hook current, and creates .vexillum/models.json
-    if it is missing. An existing models.json is never overwritten.
+    if it is missing. An older hook that only works when vx is on the
+    PATH of the hook's shell (a bare "vx sentinel await", or the
+    "vexillum ..." forms) is replaced by one that also tries the known install
+    locations; your own hooks are kept. An existing models.json is never
+    overwritten.
 
 Without a terminal upgrade asks nothing and does nothing unless --yes is
 given.

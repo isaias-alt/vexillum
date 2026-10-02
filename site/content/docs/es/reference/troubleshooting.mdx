@@ -16,6 +16,7 @@ Empezá con `vx doctor`: te dice qué falta. Los mensajes de error de vexillum e
 | `AGENTS.md: the vexillum block was edited by hand, so it is left as it is` | Editaste dentro del bloque. `vx upgrade --force` lo reemplaza después de guardar el tuyo en `.vexillum/agents-md-slot.backup.md`. Mirá [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot). |
 | `AGENTS.md: the vexillum block is malformed` | Marcadores rotos. `vx upgrade` lista las reparaciones y pregunta antes. |
 | `a sentinel is already running (pid N)` | Está bien: hay uno por máquina. No inicies otro. |
+| `vx: not found, so the sentinel Stop hook cannot wake the commander ...` (stderr del hook) o `[warn] sentinel Stop hook finds vx` en `vx doctor` | El shell del hook no tiene `vx` en su `PATH` ni hay uno en `~/.local/bin`, Homebrew o `/usr/local/bin`. Instalá `vx` en alguno de esos lugares, o poné su directorio en el `PATH`. Si el hook es el viejo `vx sentinel await` pelado, corré `vx upgrade` para reemplazarlo. Ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path). |
 | `.claude/settings.json has invalid JSON, leaving it untouched` | Arreglá el JSON y volvé a correr `vx init` para agregar el hook. |
 | `no tasks yet in this project.` después de mover el proyecto | La clave de estado sigue a la ruta; ver [Estado](/es/docs/concepts/state). |
 
@@ -35,4 +36,4 @@ Empezá con `vx doctor`: te dice qué falta. Los mensajes de error de vexillum e
 
 ## Un soldier parece atascado
 
-Mirá `vx status`. `blocked` te está esperando: usá [`decide`](/es/docs/reference/cli/decide). `unconfirmed` o `interrupted` requieren mirar el camp; ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted). Si el commander nunca reporta un soldier que terminó, confirmá que el sentinel corre (`~/.vexillum/sentinel.log`) y que `.claude/settings.json` tiene el hook `vx sentinel await`.
+Mirá `vx status`. `blocked` te está esperando: usá [`decide`](/es/docs/reference/cli/decide). `unconfirmed` o `interrupted` requieren mirar el camp; ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted). Si el commander nunca reporta un soldier que terminó, confirmá que el sentinel corre (`~/.vexillum/sentinel.log`) y que `vx doctor` reporta el hook `Stop` como registrado y encontrando vx (`[ok] sentinel Stop hook finds vx`).
