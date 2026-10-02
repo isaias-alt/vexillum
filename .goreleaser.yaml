@@ -7,7 +7,7 @@ before:
     - go mod tidy
 
 builds:
-  - id: vexillum
+  - id: vx
     main: ./cmd/vx
     binary: vx
     env:
@@ -22,7 +22,7 @@ builds:
       - -s -w -X main.version={{.Version}}
 
 archives:
-  - id: vexillum
+  - id: vx
     formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
@@ -38,7 +38,7 @@ changelog:
       - "^docs:"
 
 brews:
-  - name: vexillum
+  - name: vx
     repository:
       owner: isaias-alt
       name: homebrew-tap
