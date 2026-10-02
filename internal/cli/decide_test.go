@@ -9,7 +9,6 @@ import (
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
-	"github.com/isaias-alt/vexillum/internal/tribunal"
 )
 
 // blockedTestTask persists a task already in StatusBlocked, with a real
@@ -321,7 +320,7 @@ func TestRefusalsOfABlockedTaskMentionDismiss(t *testing.T) {
 	task := falseBlockedTask(t, projectRoot)
 
 	var out bytes.Buffer
-	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code == 0 {
+	if code := runShip(project, home, task.ID, shipOptions{}, &out, &out); code == 0 {
 		t.Fatal("expected ship to refuse a blocked task")
 	}
 	if !strings.Contains(out.String(), "decide "+task.ID+" --dismiss") {

@@ -47,7 +47,7 @@ El revisor devuelve JSON: hallazgos (`file`, `line`, `severity` error/warning/in
 - un archivo cambiado que falta en `reviewed_paths` cuenta como no revisado y hace fallar el paso;
 - sin JSON válido tras los reintentos, o un timeout, el paso falla. Ninguno de los dos es jamás un pass.
 
-Los hallazgos se imprimen en la salida de `vx ship`. Si el ship pasa, los hallazgos info se agregan al cuerpo del pull request.
+Los hallazgos se imprimen en la salida de `vx ship`. Si el ship pasa, los hallazgos info se agregan al cuerpo del pull request bajo Tribunal notes.
 
 ### Revisar, arreglar, revisar (opt-in)
 
@@ -62,6 +62,16 @@ Los hallazgos `ask-user` nunca se auto-corrigen: si algún hallazgo bloqueante n
 Sin `go.mod` ni `package.json`, lint y tests pasan con una nota de que no se detectó nada. Es sincrónico: cuando `ship` vuelve, todo el pipeline terminó. Solo después de que pasan todos los pasos hace push de la branch del camp a `origin` y corre `gh pr create`. Ningún agente decide si eso ocurre ni cuándo: es la única acción con un efecto irreversible fuera de la máquina.
 
 Una mission en `done` o `shipped` puede enviarse de nuevo para empujar seguimientos al mismo PR; vuelve a correr el pipeline completo primero.
+
+### El texto del pull request
+
+El pull request es público, así que `vx ship` nunca copia en él el prompt del despacho ni sus enmiendas. El título es el subject del único commit de la branch, o de su commit `feat`, `fix` o `docs` más reciente, o de su primer commit, cortado a unos 72 caracteres. El cuerpo se arma con hechos: una sección **What** (los subjects de los commits como lista), una línea **Changes** (archivos cambiados, inserciones, borrados y las áreas de primer nivel tocadas), una línea **Verification** (los pasos del tribunal que pasaron, las rondas de revisión y las de arreglo), los hallazgos info de la revisión bajo **Tribunal notes**, y un pie de una línea que nombra la mission.
+
+```bash
+vx ship <task-id> --title "feat: titulo conciso" --body-file description.md
+```
+
+`--title` reemplaza el título derivado. `--body "<texto>"` o `--body-file <ruta>` (`-` lee la entrada estándar; no se pueden combinar) reemplaza la sección What; Changes, Verification, Tribunal notes y el pie se mantienen. Todo lo que viene del camp, del revisor o de un cuerpo provisto se sanea antes de publicar: se descartan las líneas con una ruta absoluta de home (`/Users/...`, `/home/...`), un puerto de localhost o algo que parezca un secreto, y también cualquier línea que cite el prompt de la mission; `vx ship` informa cuántas descartó. Un `--title` que no pasa la misma comprobación se rechaza antes de que corra el tribunal. Volver a enviar una mission cuyo pull request ya está abierto no toca el texto del pull request.
 
 ## Aterrizar una mission enviada
 

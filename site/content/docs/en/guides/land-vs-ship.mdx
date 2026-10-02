@@ -47,7 +47,7 @@ The reviewer returns JSON: findings (`file`, `line`, `severity` error/warning/in
 - a changed file missing from `reviewed_paths` counts as unreviewed and fails the step;
 - no valid JSON after the retries, or a timeout, fails the step. Neither is ever a pass.
 
-Findings are printed in the output of `vx ship`. If the ship passes, the info findings are added to the pull request body.
+Findings are printed in the output of `vx ship`. If the ship passes, the info findings are added to the pull request body under Tribunal notes.
 
 ### Review, fix, review (opt-in)
 
@@ -62,6 +62,16 @@ Without `--fix`, a blocking review only rejects the ship and prints the findings
 With neither `go.mod` nor `package.json`, lint and tests pass with a note that nothing was detected. It is synchronous: when `ship` returns, the whole pipeline has settled. Only after every step passes does it push the camp branch to `origin` and run `gh pr create`. No agent decides whether or when that happens: it is the one action with an irreversible effect outside the machine.
 
 A mission in `done` or `shipped` can be shipped again to push follow-ups onto the same PR; it re-runs the full pipeline first.
+
+### The pull request text
+
+The pull request is public, so `vx ship` never copies the dispatch prompt or its amendments into it. The title is the subject of the branch's only commit, or of its newest `feat`, `fix` or `docs` commit, or of its first commit, cut to about 72 characters. The body is built from facts: a **What** section (the commit subjects as a bullet list), a **Changes** line (files changed, insertions, deletions and the top-level areas touched), a **Verification** line (the tribunal steps that passed, the review rounds and the fix rounds), the review's info findings under **Tribunal notes**, and a one-line footer naming the mission.
+
+```bash
+vx ship <task-id> --title "feat: concise title" --body-file description.md
+```
+
+`--title` overrides the derived title. `--body "<text>"` or `--body-file <path>` (`-` reads standard input; the two cannot be combined) replaces the What section; Changes, Verification, Tribunal notes and the footer stay. Everything that comes from the camp, the reviewer or a supplied body is sanitized before publishing: lines with an absolute home path (`/Users/...`, `/home/...`), a localhost port or something that looks like a secret are dropped, as is any line quoting the mission prompt, and `vx ship` reports how many it dropped. A `--title` that fails the same check is refused before the tribunal runs. Re-shipping a mission whose pull request is already open leaves the pull request's text alone.
 
 ## Landing a shipped mission
 

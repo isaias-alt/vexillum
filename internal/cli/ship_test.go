@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -80,7 +81,7 @@ func doneMissionTask(t *testing.T, project, home string) state.Task {
 // filepath.Join calls - runShip rejects it up front.
 func TestRunShip_RejectsInvalidTaskID(t *testing.T) {
 	var out bytes.Buffer
-	code := runShip("/does/not/matter", "/does/not/matter", "../../etc/passwd", tribunal.Options{}, &out, &out)
+	code := runShip("/does/not/matter", "/does/not/matter", "../../etc/passwd", shipOptions{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an invalid task id")
@@ -163,7 +164,7 @@ func TestRunShip_Success(t *testing.T) {
 	t.Setenv("PATH", shipToolsPath(t, passingReview, ghCreatesNewPR))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -185,7 +186,7 @@ func TestRunShip_RecordsShippedStatus(t *testing.T) {
 	t.Setenv("PATH", shipToolsPath(t, passingReview, ghCreatesNewPR))
 
 	var out bytes.Buffer
-	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code != 0 {
+	if code := runShip(project, home, task.ID, shipOptions{}, &out, &out); code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
 
@@ -223,7 +224,7 @@ func TestRunShip_AllowsReshippingAShippedTask(t *testing.T) {
 esac`))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 reshipping an already-shipped task, got %d: %s", code, out.String())
@@ -255,7 +256,7 @@ func TestRunShip_RefusesNotDone(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for a task that isn't done")
@@ -284,7 +285,7 @@ func TestRunShip_RefusesScout(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for a scout")
@@ -303,7 +304,7 @@ func TestRunShip_RefusesWhenGhNotInstalled(t *testing.T) {
 	t.Setenv("PATH", gitOnlyPath(t))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit when gh isn't installed")
@@ -323,7 +324,7 @@ func TestRunShip_RefusesWhenTribunalFails(t *testing.T) {
 esac`))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit when a tribunal step fails")
@@ -395,7 +396,7 @@ func TestRunShip_BlockingFindingsRefuseAndArePrinted(t *testing.T) {
 			t.Setenv("PATH", shipToolsPath(t, fmt.Sprintf(reviewWithFindings, reviewFinding(tc.severity, tc.action)), ghMustNotCreate))
 
 			var out bytes.Buffer
-			code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+			code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 			if code != 1 {
 				t.Fatalf("expected exit 1, got %d: %s", code, out.String())
@@ -410,7 +411,8 @@ func TestRunShip_BlockingFindingsRefuseAndArePrinted(t *testing.T) {
 	}
 }
 
-// Info findings do not block; they are printed and ride the PR body.
+// Info findings do not block; they are printed and ride the PR body, under
+// Tribunal notes.
 func TestRunShip_InfoFindingsPassAndGoToThePRBody(t *testing.T) {
 	project := shipTestProject(t)
 	home := t.TempDir()
@@ -421,7 +423,7 @@ func TestRunShip_InfoFindingsPassAndGoToThePRBody(t *testing.T) {
 esac`))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 with only info findings, got %d: %s", code, out.String())
@@ -433,7 +435,7 @@ esac`))
 	if err != nil {
 		t.Fatalf("reading the captured gh args: %v", err)
 	}
-	for _, want := range []string{"## Review notes", "- `change.txt:1` - SOMETHING_WRONG", "do a thing"} {
+	for _, want := range []string{"## Tribunal notes", "- `change.txt:1` - SOMETHING_WRONG", "## What\n\n- change"} {
 		if !strings.Contains(string(args), want) {
 			t.Errorf("expected the PR body to contain %q, got: %s", want, args)
 		}
@@ -451,11 +453,11 @@ func TestRunShip_CleanReviewAddsNoNotesToThePRBody(t *testing.T) {
 esac`))
 
 	var out bytes.Buffer
-	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code != 0 {
+	if code := runShip(project, home, task.ID, shipOptions{}, &out, &out); code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
 	args, _ := os.ReadFile(bodyFile)
-	if strings.Contains(string(args), "Review notes") {
+	if strings.Contains(string(args), "Tribunal notes") {
 		t.Errorf("expected no review notes section, got: %s", args)
 	}
 }
@@ -474,7 +476,7 @@ func TestRunShip_FixLoopStillRefusesWithoutPushOrPR(t *testing.T) {
 			t.Setenv("PATH", shipToolsPath(t, fmt.Sprintf(reviewWithFindings, finding), ghMustNotCreate))
 
 			var out bytes.Buffer
-			code := runShip(project, home, task.ID, tribunal.Options{Fix: true}, &out, &out)
+			code := runShip(project, home, task.ID, shipOptions{Tribunal: tribunal.Options{Fix: true}}, &out, &out)
 
 			if code != 1 {
 				t.Fatalf("expected exit 1, got %d: %s", code, out.String())
@@ -489,12 +491,12 @@ func TestParseShipArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseShipArgs: %v", err)
 	}
-	if id != "abc" || !opts.Fix || opts.MaxFixRounds != 3 || opts.Timeout != 30*time.Minute {
+	if id != "abc" || !opts.Tribunal.Fix || opts.Tribunal.MaxFixRounds != 3 || opts.Tribunal.Timeout != 30*time.Minute {
 		t.Errorf("unexpected parse: %q %+v", id, opts)
 	}
 
 	id, opts, err = parseShipArgs([]string{"abc"})
-	if err != nil || id != "abc" || opts.Fix || opts.MaxFixRounds != 0 || opts.Timeout != 0 {
+	if err != nil || id != "abc" || !reflect.DeepEqual(opts, shipOptions{}) {
 		t.Errorf("expected plain defaults, got %q %+v %v", id, opts, err)
 	}
 
@@ -509,6 +511,12 @@ func TestParseShipArgs(t *testing.T) {
 		"bad timeout":           {"abc", "--timeout", "soon"},
 		"negative timeout":      {"abc", "--timeout", "-5m"},
 		"fix with value":        {"abc", "--fix=yes"},
+		"title missing":         {"abc", "--title"},
+		"title blank":           {"abc", "--title", "  "},
+		"body missing":          {"abc", "--body"},
+		"body blank":            {"abc", "--body="},
+		"body-file missing":     {"abc", "--body-file"},
+		"body and body-file":    {"abc", "--body", "x", "--body-file", "f.md"},
 	} {
 		if _, _, err := parseShipArgs(args); err == nil {
 			t.Errorf("%s: expected an error for %v", name, args)
@@ -541,7 +549,7 @@ func TestRunShip_ReviewerSeesTheTasksAmendments(t *testing.T) {
 	t.Setenv("PATH", toolsDir)
 
 	var out bytes.Buffer
-	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code != 0 {
+	if code := runShip(project, home, task.ID, shipOptions{}, &out, &out); code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
 	logged, err := os.ReadFile(argsLog)
@@ -551,6 +559,196 @@ func TestRunShip_ReviewerSeesTheTasksAmendments(t *testing.T) {
 	for _, want := range []string{"do a thing", "Instructions the general gave afterward", "via vx prompt] LATER_INSTRUCTION add a retry"} {
 		if !strings.Contains(string(logged), want) {
 			t.Errorf("expected the reviewer's prompt to contain %q:\n%s", want, logged)
+		}
+	}
+}
+
+// leakyPrompt is a dispatch prompt like the one that once ended up on a public
+// pull request: internal rules and the general's local server.
+const leakyPrompt = `You are a soldier in a vexillum camp (a git worktree of the vexillum repo). Read AGENTS.md first.
+Never touch the general's dev server on localhost:3000, work under /Users/macuser/camps/3.
+Finish with all work committed and the tree clean.`
+
+// shipCapturingGh runs a successful ship of a done mission whose prompt is
+// leakyPrompt and returns the arguments the fake "gh pr create" received (one
+// per line), plus the ship's output.
+func shipCapturingGh(t *testing.T, opts shipOptions, review string) (args, output string, code int) {
+	t.Helper()
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	task.Prompt = leakyPrompt
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	argsFile := filepath.Join(t.TempDir(), "gh-args")
+	t.Setenv("PATH", shipToolsPath(t, review, `case "$1 $2" in
+  "pr create") printf '%s\n' "$@" > '`+argsFile+`'; echo "https://github.com/x/y/pull/1" ;;
+esac`))
+
+	var out bytes.Buffer
+	code = runShip(project, home, task.ID, opts, &out, &out)
+	captured, _ := os.ReadFile(argsFile)
+	return string(captured), out.String(), code
+}
+
+// The pull request is public: neither its title nor its body carry the
+// dispatch prompt, whatever it says.
+func TestRunShip_PRTextNeverContainsThePrompt(t *testing.T) {
+	args, output, code := shipCapturingGh(t, shipOptions{}, passingReview)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, output)
+	}
+	for _, banned := range []string{"You are a soldier", "AGENTS.md", "localhost", "/Users/", "dev server", "tree clean"} {
+		if strings.Contains(args, banned) {
+			t.Errorf("the pull request text must not contain %q:\n%s", banned, args)
+		}
+	}
+	for _, want := range []string{"--title\nchange\n", "## What\n\n- change", "## Changes\n\n1 file changed, +1 -0. Areas touched: `(repo root)`.", "## Verification\n\nTribunal steps passed: lint, tests, review, docs. 1 review round, 0 fix rounds.", "vexillum mission "} {
+		if !strings.Contains(args, want) {
+			t.Errorf("expected the pull request text to contain %q:\n%s", want, args)
+		}
+	}
+	if !strings.Contains(args, "verified by tribunal: lint, tests, review, and docs all passed.") {
+		t.Errorf("expected the factual footer:\n%s", args)
+	}
+}
+
+// --title and --body replace the derived title and What section; the rest of
+// the body stays, and the supplied text is sanitized like everything else.
+func TestRunShip_TitleAndBodyOverrides(t *testing.T) {
+	opts := shipOptions{
+		Title:   "feat: a title the commander chose",
+		Body:    "Hand written summary.\nIt ran against localhost:8080 by accident.\n" + leakyPrompt,
+		HasBody: true,
+	}
+	args, output, code := shipCapturingGh(t, opts, fmt.Sprintf(reviewWithFindings, reviewFinding("info", "no-op")))
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, output)
+	}
+	for _, want := range []string{"--title\nfeat: a title the commander chose\n", "## What\n\nHand written summary.\n\n## Changes", "## Tribunal notes", "- `change.txt:1` - SOMETHING_WRONG", "verified by tribunal"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("expected the pull request text to contain %q:\n%s", want, args)
+		}
+	}
+	for _, banned := range []string{"- change\n", "localhost", "You are a soldier", "/Users/"} {
+		if strings.Contains(args, banned) {
+			t.Errorf("the pull request text must not contain %q:\n%s", banned, args)
+		}
+	}
+	if !strings.Contains(output, "dropped 4 line(s)") {
+		t.Errorf("expected ship to say it dropped lines, got: %s", output)
+	}
+}
+
+// A --title that is not safe to publish is refused before the tribunal runs:
+// no review, no push, no pull request.
+func TestRunShip_RefusesUnsafeTitle(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	t.Setenv("PATH", shipToolsPath(t, "no verdict line here at all", ghMustNotCreate))
+
+	var out bytes.Buffer
+	code := runShip(project, home, task.ID, shipOptions{Title: "fix: works on localhost:3000"}, &out, &out)
+
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "--title") || strings.Contains(out.String(), "[FAILED] review") {
+		t.Errorf("expected a refusal naming --title before the tribunal ran, got: %s", out.String())
+	}
+	assertNoShipSideEffects(t, project, home, task, out.String())
+}
+
+// Re-shipping a mission whose PR exists never touches the PR's text.
+func TestRunShip_ReshipIgnoresTitleAndBody(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	task.Status = state.StatusShipped
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	t.Setenv("PATH", shipToolsPath(t, passingReview, `case "$1 $2" in
+  "pr view") echo '{"number":1,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","headRefOid":"abc123","url":"https://github.com/x/y/pull/1"}' ;;
+  "pr create"|"pr edit") echo "PR TEXT SHOULD NOT HAVE BEEN TOUCHED" >&2; exit 1 ;;
+esac`))
+
+	var out bytes.Buffer
+	code := runShip(project, home, task.ID, shipOptions{Title: "feat: x", Body: "y", HasBody: true}, &out, &out)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "ignoring --title and --body") {
+		t.Errorf("expected a note that the flags were ignored, got: %s", out.String())
+	}
+}
+
+func TestParseShipArgs_TitleAndBodyFlags(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args []string
+		want shipOptions
+	}{
+		"title space":     {[]string{"abc", "--title", "feat: x"}, shipOptions{Title: "feat: x"}},
+		"title equals":    {[]string{"--title=fix: a=b", "abc"}, shipOptions{Title: "fix: a=b"}},
+		"body":            {[]string{"abc", "--body", "text"}, shipOptions{Body: "text", HasBody: true}},
+		"body equals":     {[]string{"abc", "--body=text"}, shipOptions{Body: "text", HasBody: true}},
+		"body-file":       {[]string{"abc", "--body-file", "d.md"}, shipOptions{BodyFile: "d.md"}},
+		"body-file stdin": {[]string{"abc", "--body-file=-"}, shipOptions{BodyFile: "-"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			id, got, err := parseShipArgs(tc.args)
+			if err != nil || id != "abc" {
+				t.Fatalf("parseShipArgs(%v) = %q, %v", tc.args, id, err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShipOptionsLoadBodyFile(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	opts := shipOptions{BodyFile: write("body.md", "from a file\n")}
+	if err := opts.loadBodyFile(strings.NewReader("")); err != nil || !opts.HasBody || opts.Body != "from a file\n" {
+		t.Errorf("file body: %+v, %v", opts, err)
+	}
+
+	opts = shipOptions{BodyFile: "-"}
+	if err := opts.loadBodyFile(strings.NewReader("from stdin")); err != nil || !opts.HasBody || opts.Body != "from stdin" {
+		t.Errorf("stdin body: %+v, %v", opts, err)
+	}
+
+	opts = shipOptions{}
+	if err := opts.loadBodyFile(strings.NewReader("ignored")); err != nil || opts.HasBody {
+		t.Errorf("no body file should change nothing: %+v, %v", opts, err)
+	}
+
+	for name, o := range map[string]shipOptions{
+		"missing file": {BodyFile: filepath.Join(dir, "nope.md")},
+		"empty file":   {BodyFile: write("empty.md", " \n")},
+	} {
+		if err := o.loadBodyFile(strings.NewReader("")); err == nil {
+			t.Errorf("%s: expected an error", name)
 		}
 	}
 }

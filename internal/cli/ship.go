@@ -12,6 +12,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/ghpr"
+	"github.com/isaias-alt/vexillum/internal/prbody"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 	"github.com/isaias-alt/vexillum/internal/tribunal"
@@ -22,6 +23,7 @@ opening a real pull request.
 
 Usage:
   ` + cmdname.Name + ` ship <task-id> [--fix] [--max-rounds <n>] [--timeout <duration>]
+                    [--title <text>] [--body <text> | --body-file <path>]
 
 Runs, in order, inside the mission's own camp: lint, tests, an adversarial
 code review of the diff, and a docs check - stopping at the first step that
@@ -64,6 +66,29 @@ this happens, since it's the one vexillum action with a real, irreversible
 effect outside the machine. Requires "gh" ('` + cmdname.Name + ` doctor' reports
 whether it's installed).
 
+The pull request is public, so its title and body are built from facts and
+never from the mission prompt or its amendments. The title is the subject of
+the branch's only commit, or of its newest feat, fix or docs commit, or of
+its first commit, cut to about 72 characters. The body has a What section
+(the commit subjects as a bullet list), the diff stat and the top-level
+areas touched, a Verification line (the tribunal steps that passed, the
+review rounds and fix rounds), the review's info findings under Tribunal
+notes, and a one-line footer naming the mission. Whatever comes from the
+camp or the reviewer is sanitized first: lines with an absolute home path,
+a localhost port or something that looks like a secret are dropped, as is any
+line quoting the mission prompt.
+
+  --title <text>        use this pull request title instead of the derived one
+  --body <text>         use this text as the What section instead of the
+                        commit subjects
+  --body-file <path>    same, read from a file ("-" reads standard input);
+                        cannot be combined with --body
+
+A supplied body is sanitized like everything else, the diff stat,
+Verification, Tribunal notes and footer stay. A supplied title or body only
+matters when the pull request is opened; re-shipping a mission whose PR
+already exists leaves the PR's text alone.
+
 A mission already shipped can be shipped again, to push follow-up commits
 onto the same open PR - only "done" and "shipped" are valid starting
 states; a re-ship still runs the full tribunal pipeline first. Once
@@ -83,6 +108,9 @@ func Ship(args []string) int {
 	}
 
 	taskID, opts, err := parseShipArgs(args)
+	if err == nil {
+		err = opts.loadBodyFile(os.Stdin)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
@@ -97,10 +125,47 @@ func Ship(args []string) int {
 	return runShip(projectDir, vexillumHome, taskID, opts, os.Stdout, os.Stderr)
 }
 
-// parseShipArgs splits ship's arguments into the task id and the tribunal
-// options its flags set. Flags may come before or after the task id.
-func parseShipArgs(args []string) (string, tribunal.Options, error) {
-	var opts tribunal.Options
+// shipOptions are ship's flags: the tribunal's own, plus the pull request
+// text overrides.
+type shipOptions struct {
+	Tribunal tribunal.Options
+	// Title overrides the derived pull request title when not empty.
+	Title string
+	// Body, when HasBody, replaces the generated What section.
+	Body    string
+	HasBody bool
+	// BodyFile is the path --body-file named, read by loadBodyFile.
+	BodyFile string
+}
+
+// loadBodyFile fills Body from BodyFile, reading stdin when it is "-".
+func (o *shipOptions) loadBodyFile(stdin io.Reader) error {
+	if o.BodyFile == "" {
+		return nil
+	}
+	var data []byte
+	var err error
+	if o.BodyFile == "-" {
+		data, err = io.ReadAll(stdin)
+	} else {
+		data, err = os.ReadFile(o.BodyFile)
+	}
+	if err != nil {
+		return fmt.Errorf("reading --body-file: %w", err)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return fmt.Errorf("--body-file %s is empty", o.BodyFile)
+	}
+	o.Body = string(data)
+	o.HasBody = true
+	return nil
+}
+
+// parseShipArgs splits ship's arguments into the task id and the options its
+// flags set. Flags may come before or after the task id.
+func parseShipArgs(args []string) (string, shipOptions, error) {
+	var ship shipOptions
+	opts := &ship.Tribunal
 	var taskID string
 	maxRoundsSet := false
 	for i := 0; i < len(args); i++ {
@@ -119,52 +184,82 @@ func parseShipArgs(args []string) (string, tribunal.Options, error) {
 		switch name {
 		case "--fix":
 			if hasValue {
-				return "", opts, fmt.Errorf("--fix takes no value")
+				return "", ship, fmt.Errorf("--fix takes no value")
 			}
 			opts.Fix = true
 		case "--max-rounds":
 			v, err := valueOf()
 			if err != nil {
-				return "", opts, err
+				return "", ship, err
 			}
 			n, err := strconv.Atoi(v)
 			if err != nil || n < 1 {
-				return "", opts, fmt.Errorf("--max-rounds needs a whole number of at least 1, got %q", v)
+				return "", ship, fmt.Errorf("--max-rounds needs a whole number of at least 1, got %q", v)
 			}
 			opts.MaxFixRounds = n
 			maxRoundsSet = true
 		case "--timeout":
 			v, err := valueOf()
 			if err != nil {
-				return "", opts, err
+				return "", ship, err
 			}
 			d, err := time.ParseDuration(v)
 			if err != nil || d <= 0 {
-				return "", opts, fmt.Errorf("--timeout needs a positive duration like 30m, got %q", v)
+				return "", ship, fmt.Errorf("--timeout needs a positive duration like 30m, got %q", v)
 			}
 			opts.Timeout = d
+		case "--title":
+			v, err := valueOf()
+			if err != nil {
+				return "", ship, err
+			}
+			if strings.TrimSpace(v) == "" {
+				return "", ship, fmt.Errorf("--title needs a non-empty title")
+			}
+			ship.Title = v
+		case "--body":
+			v, err := valueOf()
+			if err != nil {
+				return "", ship, err
+			}
+			if strings.TrimSpace(v) == "" {
+				return "", ship, fmt.Errorf("--body needs non-empty text")
+			}
+			ship.Body, ship.HasBody = v, true
+		case "--body-file":
+			v, err := valueOf()
+			if err != nil {
+				return "", ship, err
+			}
+			if v == "" {
+				return "", ship, fmt.Errorf("--body-file needs a path")
+			}
+			ship.BodyFile = v
 		default:
 			if strings.HasPrefix(arg, "-") {
-				return "", opts, fmt.Errorf("unknown flag %q for ship", arg)
+				return "", ship, fmt.Errorf("unknown flag %q for ship", arg)
 			}
 			if taskID != "" {
-				return "", opts, fmt.Errorf("unexpected extra argument %q, ship takes one task id", arg)
+				return "", ship, fmt.Errorf("unexpected extra argument %q, ship takes one task id", arg)
 			}
 			taskID = arg
 		}
 	}
 	if taskID == "" {
-		return "", opts, fmt.Errorf("missing task id")
+		return "", ship, fmt.Errorf("missing task id")
 	}
 	if maxRoundsSet && !opts.Fix {
-		return "", opts, fmt.Errorf("--max-rounds only applies with --fix")
+		return "", ship, fmt.Errorf("--max-rounds only applies with --fix")
 	}
-	return taskID, opts, nil
+	if ship.HasBody && ship.BodyFile != "" {
+		return "", ship, fmt.Errorf("--body and --body-file cannot be combined")
+	}
+	return taskID, ship, nil
 }
 
-// runShip ships taskID. opts carries the tribunal flags; the camp branch and
-// the task prompt are filled in here.
-func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, stdout, stderr io.Writer) int {
+// runShip ships taskID. ship carries the flags; the camp branch and the task
+// prompt are filled into the tribunal options here.
+func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, stderr io.Writer) int {
 	if err := state.ValidateID(taskID); err != nil {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
@@ -195,6 +290,15 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 		return 1
 	}
 
+	// What may be published never includes the mission's own words.
+	sanitizer := prbody.NewSanitizer(append([]string{task.Prompt}, amendmentTexts(task.Amendments)...)...)
+	if ship.Title != "" {
+		if _, err := prbody.Title(sanitizer, nil, ship.Title, ""); err != nil {
+			fmt.Fprintln(stderr, cmdname.Name+":", err)
+			return 1
+		}
+	}
+
 	if !ghpr.Installed() {
 		fmt.Fprintln(stderr, cmdname.Name+": 'gh' is not installed - required to open a mission's pull request (https://cli.github.com)")
 		return 1
@@ -206,6 +310,7 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 		return 1
 	}
 
+	opts := ship.Tribunal
 	opts.Branch = c.Branch
 	opts.TaskPrompt = task.Prompt
 	opts.TaskAmendments = task.Amendments
@@ -248,6 +353,29 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 		}
 	}
 
+	// Built before the push so a failure here leaves nothing half-done.
+	var title, body string
+	if task.Status == state.StatusShipped {
+		if ship.Title != "" || ship.HasBody {
+			fmt.Fprintln(stderr, cmdname.Name+": the pull request already exists, ignoring --title and --body")
+		}
+	} else {
+		facts, err := prbody.Gather(c.Path, task.CampBase)
+		if err != nil {
+			fmt.Fprintf(stderr, cmdname.Name+": reading the branch's commits and diff: %v\n", err)
+			return 1
+		}
+		var dropped int
+		title, body, dropped, err = shipPRText(sanitizer, task, ship, facts, result, notes)
+		if err != nil {
+			fmt.Fprintln(stderr, cmdname.Name+":", err)
+			return 1
+		}
+		if dropped > 0 {
+			fmt.Fprintf(stderr, cmdname.Name+": dropped %d line(s) from the pull request text: home paths, localhost ports, secrets or the mission prompt must not be published\n", dropped)
+		}
+	}
+
 	pushCmd := exec.Command("git", "push", "origin", c.Branch)
 	pushCmd.Dir = c.Path
 	if out, err := pushCmd.CombinedOutput(); err != nil {
@@ -264,7 +392,7 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 		}
 		prURL = pr.URL
 	} else {
-		prURL, err = ghpr.Create(projectDir, c.Branch, task.CampBase, shipPRTitle(task), shipPRBody(task, notes))
+		prURL, err = ghpr.Create(projectDir, c.Branch, task.CampBase, title, body)
 		if err != nil {
 			fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 			return 1
@@ -282,21 +410,43 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 	return 0
 }
 
-// shipPRTitle derives a pull request title from task's prompt - its
-// first line, since a mission's prompt is often multiple paragraphs of
-// context the PR title has no room for.
-func shipPRTitle(task state.Task) string {
-	title := strings.TrimSpace(strings.SplitN(task.Prompt, "\n", 2)[0])
-	if title == "" {
-		title = "vexillum mission " + task.ID
+// amendmentTexts returns the text of each amendment.
+func amendmentTexts(amendments []state.Amendment) []string {
+	texts := make([]string, len(amendments))
+	for i, a := range amendments {
+		texts[i] = a.Text
 	}
-	return title
+	return texts
 }
 
-// shipPRBody derives a pull request body from task's full prompt, followed
-// by the review's non-blocking (info) findings when there are any.
-func shipPRBody(task state.Task, reviewNotes []string) string {
-	return fmt.Sprintf("%s%s\n\n---\nvexillum mission %s, verified by %s: lint, tests, review, and docs all passed.", task.Prompt, ghpr.ReviewNotesSection(reviewNotes), task.ID, tribunal.Name)
+// shipPRText builds the pull request title and body for task from the
+// branch's facts and the tribunal's outcome, and how many lines the
+// sanitizer dropped. Neither contains the mission prompt.
+func shipPRText(s prbody.Sanitizer, task state.Task, ship shipOptions, facts prbody.Facts, result tribunal.Result, notes []string) (title, body string, dropped int, err error) {
+	title, err = prbody.Title(s, facts.Subjects, ship.Title, "vexillum mission "+task.ID)
+	if err != nil {
+		return "", "", 0, err
+	}
+	var passed []string
+	for _, sr := range result.Steps {
+		if sr.Passed {
+			passed = append(passed, string(sr.Step))
+		}
+	}
+	description := ""
+	if ship.HasBody {
+		description = ship.Body
+	}
+	body, dropped = prbody.Body(s, prbody.Input{
+		TaskID:       task.ID,
+		TribunalName: tribunal.Name,
+		Facts:        facts,
+		Steps:        passed,
+		FixRounds:    len(result.Earlier),
+		Notes:        notes,
+		Description:  description,
+	})
+	return title, body, dropped, nil
 }
 
 // printSteps writes one "[ok|FAILED] step" line per step, each preceded by
