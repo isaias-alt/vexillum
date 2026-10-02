@@ -195,6 +195,10 @@ func inProcessSpawn(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	prev := forumSpawn
+	prevListener := ensureForumListener
+	// No detached listener from a test: the listener has its own tests, and
+	// the command tests that need one run it in-process.
+	ensureForumListener = func(string) error { return nil }
 	forumSpawn = func(home string, port int) error {
 		wg.Add(1)
 		go func() {
@@ -207,6 +211,7 @@ func inProcessSpawn(t *testing.T) {
 		cancel()
 		wg.Wait()
 		forumSpawn = prev
+		ensureForumListener = prevListener
 	})
 }
 

@@ -17,6 +17,8 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/forum"
+	"github.com/isaias-alt/vexillum/internal/forumlisten"
+	"github.com/isaias-alt/vexillum/internal/inbox"
 )
 
 const forumUsage = `Open a local HTML artifact for visual review and collect the user's feedback.
@@ -25,6 +27,8 @@ Usage:
   ` + cmdname.Name + ` forum <html-file> [--no-open] [--reopen] [--port <n>]
   ` + cmdname.Name + ` forum poll <html-file> [--reply <text> | --reply-file <path|->] [--timeout <duration>]
   ` + cmdname.Name + ` forum poll --all [--reply-to <html-file> (--reply <text> | --reply-file <path|->)] [--timeout <duration>]
+  ` + cmdname.Name + ` forum inbox [--ack <uid>...]
+  ` + cmdname.Name + ` forum reply <html-file> (--reply <text> | --reply-file <path|->)
   ` + cmdname.Name + ` forum end <html-file>
   ` + cmdname.Name + ` forum stop
 
@@ -64,8 +68,28 @@ acknowledges them once its output was written. If a poll dies before that,
 running poll again delivers the same prompts again, marked redelivered, so
 nothing is lost; skip any uid you already applied.
 
+forum <html-file> run inside a vexillum project also records that project as
+the session's owner and makes sure the forum listener is running. The
+listener is a small background process (no model, nothing it can decide)
+that holds the poll for you: every prompt the user sends is written to the
+project's durable inbox, the Stop hook wakes the commander with a "forum
+session <file>: N new messages" line, and the browser shows the round as
+relayed (with the time since, and a note when no commander session is known)
+until a real answer, an artifact change or the user's Stop waiting. A session
+opened outside any project has no commander to wake: the listener leaves it
+alone, and forum poll works for it as before. The listener exits by itself
+when no session is open or every review window is gone.
+
+forum inbox prints the unread prompts of this project (run it from the
+project) in the poll's output format, bounded in size, attachments by path
+only. It does not mark anything read: forum inbox --ack <uid>... confirms the
+uids you handled (the ones printed), and an unconfirmed prompt is shown again.
+forum reply posts the agent's markdown answer (--reply, or --reply-file; - is
+stdin) to the review panel and answers the round without blocking, so a
+commander that does not poll can answer.
+
 forum end ends the session as the agent (a plain forum <html-file> reopens
-it later). forum stop shuts the background server down.
+it later). forum stop shuts the background listener and server down.
 `
 
 // forumHome is ~/.vexillum. Unlike the project commands it is not tied to
@@ -82,6 +106,27 @@ func forumHome() (string, error) {
 // forumSpawn launches the detached background server. A variable so tests
 // can run the server in-process instead of re-executing the test binary.
 var forumSpawn = spawnForumServer
+
+// ensureForumListener makes sure the forum listener is running. A variable so
+// tests do not spawn the real detached process.
+var ensureForumListener = func(home string) error {
+	return forumlisten.Ensure(home, func() error { return spawnForumListener(home) }, 10*time.Second)
+}
+
+// forumProjectRoot is the vexillum project root of the current directory, the
+// one a forum session is recorded under and the inbox lives in; "" outside any
+// project (not a git repository, or inside a camp).
+func forumProjectRoot(home string) string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	root, err := resolveDrainTarget(cwd, home)
+	if err != nil {
+		return ""
+	}
+	return root
+}
 
 // Forum runs the "vx forum" command.
 func Forum(args []string) int {
@@ -105,6 +150,12 @@ func Forum(args []string) int {
 	switch args[0] {
 	case "serve":
 		return runForumServe(ctx, home, args[1:], os.Stderr)
+	case "listen":
+		return runForumListen(ctx, home, args[1:], os.Stdout, os.Stderr)
+	case "inbox":
+		return runForumInbox(forumProjectRoot(home), args[1:], os.Stdout, os.Stderr)
+	case "reply":
+		return runForumReply(ctx, home, args[1:], os.Stdin, os.Stdout, os.Stderr)
 	case "poll":
 		return runForumPoll(ctx, home, args[1:], os.Stdin, os.Stdout, os.Stderr)
 	case "end":
@@ -203,7 +254,8 @@ func runForumOpen(ctx context.Context, home string, args []string, stdout, stder
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
-	res, err := client.Open(ctx, abs, a.reopen)
+	root := forumProjectRoot(home)
+	res, err := client.OpenFor(ctx, abs, a.reopen, root)
 	if err != nil {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
@@ -216,9 +268,30 @@ func runForumOpen(ctx context.Context, home string, args []string, stdout, stder
 		fmt.Fprintf(stdout, "next_step: %s\n", forum.OpenNextStep(abs, res))
 		return 1
 	}
+	// A session owned by a project has a commander to wake, so a listener holds
+	// the poll. Failing to start one is not fatal: poll still works.
+	listening := false
+	switch {
+	case root == "":
+	case res.ProjectRoot == "":
+		fmt.Fprintf(stderr, cmdname.Name+": warning: the running forum server predates the forum listener, so no listener was started; run `"+cmdname.Name+" forum stop` and open the file again\n")
+	default:
+		if lerr := ensureForumListener(home); lerr != nil {
+			fmt.Fprintf(stderr, cmdname.Name+": warning: could not start the forum listener (poll the session yourself): %v\n", lerr)
+		} else {
+			listening = true
+		}
+	}
+
 	fmt.Fprintf(stdout, "url: %s\n", res.URL)
 	fmt.Fprintf(stdout, "pending_prompts: %d\n", res.Pending)
-	fmt.Fprintf(stdout, "next_step: %s\n", forum.OpenNextStep(abs, res))
+	if listening {
+		fmt.Fprintf(stdout, "listener: running\n")
+		fmt.Fprintf(stdout, "next_step: %s\n", forum.OpenNextStepForwarded(abs, res))
+	} else {
+		fmt.Fprintf(stdout, "listener: none\n")
+		fmt.Fprintf(stdout, "next_step: %s\n", forum.OpenNextStep(abs, res))
+	}
 
 	// A browser already showing this session does not need a second tab.
 	if !a.noOpen && !res.BrowserConnected {
@@ -460,6 +533,16 @@ func runForumEnd(ctx context.Context, home string, args []string, stdout, stderr
 }
 
 func runForumStop(ctx context.Context, home string, stdout, stderr io.Writer) int {
+	// The listener goes first: it reconnects through EnsureServer, so a server
+	// stopped under it would be started again.
+	stopped, err := forumlisten.Stop(home)
+	if err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	if stopped {
+		fmt.Fprintln(stdout, "forum listener stopped")
+	}
 	client, err := forum.Discover(home)
 	if err != nil {
 		if errors.Is(err, forum.ErrNoServer) {
@@ -553,4 +636,201 @@ func openBrowser(url string) error {
 		cmd = exec.Command("xdg-open", url)
 	}
 	return cmd.Start()
+}
+
+// runForumListen is the background listener process ("vx forum listen",
+// started by spawnForumListener; not meant to be run by hand). It exits 0 when
+// another listener already holds the lock: several commands racing to start one
+// is expected, and exactly one wins.
+func runForumListen(ctx context.Context, home string, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		fmt.Fprintf(stderr, cmdname.Name+": unexpected argument %q\n", args[0])
+		return 1
+	}
+	release, err := forumlisten.AcquireLock(home)
+	if err != nil {
+		var running *forumlisten.ErrRunning
+		if errors.As(err, &running) {
+			return 0
+		}
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	defer release()
+	err = forumlisten.Run(ctx, forumlisten.Options{
+		Home:    home,
+		Connect: func(ctx context.Context) (*forum.Client, error) { return ensureForumServer(ctx, home, 0) },
+		Log:     stdout,
+	})
+	if err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	return 0
+}
+
+// spawnForumListener starts "vx forum listen" detached, logging to the
+// listener log, so it outlives this command and whatever shell launched it.
+func spawnForumListener(home string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locating the "+cmdname.Name+" binary: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(forumlisten.LogPath(home)), 0o755); err != nil {
+		return err
+	}
+	logFile, err := os.OpenFile(forumlisten.LogPath(home), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+
+	cmd := exec.Command(exe, "forum", "listen")
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
+// runForumInbox prints the project's unread forum prompts, or with --ack
+// confirms the uids named. projectRoot is where the inbox lives ("" outside any
+// project).
+func runForumInbox(projectRoot string, args []string, stdout, stderr io.Writer) int {
+	var ack []string
+	acking := false
+	for _, arg := range args {
+		switch {
+		case arg == "--ack":
+			acking = true
+		case strings.HasPrefix(arg, "-"):
+			fmt.Fprintf(stderr, cmdname.Name+": unknown flag %q\n", arg)
+			return 1
+		case acking:
+			ack = append(ack, arg)
+		default:
+			fmt.Fprintf(stderr, cmdname.Name+": unexpected argument %q\n", arg)
+			return 1
+		}
+	}
+	if acking && len(ack) == 0 {
+		fmt.Fprintln(stderr, cmdname.Name+": --ack needs the uids to confirm (the ones forum inbox printed)")
+		return 1
+	}
+	if projectRoot == "" {
+		fmt.Fprintln(stderr, cmdname.Name+": not inside a vexillum project: run this from the project the forum was opened in")
+		return 1
+	}
+
+	if acking {
+		n, err := inbox.MarkRead(projectRoot, ack)
+		if err != nil {
+			fmt.Fprintln(stderr, cmdname.Name+":", err)
+			return 1
+		}
+		left, err := inbox.Pending(projectRoot)
+		if err != nil {
+			fmt.Fprintln(stderr, cmdname.Name+":", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "acknowledged: %d\nunread_prompts: %d\n", n, len(left))
+		if len(left) > 0 {
+			fmt.Fprintf(stdout, "next_step: %d unread prompt(s) remain. Run `%s forum inbox` to read them.\n", len(left), cmdname.Name)
+		} else {
+			fmt.Fprintln(stdout, "next_step: Inbox is empty. You do not poll: the listener wakes you when the user sends more feedback.")
+		}
+		return 0
+	}
+
+	entries, err := inbox.Pending(projectRoot)
+	if err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	fmt.Fprint(stdout, forum.FormatInbox(projectRoot, entries))
+	return 0
+}
+
+// runForumReply posts the agent's answer to a session's panel without
+// blocking (poll --reply posts and then waits; the commander no longer polls).
+func runForumReply(ctx context.Context, home string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	var file, reply, replyFile string
+	hasReply := false
+	for i := 0; i < len(args); i++ {
+		switch arg := args[i]; arg {
+		case "--reply", "--reply-file":
+			i++
+			if i >= len(args) {
+				fmt.Fprintf(stderr, cmdname.Name+": %s requires a value\n", arg)
+				return 1
+			}
+			if hasReply {
+				fmt.Fprintln(stderr, cmdname.Name+": pass --reply or --reply-file, once")
+				return 1
+			}
+			hasReply = true
+			if arg == "--reply" {
+				reply = args[i]
+			} else {
+				replyFile = args[i]
+			}
+		default:
+			if strings.HasPrefix(arg, "--") {
+				fmt.Fprintf(stderr, cmdname.Name+": unknown flag %q\n", arg)
+				return 1
+			}
+			if file != "" {
+				fmt.Fprintf(stderr, cmdname.Name+": unexpected extra argument %q\n", arg)
+				return 1
+			}
+			file = arg
+		}
+	}
+	if file == "" || !hasReply {
+		fmt.Fprintln(stderr, cmdname.Name+": usage: "+cmdname.Name+" forum reply <html-file> (--reply <text> | --reply-file <path|->)")
+		return 1
+	}
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": resolving %s: %v\n", file, err)
+		return 1
+	}
+	if replyFile != "" {
+		var data []byte
+		if replyFile == "-" {
+			data, err = io.ReadAll(stdin)
+		} else {
+			data, err = os.ReadFile(replyFile)
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, cmdname.Name+": reading reply: %v\n", err)
+			return 1
+		}
+		reply = string(data)
+	}
+	client, err := ensureForumServer(ctx, home, 0)
+	if err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	status := "sent"
+	if err := client.Reply(ctx, abs, reply); err != nil {
+		var ae *forum.APIError
+		switch {
+		case errors.As(err, &ae) && ae.Code == "no_session":
+			fmt.Fprintln(stderr, noSessionMessage(abs))
+			return 1
+		case errors.As(err, &ae) && ae.Code == "ended":
+			fmt.Fprintln(stderr, cmdname.Name+": warning: reply not shown, the session already ended")
+			status = "ended"
+		default:
+			fmt.Fprintln(stderr, cmdname.Name+": reply failed:", err)
+			return 1
+		}
+	}
+	fmt.Fprintf(stdout, "session: %s\nstatus: %s\n", forum.SessionKey(abs), status)
+	fmt.Fprintf(stdout, "next_step: Confirm what you handled with `%s forum inbox --ack <uid>...`. You do not poll: the listener wakes you when the user sends more feedback.\n", cmdname.Name)
+	return 0
 }

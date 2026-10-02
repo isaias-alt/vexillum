@@ -53,34 +53,41 @@ func FormatPoll(file string, res PollResponse) string {
 	}
 	fmt.Fprintf(&b, "prompts[%d]:\n", len(res.Prompts))
 	for _, p := range res.Prompts {
-		b.WriteString("  - ")
-		writeField(&b, "", "uid", p.UID)
-		if p.Redelivered {
-			writeField(&b, "    ", "redelivered", "true")
-		}
-		writeField(&b, "    ", "tag", p.Tag)
-		writeField(&b, "    ", "prompt", p.Prompt)
-		if p.Selector != "" {
-			writeField(&b, "    ", "selector", p.Selector)
-		}
-		if p.Text != "" {
-			writeField(&b, "    ", "text", p.Text)
-		}
-		if len(p.Target) > 0 {
-			writeField(&b, "    ", "target", string(p.Target))
-		}
-		if len(p.Attachments) > 0 {
-			fmt.Fprintf(&b, "    attachments[%d]:\n", len(p.Attachments))
-			for _, a := range p.Attachments {
-				b.WriteString("      - ")
-				writeField(&b, "", "path", a.Path)
-				writeField(&b, "        ", "type", a.Mime)
-				writeField(&b, "        ", "bytes", fmt.Sprint(a.Bytes))
-			}
-		}
+		writePrompt(&b, "", p)
 	}
 	fmt.Fprintf(&b, "next_step: %s\n", PollNextStep(file, res))
 	return b.String()
+}
+
+// writePrompt writes one prompt as a list item of a prompts[N] block, its "- "
+// marker indented by lead.
+func writePrompt(b *strings.Builder, lead string, p Prompt) {
+	b.WriteString(lead + "  - ")
+	writeField(b, "", "uid", p.UID)
+	in := lead + "    "
+	if p.Redelivered {
+		writeField(b, in, "redelivered", "true")
+	}
+	writeField(b, in, "tag", p.Tag)
+	writeField(b, in, "prompt", p.Prompt)
+	if p.Selector != "" {
+		writeField(b, in, "selector", p.Selector)
+	}
+	if p.Text != "" {
+		writeField(b, in, "text", p.Text)
+	}
+	if len(p.Target) > 0 {
+		writeField(b, in, "target", string(p.Target))
+	}
+	if len(p.Attachments) > 0 {
+		fmt.Fprintf(b, "%sattachments[%d]:\n", in, len(p.Attachments))
+		for _, a := range p.Attachments {
+			b.WriteString(in + "  - ")
+			writeField(b, "", "path", a.Path)
+			writeField(b, in+"    ", "type", a.Mime)
+			writeField(b, in+"    ", "bytes", fmt.Sprint(a.Bytes))
+		}
+	}
 }
 
 func writeField(b *strings.Builder, indent, key, value string) {
@@ -171,6 +178,21 @@ func OpenNextStep(file string, res OpenResponse) string {
 		return fmt.Sprintf("The user already sent %d prompt(s). Run `%s` now to receive them; keep polling in a loop after that.", res.Pending, poll)
 	}
 	return "Tell the user the review is open at the URL above, then run `" + poll + "` to wait for their feedback (keep polling in a loop; never kill the poll). With several sessions open, run one `" + cmdname.Name + " forum poll --all` instead of a poll per file."
+}
+
+// OpenNextStepForwarded is the instruction printed after `vx forum <file>` when
+// a listener is running for the session: the commander does not poll, feedback
+// reaches it through the inbox and a forum wake.
+func OpenNextStepForwarded(file string, res OpenResponse) string {
+	if res.Status == OpenUserEnded {
+		return OpenNextStep(file, res)
+	}
+	step := "Tell the user the review is open at the URL above. Do not poll: a listener forwards their feedback to this project's inbox and wakes you through the Stop hook when you end a turn. On a forum wake run `" +
+		cmdname.Name + " forum inbox`, act on it, then answer with `" + cmdname.Name + " forum reply " + shellQuote(file) + " --reply \"<what you did>\"` and confirm with `" + cmdname.Name + " forum inbox --ack <uid>...`."
+	if res.Pending > 0 {
+		step = fmt.Sprintf("The user already sent %d prompt(s); the listener is forwarding them, so `%s forum inbox` shows them shortly. ", res.Pending, cmdname.Name) + step
+	}
+	return step + " (Fallback if no listener runs: `" + cmdname.Name + " forum poll " + shellQuote(file) + "`.)"
 }
 
 // shellQuote quotes s for a POSIX shell only when it needs it.
