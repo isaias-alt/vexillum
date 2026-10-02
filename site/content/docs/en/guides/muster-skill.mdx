@@ -3,7 +3,7 @@ title: Muster skill
 description: A first-party Claude Code skill that turns vx status into a troop board.
 ---
 
-`muster` is a Claude Code Agent Skill that ships inside the vexillum binary. It reads `vx status --json` and groups the project's tasks so you can see, at a glance, what needs you.
+`muster` is a Claude Code Agent Skill that ships inside the vexillum binary. It reads `vx status --json` and `vx pending list --json` and groups the project's tasks and the commander's pending decisions so you can see, at a glance, what needs you.
 
 ## Install
 
@@ -17,6 +17,18 @@ description: A first-party Claude Code skill that turns vx status into a troop b
 | `/muster pr` | missions with a real GitHub PR, enriched with live PR status |
 | `/muster sitrep` | a terminal-only recap of this session's own dispatches; never opens a board |
 
-The board has five sections: **Needs attention** (blocked, interrupted, failed), **Awaiting land approval** (done missions not yet landed), **In flight**, **Finished** and **Shipped**. A blocked task shows its question on the board.
+The board has six sections: **Needs attention** (blocked, interrupted, failed), **Pending decisions** (what the commander is waiting on you to approve), **Awaiting land approval** (done missions not yet landed), **In flight**, **Finished** and **Shipped**. A blocked task shows its question on the board.
 
-muster is read-only: it never lands, releases or redispatches anything. It never infers a status vexillum did not report, and it classifies "landed" with git, since vexillum does not record landing on the task.
+## Pending decisions
+
+**Needs attention** means a soldier is stuck and needs you. **Pending decisions** is the other direction: the commander needs your approval for something that would otherwise live only in its head, such as a mission it has already designed and wants to dispatch, or a PR it would ship. The commander records these with [`vx pending`](/docs/reference/cli/pending) the moment it asks you, and clears them once you decide, so they survive a cut session:
+
+```text
+vx pending add "dispatch the docs mission"
+vx pending list
+vx pending clear <id>
+```
+
+A finished mission awaiting `vx land` needs no entry: muster derives **Awaiting land approval** from git. Items are stored under `projects/<repo>-<hash>/pending/` in `~/.vexillum`, one file each, so nothing depends on a vault or any other tool.
+
+muster is read-only: it never lands, releases or redispatches anything, and it never adds or clears a pending decision. It never infers a status vexillum did not report, and it classifies "landed" with git, since vexillum does not record landing on the task.

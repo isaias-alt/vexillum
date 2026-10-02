@@ -3,7 +3,7 @@ title: Skill muster
 description: Un skill first-party de Claude Code que convierte vx status en un tablero de la tropa.
 ---
 
-`muster` es un Agent Skill de Claude Code que viene dentro del binario de vexillum. Lee `vx status --json` y agrupa las tareas del proyecto para que veas de un vistazo qué te necesita.
+`muster` es un Agent Skill de Claude Code que viene dentro del binario de vexillum. Lee `vx status --json` y `vx pending list --json` y agrupa las tareas del proyecto y las decisiones pendientes del commander para que veas de un vistazo qué te necesita.
 
 ## Instalación
 
@@ -17,6 +17,18 @@ description: Un skill first-party de Claude Code que convierte vx status en un t
 | `/muster pr` | missions con un PR real de GitHub, enriquecidas con el estado en vivo del PR |
 | `/muster sitrep` | un resumen solo en terminal de los dispatches de esta sesión; nunca abre un tablero |
 
-El tablero tiene cinco secciones: **Needs attention** (blocked, interrupted, failed), **Awaiting land approval** (missions done todavía no aterrizadas), **In flight**, **Finished** y **Shipped**. Una tarea blocked muestra su pregunta en el tablero.
+El tablero tiene seis secciones: **Needs attention** (blocked, interrupted, failed), **Pending decisions** (lo que el commander espera que apruebes), **Awaiting land approval** (missions done todavía no aterrizadas), **In flight**, **Finished** y **Shipped**. Una tarea blocked muestra su pregunta en el tablero.
 
-muster es de solo lectura: nunca aterriza, hace release ni re-despacha nada. Nunca infiere un status que vexillum no reportó, y clasifica "aterrizada" con git, ya que vexillum no registra el landing en la tarea.
+## Decisiones pendientes
+
+**Needs attention** significa que un soldier está trabado y te necesita. **Pending decisions** es la otra dirección: el commander necesita tu aprobación para algo que, si no, viviría solo en su cabeza, como una mission que ya diseñó y quiere despachar, o un PR que haría ship. El commander las registra con [`vx pending`](/es/docs/reference/cli/pending) en el momento en que te pregunta, y las limpia cuando decidís, así sobreviven a una sesión cortada:
+
+```text
+vx pending add "dispatch the docs mission"
+vx pending list
+vx pending clear <id>
+```
+
+Una mission terminada que espera `vx land` no necesita entrada: muster deriva **Awaiting land approval** desde git. Los items se guardan en `projects/<repo>-<hash>/pending/` dentro de `~/.vexillum`, un archivo cada uno, así que nada depende de un vault ni de otra herramienta.
+
+muster es de solo lectura: nunca aterriza, hace release ni re-despacha nada, y nunca agrega ni limpia una decisión pendiente. Nunca infiere un status que vexillum no reportó, y clasifica "aterrizada" con git, ya que vexillum no registra el landing en la tarea.

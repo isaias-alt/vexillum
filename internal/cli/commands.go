@@ -35,6 +35,7 @@ var commands = []Command{
 	{"redispatch", "Re-dispatch an interrupted task from its original prompt", redispatchUsage},
 	{"decide", "Answer a blocked task's open question so it can continue", decideUsage},
 	{"prompt", "Send a follow-up prompt to a soldier that already finished", repromptUsage},
+	{"pending", "Record and clear the commander's own pending decisions", pendingUsage},
 	{"status", "Report the troop: every mission and scout in the current project", statusUsage},
 	{"land", "Land a finished mission's work into this project's base branch", landUsage},
 	{"ship", "Ship a finished mission through vexillum's own tribunal pipeline, opening a real pull request", shipUsage},

@@ -29,6 +29,7 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | `sentinel.pid`, `sentinel.log` | el único sentinel por máquina |
 | `projects/<repo>-<hash>/tasks/<id>.json` | una tarea |
 | `projects/<repo>-<hash>/wakes/<id>.json` | un wake pendiente del sentinel |
+| `projects/<repo>-<hash>/pending/<id>.json` | una decisión pendiente del commander, ver [`vx pending`](/es/docs/reference/cli/pending) |
 | `projects/<repo>-<hash>/camps/` | el pool de worktrees: `pool.json` y `<slot>/<repo>/` |
 | `projects/<repo>-<hash>/reports/<agent>-<id>.md` | el reporte final de un scout |
 | `projects/<repo>-<hash>/pauses/<agent>.md` | una pausa declarada por un soldier |

@@ -121,3 +121,22 @@ call it until the soldier's work is actually landed (or, for a scout, reported).
 It is not a "give up on this soldier" command. A mission shipped through
 `vx ship` is not released: its branch is still in flight until the general merges
 the real PR.
+
+## Recording pending decisions
+
+Some decisions wait on the general and exist only in your head: a mission you
+already designed and want approval to dispatch, a PR you would ship, a trade-off
+you asked about. If the session is cut they are lost. Record each one the moment
+you ask the general:
+
+```
+vx pending add "<what you are waiting on the general to approve>"
+vx pending list
+vx pending clear <id>
+```
+
+`add` prints the id. Clear the item in the same turn the general decides it
+(approve, reject or drop), whichever way it went. `/muster` shows the list as
+its "Pending decisions" section. Do not record a finished mission awaiting
+`vx land`: `/muster` derives that from git. A soldier's blocked question is not
+one either: that is a task, answered with `vx decide`.

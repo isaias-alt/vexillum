@@ -45,6 +45,8 @@ func run(args []string) int {
 		return cli.Decide(args[1:])
 	case "prompt":
 		return cli.Reprompt(args[1:])
+	case "pending":
+		return cli.Pending(args[1:])
 	case "status":
 		return cli.Status(args[1:])
 	case "land":
