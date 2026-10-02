@@ -4,13 +4,18 @@
   "private": true,
   "packageManager": "pnpm@11.22.0",
   "scripts": {
+    "predev": "node scripts/changelog.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/changelog.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test scripts/changelog.test.mjs",
     "seo:audit": "node scripts/seo-audit.mjs",
     "links:check": "node scripts/link-check.mjs",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "pretypecheck": "node scripts/changelog.mjs",
+    "changelog": "node scripts/changelog.mjs"
   },
   "dependencies": {
     "@types/mdx": "2.0.14",
