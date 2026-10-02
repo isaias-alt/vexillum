@@ -100,7 +100,7 @@ func TestUpgrade_MigratesOldScaffold(t *testing.T) {
 	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(projectDir, ".claude", "settings.json"))), &settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings["permissions"] == nil || strings.Count(readFile(t, filepath.Join(projectDir, ".claude", "settings.json")), sentinelHookCommand) != 1 {
+	if settings["permissions"] == nil || countStopHookCommand(settings, sentinelHookCommand) != 1 || countStopHookCommand(settings, "") != 1 {
 		t.Errorf("settings.json not preserved: %v", settings)
 	}
 
@@ -440,9 +440,9 @@ func TestUpgrade_MigratesProjectInitializedBeforeTheRename(t *testing.T) {
 				t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
 			}
 			notExist(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
-			settings := readFile(t, filepath.Join(projectDir, ".claude", "settings.json"))
-			if strings.Contains(settings, "vexillum sentinel") || strings.Count(settings, sentinelHookCommand) != 1 {
-				t.Errorf("hook not migrated: %s", settings)
+			settings := parseSettings(t, readFile(t, filepath.Join(projectDir, ".claude", "settings.json")))
+			if countStopHookCommand(settings, sentinelHookCommand) != 1 || countStopHookCommand(settings, "") != 1 {
+				t.Errorf("hook not migrated: %v", settings)
 			}
 		})
 	}
@@ -516,4 +516,56 @@ func TestUpgradeGlobal(t *testing.T) {
 			t.Error("backup missing")
 		}
 	})
+}
+
+// countStopHookCommand counts the Stop hook entries whose command is
+// command, or every Stop hook entry when command is empty.
+func countStopHookCommand(settings map[string]any, command string) int {
+	hooks, _ := settings["hooks"].(map[string]any)
+	stopGroups, _ := hooks["Stop"].([]any)
+	n := 0
+	for _, g := range stopGroups {
+		group, _ := g.(map[string]any)
+		entries, _ := group["hooks"].([]any)
+		for _, e := range entries {
+			entry, _ := e.(map[string]any)
+			if cmd, _ := entry["command"].(string); command == "" || cmd == command {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// upgrade tells the person it is replacing the PATH-dependent hook, keeps
+// the Stop hooks that are not vexillum's, and leaves nothing to redo.
+func TestUpgrade_MigratesBareHookKeepingForeignOnes(t *testing.T) {
+	projectDir, home := oldScaffoldProject(t)
+	writeFileT(t, filepath.Join(projectDir, ".claude", "settings.json"),
+		`{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-me stopped"},{"type":"command","command":"vx sentinel await","asyncRewake":true,"timeout":3600}]}]}}`)
+
+	r := doUpgrade(projectDir, home, setupOptions{Yes: true}, "", false)
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+	}
+	if !strings.Contains(r.out, "update the sentinel Stop hook") || !strings.Contains(r.out, "Updated the vx sentinel Stop hook") {
+		t.Errorf("expected the notice and the result to say the hook is updated, got: %s", r.out)
+	}
+
+	settings := parseSettings(t, readFile(t, filepath.Join(projectDir, ".claude", "settings.json")))
+	if countStopHookCommand(settings, "notify-me stopped") != 1 || countStopHookCommand(settings, sentinelHookCommand) != 1 || countStopHookCommand(settings, "") != 2 {
+		t.Errorf("Stop hooks after upgrade: %v", settings)
+	}
+}
+
+// Without consent (no --yes, no terminal) nothing is rewritten.
+func TestUpgrade_BareHookUntouchedWithoutConsent(t *testing.T) {
+	projectDir, home := oldScaffoldProject(t)
+	before := readFile(t, filepath.Join(projectDir, ".claude", "settings.json"))
+
+	doUpgrade(projectDir, home, setupOptions{}, "", false)
+
+	if after := readFile(t, filepath.Join(projectDir, ".claude", "settings.json")); after != before {
+		t.Errorf("settings.json changed without consent:\n%s", after)
+	}
 }

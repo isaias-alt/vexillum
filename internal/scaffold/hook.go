@@ -1,6 +1,7 @@
 package scaffold
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,7 +31,37 @@ const (
 	// never produce for it: it only actually waits inside a
 	// herdr-managed pane (HERDR_WORKSPACE_ID set), same as dispatch and
 	// redispatch already require of their own caller.
-	SentinelHookCommand = cmdname.Name + " sentinel await"
+	//
+	// The command does not depend on the PATH of the shell Claude Code
+	// runs hooks in: that shell may not have the directory vx was
+	// installed to (a bare "vx sentinel await" died with "command not
+	// found" and the commander was never woken, silently). It is a
+	// one-line POSIX sh wrapper that tries "command -v vx" and then the
+	// known install locations, so it needs no extra file in the project
+	// and no absolute path baked in (settings.json is committed and
+	// shared across machines). When vx cannot be found at all it prints
+	// SentinelHookNotFoundMessage to stderr and exits 0, so the failure
+	// is visible without blocking Claude Code. exec keeps the await
+	// process a direct child of the hook runner, which its owner tracking
+	// (see internal/sentinel) relies on.
+	SentinelHookCommand = `sh -c 'for v in "$(command -v ` + cmdname.Name + ` 2>/dev/null)" ` +
+		`"$HOME/.local/bin/` + cmdname.Name + `" /opt/homebrew/bin/` + cmdname.Name + ` ` +
+		`/usr/local/bin/` + cmdname.Name + ` /home/linuxbrew/.linuxbrew/bin/` + cmdname.Name + `; do ` +
+		`[ -f "$v" ] && [ -x "$v" ] && exec "$v" sentinel await; done; ` +
+		`echo "` + SentinelHookNotFoundMessage + `" >&2; exit 0'`
+
+	// SentinelHookNotFoundMessage is the line SentinelHookCommand prints to
+	// stderr when no vx binary can be found. It must stay free of double
+	// quotes, single quotes, backticks and dollar signs, since it is
+	// embedded in the shell wrapper above.
+	SentinelHookNotFoundMessage = cmdname.Name + ": not found, so the sentinel Stop hook cannot wake the commander. " +
+		"Install " + cmdname.Name + " (brew or curl) or put its directory on PATH, then run: " + cmdname.Name + " doctor"
+
+	// BareSentinelHookCommand is the hook as earlier versions registered
+	// it: the bare executable name, which only works when the hook's shell
+	// has vx on its PATH. EnsureSentinelHook migrates it to
+	// SentinelHookCommand.
+	BareSentinelHookCommand = cmdname.Name + " sentinel await"
 
 	// legacyCommandName is the executable name before the command was
 	// renamed to cmdname.Name. A project initialized back then has hooks
@@ -47,7 +78,7 @@ const (
 
 	// LegacyRenamedSentinelHookCommand is the async hook as it was
 	// registered under the old executable name: same behavior as
-	// SentinelHookCommand, but it invokes a binary that no longer exists.
+	// BareSentinelHookCommand, but it invokes a binary that no longer exists.
 	LegacyRenamedSentinelHookCommand = legacyCommandName + " sentinel await"
 
 	// SentinelHookTimeoutSeconds bounds how long a single async hook
@@ -65,9 +96,12 @@ const (
 // turn already ended before anything settled. Reads and merges rather
 // than overwriting - existing hooks and settings are preserved untouched.
 // An older project's synchronous-only hook (LegacySentinelHookCommand)
-// or its hook registered under the old executable name
-// (LegacyRenamedSentinelHookCommand) is upgraded in place, not duplicated. A malformed existing file is
-// left untouched and reported as an error rather than risk corrupting it.
+// (LegacySentinelHookCommand), its hook registered under the old
+// executable name (LegacyRenamedSentinelHookCommand) and the bare
+// PATH-dependent one (BareSentinelHookCommand) are upgraded in place, not
+// duplicated; hooks that are not vexillum's are left as they are. A
+// malformed existing file is left untouched and reported as an error
+// rather than risk corrupting it.
 func EnsureSentinelHook(projectDir string) (added bool, err error) {
 	path := filepath.Join(projectDir, ".claude", "settings.json")
 	out, changed, err := mergeSentinelHook(path)
@@ -144,7 +178,7 @@ func mergeSentinelHook(path string) (out []byte, changed bool, err error) {
 					group["hooks"] = entries
 					changed = true
 				}
-			case LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand:
+			case BareSentinelHookCommand, LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand:
 				entries[i] = newEntry
 				group["hooks"] = entries
 				found = true
@@ -166,9 +200,67 @@ func mergeSentinelHook(path string) (out []byte, changed bool, err error) {
 		return nil, false, nil
 	}
 
-	out, err = json.MarshalIndent(settings, "", "  ")
-	if err != nil {
+	// The hook command holds shell characters (">&", "&&") that the
+	// default encoder would write as \u003e and \u0026.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(settings); err != nil {
 		return nil, false, err
 	}
-	return append(out, '\n'), true, nil
+	return buf.Bytes(), true, nil
+}
+
+// SentinelHookState is what a project's .claude/settings.json holds for
+// the sentinel Stop hook.
+type SentinelHookState struct {
+	// Present is whether a Stop hook of vexillum's is registered, in any
+	// of its current or older forms.
+	Present bool
+	// Command is that hook's command line as registered.
+	Command string
+	// Current is whether it is exactly what EnsureSentinelHook would
+	// write now.
+	Current bool
+}
+
+// InspectSentinelHook reads projectDir's .claude/settings.json and reports
+// the sentinel Stop hook in it, without writing anything. A missing file
+// is simply no hook; a malformed one is an error.
+func InspectSentinelHook(projectDir string) (SentinelHookState, error) {
+	path := filepath.Join(projectDir, ".claude", "settings.json")
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return SentinelHookState{}, nil
+	}
+	if err != nil {
+		return SentinelHookState{}, err
+	}
+	var settings struct {
+		Hooks struct {
+			Stop []struct {
+				Hooks []struct {
+					Command     string `json:"command"`
+					AsyncRewake bool   `json:"asyncRewake"`
+					Timeout     any    `json:"timeout"`
+				} `json:"hooks"`
+			} `json:"Stop"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return SentinelHookState{}, fmt.Errorf("%s has invalid JSON: %w", path, err)
+	}
+
+	for _, group := range settings.Hooks.Stop {
+		for _, h := range group.Hooks {
+			switch h.Command {
+			case SentinelHookCommand:
+				return SentinelHookState{Present: true, Command: h.Command, Current: h.AsyncRewake && h.Timeout != nil}, nil
+			case BareSentinelHookCommand, LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand:
+				return SentinelHookState{Present: true, Command: h.Command}, nil
+			}
+		}
+	}
+	return SentinelHookState{}, nil
 }

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "asyncRewake": true,
-            "command": "vx sentinel await",
+            "command": "sh -c 'for v in \"$(command -v vx 2>/dev/null)\" \"$HOME/.local/bin/vx\" /opt/homebrew/bin/vx /usr/local/bin/vx /home/linuxbrew/.linuxbrew/bin/vx; do [ -f \"$v\" ] && [ -x \"$v\" ] && exec \"$v\" sentinel await; done; echo \"vx: not found, so the sentinel Stop hook cannot wake the commander. Install vx (brew or curl) or put its directory on PATH, then run: vx doctor\" >&2; exit 0'",
             "timeout": 3600,
             "type": "command"
           }

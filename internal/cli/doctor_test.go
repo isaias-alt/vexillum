@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/install"
+	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/slot"
 )
 
@@ -652,7 +653,7 @@ func TestDoctor_AnotherVXEarlierInPathWarns(t *testing.T) {
 	if !bytes.Contains(out.Bytes(), []byte(want)) {
 		t.Errorf("expected %q in output, got: %s", want, out.String())
 	}
-	if !bytes.Contains(out.Bytes(), []byte("another vx earlier in PATH).")) {
+	if !bytes.Contains(out.Bytes(), []byte("warnings: herdr version, another vx earlier in PATH")) {
 		t.Errorf("expected the summary to list the warning, got: %s", out.String())
 	}
 }
@@ -666,5 +667,70 @@ func TestDoctor_NoVXConflictIsOK(t *testing.T) {
 
 	if !bytes.Contains(out.Bytes(), []byte("[ok] another vx earlier in PATH")) {
 		t.Errorf("expected an ok line for the vx PATH check, got: %s", out.String())
+	}
+}
+
+// doctor probes the project's Stop hook for real, from a bare environment
+// (HOME and PATH=/usr/bin:/bin), and warns with the fix when it cannot find
+// vx - even though the vx on the test's own PATH is fine.
+func TestDoctor_StopHookResolvingVXIsOK(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeStub(t, filepath.Join(home, ".local", "bin"), "vx", "exit 0")
+
+	var out bytes.Buffer
+	runDoctor(projectDir, t.TempDir(), home, &out)
+
+	for _, want := range []string{"[ok] sentinel Stop hook - registered", "[ok] sentinel Stop hook finds vx", "[ok] sentinel - not running"} {
+		if !bytes.Contains(out.Bytes(), []byte(want)) {
+			t.Errorf("expected %q in output, got: %s", want, out.String())
+		}
+	}
+	if bytes.Contains(out.Bytes(), []byte("[warn] sentinel")) {
+		t.Errorf("no sentinel warning expected, got: %s", out.String())
+	}
+}
+
+func TestDoctor_StopHookNotFindingVXWarnsWithTheFix(t *testing.T) {
+	for _, p := range []string{"/opt/homebrew/bin/vx", "/usr/local/bin/vx", "/home/linuxbrew/.linuxbrew/bin/vx", "/usr/bin/vx", "/bin/vx"} {
+		if _, err := os.Stat(p); err == nil {
+			t.Skipf("a real vx is installed at %s", p)
+		}
+	}
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux", "vx"))
+	projectDir := initializedProject(t)
+	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+
+	if code != 0 {
+		t.Errorf("a hook warning must not fail doctor, got exit %d", code)
+	}
+	for _, want := range []string{"[warn] sentinel Stop hook finds vx - not found with a minimal environment", "install vx where the hook looks", "sentinel Stop hook finds vx)."} {
+		if !bytes.Contains(out.Bytes(), []byte(want)) {
+			t.Errorf("expected %q in output, got: %s", want, out.String())
+		}
+	}
+}
+
+func TestDoctor_StopHookMissingWarnsToUpgrade(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+
+	var out bytes.Buffer
+	runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+
+	if !bytes.Contains(out.Bytes(), []byte("[warn] sentinel Stop hook - not registered")) {
+		t.Errorf("expected a missing-hook warning, got: %s", out.String())
 	}
 }

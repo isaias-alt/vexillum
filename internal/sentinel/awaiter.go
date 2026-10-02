@@ -207,3 +207,24 @@ func sweepAwaiters(vexillumHome string, superseded func(AwaiterRecord) bool) int
 	}
 	return signaled
 }
+
+// LiveAwaiters counts the "vx sentinel await" processes currently alive
+// under vexillumHome: the Stop hooks that are blocked waiting to wake a
+// commander. It only reads - it signals nothing and deletes no record.
+func LiveAwaiters(vexillumHome string) int {
+	entries, err := os.ReadDir(awaitersDir(vexillumHome))
+	if err != nil {
+		return 0
+	}
+	live := 0
+	for _, entry := range entries {
+		pid, convErr := strconv.Atoi(strings.TrimSuffix(entry.Name(), ".json"))
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" || convErr != nil || pid <= 1 {
+			continue
+		}
+		if _, command, err := inspectProcess(pid); err == nil && isAwaitCommand(command) {
+			live++
+		}
+	}
+	return live
+}

@@ -15,7 +15,8 @@ import (
 
 // ProjectChecks reports on what vexillum put in an initialized project: the
 // AGENTS.md block, the CLAUDE.md import, the first-party skills, a leftover
-// rules file from an older version, and models.json. Every check is
+// rules file from an older version, models.json, and the sentinel Stop hook
+// with the sentinel behind it. Every check is
 // read-only, and none is Required: a stale or missing piece is something to
 // fix with init or upgrade, not a reason to call the environment unusable.
 func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
@@ -30,6 +31,7 @@ func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
 	}
 	out = append(out, Skills(projectDir, vexillumHome, homeDir)...)
 	out = append(out, Models(projectDir, vexillumHome))
+	out = append(out, StopHooks(projectDir, vexillumHome, homeDir)...)
 	return out
 }
 

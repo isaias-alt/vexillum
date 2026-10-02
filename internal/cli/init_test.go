@@ -135,9 +135,7 @@ func TestInit_YesWritesEverything(t *testing.T) {
 		}
 		mustStat(t, filepath.Join(projectDir, ".claude", "skills", name, "SKILL.md"))
 	}
-	if !strings.Contains(readFile(t, filepath.Join(projectDir, ".claude", "settings.json")), sentinelHookCommand) {
-		t.Error("sentinel hook missing")
-	}
+	findStopHookEntry(t, parseSettings(t, readFile(t, filepath.Join(projectDir, ".claude", "settings.json"))), sentinelHookCommand)
 	if !strings.Contains(r.out, "will change these files") {
 		t.Errorf("expected the notice, got: %s", r.out)
 	}
@@ -706,9 +704,7 @@ func TestInit_AddsSentinelStopHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading .claude/settings.json: %v", err)
 	}
-	if !bytes.Contains(data, []byte(sentinelHookCommand)) {
-		t.Errorf("expected settings.json to contain %q, got: %s", sentinelHookCommand, data)
-	}
+	findStopHookEntry(t, parseSettings(t, string(data)), sentinelHookCommand)
 }
 
 // The hook init writes has the async fields set - verified live that a
@@ -806,6 +802,15 @@ func TestEnsureSentinelHook_UpgradesLegacySyncHook(t *testing.T) {
 	}
 }
 
+func parseSettings(t *testing.T, content string) map[string]any {
+	t.Helper()
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(content), &settings); err != nil {
+		t.Fatalf("parsing settings.json: %v", err)
+	}
+	return settings
+}
+
 func findStopHookEntry(t *testing.T, settings map[string]any, command string) map[string]any {
 	t.Helper()
 	hooks, _ := settings["hooks"].(map[string]any)
@@ -867,9 +872,7 @@ func TestEnsureSentinelHook_MergesAndDedupes(t *testing.T) {
 	if !bytes.Contains(data, []byte("prettier --write")) {
 		t.Errorf("expected existing PostToolUse hook to survive the merge, got: %s", data)
 	}
-	if !bytes.Contains(data, []byte(sentinelHookCommand)) {
-		t.Errorf("expected the sentinel Stop hook to be present, got: %s", data)
-	}
+	findStopHookEntry(t, parseSettings(t, string(data)), sentinelHookCommand)
 
 	addedAgain, err := ensureSentinelHook(projectDir)
 	if err != nil {

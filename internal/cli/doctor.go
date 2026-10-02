@@ -20,6 +20,13 @@ malformed), whether CLAUDE.md imports AGENTS.md, each first-party skill
 (installed and current, stale, edited by hand, or missing), a rules file left
 by an older version, and whether the model profiles in models.json are valid.
 
+It also checks the sentinel Stop hook, the one that wakes the commander when a
+soldier finishes: whether it is registered in .claude/settings.json, whether
+its command finds a ` + cmdname.Name + ` binary when run from a bare environment (only HOME and
+PATH=/usr/bin:/bin, the way a hook shell that never read your profile has it),
+and whether a sentinel is running. A hook that cannot find ` + cmdname.Name + ` is a warning
+that names the fix; it never fails doctor.
+
 Usage:
   ` + cmdname.Name + ` doctor
 `

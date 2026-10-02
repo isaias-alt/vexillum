@@ -336,3 +336,31 @@ func TestRegisterAwaiter_NeverSupersedesANewerAwait(t *testing.T) {
 		t.Fatal("a newer await of the same owner must not be signaled by an older one")
 	}
 }
+
+func TestLiveAwaiters_CountsOnlyVerifiedAwaitsAndTouchesNothing(t *testing.T) {
+	home := t.TempDir()
+	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: 4001, OwnerPID: 1})
+	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: 4002, OwnerPID: 1})
+	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: 4003, OwnerPID: 1})
+	t.Cleanup(sentinel.SetInspectProcess(func(pid int) (int, string, error) {
+		switch pid {
+		case 4001:
+			return 1, awaitCmd, nil
+		case 4002:
+			return 1, "/usr/bin/vim notes.txt", nil // a recycled pid
+		}
+		return 0, "", sentinel.ErrProcessGone
+	}))
+
+	if got := sentinel.LiveAwaiters(home); got != 1 {
+		t.Errorf("LiveAwaiters = %d, want 1", got)
+	}
+	for _, pid := range []int{4001, 4002, 4003} {
+		if _, err := os.Stat(awaiterRecordPath(home, pid)); err != nil {
+			t.Errorf("LiveAwaiters must not delete record %d: %v", pid, err)
+		}
+	}
+	if got := sentinel.LiveAwaiters(t.TempDir()); got != 0 {
+		t.Errorf("no registry: LiveAwaiters = %d, want 0", got)
+	}
+}

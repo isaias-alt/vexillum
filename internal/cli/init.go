@@ -23,7 +23,9 @@ change and asks for consent (Continue? [Y/n]):
   CLAUDE.md              gets the line @AGENTS.md so Claude Code sees that
                          block (created if missing; an existing one is edited
                          only after a second question)
-  .claude/settings.json  gets the sentinel Stop hook
+  .claude/settings.json  gets the sentinel Stop hook, a one-line command that
+                         finds ` + cmdname.Name + ` without relying on the PATH of the hook's shell
+                         (an older ` + cmdname.Name + ` sentinel await hook is migrated)
 
 The block is written in the language it detects in AGENTS.md (English when it
 cannot tell); you confirm or override it. Then init asks "Install the

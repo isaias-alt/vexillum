@@ -73,10 +73,13 @@ type projectPlan struct {
 	claude     slot.ClaudeImport
 	skills     []skillPlan
 	hookNeeded bool
-	hookErr    error
-	needIgnore bool
-	needModels bool
-	legacy     legacyState
+	// hookPresent is whether an older form of the hook is already
+	// registered, so the run migrates it instead of adding one.
+	hookPresent bool
+	hookErr     error
+	needIgnore  bool
+	needModels  bool
+	legacy      legacyState
 }
 
 func (p *projectPlan) slotPlan() slotPlan {
@@ -141,6 +144,11 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 	}
 
 	p.hookNeeded, p.hookErr = scaffold.SentinelHookNeeded(projectDir)
+	if p.hookNeeded && p.hookErr == nil {
+		if hook, err := scaffold.InspectSentinelHook(projectDir); err == nil {
+			p.hookPresent = hook.Present
+		}
+	}
 	p.needIgnore = !exists(filepath.Join(p.configDir, ".gitignore"))
 	p.needModels = !exists(filepath.Join(p.configDir, models.FileName))
 
@@ -239,7 +247,11 @@ func (p *projectPlan) userFileLines() []string {
 		pad("CLAUDE.md", "add the "+slot.ClaudeImportLine+" import, so Claude Code sees the block (asks first)")
 	}
 	if p.hookNeeded {
-		pad(".claude/settings.json", "add the sentinel Stop hook")
+		if p.hookPresent {
+			pad(".claude/settings.json", "update the sentinel Stop hook so it finds "+cmdname.Name+" without depending on PATH (your other hooks stay)")
+		} else {
+			pad(".claude/settings.json", "add the sentinel Stop hook")
+		}
 	}
 	if p.kind == setupUpgrade && p.legacy == legacyUnedited {
 		pad(legacyRulesRel, "remove it (the rules now live in AGENTS.md and the skills)")
@@ -455,6 +467,8 @@ func (p *projectPlan) apply(e *setupEnv, vexillumHome string) int {
 	if p.hookNeeded && p.hookErr == nil {
 		if added, err := scaffold.EnsureSentinelHook(p.dir); err != nil {
 			e.warn("could not add the sentinel Stop hook: %v", err)
+		} else if added && p.hookPresent {
+			e.say("Updated the %s sentinel Stop hook in .claude/settings.json so it no longer depends on PATH", cmdname.Name)
 		} else if added {
 			e.say("Added %s sentinel Stop hook to .claude/settings.json", cmdname.Name)
 		}

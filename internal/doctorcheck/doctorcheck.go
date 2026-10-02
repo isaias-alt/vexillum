@@ -112,8 +112,9 @@ func HerdrVersion() Result {
 // VXShadow checks that typing the command name runs the executable that
 // is running right now. A different "vx" earlier in PATH (an unrelated
 // tool that happens to share the name) would silently answer instead -
-// including from the sentinel Stop hook, which is registered as a bare
-// "vx sentinel await" - so this warns and names the one that wins.
+// including from the sentinel Stop hook, whose command tries the first
+// vx on PATH before the known install locations - so this warns and names
+// the one that wins.
 // It only ever warns, never fails: not finding any vx on PATH (the binary
 // was run by its full path) is not a conflict.
 func VXShadow() Result {
