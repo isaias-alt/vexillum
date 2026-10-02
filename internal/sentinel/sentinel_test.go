@@ -1,9 +1,12 @@
 package sentinel_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,6 +140,7 @@ func newRunningTask(t *testing.T, projectRoot, agentName string) state.Task {
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
+	leaseCamp(t, projectRoot, task.ID)
 	return task
 }
 
@@ -746,6 +750,7 @@ func newRunningMissionTaskWithCamp(t *testing.T, projectRoot, agentName, campPat
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
+	leaseCamp(t, projectRoot, task.ID)
 	return task
 }
 
@@ -1276,8 +1281,45 @@ func leaseCamp(t *testing.T, projectRoot, taskID string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("creating pool dir: %v", err)
 	}
-	pool := `{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"` + taskID + `"}]}`
-	if err := os.WriteFile(filepath.Join(dir, "pool.json"), []byte(pool), 0o644); err != nil {
+	poolPath := filepath.Join(dir, "pool.json")
+
+	// Add to whatever is already leased, so several tasks of one project
+	// can each hold a slot.
+	var ids []string
+	if data, err := os.ReadFile(poolPath); err == nil {
+		var pool struct {
+			Slots []struct {
+				LeasedBy string `json:"leased_by"`
+			} `json:"slots"`
+		}
+		if err := json.Unmarshal(data, &pool); err != nil {
+			t.Fatalf("parsing pool: %v", err)
+		}
+		for _, s := range pool.Slots {
+			ids = append(ids, s.LeasedBy)
+		}
+	}
+	if slices.Contains(ids, taskID) {
+		return
+	}
+	ids = append(ids, taskID)
+
+	var slots []string
+	for i, id := range ids {
+		slots = append(slots, fmt.Sprintf(`{"number":%d,"branch":"vexillum/x%d","leased_by":%q}`, i+1, i+1, id))
+	}
+	pool := `{"schema_version":1,"slots":[` + strings.Join(slots, ",") + `]}`
+	if err := os.WriteFile(poolPath, []byte(pool), 0o644); err != nil {
+		t.Fatalf("writing pool: %v", err)
+	}
+}
+
+// releaseCamp drops every lease under projectRoot, as releasing each
+// task's camp would.
+func releaseCamp(t *testing.T, projectRoot string) {
+	t.Helper()
+	pool := filepath.Join(projectRoot, "camps", "pool.json")
+	if err := os.WriteFile(pool, []byte(`{"schema_version":1,"slots":[]}`), 0o644); err != nil {
 		t.Fatalf("writing pool: %v", err)
 	}
 }
@@ -1393,6 +1435,7 @@ func TestTick_DoesNotProbeReleasedTasks(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 	task := savedTask(t, proj, state.StatusDone)
+	releaseCamp(t, proj)
 
 	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
 	if _, err := sentinel.Tick(home, client); err != nil {
@@ -1463,5 +1506,178 @@ func TestTick_CorruptPoolSkipsReopenWithoutFailingTheTick(t *testing.T) {
 	got, _ := state.Load(proj, task.ID)
 	if got.Status != state.StatusDone {
 		t.Errorf("expected done untouched, got %s", got.Status)
+	}
+}
+
+// settleOneDone runs a Tick that settles a fresh running mission to done
+// and returns it, with its wake pending in proj.
+func settleOneDone(t *testing.T, home, proj, agentName string) state.Task {
+	t.Helper()
+	task := newRunningTask(t, proj, agentName)
+	client := &fakeHerdr{statuses: map[string]string{agentName: "done"}}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+	return task
+}
+
+func wakeFileExists(proj, taskID string) bool {
+	_, err := os.Stat(filepath.Join(proj, "wakes", taskID+".json"))
+	return err == nil
+}
+
+// A wake for a task whose camp was released since is not news: the soldier
+// and its pane are gone. It is consumed, not returned and not kept.
+func TestDrain_DropsAWakeForAReleasedTask(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := settleOneDone(t, home, proj, "vx-do-the-thing")
+
+	releaseCamp(t, proj)
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 0 {
+		t.Errorf("expected the released task's wake dropped, got %+v", wakes)
+	}
+	if wakeFileExists(proj, task.ID) {
+		t.Error("expected the stale wake file consumed")
+	}
+}
+
+// A wake whose task has moved on since (here: the commander re-prompted it
+// and it is running again) is stale: whoever acted already knows.
+func TestDrain_DropsAWakeWhoseStatusChanged(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := settleOneDone(t, home, proj, "vx-do-the-thing")
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Status = state.StatusRunning
+	if err := state.Save(proj, got); err != nil {
+		t.Fatal(err)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil || len(wakes) != 0 {
+		t.Errorf("expected the superseded wake dropped, got %+v err=%v", wakes, err)
+	}
+}
+
+// A done mission whose commits were landed since (its branch is now inside
+// its base) is old news even though its camp is still leased.
+func TestDrain_DropsAWakeForALandedMission(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := settleOneDone(t, home, proj, "vx-do-the-thing")
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What land does to the base: it now contains the camp's commits.
+	runGitT(t, got.CampPath, "branch", "-f", got.CampBase, "HEAD")
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil || len(wakes) != 0 {
+		t.Errorf("expected the landed mission's wake dropped, got %+v err=%v", wakes, err)
+	}
+}
+
+// A wake for a task that no longer exists is dropped.
+func TestDrain_DropsAWakeForAMissingTask(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := settleOneDone(t, home, proj, "vx-do-the-thing")
+
+	if err := os.Remove(filepath.Join(proj, "tasks", task.ID+".json")); err != nil {
+		t.Fatal(err)
+	}
+	wakes, err := sentinel.Drain(proj)
+	if err != nil || len(wakes) != 0 {
+		t.Errorf("expected the orphan wake dropped, got %+v err=%v", wakes, err)
+	}
+}
+
+// The reported incident: a backlog of old wakes (tasks since landed and
+// released) built up while nobody was draining, and replayed all at once.
+// Only the one task still waiting on the commander is delivered.
+func TestDrain_ReplaysNoStaleBacklog(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+
+	var stale []state.Task
+	for i := 0; i < 14; i++ {
+		stale = append(stale, settleOneDone(t, home, proj, fmt.Sprintf("vx-old-%d", i)))
+	}
+	live := settleOneDone(t, home, proj, "vx-current")
+
+	// Everything but the current soldier was landed and released.
+	pool := filepath.Join(proj, "camps", "pool.json")
+	if err := os.WriteFile(pool, []byte(`{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"`+live.ID+`"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 || wakes[0].TaskID != live.ID {
+		t.Fatalf("expected only the current task's wake, got %d: %+v", len(wakes), wakes)
+	}
+	for _, task := range stale {
+		if wakeFileExists(proj, task.ID) {
+			t.Errorf("expected stale wake file for %s consumed", task.ID)
+		}
+	}
+	if again, _ := sentinel.Drain(proj); len(again) != 0 {
+		t.Errorf("expected nothing on a second drain, got %+v", again)
+	}
+}
+
+// Concurrent drains (the Stop hook's await racing a manual drain) never
+// both deliver the same wake.
+func TestDrain_ConcurrentDrainsDeliverEachWakeOnce(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	for i := 0; i < 5; i++ {
+		settleOneDone(t, home, proj, fmt.Sprintf("vx-task-%d", i))
+	}
+
+	var (
+		mu        sync.Mutex
+		delivered = map[string]int{}
+		wg        sync.WaitGroup
+	)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			wakes, err := sentinel.Drain(proj)
+			if err != nil {
+				t.Errorf("Drain: %v", err)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			for _, w := range wakes {
+				delivered[w.TaskID]++
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(delivered) != 5 {
+		t.Errorf("expected all 5 wakes delivered, got %v", delivered)
+	}
+	for id, n := range delivered {
+		if n != 1 {
+			t.Errorf("wake for %s delivered %d times, want exactly once", id, n)
+		}
 	}
 }

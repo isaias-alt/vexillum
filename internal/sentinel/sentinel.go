@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -72,6 +73,17 @@ type Wake struct {
 
 func wakesDir(projectRoot string) string {
 	return filepath.Join(projectRoot, "wakes")
+}
+
+// claimSeq makes each claimed file's name unique within the process, so a
+// wake rewritten for the same task while an earlier drain is still reading
+// its claimed copy can never be renamed over it.
+var claimSeq atomic.Uint64
+
+// claimedPath is where a drain moves wake file path while it reads it. The
+// result no longer ends in ".json", so no drain lists it as pending.
+func claimedPath(path string) string {
+	return fmt.Sprintf("%s.claimed-%d-%d", path, os.Getpid(), claimSeq.Add(1))
 }
 
 func wakePath(projectRoot, taskID string) string {
@@ -322,7 +334,7 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 // package doc):
 //
 //  0. A needs-decision: line in the soldier's fresh output
-//     (soldier.ExtractNeedsDecisionSignal) takes priority over everything
+//     (soldier.FinalTurnNeedsDecision) takes priority over everything
 //     below: the soldier explicitly said it's waiting on the general - a
 //     plain-prose question, the one shape herdr's own classifier never
 //     catches on its own (see the durable decision record's design
@@ -343,7 +355,7 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (bool, error) {
 	output, readErr := client.AgentRead(task.HerdrAgentName, tickReadLines)
 	if readErr == nil {
-		if d, found := soldier.ExtractNeedsDecisionSignal(output); found {
+		if d, found := soldier.FinalTurnNeedsDecision(task, output); found {
 			return true, settleNeedsDecision(projectRoot, task, output, d)
 		}
 	}
@@ -375,7 +387,7 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 
 // settleNeedsDecision persists task's transition from an apparently-idle
 // turn straight to StatusBlocked, because its fresh output actually
-// carries a needs-decision: line (soldier.ExtractNeedsDecisionSignal) -
+// carries a needs-decision: line (soldier.FinalTurnNeedsDecision) -
 // the soldier is waiting on the general, not finished. output is
 // whatever settleIdleTask already read to find that line, so this never
 // re-reads it.
@@ -513,11 +525,24 @@ func recordWake(projectRoot string, task state.Task, old, newStatus state.Status
 	return atomicfile.WriteJSON(wakePath(projectRoot, task.ID), w)
 }
 
-// Drain returns every pending wake for the project rooted at projectRoot,
-// oldest first, deleting each one's file as it's delivered - a wake is
-// surfaced once, not repeated on every drain, and its file's mere
-// existence on disk is what "pending" means (no separate acked flag to
-// keep in sync).
+// Drain returns the pending wakes for the project rooted at projectRoot
+// that are still news, oldest first. Every wake file it finds is consumed:
+// a wake is surfaced at most once, never repeated on every drain, and its
+// file's mere existence on disk is what "pending" means (no separate acked
+// flag to keep in sync).
+//
+// A wake is a note that a task changed status, written when the sentinel
+// saw it. By the time anyone drains, the commander may have moved on: a
+// backlog that built up while nobody was listening would otherwise replay
+// as a burst of "soldier changed" notices for tasks long since landed and
+// released. Such a wake is consumed without being returned - see
+// wakeIsCurrent for what counts as still current.
+//
+// Each wake is claimed by renaming its file before it is read: rename is
+// atomic with exactly one winner, so two drains racing over the same wake
+// (the Stop hook's await and a manual drain) can never both deliver it. A
+// plain remove is not enough: concurrent unlinks of one file can all
+// report success on some filesystems, so no remove result says who won.
 func Drain(projectRoot string) ([]Wake, error) {
 	dir := wakesDir(projectRoot)
 	entries, err := os.ReadDir(dir)
@@ -528,28 +553,90 @@ func Drain(projectRoot string) ([]Wake, error) {
 		return nil, fmt.Errorf("listing wakes: %w", err)
 	}
 
+	leases := lazyLeases(projectRoot)
 	var drained []Wake
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		data, err := os.ReadFile(path)
+		claimed := claimedPath(path)
+		if err := os.Rename(path, claimed); err != nil {
+			// Already claimed by a concurrent drain (or gone): not ours.
+			continue
+		}
+		data, err := os.ReadFile(claimed)
+		if rmErr := os.Remove(claimed); rmErr != nil && !os.IsNotExist(rmErr) {
+			return nil, fmt.Errorf("removing delivered wake %s: %w", entry.Name(), rmErr)
+		}
 		if err != nil {
 			continue
 		}
 		var w Wake
 		if err := json.Unmarshal(data, &w); err != nil {
+			// A corrupt wake is garbage, consumed like any other.
 			continue
 		}
-		drained = append(drained, w)
-		if err := os.Remove(path); err != nil {
-			return nil, fmt.Errorf("removing delivered wake for task %s: %w", w.TaskID, err)
+		if wakeIsCurrent(projectRoot, w, leases) {
+			drained = append(drained, w)
 		}
 	}
 
 	sort.Slice(drained, func(i, j int) bool { return drained[i].DetectedAt.Before(drained[j].DetectedAt) })
 	return drained, nil
+}
+
+// lazyLeases returns a function that reads the project's camp leases on
+// first use and remembers the answer, so a drain with nothing to evaluate
+// never touches the pool. A pool that cannot be read yields nil: "can't
+// tell", which wakeIsCurrent treats as not released.
+func lazyLeases(projectRoot string) func() map[string]bool {
+	var leased map[string]bool
+	loaded := false
+	return func() map[string]bool {
+		if !loaded {
+			loaded = true
+			if l, err := camp.LeasedTasks(projectRoot); err == nil {
+				leased = l
+			}
+		}
+		return leased
+	}
+}
+
+// wakeIsCurrent reports whether w still describes its task: the commander
+// would learn something true by hearing it. It is not when
+//
+//   - the task is gone, or its status is no longer the one the wake
+//     announced (the commander answered, re-prompted, shipped or redispatched
+//     it since - whoever did that already knows);
+//   - the task's camp was released, so its soldier and pane are gone and
+//     there is nothing left to act on (a task that never had a camp is not
+//     subject to this check);
+//   - it announced a mission done and that mission's commits are no longer
+//     ahead of its base: they were landed.
+//
+// Anything it cannot establish (an unreadable pool, a camp whose git state
+// cannot be read) counts as current: a notice is never dropped on a guess.
+func wakeIsCurrent(projectRoot string, w Wake, leases func() map[string]bool) bool {
+	task, err := state.Load(projectRoot, w.TaskID)
+	if err != nil {
+		return !errors.Is(err, os.ErrNotExist)
+	}
+	if task.Status != w.NewStatus {
+		return false
+	}
+	if task.CampPath != "" {
+		if leased := leases(); leased != nil && !leased[task.ID] {
+			return false
+		}
+	}
+	if task.Kind == state.KindMission && w.NewStatus == state.StatusDone && task.CampPath != "" && task.CampBase != "" {
+		if ahead, err := camp.HasNewCommits(task.CampPath, task.CampBase); err == nil && !ahead {
+			return false
+		}
+	}
+	return true
 }
 
 func lockPath(vexillumHome string) string {

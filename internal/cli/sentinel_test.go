@@ -69,7 +69,23 @@ func newSettledMissionTask(t *testing.T, projectRoot string) state.Task {
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
+	leaseCamp(t, projectRoot, task.ID)
 	return task
+}
+
+// leaseCamp writes the pool file a real camp.Acquire leaves under
+// projectRoot with taskID holding a slot: the sentinel only delivers a
+// wake for a task whose camp has not been released.
+func leaseCamp(t *testing.T, projectRoot, taskID string) {
+	t.Helper()
+	dir := filepath.Join(projectRoot, "camps")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating pool dir: %v", err)
+	}
+	pool := `{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"` + taskID + `"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "pool.json"), []byte(pool), 0o644); err != nil {
+		t.Fatalf("writing pool: %v", err)
+	}
 }
 
 // sentinelMode classifies the three recognized forms and rejects anything

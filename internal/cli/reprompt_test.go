@@ -29,13 +29,9 @@ func repromptFixture(t *testing.T, status state.Status, leased bool) (project, h
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
-	if leased {
-		dir := filepath.Join(projectRoot, "camps")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		pool := `{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"` + task.ID + `"}]}`
-		if err := os.WriteFile(filepath.Join(dir, "pool.json"), []byte(pool), 0o644); err != nil {
+	if !leased {
+		// newSettledMissionTask leases a camp; a released one has no slot.
+		if err := os.Remove(filepath.Join(projectRoot, "camps", "pool.json")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -122,7 +118,7 @@ func TestReprompt_RefusesStatusesThatCannotBePrompted(t *testing.T) {
 		want   string
 	}{
 		{state.StatusRunning, "already running"},
-		{state.StatusBlocked, "decide"},
+		{state.StatusBlocked, "--dismiss"},
 		{state.StatusInterrupted, "redispatch"},
 		{state.StatusFailed, "only a done or unconfirmed"},
 		{state.StatusShipped, "only a done or unconfirmed"},
