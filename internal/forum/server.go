@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,6 +24,10 @@ type ServerOptions struct {
 	// Addr is the host:port the server listens on, used to build session
 	// URLs.
 	Addr string
+	// Build and Protocol are the identity the status route reports; a zero
+	// Protocol means ProtocolVersion.
+	Build    string
+	Protocol int
 	// Shutdown asks the process to stop (the `vx forum stop` route).
 	Shutdown func()
 	// EventsHeartbeat is how often an idle event stream sends a comment so a
@@ -47,6 +52,8 @@ type Server struct {
 	store      *Store
 	agentToken string
 	addr       string
+	build      string
+	protocol   int
 	shutdown   func()
 	heartbeat  time.Duration
 	mux        *http.ServeMux
@@ -59,9 +66,14 @@ func NewServer(opts ServerOptions) *Server {
 		store:      opts.Store,
 		agentToken: opts.AgentToken,
 		addr:       opts.Addr,
+		build:      opts.Build,
+		protocol:   opts.Protocol,
 		shutdown:   opts.Shutdown,
 		heartbeat:  opts.EventsHeartbeat,
 		mux:        http.NewServeMux(),
+	}
+	if s.protocol == 0 {
+		s.protocol = ProtocolVersion
 	}
 	if s.heartbeat <= 0 {
 		s.heartbeat = defaultEventsHeartbeat
@@ -85,6 +97,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/agent/reply", s.agentOnly(s.handleAgentReply))
 	s.mux.HandleFunc("POST /api/agent/end", s.agentOnly(s.handleAgentEnd))
 	s.mux.HandleFunc("POST /api/agent/stop", s.agentOnly(s.handleAgentStop))
+	s.mux.HandleFunc("GET /api/agent/status", s.agentOnly(s.handleAgentStatus))
 	s.browserRoutes()
 	s.pageRoutes()
 	s.whiteboardRoutes()
@@ -321,11 +334,32 @@ func (s *Server) handleAgentEnd(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ended"})
 }
 
+// stopRequest is the body of POST /api/agent/stop. OnlyIfIdle makes the stop
+// conditional on nothing being open or connected, so a client replacing a
+// stale server cannot kill one that gained a tab since it looked.
+type stopRequest struct {
+	OnlyIfIdle bool `json:"only_if_idle"`
+}
+
 func (s *Server) handleAgentStop(w http.ResponseWriter, r *http.Request) {
+	var req stopRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if req.OnlyIfIdle {
+		if a := s.hub.Activity(); a.Busy() {
+			writeError(w, http.StatusConflict, "busy", "the forum server is in use ("+a.String()+")")
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "stopping"})
 	if s.shutdown != nil {
 		go s.shutdown()
 	}
+}
+
+func (s *Server) handleAgentStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, ServerStatus{PID: os.Getpid(), Build: s.build, Protocol: s.protocol, Activity: s.hub.Activity()})
 }
 
 // loopbackHost reports whether a Host header names this machine's loopback

@@ -133,3 +133,17 @@ func (c *Client) End(ctx context.Context, file string) error {
 func (c *Client) Stop(ctx context.Context) error {
 	return c.do(ctx, http.MethodPost, "/api/agent/stop", struct{}{}, nil)
 }
+
+// StopIfIdle asks the server to shut down only if nothing is open or
+// connected. A busy server answers 409 with code "busy" (an *APIError).
+func (c *Client) StopIfIdle(ctx context.Context) error {
+	return c.do(ctx, http.MethodPost, "/api/agent/stop", stopRequest{OnlyIfIdle: true}, nil)
+}
+
+// Status reports the server's build, protocol and current activity. A server
+// older than the status route answers 404 (an *APIError).
+func (c *Client) Status(ctx context.Context) (ServerStatus, error) {
+	var out ServerStatus
+	err := c.do(ctx, http.MethodGet, "/api/agent/status", nil, &out)
+	return out, err
+}
