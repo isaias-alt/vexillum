@@ -3,6 +3,5 @@
 *.test
 .DS_Store
 /dist
-/.forum
 /.claude/skills/binnacle
 /.vexillum/forum
