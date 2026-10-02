@@ -3,6 +3,8 @@ package forum
 import (
 	"fmt"
 	"strings"
+
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 // FormatPoll renders a poll response in the stable text format agents parse
@@ -84,7 +86,7 @@ func writeField(b *strings.Builder, indent, key, value string) {
 // PollNextStep is the one-sentence instruction printed after a poll: what
 // the agent should do now, per status.
 func PollNextStep(file string, res PollResponse) string {
-	poll := "vexillum forum poll " + shellQuote(file)
+	poll := cmdname.Name + " forum poll " + shellQuote(file)
 	switch res.Status {
 	case PollFeedback:
 		if hasAttachments(res.Prompts) {
@@ -101,7 +103,7 @@ func PollNextStep(file string, res PollResponse) string {
 		}
 		return who + ". Stop polling and do not reopen the session unless the user asks."
 	case PollBrowserDisconnected:
-		return "The browser window went away but the session is still resumable. Ask the user whether to reopen it (`vexillum forum " + shellQuote(file) + "`) or end it (`vexillum forum end " + shellQuote(file) + "`); do neither uninvited."
+		return "The browser window went away but the session is still resumable. Ask the user whether to reopen it (`" + cmdname.Name + " forum " + shellQuote(file) + "`) or end it (`" + cmdname.Name + " forum end " + shellQuote(file) + "`); do neither uninvited."
 	case PollTimeout:
 		return "No feedback yet. Run `" + poll + "` again to keep waiting."
 	default:
@@ -109,12 +111,12 @@ func PollNextStep(file string, res PollResponse) string {
 	}
 }
 
-// OpenNextStep is the instruction printed after `vexillum forum <file>`.
+// OpenNextStep is the instruction printed after `vx forum <file>`.
 func OpenNextStep(file string, res OpenResponse) string {
-	poll := "vexillum forum poll " + shellQuote(file)
+	poll := cmdname.Name + " forum poll " + shellQuote(file)
 	switch res.Status {
 	case OpenUserEnded:
-		return "The user ended this session from the browser, so it was not reopened. Only if the user asks for further review, run `vexillum forum " + shellQuote(file) + " --reopen`."
+		return "The user ended this session from the browser, so it was not reopened. Only if the user asks for further review, run `" + cmdname.Name + " forum " + shellQuote(file) + " --reopen`."
 	}
 	if res.Pending > 0 {
 		return fmt.Sprintf("The user already sent %d prompt(s). Run `%s` now to receive them; keep polling in a loop after that.", res.Pending, poll)

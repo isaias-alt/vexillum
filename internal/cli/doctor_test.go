@@ -63,7 +63,7 @@ func writeSkillFile(t *testing.T, dir, name string) {
 }
 
 // initializedProject returns a project dir that is a git repo with the
-// vexillum scaffold already in place (as vexillum init would leave it).
+// vexillum scaffold already in place (as vx init would leave it).
 func initializedProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -162,8 +162,8 @@ func TestDoctor_ProjectNotInitialized(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("expected non-zero exit, got 0\noutput:\n%s", out.String())
 	}
-	if !bytes.Contains(out.Bytes(), []byte("vexillum init")) {
-		t.Errorf("expected output to suggest running 'vexillum init', got:\n%s", out.String())
+	if !bytes.Contains(out.Bytes(), []byte("vx init")) {
+		t.Errorf("expected output to suggest running 'vx init', got:\n%s", out.String())
 	}
 }
 
@@ -387,7 +387,7 @@ func TestDoctor_AxiStatusNeverAffectsExitCode(t *testing.T) {
 	}
 }
 
-// forum-tool was replaced by `vexillum forum`: doctor must no longer report it.
+// forum-tool was replaced by `vx forum`: doctor must no longer report it.
 func TestDoctor_ForumNotListed(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir := initializedProject(t)
@@ -557,4 +557,38 @@ func snapshotTree(t *testing.T, dir string) (string, error) {
 		return nil
 	})
 	return b.String(), err
+}
+
+// doctor reports a different vx earlier in PATH as a warning (never a
+// failure), naming the one that wins.
+func TestDoctor_AnotherVXEarlierInPathWarns(t *testing.T) {
+	binDir := fakeBinDir(t, "claude", "herdr", "tmux", "vx")
+	t.Setenv("PATH", binDir)
+	projectDir := initializedProject(t)
+
+	var out bytes.Buffer
+	code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+
+	if code != 0 {
+		t.Errorf("a shadowing vx must not fail doctor, got exit %d: %s", code, out.String())
+	}
+	want := "[warn] another vx earlier in PATH - " + filepath.Join(binDir, "vx")
+	if !bytes.Contains(out.Bytes(), []byte(want)) {
+		t.Errorf("expected %q in output, got: %s", want, out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("another vx earlier in PATH).")) {
+		t.Errorf("expected the summary to list the warning, got: %s", out.String())
+	}
+}
+
+func TestDoctor_NoVXConflictIsOK(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+
+	var out bytes.Buffer
+	runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+
+	if !bytes.Contains(out.Bytes(), []byte("[ok] another vx earlier in PATH")) {
+		t.Errorf("expected an ok line for the vx PATH check, got: %s", out.String())
+	}
 }

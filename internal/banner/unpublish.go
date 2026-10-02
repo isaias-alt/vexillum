@@ -1,6 +1,6 @@
 package banner
 
-// UnpublishPlaceholderHTML is what "vexillum banner --unpublish" writes
+// UnpublishPlaceholderHTML is what "vx banner --unpublish" writes
 // over a page's content. There is no delete endpoint on ht-ml.app (or in
 // forum-tool's self-hosting contract), so "unpublishing" is really a PUT
 // of this placeholder behind a fresh, immediately-discarded password -

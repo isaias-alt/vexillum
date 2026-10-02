@@ -1,4 +1,4 @@
-// Package forum implements "vexillum forum". It serves a single local HTML
+// Package forum implements "vx forum". It serves a single local HTML
 // artifact file so its Mermaid diagrams (each in a `<div class="mermaid">...</div>` container,
 // the same authoring convention forum-tool already uses) render as
 // editable Excalidraw whiteboards in the browser.
@@ -33,7 +33,7 @@ import (
 var sessionKeyPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 // SessionKey derives the stable on-disk key for a forum session for file: the
-// first 16 hex characters of sha256(absolute path). Two `vexillum forum`
+// first 16 hex characters of sha256(absolute path). Two `vx forum`
 // invocations against the same file (any working directory, any relative
 // path spelling) converge on the same key, so a diagram's autosaved scene
 // survives across runs; a renamed or moved file gets a fresh key and starts
@@ -50,7 +50,7 @@ func ValidSessionKey(key string) bool {
 	return sessionKeyPattern.MatchString(key)
 }
 
-// ValidDiagramIndex reports whether index is in the range vexillum forum
+// ValidDiagramIndex reports whether index is in the range vx forum
 // accepts for a diagram's position in the artifact (0-999, matching the
 // hard cap encoded in the whiteboard frame's own URL parsing - see
 // whiteboard-frame.js's `main()`).

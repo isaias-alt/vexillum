@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 const (
@@ -27,14 +29,25 @@ const (
 	// never produce for it: it only actually waits inside a
 	// herdr-managed pane (HERDR_WORKSPACE_ID set), same as dispatch and
 	// redispatch already require of their own caller.
-	SentinelHookCommand = "vexillum sentinel await"
+	SentinelHookCommand = cmdname.Name + " sentinel await"
+
+	// legacyCommandName is the executable name before the command was
+	// renamed to cmdname.Name. A project initialized back then has hooks
+	// registered under it, which stop working once only the renamed
+	// binary is installed.
+	legacyCommandName = "vexillum"
 
 	// LegacySentinelHookCommand is the older, synchronous-only hook
 	// (an instant check-and-return, registered without asyncRewake)
-	// this replaces. EnsureSentinelHook detects and upgrades it in
-	// place instead of leaving a stale, redundant hook alongside the
-	// new one.
-	LegacySentinelHookCommand = "vexillum sentinel drain"
+	// the async hook replaced. EnsureSentinelHook detects and upgrades
+	// it in place instead of leaving a stale, redundant hook alongside
+	// the new one.
+	LegacySentinelHookCommand = legacyCommandName + " sentinel drain"
+
+	// LegacyRenamedSentinelHookCommand is the async hook as it was
+	// registered under the old executable name: same behavior as
+	// SentinelHookCommand, but it invokes a binary that no longer exists.
+	LegacyRenamedSentinelHookCommand = legacyCommandName + " sentinel await"
 
 	// SentinelHookTimeoutSeconds bounds how long a single async hook
 	// invocation may block. runSentinelAwait's own internal deadline
@@ -51,7 +64,8 @@ const (
 // turn already ended before anything settled. Reads and merges rather
 // than overwriting - existing hooks and settings are preserved untouched.
 // An older project's synchronous-only hook (LegacySentinelHookCommand)
-// is upgraded in place, not duplicated. A malformed existing file is
+// or its hook registered under the old executable name
+// (LegacyRenamedSentinelHookCommand) is upgraded in place, not duplicated. A malformed existing file is
 // left untouched and reported as an error rather than risk corrupting it.
 func EnsureSentinelHook(projectDir string) (added bool, err error) {
 	path := filepath.Join(projectDir, ".claude", "settings.json")
@@ -104,7 +118,7 @@ func EnsureSentinelHook(projectDir string) (added bool, err error) {
 					group["hooks"] = entries
 					changed = true
 				}
-			case LegacySentinelHookCommand:
+			case LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand:
 				entries[i] = newEntry
 				group["hooks"] = entries
 				found = true

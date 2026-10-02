@@ -2,13 +2,17 @@ package cli
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// vexillum upgrade refuses to run against a project that was never
-// initialized, pointing at 'vexillum init' instead.
+// vx upgrade refuses to run against a project that was never
+// initialized, pointing at 'vx init' instead.
 func TestUpgrade_RefusesUninitializedProject(t *testing.T) {
 	projectDir := t.TempDir()
 	initGitRepo(t, projectDir)
@@ -299,7 +303,7 @@ func TestUpgrade_ForceCoversUnknownProvenance(t *testing.T) {
 	}
 }
 
-// vexillum upgrade refuses to run from inside a vexillum-managed camp,
+// vx upgrade refuses to run from inside a vexillum-managed camp,
 // same guard as init - see TestRefuseInsideVexillumHome.
 func TestUpgrade_RefusesInsideVexillumHome(t *testing.T) {
 	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
@@ -318,7 +322,7 @@ func TestUpgrade_RefusesInsideVexillumHome(t *testing.T) {
 	}
 }
 
-// vexillum upgrade --global refuses to run before 'vexillum init --global'
+// vx upgrade --global refuses to run before 'vx init --global'
 // has ever been run - same posture as the local upgrade refusing an
 // uninitialized project.
 func TestUpgradeGlobal_RefusesUninitialized(t *testing.T) {
@@ -329,7 +333,7 @@ func TestUpgradeGlobal_RefusesUninitialized(t *testing.T) {
 	code := runUpgradeGlobal(vexillumHome, home, false, &stdout, &stderr)
 
 	if code == 0 {
-		t.Fatal("expected non-zero exit code before 'vexillum init --global' ran")
+		t.Fatal("expected non-zero exit code before 'vx init --global' ran")
 	}
 	if stderr.String() == "" {
 		t.Error("expected an error message on stderr")
@@ -422,5 +426,87 @@ func TestUpgradeGlobal_ForceOverwritesHandEditedFile(t *testing.T) {
 	}
 	if string(got) != productVexillumRule {
 		t.Error("expected --force to overwrite the global rule file with the latest template")
+	}
+}
+
+// A project initialized before the command was renamed has the old
+// template (full of `vexillum <cmd>` examples) and a Stop hook that runs
+// the old executable name. upgrade must migrate both: refresh the rules
+// (its hash is the stored one, so it is safe to overwrite) and rewrite the
+// hook to the current command - whichever legacy spelling it carries.
+func TestUpgrade_MigratesProjectInitializedBeforeTheRename(t *testing.T) {
+	oldRules, err := os.ReadFile(filepath.Join("testdata", "commander-rules-pre-vx.md"))
+	if err != nil {
+		t.Fatalf("reading the pre-rename template fixture: %v", err)
+	}
+	if !strings.Contains(string(oldRules), "`vexillum dispatch`") {
+		t.Fatal("fixture should be the template from before the rename")
+	}
+	sum := sha256.Sum256(oldRules)
+
+	for _, legacyHook := range []string{"vexillum sentinel await", "vexillum sentinel drain"} {
+		t.Run(legacyHook, func(t *testing.T) {
+			projectDir := t.TempDir()
+			initGitRepo(t, projectDir)
+			vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+
+			// Lay down the project exactly as the old binary left it.
+			write := func(rel, content string) {
+				t.Helper()
+				path := filepath.Join(projectDir, rel)
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cfg, _ := json.Marshal(map[string]any{
+				"version":            1,
+				"initialized_at":     "2026-01-01T00:00:00Z",
+				"vexillum_rule_hash": hex.EncodeToString(sum[:]),
+			})
+			write(".vexillum/config.json", string(cfg))
+			write(".claude/rules/vexillum.md", string(oldRules))
+			write(".claude/settings.json", `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"`+legacyHook+`","asyncRewake":true,"timeout":3600}]}]}}`)
+
+			var stdout, stderr bytes.Buffer
+			if code := runUpgrade(projectDir, vexillumHome, false, &stdout, &stderr); code != 0 {
+				t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+			}
+
+			rules, err := os.ReadFile(filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(rules) != productVexillumRule {
+				t.Error("expected the rules to be refreshed to the current template")
+			}
+			if strings.Contains(string(rules), "`vexillum dispatch`") || !strings.Contains(string(rules), "`vx dispatch`") {
+				t.Error("expected the refreshed rules to use the vx command")
+			}
+
+			settings, err := os.ReadFile(filepath.Join(projectDir, ".claude", "settings.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(settings), "vexillum sentinel") {
+				t.Errorf("expected the legacy hook command to be gone, got: %s", settings)
+			}
+			if strings.Count(string(settings), sentinelHookCommand) != 1 {
+				t.Errorf("expected exactly one %q hook, got: %s", sentinelHookCommand, settings)
+			}
+
+			// The stored hash follows the new template, so the next upgrade
+			// is a no-op rather than treating the file as customized.
+			newCfg, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			newSum := sha256.Sum256([]byte(productVexillumRule))
+			if !strings.Contains(string(newCfg), hex.EncodeToString(newSum[:])) {
+				t.Errorf("expected config.json to record the new template hash, got: %s", newCfg)
+			}
+		})
 	}
 }

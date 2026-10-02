@@ -43,7 +43,7 @@ func shortHash(s string) string {
 // Normalization matters because two different call paths resolve the
 // same project from two different starting points: dispatch resolves it
 // from a plain os.Getwd() (shell-normalized, symlink-preserving), while
-// "vexillum sentinel drain" resolves it from "git rev-parse
+// "vx sentinel drain" resolves it from "git rev-parse
 // --show-toplevel" (git-normalized). On a machine where the project's
 // path involves a symlink (e.g. macOS's $TMPDIR under /var, itself a
 // symlink to /private/var), those two forms can disagree on the same

@@ -65,7 +65,7 @@ func TestWriteIsIdempotentAndRemovesStalePages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(first), "| `vexillum init` |") {
+	if !strings.Contains(string(first), "| `vx init` |") {
 		t.Errorf("README table was not spliced in:\n%s", first)
 	}
 

@@ -77,7 +77,7 @@ func Acquire(projectDir, vexillumHome, taskID string) (Camp, error) {
 	}
 
 	// N soldiers dispatched at once means N concurrent Acquire calls (each
-	// a separate `vexillum dispatch` process) racing against the same
+	// a separate `vx dispatch` process) racing against the same
 	// pool.json - without serializing the read-modify-write below, two
 	// could both read the pool before either writes back, both compute
 	// the same slot number, and both run `git worktree add` at the
@@ -278,7 +278,7 @@ func Release(c Camp, taskID string) error {
 		return fmt.Errorf("checking whether camp branch landed: %w", err)
 	}
 	if !landed {
-		// A plain ancestor check only proves a "vexillum land"
+		// A plain ancestor check only proves a "vx land"
 		// fast-forward. A shipped mission whose PR merged via squash or
 		// rebase on GitHub never satisfies it, even after a real local
 		// pull - the merge commit's parent is the pre-merge base, not

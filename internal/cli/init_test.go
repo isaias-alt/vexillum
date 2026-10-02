@@ -275,7 +275,7 @@ func TestInit_VexillumHomeNotWritable(t *testing.T) {
 	}
 }
 
-// vexillum init adds the sentinel Stop hook to a fresh .claude/settings.json.
+// vx init adds the sentinel Stop hook to a fresh .claude/settings.json.
 func TestInit_AddsSentinelStopHook(t *testing.T) {
 	projectDir := t.TempDir()
 	initGitRepo(t, projectDir)
@@ -499,7 +499,7 @@ func TestEnsureSentinelHook_RefusesMalformedSettings(t *testing.T) {
 	}
 }
 
-// vexillum init refuses to run from inside a vexillum-managed camp - see
+// vx init refuses to run from inside a vexillum-managed camp - see
 // TestRefuseInsideVexillumHome for the underlying bug this guards
 // against.
 func TestInit_RefusesInsideVexillumHome(t *testing.T) {
@@ -522,7 +522,7 @@ func TestInit_RefusesInsideVexillumHome(t *testing.T) {
 	}
 }
 
-// vexillum init --global scaffolds ~/.claude/rules/vexillum.md once for
+// vx init --global scaffolds ~/.claude/rules/vexillum.md once for
 // the whole machine, tracked in vexillumHome/config.json - not tied to any
 // project, and not required to be a git repo.
 func TestInitGlobal_CleanMachine(t *testing.T) {
@@ -613,7 +613,7 @@ func TestInitGlobal_DoesNotOverwriteEditedRuleFile(t *testing.T) {
 	}
 }
 
-// vexillum init --global never writes a project-shaped .vexillum/ scaffold
+// vx init --global never writes a project-shaped .vexillum/ scaffold
 // under home - it's a different artifact at a different path, not a
 // project init in disguise.
 func TestInitGlobal_DoesNotWriteProjectScaffold(t *testing.T) {

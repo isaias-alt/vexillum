@@ -96,7 +96,7 @@ func TestForumOpen_PrintsSessionURLAndNextStepThenReturns(t *testing.T) {
 		t.Fatal("forum <file> did not return (it must not block on the server)")
 	}
 	text := out.String()
-	for _, want := range []string{"session: " + forum.SessionKey(file), "status: open", "url: http://127.0.0.1:", "/session/", "next_step:", "vexillum forum poll"} {
+	for _, want := range []string{"session: " + forum.SessionKey(file), "status: open", "url: http://127.0.0.1:", "/session/", "next_step:", "vx forum poll"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("output missing %q:\n%s", want, text)
 		}
@@ -141,7 +141,7 @@ func TestForumPoll_NoSessionExplainsHowToOpen(t *testing.T) {
 	file := writeArtifact(t)
 	var out, errb bytes.Buffer
 	code := runForumPoll(context.Background(), home, []string{file, "--timeout", "1s"}, strings.NewReader(""), &out, &errb)
-	if code == 0 || !strings.Contains(errb.String(), "vexillum forum "+file) {
+	if code == 0 || !strings.Contains(errb.String(), "vx forum "+file) {
 		t.Errorf("exit %d, stderr %q; want a failure that names the open command", code, errb.String())
 	}
 }

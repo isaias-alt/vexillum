@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/ghpr"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -20,12 +21,12 @@ const shipUsage = `Ship a finished mission through vexillum's own tribunal pipel
 opening a real pull request.
 
 Usage:
-  vexillum ship <task-id> [--fix] [--max-rounds <n>] [--timeout <duration>]
+  ` + cmdname.Name + ` ship <task-id> [--fix] [--max-rounds <n>] [--timeout <duration>]
 
 Runs, in order, inside the mission's own camp: lint, tests, an adversarial
 code review of the diff, and a docs check - stopping at the first step that
 fails and reporting it, without pushing or opening anything. Every step
-runs synchronously; "vexillum ship" doesn't return until the whole pipeline
+runs synchronously; "` + cmdname.Name + ` ship" doesn't return until the whole pipeline
 has settled, there's nothing external to track afterward.
 
 The review runs in a brand-new Claude Code session that has none of the
@@ -58,17 +59,17 @@ Once every step passes, pushes the mission's camp branch to the real
 remote ("origin") and opens the pull request itself with "gh pr create" -
 deterministically, no soldier or agent judgment decides whether or when
 this happens, since it's the one vexillum action with a real, irreversible
-effect outside the machine. Requires "gh" ('vexillum doctor' reports
+effect outside the machine. Requires "gh" ('` + cmdname.Name + ` doctor' reports
 whether it's installed).
 
 A mission already shipped can be shipped again, to push follow-up commits
 onto the same open PR - only "done" and "shipped" are valid starting
 states; a re-ship still runs the full tribunal pipeline first. Once
-shipped, land the PR with 'vexillum land <task-id>' rather than 'vexillum
+shipped, land the PR with '` + cmdname.Name + ` land <task-id>' rather than '` + cmdname.Name + `
 land'-ing the camp locally.
 `
 
-// Ship runs the "vexillum ship" command.
+// Ship runs the "vx ship" command.
 func Ship(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Print(shipUsage)
@@ -81,13 +82,13 @@ func Ship(args []string) int {
 
 	taskID, opts, err := parseShipArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	projectDir, vexillumHome, err := resolveDirs()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -163,39 +164,39 @@ func parseShipArgs(args []string) (string, tribunal.Options, error) {
 // the task prompt are filled in here.
 func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, stdout, stderr io.Writer) int {
 	if err := state.ValidateID(taskID); err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	projectRoot, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	task, err := state.Load(projectRoot, taskID)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
+		fmt.Fprintf(stderr, cmdname.Name+": loading task %s: %v\n", taskID, err)
 		return 1
 	}
 
 	if task.Kind != state.KindMission {
-		fmt.Fprintf(stderr, "vexillum: task %s is a scout, not a mission - a scout should never have committed anything to ship\n", taskID)
+		fmt.Fprintf(stderr, cmdname.Name+": task %s is a scout, not a mission - a scout should never have committed anything to ship\n", taskID)
 		return 1
 	}
 	if task.Status != state.StatusDone && task.Status != state.StatusShipped {
-		fmt.Fprintf(stderr, "vexillum: task %s is %s, not done or already shipped - only a finished mission can be shipped\n", taskID, task.Status)
+		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not done or already shipped - only a finished mission can be shipped\n", taskID, task.Status)
 		return 1
 	}
 
 	if !ghpr.Installed() {
-		fmt.Fprintln(stderr, "vexillum: 'gh' is not installed - required to open a mission's pull request (https://cli.github.com)")
+		fmt.Fprintln(stderr, cmdname.Name+": 'gh' is not installed - required to open a mission's pull request (https://cli.github.com)")
 		return 1
 	}
 
 	c, err := camp.Resolve(projectDir, vexillumHome, task.CampSlot)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: resolving camp: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": resolving camp: %v\n", err)
 		return 1
 	}
 
@@ -204,7 +205,7 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 	opts.Log = func(msg string) { fmt.Fprintf(stderr, "%s: %s\n", tribunal.Name, msg) }
 	result, err := tribunal.Run(c.Path, task.CampBase, opts)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: running the %s pipeline: %v\n", tribunal.Name, err)
+		fmt.Fprintf(stderr, cmdname.Name+": running the %s pipeline: %v\n", tribunal.Name, err)
 		return 1
 	}
 	for i, round := range result.Earlier {
@@ -221,7 +222,7 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 		}
 	}
 	if failed := result.FailedStep(); failed != nil {
-		fmt.Fprintf(stderr, "vexillum: %s failed at %s, refusing to push or open a pull request\n", tribunal.Name, failed.Step)
+		fmt.Fprintf(stderr, cmdname.Name+": %s failed at %s, refusing to push or open a pull request\n", tribunal.Name, failed.Step)
 		for _, sr := range result.Steps {
 			if !sr.Passed && sr.Detail != "" {
 				fmt.Fprintln(stderr, sr.Detail)
@@ -243,7 +244,7 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 	pushCmd := exec.Command("git", "push", "origin", c.Branch)
 	pushCmd.Dir = c.Path
 	if out, err := pushCmd.CombinedOutput(); err != nil {
-		fmt.Fprintf(stderr, "vexillum: pushing %s to origin: %v\n%s\n", c.Branch, err, strings.TrimSpace(string(out)))
+		fmt.Fprintf(stderr, cmdname.Name+": pushing %s to origin: %v\n%s\n", c.Branch, err, strings.TrimSpace(string(out)))
 		return 1
 	}
 
@@ -251,14 +252,14 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 	if task.Status == state.StatusShipped {
 		pr, err := ghpr.View(projectDir, c.Branch)
 		if err != nil {
-			fmt.Fprintf(stderr, "vexillum: pushed follow-up commits, but couldn't look up the existing pull request: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": pushed follow-up commits, but couldn't look up the existing pull request: %v\n", err)
 			return 1
 		}
 		prURL = pr.URL
 	} else {
 		prURL, err = ghpr.Create(projectDir, c.Branch, task.CampBase, shipPRTitle(task), shipPRBody(task, notes))
 		if err != nil {
-			fmt.Fprintf(stderr, "vexillum: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 			return 1
 		}
 	}
@@ -266,7 +267,7 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 	task.Status = state.StatusShipped
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
-		fmt.Fprintf(stderr, "vexillum: opened %s, but failed to record shipped status: %v\n", prURL, err)
+		fmt.Fprintf(stderr, cmdname.Name+": opened %s, but failed to record shipped status: %v\n", prURL, err)
 		return 1
 	}
 

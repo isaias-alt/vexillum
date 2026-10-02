@@ -65,7 +65,7 @@ const (
 )
 
 // Run starts the one forum server for opts.Home and blocks until ctx is
-// canceled, `vexillum forum stop` is called, or it has been idle past
+// canceled, `vx forum stop` is called, or it has been idle past
 // IdleTimeout. It refuses (with *ErrServerRunning) if another server holds
 // the lock. It binds 127.0.0.1 only, never another interface.
 func Run(ctx context.Context, opts RunOptions) error {

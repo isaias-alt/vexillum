@@ -139,7 +139,7 @@
         throw new Error("the event stream closed");
       } catch (error) {
         if (error.status === 401 || error.status === 404) {
-          fatal("This review session is no longer available. Ask your agent to run `vexillum forum " + boot.name + "` again.");
+          fatal("This review session is no longer available. Ask your agent to run `vx forum " + boot.name + "` again.");
           return;
         }
         failures += 1;

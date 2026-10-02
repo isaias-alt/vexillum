@@ -75,7 +75,7 @@ func newSettledMissionTask(t *testing.T, projectRoot string) state.Task {
 // sentinelMode classifies the three recognized forms and rejects anything
 // else - an unrecognized subcommand must not silently fall through to
 // starting the infinite polling loop (the bug found via a real commander
-// session running "vexillum sentinel status").
+// session running "vx sentinel status").
 func TestSentinelMode(t *testing.T) {
 	cases := []struct {
 		args    []string
@@ -303,7 +303,7 @@ func TestResolveDrainTarget_NotARepo(t *testing.T) {
 
 // C1-10: a real project's root resolves to the same project root
 // internal/project.Root (and so camp.Acquire) would compute for it -
-// this is what keeps "vexillum dispatch" and "vexillum sentinel drain"
+// this is what keeps "vx dispatch" and "vx sentinel drain"
 // agreeing on the same project.
 func TestResolveDrainTarget_RealProject(t *testing.T) {
 	vexillumHome := t.TempDir()

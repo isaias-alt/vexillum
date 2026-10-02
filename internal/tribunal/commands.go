@@ -3,9 +3,9 @@ package tribunal
 // runLint and runTests autodetect which command to run from the project
 // markers already sitting in campPath - no per-project tribunal config
 // to set up first (same "no separate setup step" posture the general
-// asked for when review-tool' own gating moved from "vexillum init" to
+// asked for when review-tool' own gating moved from "vx init" to
 // lazy-on-first-ship; here there's simply nothing left to configure).
-// Neither marker present means "vexillum ship" is being used against a
+// Neither marker present means "vx ship" is being used against a
 // project this pipeline doesn't yet know how to lint or test - Passed
 // stays true rather than failing a mission for tooling gaps outside its
 // control, but Detail says so plainly.

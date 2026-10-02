@@ -3,8 +3,8 @@
 // the commander persona and the sentinel Stop hook: .vexillum/config.json
 // (or vexillumHome/config.json for the global scaffold),
 // .claude/rules/vexillum.md, and the hook entry inside
-// .claude/settings.json (see hook.go). "vexillum init" writes these
-// fresh; "vexillum upgrade" refreshes them to the latest template without
+// .claude/settings.json (see hook.go). "vx init" writes these
+// fresh; "vx upgrade" refreshes them to the latest template without
 // clobbering local edits it can't vouch for.
 package scaffold
 
@@ -23,7 +23,7 @@ import (
 //go:generate cp vexillum-commander-rules.md ../../.claude/rules/vexillum.md
 
 // VexillumCommanderRules is the "Vexillum commander rules" product
-// scaffold that `vexillum init` writes to .claude/rules/vexillum.md in a
+// scaffold that `vx init` writes to .claude/rules/vexillum.md in a
 // scaffolded project. It is also this repository's own dogfooded copy at
 // .claude/rules/vexillum.md - re-run `go generate ./...` after editing
 // this file to keep that copy in sync.
@@ -37,7 +37,7 @@ type Config struct {
 	Version       int       `json:"version"`
 	InitializedAt time.Time `json:"initialized_at"`
 	// VexillumRuleHash is the sha256 hex digest of the content vexillum
-	// itself last wrote to .claude/rules/vexillum.md. 'vexillum upgrade'
+	// itself last wrote to .claude/rules/vexillum.md. 'vx upgrade'
 	// compares the file's current content against this to tell "still
 	// exactly what we wrote" (safe to refresh to the latest template) apart
 	// from "the general edited this" (leave it alone). Empty means unknown
@@ -100,14 +100,14 @@ func EnsureDir(path string) (created bool, err error) {
 }
 
 // ProjectInitialized reports whether projectDir has already been
-// scaffolded by 'vexillum init' (i.e. has a .vexillum/config.json).
+// scaffolded by 'vx init' (i.e. has a .vexillum/config.json).
 func ProjectInitialized(projectDir string) bool {
 	_, err := os.Stat(filepath.Join(projectDir, ".vexillum", "config.json"))
 	return err == nil
 }
 
 // GlobalInitialized reports whether the global scaffold
-// (vexillumHome/config.json, written by 'vexillum init --global') exists.
+// (vexillumHome/config.json, written by 'vx init --global') exists.
 func GlobalInitialized(vexillumHome string) bool {
 	_, err := os.Stat(filepath.Join(vexillumHome, "config.json"))
 	return err == nil

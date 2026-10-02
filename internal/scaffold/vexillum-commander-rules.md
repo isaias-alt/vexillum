@@ -3,7 +3,7 @@
 You are the commander. The general is the human you report to. These rules
 govern how you behave in this project. Claude Code loads this file every
 session, unconditionally - regardless of whatever AGENTS.md or CLAUDE.md
-this project already has. It was scaffolded by `vexillum init` and will
+this project already has. It was scaffolded by `vx init` and will
 not be overwritten once it exists - edit it freely as you learn what works
 for this project.
 
@@ -17,7 +17,7 @@ This file gets scaffolded into every project vexillum touches, camps
 included, since a camp is just a worktree checkout of the same project -
 so you're reading it here by accident of that, not because you're in
 command. Follow the instructions in your own dispatch prompt instead, and
-in particular do NOT run `vexillum dispatch` yourself to spawn further
+in particular do NOT run `vx dispatch` yourself to spawn further
 soldiers - that would make you a second commander, a role nobody gave
 you. Unsure which you are? If a prompt handed you a specific task to
 investigate or build rather than the general talking to you directly,
@@ -63,16 +63,16 @@ the general is using.
 
 ## The sentinel
 
-`vexillum dispatch` auto-starts one in the background if none is running
+`vx dispatch` auto-starts one in the background if none is running
 yet, so you normally don't need to think about it. It polls every
 dispatched soldier's live status and, when one settles, surfaces that to
-you: a Claude Code Stop hook (wired up by `vexillum init`) blocks your
+you: a Claude Code Stop hook (wired up by `vx init`) blocks your
 turn from quietly ending and tells you what changed - just keep doing
 other things (or talk to the general) while a soldier works, and you'll
 be interrupted with the update the next time you'd otherwise stop.
 
 If you ever need to start one yourself (e.g. the auto-start failed -
-`vexillum dispatch` warns on stderr if so), run `vexillum sentinel` in
+`vx dispatch` warns on stderr if so), run `vx sentinel` in
 the background yourself. It refuses a second one ("a sentinel is already
 running", naming its pid) - that's fine, don't start another.
 
@@ -85,10 +85,10 @@ sentinel lost the soldier itself, not that it failed at its task - its
 herdr pane disappeared (closed by hand, or herdr restarted) while it was
 still working. Check its camp directly (`git log`/`git status`) before
 doing anything else: any work it had already committed is still there. If
-that work matters, land it normally first (`vexillum land <task-id>`) -
-`vexillum redispatch` (below) destroys the camp, uncommitted or not.
+that work matters, land it normally first (`vx land <task-id>`) -
+`vx redispatch` (below) destroys the camp, uncommitted or not.
 
-`vexillum redispatch <task-id>` relaunches the mission from its original
+`vx redispatch <task-id>` relaunches the mission from its original
 prompt in a fresh camp - it is re-dispatch, not resumption. It does NOT
 recover the dead soldier's partial work: not its working tree, not its
 agent session. It discards the old camp outright, including any commits
@@ -106,11 +106,11 @@ internal subagent - it never touches vexillum's camp/herdr machinery,
 never creates an isolated git worktree, never opens a herdr pane, and the
 general can't see or attach to it. It is not a vexillum soldier, even
 though the word is similar. If you dispatch a "soldier" with your Agent
-tool, you have not done what was asked - use `vexillum dispatch` instead,
+tool, you have not done what was asked - use `vx dispatch` instead,
 via your Bash tool:
 
 ```
-vexillum dispatch "<prompt>" [--kind mission|scout] [--model <model>] [--effort <level>]
+vx dispatch "<prompt>" [--kind mission|scout] [--model <model>] [--effort <level>]
 ```
 
 Kind defaults to mission. Use scout for investigation, diagnosis, or
@@ -202,7 +202,7 @@ general and ask what they want done. Once you've reported a scout's
 findings, just release its camp (below) - no landing step.
 
 A mission's work lands with a fast-forward merge into this project's base
-branch, done by you with `vexillum land <task-id>`, not by running raw
+branch, done by you with `vx land <task-id>`, not by running raw
 `git merge` on your own judgment.
 
 Default posture (unless the general has told you otherwise for this
@@ -211,7 +211,7 @@ the general what it did and ask if you should land it - don't merge
 unreviewed work on your own. On approval:
 
 ```
-vexillum land <task-id>
+vx land <task-id>
 ```
 
 This refuses and leaves everything untouched if this project's own
@@ -225,13 +225,13 @@ other mission dispatched from that same starting point stops being a
 clean fast-forward - not because anything went wrong. If the general
 wants it landed too, ask the soldier itself (re-prompt its still-open
 pane, don't dispatch a fresh one) to rebase its branch onto the updated
-base, then retry `vexillum land`. It has the full context of its own
+base, then retry `vx land`. It has the full context of its own
 change; you or vexillum guessing at a rebase from outside does not.
 
 If the pane already closed, no fresh soldier can rebase an old branch it
 never touched - tell the general instead of attempting it yourself.
 
-A dirty checkout here is often just `vexillum init`'s own scaffold
+A dirty checkout here is often just `vx init`'s own scaffold
 (`.claude/rules/vexillum.md`, `.vexillum/`) never having been committed -
 init writes those files but never commits them itself. Don't let that
 surprise you mid-land: if you notice this project's checkout has
@@ -245,9 +245,9 @@ missions - but that's their call, not your default.
 
 ## Shipping through vexillum's own tribunal pipeline (alternative to landing)
 
-`vexillum land` merges locally, no PR, no review pipeline - the right
+`vx land` merges locally, no PR, no review pipeline - the right
 default for most missions in this project. If the general instead wants
-a real, validated GitHub PR for a finished mission, offer `vexillum ship <task-id>`
+a real, validated GitHub PR for a finished mission, offer `vx ship <task-id>`
 instead. It runs vexillum's own tribunal pipeline (lint, tests, an
 adversarial review of the diff by a fresh session that reads the diff
 itself, a docs check) against the mission's
@@ -257,23 +257,23 @@ that a mission is "ready to ship" the way you might decide it's ready to
 land; ask first, same as landing, but treat this one as more
 consequential: it produces a real PR outside the machine.
 
-Requires the `gh` binary installed (`vexillum doctor` reports whether it
-is) - `vexillum ship` refuses up front and tells the general so if it
+Requires the `gh` binary installed (`vx doctor` reports whether it
+is) - `vx ship` refuses up front and tells the general so if it
 isn't. There's no separate setup step for you or the general to remember
 otherwise: the tribunal pipeline runs entirely inside vexillum, with no
 external tool to install or configure first. If a tribunal step fails,
-`vexillum ship` reports which one and why, and nothing is pushed. A review
+`vx ship` reports which one and why, and nothing is pushed. A review
 that blocks prints its findings: any error or warning blocks (including
 ask-user ones, which need the general's decision - bring them to the
 general, don't decide for them), info findings never block and end up in
-the PR body. Plain `vexillum ship` only rejects. `vexillum ship <task-id> --fix`
+the PR body. Plain `vx ship` only rejects. `vx ship <task-id> --fix`
 (optionally `--max-rounds <n>`) is opt-in: it sends the auto-fix findings
 to a fixer in the camp and reviews again, never touching ask-user ones -
 use it only if the general asks for it. Once
-every step passes and the PR opens, `vexillum ship` itself reports the
+every step passes and the PR opens, `vx ship` itself reports the
 PR's URL - there's no separate pipeline to track afterward the way there
 would be with an external tool, since it already ran to completion before
-`vexillum ship` returned. You still don't release the camp afterward the
+`vx ship` returned. You still don't release the camp afterward the
 way you would after landing: the branch is still in flight until the
 general merges the real PR, not something vexillum can call "landed" on
 its own.
@@ -286,7 +286,7 @@ right away, without stopping to ask the general first - unlike landing,
 this isn't a judgment call:
 
 ```
-vexillum release <task-id>
+vx release <task-id>
 ```
 
 This refuses (leaving the camp and pane untouched) if the worktree still

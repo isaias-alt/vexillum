@@ -3,26 +3,28 @@ package cli
 import (
 	"fmt"
 	"strings"
+
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 // Command describes one vexillum subcommand. The registry below is the
 // single source of truth for the command list: the general usage text
-// printed by `vexillum --help`, the docs generator (tools/docgen), and the
+// printed by `vx --help`, the docs generator (tools/docgen), and the
 // README command table all read from it. Each Usage value is the very same
 // const the command prints for its own -h, so the two can never diverge.
 type Command struct {
-	// Name is the word typed after "vexillum".
+	// Name is the word typed after "vx".
 	Name string
 	// Summary is the one-line description shown in the command list. It
 	// must be the opening words of Usage's first paragraph (a test
 	// enforces it), so the two cannot drift apart.
 	Summary string
-	// Usage is the full help text printed by `vexillum <Name> -h`.
+	// Usage is the full help text printed by `vx <Name> -h`.
 	Usage string
 }
 
-// commands is in display order: the order of `vexillum --help`. When adding
-// a command, add its case to the switch in cmd/vexillum/main.go too - a test
+// commands is in display order: the order of `vx --help`. When adding
+// a command, add its case to the switch in cmd/vx/main.go too - a test
 // there fails if the two drift.
 var commands = []Command{
 	{"init", "Prepare the current project to be orchestrated by vexillum", initUsage},
@@ -47,8 +49,8 @@ func Commands() []Command {
 	return out
 }
 
-// GeneralUsage is the text printed by `vexillum`, `vexillum -h` and
-// `vexillum --help`, with the command list rendered from the registry.
+// GeneralUsage is the text printed by `vx`, `vx -h` and
+// `vx --help`, with the command list rendered from the registry.
 func GeneralUsage() string {
 	width := 0
 	for _, c := range commands {
@@ -59,7 +61,7 @@ func GeneralUsage() string {
 
 	var b strings.Builder
 	b.WriteString("vexillum is a CLI orchestrator for code agents.\n\n")
-	b.WriteString("Usage:\n  vexillum <command> [flags]\n\n")
+	b.WriteString("Usage:\n  " + cmdname.Name + " <command> [flags]\n\n")
 	b.WriteString("Commands:\n")
 	for _, c := range commands {
 		fmt.Fprintf(&b, "  %-*s  %s\n", width, c.Name, c.Summary)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
@@ -18,7 +19,7 @@ import (
 const redispatchUsage = `Re-dispatch an interrupted task from its original prompt.
 
 Usage:
-  vexillum redispatch <task-id>
+  ` + cmdname.Name + ` redispatch <task-id>
 
 Only a task in status "interrupted" can be re-dispatched. This is
 re-dispatch, not resumption: the task's dirty camp (working tree and any
@@ -28,7 +29,7 @@ none of the dead soldier's partial work or agent session is recovered.
 Requires HERDR_WORKSPACE_ID - run this from inside a herdr-managed pane.
 `
 
-// Redispatch runs the "vexillum redispatch" command.
+// Redispatch runs the "vx redispatch" command.
 func Redispatch(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Print(redispatchUsage)
@@ -41,19 +42,19 @@ func Redispatch(args []string) int {
 
 	projectDir, vexillumHome, err := resolveDirs()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum: cannot determine home directory:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+": cannot determine home directory:", err)
 		return 1
 	}
 
 	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
 	if workspaceID == "" {
-		fmt.Fprintln(os.Stderr, "vexillum: HERDR_WORKSPACE_ID is not set - redispatch must run from inside a herdr-managed pane")
+		fmt.Fprintln(os.Stderr, cmdname.Name+": HERDR_WORKSPACE_ID is not set - redispatch must run from inside a herdr-managed pane")
 		return 1
 	}
 
@@ -64,35 +65,35 @@ func Redispatch(args []string) int {
 
 func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
 	if err := state.ValidateID(taskID); err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	projectRoot, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	task, err := state.Load(projectRoot, taskID)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: loading task %s: %v\n", taskID, err)
+		fmt.Fprintf(stderr, cmdname.Name+": loading task %s: %v\n", taskID, err)
 		return 1
 	}
 
 	if task.Status != state.StatusInterrupted {
-		fmt.Fprintf(stderr, "vexillum: task %s is %s, not interrupted - only an interrupted task can be re-dispatched (a done mission is landed with 'vexillum land' and released; a running one is left alone)\n", taskID, task.Status)
+		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not interrupted - only an interrupted task can be re-dispatched (a done mission is landed with '"+cmdname.Name+" land' and released; a running one is left alone)\n", taskID, task.Status)
 		return 1
 	}
 
 	if task.CampSlot != 0 {
 		c, err := camp.Resolve(projectDir, vexillumHome, task.CampSlot)
 		if err != nil {
-			fmt.Fprintf(stderr, "vexillum: resolving old camp: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": resolving old camp: %v\n", err)
 			return 1
 		}
 		if err := soldier.DiscardInHerdr(task, c, client, homeDir); err != nil {
-			fmt.Fprintf(stderr, "vexillum: discarding old camp: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": discarding old camp: %v\n", err)
 			return 1
 		}
 	}
@@ -104,12 +105,12 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 	// very likely come out identical to the dead soldier's. Any report
 	// the dead soldier left behind at that exact path must be cleared
 	// before relaunching - otherwise it could be mistaken for the new
-	// attempt's own report (e.g. by 'vexillum release' gating on mere
+	// attempt's own report (e.g. by 'vx release' gating on mere
 	// existence) even if the new soldier never gets around to writing
 	// one itself.
 	if task.HerdrAgentName != "" {
 		if err := report.Remove(projectRoot, task.HerdrAgentName, task.ID); err != nil {
-			fmt.Fprintf(stderr, "vexillum: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 			return 1
 		}
 		// Same reasoning as report.Remove above: a leftover pause file
@@ -117,7 +118,7 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 		// path the freshly re-dispatched soldier is about to be told to
 		// write to, and could be mistaken for its own declaration.
 		if err := pause.Remove(projectRoot, task.HerdrAgentName); err != nil {
-			fmt.Fprintf(stderr, "vexillum: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 			return 1
 		}
 	}
@@ -144,7 +145,7 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 	task.AgentNotFoundSince = time.Time{}
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
-		fmt.Fprintf(stderr, "vexillum: persisting reset task: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": persisting reset task: %v\n", err)
 		return 1
 	}
 

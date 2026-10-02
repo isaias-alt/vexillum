@@ -163,7 +163,7 @@ func initDispatchTestProject(t *testing.T) string {
 	return dir
 }
 
-// vexillum dispatch refuses on a project that was never `vexillum init`-ed.
+// vx dispatch refuses on a project that was never `vx init`-ed.
 func TestRunDispatch_RefusesUninitializedProject(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
@@ -174,8 +174,8 @@ func TestRunDispatch_RefusesUninitializedProject(t *testing.T) {
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an uninitialized project")
 	}
-	if !strings.Contains(out.String(), "vexillum init") {
-		t.Errorf("expected the error to suggest running vexillum init, got: %s", out.String())
+	if !strings.Contains(out.String(), "vx init") {
+		t.Errorf("expected the error to suggest running vx init, got: %s", out.String())
 	}
 }
 
@@ -453,9 +453,9 @@ func landTestMission(t *testing.T, project, home string) (state.Task, camp.Camp)
 
 // A successful land fast-forwards the base branch AND automatically
 // releases the mission's camp - the operator no longer chains a manual
-// 'vexillum release' afterward. Verified two ways: the herdr pane got
+// 'vx release' afterward. Verified two ways: the herdr pane got
 // closed (soldier.ReleaseInHerdr's own side effect), and the pool slot
-// is no longer leased so a second 'vexillum release' on the same task has
+// is no longer leased so a second 'vx release' on the same task has
 // nothing left to do.
 func TestRunLand_AutoReleasesCamp(t *testing.T) {
 	project := initDispatchTestProject(t)
@@ -479,7 +479,7 @@ func TestRunLand_AutoReleasesCamp(t *testing.T) {
 	out.Reset()
 	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
 	if code == 0 {
-		t.Fatalf("expected a follow-up 'vexillum release' to fail, camp was already released; got exit 0: %s", out.String())
+		t.Fatalf("expected a follow-up 'vx release' to fail, camp was already released; got exit 0: %s", out.String())
 	}
 	if !strings.Contains(out.String(), "not leased") {
 		t.Errorf("expected the refusal to say the slot is no longer leased, got: %s", out.String())
@@ -528,7 +528,7 @@ func TestRunLand_RefusalLeavesCampUntouched(t *testing.T) {
 // uncommitted junk in its own camp worktree - camp.Land only checks the
 // PROJECT checkout is clean, not the camp's). land must report both
 // outcomes plainly - the merge is not undone, and the failure is not
-// swallowed - and leave the camp for a manual 'vexillum release' to
+// swallowed - and leave the camp for a manual 'vx release' to
 // retry.
 func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
 	project := initDispatchTestProject(t)
@@ -551,8 +551,8 @@ func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
 	if !strings.Contains(out.String(), "automatic release failed") {
 		t.Errorf("expected the release failure to be reported plainly, got: %s", out.String())
 	}
-	if !strings.Contains(out.String(), "vexillum release "+task.ID) {
-		t.Errorf("expected land to point the operator at a manual 'vexillum release %s', got: %s", task.ID, out.String())
+	if !strings.Contains(out.String(), "vx release "+task.ID) {
+		t.Errorf("expected land to point the operator at a manual 'vx release %s', got: %s", task.ID, out.String())
 	}
 	if client.tabClosed {
 		t.Error("a failed release must never close the herdr pane")
@@ -734,7 +734,7 @@ func TestRunRelease_MissionNeverRequiresReport(t *testing.T) {
 	}
 }
 
-// vexillum release <task-id> --force parses regardless of flag/arg order.
+// vx release <task-id> --force parses regardless of flag/arg order.
 func TestParseReleaseArgs(t *testing.T) {
 	cases := []struct {
 		name       string

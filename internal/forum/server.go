@@ -23,7 +23,7 @@ type ServerOptions struct {
 	// Addr is the host:port the server listens on, used to build session
 	// URLs.
 	Addr string
-	// Shutdown asks the process to stop (the `vexillum forum stop` route).
+	// Shutdown asks the process to stop (the `vx forum stop` route).
 	Shutdown func()
 	// EventsHeartbeat is how often an idle event stream sends a comment so a
 	// dead connection is noticed; zero means 15 seconds. Tests shrink it.
@@ -34,7 +34,7 @@ type ServerOptions struct {
 // the user, keyed by the SHA-256 of the artifact's absolute path. Two
 // audiences use it with two different credentials:
 //
-//   - the agent, through `vexillum forum` subcommands -> /api/agent/*,
+//   - the agent, through `vx forum` subcommands -> /api/agent/*,
 //     authenticated by the agent token;
 //   - the reviewer's browser -> /session/{key}, /a/{key}/..., /api/s/{key}/...,
 //     authenticated by a per-session token plus a same-origin check (see

@@ -1,9 +1,9 @@
 // Package doctorcheck implements the individual environment checks
-// "vexillum doctor" reports on - required and optional binaries, herdr's
+// "vx doctor" reports on - required and optional binaries, herdr's
 // version, the project's own scaffold - plus the catalog of AXIs and
 // first-party skills doctor lists informationally. Each check is a pure
 // function returning a Result (or, for the AXI catalog, a status line);
-// "vexillum doctor" itself only composes and prints them, and never
+// "vx doctor" itself only composes and prints them, and never
 // affects the exit code beyond what Result.Required/OK say.
 package doctorcheck
 
@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 )
@@ -60,13 +61,13 @@ var KnownAXIs = []AXI{
 	{Name: "chrome-devtools-tool", Repo: "upstream", Global: true},
 	// muster isn't a third-party AXI - it ships in this repo
 	// (skills/muster/SKILL.md) and reads this project's own
-	// `vexillum status --json`, so it's project-local, not
+	// `vx status --json`, so it's project-local, not
 	// global. Listed here anyway because the install/detection mechanism
 	// ("npx skills add", .claude/skills/<name>/SKILL.md) is identical and
 	// this is where the general already looks for on-demand skill status.
 	{Name: "muster", Repo: "isaias-alt/vexillum", Global: false},
 	// forum is first-party too (skills/forum/SKILL.md): the agent-facing
-	// guide to "vexillum forum", the in-binary review surface.
+	// guide to "vx forum", the in-binary review surface.
 	{Name: "forum", Repo: "isaias-alt/vexillum", Global: false},
 }
 
@@ -83,15 +84,15 @@ func Binary(label, binaryName string, required bool) Result {
 }
 
 // GitHubCLI reports whether the "gh" binary is installed - the official
-// GitHub CLI, called directly by "vexillum ship" (internal/ghpr.Create)
+// GitHub CLI, called directly by "vx ship" (internal/ghpr.Create)
 // to open a mission's pull request once its tribunal pipeline passes,
-// and by "vexillum land" (internal/ghpr.MergeShipped) to later merge it -
+// and by "vx land" (internal/ghpr.MergeShipped) to later merge it -
 // not the separate "gh-tool" agent-facing AXI. Optional and purely
 // informational: a project that never ships never needs it.
 func GitHubCLI() Result {
 	const name = "GitHub CLI (gh)"
 	if _, err := exec.LookPath("gh"); err != nil {
-		return Result{Name: name, Detail: "not found in PATH (optional - only needed for 'vexillum ship'/'vexillum land' on a shipped mission)"}
+		return Result{Name: name, Detail: "not found in PATH (optional - only needed for '" + cmdname.Name + " ship'/'" + cmdname.Name + " land' on a shipped mission)"}
 	}
 	return Result{Name: name, OK: true}
 }
@@ -119,6 +120,71 @@ func HerdrVersion() Result {
 	return Result{Name: name, OK: true, Detail: version}
 }
 
+// VXShadow checks that typing the command name runs the executable that
+// is running right now. A different "vx" earlier in PATH (an unrelated
+// tool that happens to share the name) would silently answer instead -
+// including from the sentinel Stop hook, which is registered as a bare
+// "vx sentinel await" - so this warns and names the one that wins.
+// It only ever warns, never fails: not finding any vx on PATH (the binary
+// was run by its full path) is not a conflict.
+func VXShadow() Result {
+	exe, err := os.Executable()
+	if err != nil {
+		return Result{Name: vxShadowName, Warn: true, Detail: "could not determine the running executable: " + err.Error()}
+	}
+	return vxShadow(exe, os.Getenv("PATH"))
+}
+
+const vxShadowName = "another " + cmdname.Name + " earlier in PATH"
+
+// vxShadow is VXShadow with the running executable and PATH injected, so
+// tests control both.
+func vxShadow(exe, pathEnv string) Result {
+	self := realPath(exe)
+
+	first := firstOnPath(cmdname.Name, pathEnv)
+	if first == "" {
+		return Result{Name: vxShadowName, OK: true, Detail: "no, " + cmdname.Name + " is not on PATH (running " + self + ")"}
+	}
+	if realPath(first) == self {
+		return Result{Name: vxShadowName, OK: true, Detail: "no, " + cmdname.Name + " on PATH is " + first}
+	}
+	return Result{
+		Name: vxShadowName,
+		Warn: true,
+		Detail: fmt.Sprintf("%s comes first in PATH, so running '%s' does not run this one (%s) - put this one's directory first, or remove the other",
+			first, cmdname.Name, self),
+	}
+}
+
+// firstOnPath returns the first executable file called name in pathEnv's
+// directories, in order, the way a shell resolves a bare command, or ""
+// if there is none. Empty and relative entries are skipped, as
+// exec.LookPath refuses them.
+func firstOnPath(name, pathEnv string) string {
+	for _, dir := range filepath.SplitList(pathEnv) {
+		if dir == "" || !filepath.IsAbs(dir) {
+			continue
+		}
+		candidate := filepath.Join(dir, name)
+		info, err := os.Stat(candidate)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			continue
+		}
+		return candidate
+	}
+	return ""
+}
+
+// realPath resolves symlinks (a brew-linked vx points into its Cellar),
+// falling back to the cleaned input if that fails.
+func realPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
+}
+
 // VexillumHome checks that path (~/.vexillum/) exists, is a directory,
 // and is writable.
 func VexillumHome(path string) Result {
@@ -126,7 +192,7 @@ func VexillumHome(path string) Result {
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return Result{Name: name, OK: false, Detail: "does not exist, run 'vexillum init'", Required: true}
+		return Result{Name: name, OK: false, Detail: "does not exist, run '" + cmdname.Name + " init'", Required: true}
 	}
 	if !info.IsDir() {
 		return Result{Name: name, OK: false, Detail: "exists but is not a directory", Required: true}
@@ -138,14 +204,14 @@ func VexillumHome(path string) Result {
 }
 
 // ProjectInitialized checks that projectDir has been scaffolded by
-// 'vexillum init'.
+// 'vx init'.
 func ProjectInitialized(projectDir string) Result {
 	const name = "project initialized"
 
 	if scaffold.ProjectInitialized(projectDir) {
 		return Result{Name: name, OK: true, Required: true}
 	}
-	return Result{Name: name, OK: false, Detail: "run 'vexillum init'", Required: true}
+	return Result{Name: name, OK: false, Detail: "run '" + cmdname.Name + " init'", Required: true}
 }
 
 // GitRepo checks that projectDir is a git repository.

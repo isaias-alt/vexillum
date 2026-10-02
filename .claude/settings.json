@@ -5,7 +5,7 @@
         "hooks": [
           {
             "asyncRewake": true,
-            "command": "vexillum sentinel await",
+            "command": "vx sentinel await",
             "timeout": 3600,
             "type": "command"
           }

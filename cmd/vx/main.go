@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/isaias-alt/vexillum/internal/cli"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".
@@ -26,7 +27,7 @@ func run(args []string) int {
 		fmt.Print(cli.GeneralUsage())
 		return 0
 	case "-v", "--version":
-		fmt.Printf("vexillum %s\n", version)
+		fmt.Printf(cmdname.Name+" %s\n", version)
 		return 0
 	case "init":
 		return cli.Init(args[1:])
@@ -55,8 +56,8 @@ func run(args []string) int {
 	case "banner":
 		return cli.Banner(args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "vexillum: unknown command %q\n", args[0])
-		fmt.Fprintln(os.Stderr, "Run 'vexillum --help' for a list of commands.")
+		fmt.Fprintf(os.Stderr, cmdname.Name+": unknown command %q\n", args[0])
+		fmt.Fprintln(os.Stderr, "Run '"+cmdname.Name+" --help' for a list of commands.")
 		return 1
 	}
 }

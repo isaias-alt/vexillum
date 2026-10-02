@@ -1,7 +1,7 @@
 // Package ghpr handles a shipped mission's real GitHub pull request end
-// to end via the "gh" CLI: opening it (Create, once "vexillum ship" has
+// to end via the "gh" CLI: opening it (Create, once "vx ship" has
 // pushed a mission's branch through internal/tribunal's own validation
-// pipeline) and later merging it (MergeShipped, "vexillum land" on a
+// pipeline) and later merging it (MergeShipped, "vx land" on a
 // shipped task) - the PR, not the project's own camp, is the source of
 // truth once a mission has shipped, so land verifies live, right before
 // merging, that the pull request is open, not a draft, mergeable, and

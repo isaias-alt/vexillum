@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
@@ -44,7 +45,7 @@ func resolveDirs() (projectDir, vexillumHome string, err error) {
 // second mission without cd-ing back. That created an entirely separate
 // camp pool keyed off the camp's own path hash - invisible to every
 // future command run correctly from the real project root, and a
-// correctly-run 'vexillum land'/'release' for that slot number would
+// correctly-run 'vx land'/'release' for that slot number would
 // have resolved the WRONG camp in the real project's own pool.
 func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
 	absProject, err := filepath.Abs(projectDir)
@@ -64,14 +65,14 @@ func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
 	return nil
 }
 
-// ensureSentinelRunning best-effort auto-starts "vexillum sentinel"
+// ensureSentinelRunning best-effort auto-starts "vx sentinel"
 // detached in the background if one isn't already watching vexillumHome.
 // Dispatch (and redispatch) return after only a short quick-settle probe
 // (see soldier.RunInHerdr) - for anything but a trivial prompt, the
 // sentinel is what eventually records the soldier's real outcome, so a
 // dispatch with no sentinel running would otherwise strand that task
 // Running forever. A failure here is reported but never fails dispatch
-// itself: the soldier is already started regardless: 'vexillum sentinel'
+// itself: the soldier is already started regardless: 'vx sentinel'
 // remains available to start by hand if this doesn't work.
 func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 	if sentinel.IsRunning(vexillumHome) {
@@ -80,14 +81,14 @@ func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 
 	exe, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: warning: could not auto-start the sentinel: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": warning: could not auto-start the sentinel: %v\n", err)
 		return
 	}
 
 	logPath := filepath.Join(vexillumHome, "sentinel.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: warning: could not auto-start the sentinel: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": warning: could not auto-start the sentinel: %v\n", err)
 		return
 	}
 	defer logFile.Close()
@@ -101,10 +102,10 @@ func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
 	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(stderr, "vexillum: warning: could not auto-start the sentinel: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": warning: could not auto-start the sentinel: %v\n", err)
 		return
 	}
-	fmt.Fprintf(stderr, "vexillum: auto-started sentinel (pid %d), logging to %s\n", cmd.Process.Pid, logPath)
+	fmt.Fprintf(stderr, cmdname.Name+": auto-started sentinel (pid %d), logging to %s\n", cmd.Process.Pid, logPath)
 }
 
 // acquireAndRunInHerdr acquires a camp for task and runs it in a real
@@ -120,7 +121,7 @@ func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 // then fails, RunInHerdr returns before saving anything of its own -
 // without this earlier save, that would leave a pool slot permanently
 // leased to a task ID no task file on disk ever references (unrecoverable,
-// since both 'vexillum release' and 'vexillum redispatch' require
+// since both 'vx release' and 'vx redispatch' require
 // state.Load - and, to resolve the right camp, a populated CampSlot - to
 // succeed first). Saving the camp fields here, before RunInHerdr is even
 // called, means a CreateTab failure still leaves a loadable task that
@@ -134,13 +135,13 @@ func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task state.Task, client herdr.Client, stdout, stderr io.Writer) int {
 	projectRoot, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: resolving project root: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": resolving project root: %v\n", err)
 		return 1
 	}
 
 	c, err := camp.Acquire(projectDir, vexillumHome, task.ID)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: acquiring camp: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": acquiring camp: %v\n", err)
 		return 1
 	}
 	fmt.Fprintf(stdout, "task_id=%s kind=%s camp_slot=%d camp_branch=%s\n", task.ID, task.Kind, c.Slot, c.Branch)
@@ -157,9 +158,9 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 		// The worktree is still fresh (no commits, clean), so Release's
 		// landed-check passes trivially - give the slot back rather than
 		// stranding it.
-		fmt.Fprintf(stderr, "vexillum: persisting acquired camp: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": persisting acquired camp: %v\n", err)
 		if releaseErr := camp.Release(c, task.ID); releaseErr != nil {
-			fmt.Fprintf(stderr, "vexillum: releasing camp slot %d after failed save: %v\n", c.Slot, releaseErr)
+			fmt.Fprintf(stderr, cmdname.Name+": releasing camp slot %d after failed save: %v\n", c.Slot, releaseErr)
 		}
 		return 1
 	}
@@ -194,11 +195,11 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 			result.Output = runErr.Error()
 			result.UpdatedAt = time.Now().UTC()
 			if saveErr := state.Save(projectRoot, result); saveErr != nil {
-				fmt.Fprintf(stderr, "vexillum: persisting failed state (after: %v): %v\n", runErr, saveErr)
+				fmt.Fprintf(stderr, cmdname.Name+": persisting failed state (after: %v): %v\n", runErr, saveErr)
 				return 1
 			}
 		}
-		fmt.Fprintf(stderr, "vexillum: %v\n", runErr)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", runErr)
 		return 1
 	}
 	return 0

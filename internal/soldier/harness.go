@@ -138,7 +138,7 @@ func (ClaudeHarness) ModelEffortArgs(task state.Task) []string {
 // where a soldier's commits can land, not what its process can read,
 // write, or exfiltrate elsewhere on the machine (credentials, SSH keys,
 // a sibling project's .env, etc.). The real safety control is the
-// landing approval step (camp.Land / vexillum land): nothing a soldier
+// landing approval step (camp.Land / vx land): nothing a soldier
 // does reaches the project's real history until a human explicitly
 // approves it. Never dispatch a soldier against a prompt, repository, or
 // machine where reading sensitive host state would be a problem.

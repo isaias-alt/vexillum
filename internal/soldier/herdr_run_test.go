@@ -282,7 +282,7 @@ func TestRunInHerdr_ScoutPromptIncludesReportInstructions(t *testing.T) {
 		t.Errorf("expected the report instructions to be appended after the original prompt, got: %s", client.promptCalls[0])
 	}
 
-	// task.Prompt itself is never mutated - 'vexillum redispatch' reuses
+	// task.Prompt itself is never mutated - 'vx redispatch' reuses
 	// it verbatim, and must not accumulate a copy of the suffix on every
 	// re-dispatch.
 	persisted, err := state.Load(testProjectRoot(t, home), task.ID)

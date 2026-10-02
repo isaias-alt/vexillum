@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 // Client talks to the running forum server on behalf of the agent-facing
@@ -97,7 +99,7 @@ func (c *Client) health(ctx context.Context) error {
 		App string `json:"app"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || body.App != "vexillum-forum" {
-		return errors.New("not a vexillum forum server")
+		return errors.New("not a " + cmdname.Name + " forum server")
 	}
 	return nil
 }

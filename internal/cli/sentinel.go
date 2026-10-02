@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
@@ -18,17 +19,17 @@ import (
 const sentinelUsage = `Watch dispatched soldiers and record status changes.
 
 Usage:
-  vexillum sentinel         Poll forever (foreground; run it backgrounded)
-  vexillum sentinel drain   Print and acknowledge pending wakes right now
-  vexillum sentinel await   Block until a wake arrives, or time out (for the
-                             async Stop hook - see 'vexillum init')
+  ` + cmdname.Name + ` sentinel         Poll forever (foreground; run it backgrounded)
+  ` + cmdname.Name + ` sentinel drain   Print and acknowledge pending wakes right now
+  ` + cmdname.Name + ` sentinel await   Block until a wake arrives, or time out (for the
+                             async Stop hook - see '` + cmdname.Name + ` init')
 
 The sentinel polls every tracked "running" task's live herdr status,
 across every project it's ever seen (one sentinel process per machine -
 see internal/sentinel.Tick). When one settles (done or blocked), it
 persists the change and records a durable wake, scoped to that task's own
 project. "drain"/"await" resolve which project to act on from the
-current directory (git toplevel, namespaced the same way "vexillum
+current directory (git toplevel, namespaced the same way "vx
 dispatch" namespaces a project's camps) - not a repo, or a toplevel
 that's itself a vexillum-managed camp, means nothing to drain here, so
 both are silent no-ops rather than an error.
@@ -56,7 +57,7 @@ const (
 	sentinelAwaitMaxWait = 55 * time.Minute
 )
 
-// sentinelMode classifies args into which action "vexillum sentinel" should
+// sentinelMode classifies args into which action "vx sentinel" should
 // take. Any args[0] other than "drain"/"await"/"-h"/"--help" is an error -
 // without this, an unrecognized subcommand (a typo, a guess like "status")
 // used to fall through silently to starting the infinite polling loop.
@@ -76,11 +77,11 @@ func sentinelMode(args []string) (mode string, err error) {
 	}
 }
 
-// Sentinel runs the "vexillum sentinel" command.
+// Sentinel runs the "vx sentinel" command.
 func Sentinel(args []string) int {
 	mode, err := sentinelMode(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		fmt.Fprint(os.Stderr, sentinelUsage)
 		return 1
 	}
@@ -95,13 +96,13 @@ func Sentinel(args []string) int {
 
 	_, vexillumHome, err := resolveDirs()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	release, err := sentinel.AcquireLock(vexillumHome)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 	defer release()
@@ -121,20 +122,20 @@ func Sentinel(args []string) int {
 func runSentinelDrainOrAwait(mode string) int {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum: cannot determine home directory:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+": cannot determine home directory:", err)
 		return 1
 	}
 	vexillumHome := filepath.Join(home, ".vexillum")
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	projectRoot, err := resolveDrainTarget(cwd, vexillumHome)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -205,7 +206,7 @@ func gitToplevel(dir string) (string, error) {
 func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 	wakes, err := sentinel.Drain(projectRoot)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -216,7 +217,7 @@ func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 
 	out, err := json.Marshal(map[string]string{"decision": "block", "reason": wakeReason(wakes)})
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	fmt.Fprintln(stdout, string(out))
@@ -226,7 +227,7 @@ func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 // runSentinelAwaitGuarded is the actual entry point the async Stop hook
 // reaches. It only makes sense for a genuine vexillum-managed turn - the
 // commander's own interactive session, or a dispatched soldier's - both
-// of which always run inside a herdr-managed pane (vexillum dispatch and
+// of which always run inside a herdr-managed pane (vx dispatch and
 // redispatch already require the same HERDR_WORKSPACE_ID from their
 // caller; see cli/dispatch.go). workspaceID is that same env var, read
 // by the caller.
@@ -236,7 +237,7 @@ func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 // then tracks like any other file - so it travels into every checkout
 // of the repo, including a mission's own camp. A headless Claude Code
 // turn run there outside a herdr pane - internal/tribunal's review
-// step, which shells out to "claude -p ..." directly from "vexillum
+// step, which shells out to "claude -p ..." directly from "vx
 // ship", is the case that surfaced this - inherits the hook too, with no
 // HERDR_WORKSPACE_ID in its environment. Without this guard, that turn
 // would sit blocked in runSentinelAwait for up to maxWait: the sentinel

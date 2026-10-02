@@ -8,14 +8,15 @@ import (
 	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/banner"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 const bannerUsage = `Publish an HTML artifact to a public URL, or update one already published.
 
 Usage:
-  vexillum banner <file.html> [--private | --password <pw>]
-  vexillum banner <file.html> --site <id> --update-key <key> [--private | --password <pw>]
-  vexillum banner --unpublish --site <id> --update-key <key>
+  ` + cmdname.Name + ` banner <file.html> [--private | --password <pw>]
+  ` + cmdname.Name + ` banner <file.html> --site <id> --update-key <key> [--private | --password <pw>]
+  ` + cmdname.Name + ` banner --unpublish --site <id> --update-key <key>
 
 The first form publishes a brand-new page: local assets (images, CSS, JS
 in the same directory tree as <file.html>) are inlined into the HTML as
@@ -81,7 +82,7 @@ doesn't offer a flag that would misreport a page as public while it
 stays gated.
 `
 
-// Banner runs the "vexillum banner" command.
+// Banner runs the "vx banner" command.
 func Banner(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Print(bannerUsage)
@@ -90,7 +91,7 @@ func Banner(args []string) int {
 
 	opts, err := parseBannerArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		fmt.Fprint(os.Stderr, bannerUsage)
 		return 1
 	}
@@ -231,14 +232,14 @@ func runBanner(opts bannerArgs, client *banner.Client, stdout, stderr io.Writer)
 func runBannerPublish(opts bannerArgs, client *banner.Client, stdout, stderr io.Writer) int {
 	html, warnings, err := banner.InlineLocalAssets(opts.file)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
 	}
 	printWarnings(stderr, withSelfPaintWarning(html, warnings))
 
 	password, shown, err := resolveBannerPassword(opts)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
 	}
 
@@ -276,20 +277,20 @@ func runBannerPublish(opts bannerArgs, client *banner.Client, stdout, stderr io.
 func runBannerRepublish(opts bannerArgs, client *banner.Client, stdout, stderr io.Writer) int {
 	html, warnings, err := banner.InlineLocalAssets(opts.file)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
 	}
 	printWarnings(stderr, withSelfPaintWarning(html, warnings))
 
 	password, shown, err := resolveBannerPassword(opts)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
 	}
 
 	site, err := client.Update(opts.site, opts.updateKey, html, password)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
 	}
 
@@ -318,13 +319,13 @@ func runBannerRepublish(opts bannerArgs, client *banner.Client, stdout, stderr i
 func runBannerUnpublish(opts bannerArgs, client *banner.Client, stdout, stderr io.Writer) int {
 	discardPassword, err := banner.GeneratePassword()
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
 	}
 
 	site, err := client.Update(opts.site, opts.updateKey, banner.UnpublishPlaceholderHTML, discardPassword)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
 	}
 
@@ -366,12 +367,12 @@ func withSelfPaintWarning(html string, warnings []string) []string {
 
 func printWarnings(stderr io.Writer, warnings []string) {
 	for _, w := range warnings {
-		fmt.Fprintf(stderr, "vexillum: %s\n", w)
+		fmt.Fprintf(stderr, cmdname.Name+": %s\n", w)
 	}
 }
 
 func reportBannerCreateError(stderr io.Writer, err error) {
-	fmt.Fprintf(stderr, "vexillum: %v\n", err)
+	fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 	var ambiguous *banner.AmbiguousCreateError
 	if !errors.As(err, &ambiguous) {
 		return

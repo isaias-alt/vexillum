@@ -297,7 +297,7 @@ prompts[2]:
       line two
 
       line four
-next_step: Apply this feedback, then run ` + "`vexillum forum poll /tmp/a.html --reply \"<what you did>\"`" + ` to answer in the browser and keep waiting for more.
+next_step: Apply this feedback, then run ` + "`vx forum poll /tmp/a.html --reply \"<what you did>\"`" + ` to answer in the browser and keep waiting for more.
 `
 	if got != want {
 		t.Errorf("FormatPoll mismatch.\n got:\n%s\nwant:\n%s", got, want)

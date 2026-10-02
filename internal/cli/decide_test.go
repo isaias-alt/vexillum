@@ -52,7 +52,7 @@ func TestDecide_BlockedDecisionSurvivesRestartAndIsAnswered(t *testing.T) {
 
 	// Simulate a restart: don't trust the in-memory task built above -
 	// reload strictly from disk, the way a freshly started vexillum
-	// process (or a fresh 'vexillum status') would.
+	// process (or a fresh 'vx status') would.
 	reloaded, err := state.Load(projectRoot, task.ID)
 	if err != nil {
 		t.Fatalf("state.Load after simulated restart: %v", err)

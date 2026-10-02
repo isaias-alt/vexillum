@@ -33,7 +33,7 @@ import (
 const SchemaVersion = 3
 
 // Kind distinguishes a mission (delivers code changes, landed locally via
-// vexillum land - v1 never opens a real PR) from a scout (delivers a
+// vx land - v1 never opens a real PR) from a scout (delivers a
 // report).
 type Kind string
 
@@ -60,7 +60,7 @@ const (
 	// any work it had already committed is still sitting in its camp.
 	StatusInterrupted Status = "interrupted"
 	// StatusShipped marks a mission pushed through vexillum's own
-	// tribunal pipeline (vexillum ship, internal/tribunal) and opened
+	// tribunal pipeline (vx ship, internal/tribunal) and opened
 	// as a real pull request. From here the PR is the source of truth,
 	// not this camp: land merges the real PR instead of fast-forwarding a
 	// local branch, and release can no longer rely on a plain ancestor
@@ -171,7 +171,7 @@ type Task struct {
 	// alongside Status, in the same Save call, so it's exactly as
 	// restart-proof as the rest of Task: read back from disk on a fresh
 	// state.Load, never reconstructed from a live herdr pane or re-parsed
-	// out of Output's free-text transcript. vexillum decide
+	// out of Output's free-text transcript. vx decide
 	// (internal/cli.Decide, internal/soldier.AnswerBlocked) fills
 	// Answer/AnsweredAt and flips Status back to Running. Nil until the
 	// task has gone Blocked at least once; a task that never blocks never
@@ -241,7 +241,7 @@ var idPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 // ValidateID reports an error if id does not match the fixed format
 // vexillum generates task IDs in. A task id that reaches this package
-// from outside vexillum's own state (a CLI argument such as `vexillum
+// from outside vexillum's own state (a CLI argument such as `vx
 // land <task-id>`) is used to build a filesystem path (see taskPath) -
 // every command that accepts a task id as external input must call
 // ValidateID on it before that id touches the filesystem in any way, so

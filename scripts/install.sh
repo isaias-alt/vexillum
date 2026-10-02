@@ -10,7 +10,8 @@ set -euo pipefail
 
 GITHUB_OWNER="isaias-alt"
 GITHUB_REPO="vexillum"
-BINARY_NAME="vexillum"
+PRODUCT_NAME="vexillum"   # brew formula and release archive name
+BINARY_NAME="vx"          # the executable that gets installed
 BREW_TAP="isaias-alt/tap"
 
 info()  { echo "[info]  $*"; }
@@ -40,8 +41,8 @@ detect_platform() {
 
 install_via_brew() {
     info "Homebrew found - installing via ${BREW_TAP}"
-    brew install "${BREW_TAP}/${BINARY_NAME}" || fatal "brew install failed"
-    ok "Installed ${BINARY_NAME} via Homebrew"
+    brew install "${BREW_TAP}/${PRODUCT_NAME}" || fatal "brew install failed"
+    ok "Installed ${PRODUCT_NAME} (${BINARY_NAME}) via Homebrew"
 }
 
 get_latest_version() {
@@ -58,7 +59,7 @@ install_via_binary() {
     get_latest_version
     ok "Latest version: ${LATEST_VERSION}"
 
-    local archive="${BINARY_NAME}_${VERSION_NUMBER}_${OS}_${ARCH}.tar.gz"
+    local archive="${PRODUCT_NAME}_${VERSION_NUMBER}_${OS}_${ARCH}.tar.gz"
     local base_url="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${LATEST_VERSION}"
 
     local tmpdir

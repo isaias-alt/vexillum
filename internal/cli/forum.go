@@ -15,16 +15,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/forum"
 )
 
 const forumUsage = `Open a local HTML artifact for visual review and collect the user's feedback.
 
 Usage:
-  vexillum forum <html-file> [--no-open] [--reopen] [--port <n>]
-  vexillum forum poll <html-file> [--reply <text> | --reply-file <path|->] [--timeout <duration>]
-  vexillum forum end <html-file>
-  vexillum forum stop
+  ` + cmdname.Name + ` forum <html-file> [--no-open] [--reopen] [--port <n>]
+  ` + cmdname.Name + ` forum poll <html-file> [--reply <text> | --reply-file <path|->] [--timeout <duration>]
+  ` + cmdname.Name + ` forum end <html-file>
+  ` + cmdname.Name + ` forum stop
 
 forum <html-file> opens (or resumes) the review session for that file and
 returns right away, printing the session URL and the next step; one local
@@ -67,7 +68,7 @@ func forumHome() (string, error) {
 // can run the server in-process instead of re-executing the test binary.
 var forumSpawn = spawnForumServer
 
-// Forum runs the "vexillum forum" command.
+// Forum runs the "vx forum" command.
 func Forum(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Print(forumUsage)
@@ -79,7 +80,7 @@ func Forum(args []string) int {
 	}
 	home, err := forumHome()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -174,22 +175,22 @@ func ensureForumServer(ctx context.Context, home string, port int) (*forum.Clien
 func runForumOpen(ctx context.Context, home string, args []string, stdout, stderr io.Writer) int {
 	a, err := parseForumOpenArgs(args)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	abs, err := absArtifact(a.file)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	client, err := ensureForumServer(ctx, home, a.port)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	res, err := client.Open(ctx, abs, a.reopen)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -207,7 +208,7 @@ func runForumOpen(ctx context.Context, home string, args []string, stdout, stder
 	// A browser already showing this session does not need a second tab.
 	if !a.noOpen && !res.BrowserConnected {
 		if openErr := openBrowser(res.URL); openErr != nil {
-			fmt.Fprintf(stderr, "vexillum: warning: could not open a browser automatically: %v\n", openErr)
+			fmt.Fprintf(stderr, cmdname.Name+": warning: could not open a browser automatically: %v\n", openErr)
 		}
 	}
 	return 0
@@ -264,12 +265,12 @@ func parseForumPollArgs(args []string) (forumPollArgs, error) {
 func runForumPoll(ctx context.Context, home string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	a, err := parseForumPollArgs(args)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	abs, err := filepath.Abs(a.file)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: resolving %s: %v\n", a.file, err)
+		fmt.Fprintf(stderr, cmdname.Name+": resolving %s: %v\n", a.file, err)
 		return 1
 	}
 
@@ -282,7 +283,7 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 			data, err = os.ReadFile(a.replyFile)
 		}
 		if err != nil {
-			fmt.Fprintf(stderr, "vexillum: reading reply: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": reading reply: %v\n", err)
 			return 1
 		}
 		reply = string(data)
@@ -290,7 +291,7 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 
 	client, err := ensureForumServer(ctx, home, 0)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -304,9 +305,9 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 			case errors.As(err, &ae) && ae.Code == "ended":
 				// The session ended: nothing to show a reply in, but the poll
 				// below still delivers any final feedback exactly once.
-				fmt.Fprintln(stderr, "vexillum: warning: reply not shown, the session already ended")
+				fmt.Fprintln(stderr, cmdname.Name+": warning: reply not shown, the session already ended")
 			default:
-				fmt.Fprintln(stderr, "vexillum: reply failed:", err)
+				fmt.Fprintln(stderr, cmdname.Name+": reply failed:", err)
 				return 1
 			}
 		}
@@ -332,13 +333,13 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 			if ae.Code == "no_session" {
 				fmt.Fprintln(stderr, noSessionMessage(abs))
 			} else {
-				fmt.Fprintln(stderr, "vexillum:", err)
+				fmt.Fprintln(stderr, cmdname.Name+":", err)
 			}
 			return 1
 		}
 		failures++
 		if failures > maxReconnects {
-			fmt.Fprintf(stderr, "vexillum: lost the forum server and could not restart it: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": lost the forum server and could not restart it: %v\n", err)
 			return 1
 		}
 		select {
@@ -347,29 +348,29 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 		case <-time.After(500 * time.Millisecond):
 		}
 		if client, err = ensureForumServer(ctx, home, 0); err != nil {
-			fmt.Fprintln(stderr, "vexillum:", err)
+			fmt.Fprintln(stderr, cmdname.Name+":", err)
 			return 1
 		}
 	}
 }
 
 func noSessionMessage(abs string) string {
-	return fmt.Sprintf("vexillum: no forum session for %s - run `vexillum forum %s` first", abs, abs)
+	return fmt.Sprintf(cmdname.Name+": no forum session for %s - run `"+cmdname.Name+" forum %s` first", abs, abs)
 }
 
 func runForumEnd(ctx context.Context, home string, args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
-		fmt.Fprintln(stderr, "vexillum: usage: vexillum forum end <html-file>")
+		fmt.Fprintln(stderr, cmdname.Name+": usage: "+cmdname.Name+" forum end <html-file>")
 		return 1
 	}
 	abs, err := filepath.Abs(args[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: resolving %s: %v\n", args[0], err)
+		fmt.Fprintf(stderr, cmdname.Name+": resolving %s: %v\n", args[0], err)
 		return 1
 	}
 	client, err := ensureForumServer(ctx, home, 0)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	if err := client.End(ctx, abs); err != nil {
@@ -378,11 +379,11 @@ func runForumEnd(ctx context.Context, home string, args []string, stdout, stderr
 			fmt.Fprintln(stderr, noSessionMessage(abs))
 			return 1
 		}
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	fmt.Fprintf(stdout, "session: %s\nstatus: ended\n", forum.SessionKey(abs))
-	fmt.Fprintf(stdout, "next_step: Session ended. Run `vexillum forum %s` to reopen it if the user wants further review.\n", abs)
+	fmt.Fprintf(stdout, "next_step: Session ended. Run `"+cmdname.Name+" forum %s` to reopen it if the user wants further review.\n", abs)
 	return 0
 }
 
@@ -393,18 +394,18 @@ func runForumStop(ctx context.Context, home string, stdout, stderr io.Writer) in
 			fmt.Fprintln(stdout, "no forum server is running")
 			return 0
 		}
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	if err := client.Stop(ctx); err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	fmt.Fprintln(stdout, "forum server stopping")
 	return 0
 }
 
-// runForumServe is the background server process ("vexillum forum serve",
+// runForumServe is the background server process ("vx forum serve",
 // started by spawnForumServer; not meant to be run by hand). It exits 0 when
 // another server already holds the lock - several clients racing to start
 // one is expected, and exactly one wins.
@@ -412,13 +413,13 @@ func runForumServe(ctx context.Context, home string, args []string, stderr io.Wr
 	port := 0
 	for i := 0; i < len(args); i++ {
 		if args[i] != "--port" || i+1 >= len(args) {
-			fmt.Fprintf(stderr, "vexillum: unexpected argument %q\n", args[i])
+			fmt.Fprintf(stderr, cmdname.Name+": unexpected argument %q\n", args[i])
 			return 1
 		}
 		i++
 		p, err := parsePort(args[i])
 		if err != nil {
-			fmt.Fprintln(stderr, "vexillum:", err)
+			fmt.Fprintln(stderr, cmdname.Name+":", err)
 			return 1
 		}
 		port = p
@@ -429,18 +430,18 @@ func runForumServe(ctx context.Context, home string, args []string, stderr io.Wr
 		return 0
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	return 0
 }
 
-// spawnForumServer starts "vexillum forum serve" detached, logging to the
+// spawnForumServer starts "vx forum serve" detached, logging to the
 // forum log, so it outlives this command and whatever shell launched it.
 func spawnForumServer(home string, port int) error {
 	exe, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("locating the vexillum binary: %w", err)
+		return fmt.Errorf("locating the "+cmdname.Name+" binary: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(forum.LogPath(home)), 0o755); err != nil {
 		return err

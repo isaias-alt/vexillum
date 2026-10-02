@@ -343,7 +343,7 @@ func TestLand_RefusesDirtyProjectCheckout(t *testing.T) {
 }
 
 // Capa 4 paso 3: N soldiers dispatched at once each call Acquire
-// concurrently (separate `vexillum dispatch` processes racing against the
+// concurrently (separate `vx dispatch` processes racing against the
 // same pool). Acquire's read-modify-write over pool.json (scan for an
 // idle slot, or compute len(pool.Slots)+1 for a new one, then save) has
 // no mutual exclusion between the read and the write - two concurrent

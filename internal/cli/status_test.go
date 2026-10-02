@@ -198,7 +198,7 @@ func TestStatus_PlainText_ListsTasks(t *testing.T) {
 
 // Without --json, a blocked task's open question is surfaced on its own
 // line - not just the word "blocked" - so it mirrors the durable decision
-// vexillum status --json already carries in the task's "decision" field.
+// vx status --json already carries in the task's "decision" field.
 func TestStatus_PlainText_ShowsBlockedQuestion(t *testing.T) {
 	projectDir, vexillumHome, projectRoot := statusProject(t)
 

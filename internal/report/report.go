@@ -1,7 +1,7 @@
 // Package report resolves where a scout soldier writes its final
 // deliverable: ~/.vexillum/projects/<key>/reports/<agent-name>-<task-id>.md
 // - the same namespaced-per-project root internal/project computes for
-// tasks/, wakes/ and camps/, so it survives 'vexillum release' the way a
+// tasks/, wakes/ and camps/, so it survives 'vx release' the way a
 // report living inside the soldier's own camp worktree wouldn't.
 //
 // The file is named after both the task's HerdrAgentName (internal/state.

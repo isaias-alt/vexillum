@@ -173,7 +173,7 @@ func TestEnsureServer_ConcurrentCallersShareOneServer(t *testing.T) {
 		go func() {
 			defer runs.Done()
 			// Losers get ErrServerRunning, exactly like a second
-			// `vexillum forum serve` would.
+			// `vx forum serve` would.
 			_ = forum.Run(ctx, forum.RunOptions{Home: home})
 		}()
 		return nil

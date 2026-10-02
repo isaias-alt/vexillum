@@ -26,7 +26,7 @@
   function rpc(op, payload) {
     return new Promise((resolve, reject) => {
       if (window.parent === window) {
-        reject(new Error("window.forum needs the forum chrome - open this artifact with `vexillum forum <file>`"));
+        reject(new Error("window.forum needs the forum chrome - open this artifact with `vx forum <file>`"));
         return;
       }
       const id = ++nextId;

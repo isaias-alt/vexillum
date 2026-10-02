@@ -136,7 +136,7 @@
         if (record && !record.ready) {
           setStatus(
             index,
-            "The whiteboard did not start: its frame never reported ready. Reload the page; if it persists, run `vexillum forum stop` and open the session again so the server restarts with the current build.",
+            "The whiteboard did not start: its frame never reported ready. Reload the page; if it persists, run `vx forum stop` and open the session again so the server restarts with the current build.",
             true,
           );
         }

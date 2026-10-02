@@ -19,7 +19,7 @@ const (
 )
 
 // Who ended a session. A session the user ended from the browser is not
-// reopened by a plain `vexillum forum <file>` - see Hub.Open.
+// reopened by a plain `vx forum <file>` - see Hub.Open.
 const (
 	EndedByUser  = "user"
 	EndedByAgent = "agent"

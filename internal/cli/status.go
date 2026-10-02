@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -16,7 +17,7 @@ const statusUsage = `Report the troop: every mission and scout in the current pr
 whatever state it's in. Read-only.
 
 Usage:
-  vexillum status [--json]
+  ` + cmdname.Name + ` status [--json]
 
 Without --json, prints one line per task (most recently updated first).
 
@@ -38,7 +39,7 @@ in the current session, GitHub PR enrichment) are left to that consumer,
 not decided here.
 
 A task in status "blocked" carries its open question in its "decision"
-field (question, options, asked_at, and - once 'vexillum decide' has run -
+field (question, options, asked_at, and - once '` + cmdname.Name + ` decide' has run -
 answer/answered_at) - not just the word "blocked". Without --json, a
 blocked task's question is also printed on its own indented line.
 `
@@ -55,7 +56,7 @@ type statusSnapshot struct {
 	Tasks         []state.Task `json:"tasks"`
 }
 
-// Status runs the "vexillum status" command.
+// Status runs the "vx status" command.
 func Status(args []string) int {
 	jsonOutput, help, err := parseStatusArgs(args)
 	if help {
@@ -63,14 +64,14 @@ func Status(args []string) int {
 		return 0
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		fmt.Fprint(os.Stderr, statusUsage)
 		return 1
 	}
 
 	projectDir, vexillumHome, err := resolveDirs()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -94,13 +95,13 @@ func parseStatusArgs(args []string) (jsonOutput, help bool, err error) {
 func runStatus(projectDir, vexillumHome string, jsonOutput bool, stdout, stderr io.Writer) int {
 	projectRoot, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "vexillum:", err)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	tasks, err := state.List(projectRoot)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: listing tasks: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": listing tasks: %v\n", err)
 		return 1
 	}
 	if tasks == nil {
@@ -120,7 +121,7 @@ func runStatus(projectDir, vexillumHome string, jsonOutput bool, stdout, stderr 
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(snapshot); err != nil {
-			fmt.Fprintf(stderr, "vexillum: encoding status: %v\n", err)
+			fmt.Fprintf(stderr, cmdname.Name+": encoding status: %v\n", err)
 			return 1
 		}
 		return 0

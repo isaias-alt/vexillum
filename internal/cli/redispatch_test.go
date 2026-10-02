@@ -279,7 +279,7 @@ func TestRunRedispatch_Success(t *testing.T) {
 }
 
 // Redispatching a task that carries a stale Decision from its previous,
-// now-superseded blocked life must clear it - otherwise 'vexillum status
+// now-superseded blocked life must clear it - otherwise 'vx status
 // --json' would keep reporting a moot question on a task that isn't
 // blocked anymore (and may already be finished by the time anyone looks).
 func TestRunRedispatch_ClearsStaleDecision(t *testing.T) {

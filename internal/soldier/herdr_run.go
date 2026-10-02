@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
@@ -141,7 +142,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		// where report.md is exclusive to worker tasks, never optional
 		// for a ship). The instruction is appended to what's actually
 		// submitted, not stored back onto task.Prompt: task.Prompt stays
-		// the general's original ask, since 'vexillum redispatch' reuses
+		// the general's original ask, since 'vx redispatch' reuses
 		// it verbatim and would otherwise accumulate a new copy of this
 		// suffix on every re-dispatch.
 		promptText += scoutReportInstructions(report.Path(projectRoot, task.HerdrAgentName, task.ID))
@@ -238,7 +239,7 @@ func blockedDecision(client herdr.Client, agentName, liveStatus, output string) 
 // yet), AnswerBlocked marks the task Interrupted itself rather than leaving
 // it stranded as Blocked forever: internal/sentinel never polls a Blocked
 // task, so nothing else would ever catch this. The caller should point the
-// general at 'vexillum redispatch' instead.
+// general at 'vx redispatch' instead.
 func AnswerBlocked(projectRoot string, task state.Task, answer string, client herdr.Client) (state.Task, error) {
 	if task.Decision != nil && task.Decision.Kind == state.DecisionKindModal {
 		if n, label, ok := resolveModalAnswer(task.Decision.Options, answer); ok && label != optionTypeSomething {
@@ -273,11 +274,11 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, status str
 			if task.Output != "" {
 				task.Output += "\n\n"
 			}
-			task.Output += "[vexillum] this soldier's herdr pane was already gone by the time its answer could be delivered - marked interrupted. Use 'vexillum redispatch' instead."
+			task.Output += "[vexillum] this soldier's herdr pane was already gone by the time its answer could be delivered - marked interrupted. Use '" + cmdname.Name + " redispatch' instead."
 			if saveErr := state.Save(projectRoot, task); saveErr != nil {
 				return task, fmt.Errorf("persisting interrupted task (after: %v): %w", settleErr, saveErr)
 			}
-			return task, fmt.Errorf("the soldier's herdr pane is gone (not something vexillum did) - marked interrupted, use 'vexillum redispatch' instead: %w", settleErr)
+			return task, fmt.Errorf("the soldier's herdr pane is gone (not something vexillum did) - marked interrupted, use '"+cmdname.Name+" redispatch' instead: %w", settleErr)
 		}
 		if !herdr.IsTimeout(settleErr) {
 			return task, fmt.Errorf("delivering answer to soldier: %w", settleErr)
@@ -372,7 +373,7 @@ func DiscardInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir s
 }
 
 // scoutReportInstructions tells a scout soldier where to write its final
-// report - the deliverable 'vexillum release' gates on for a scout (see
+// report - the deliverable 'vx release' gates on for a scout (see
 // internal/report, internal/cli.runRelease). reportPath is already
 // resolved from the soldier's own (possibly disambiguated) agent name, so
 // the soldier never has to compute or guess it.
@@ -380,7 +381,7 @@ func scoutReportInstructions(reportPath string) string {
 	return "\n\n---\n\nBefore you finish, write your final report as a single Markdown file at:\n\n  " +
 		reportPath +
 		"\n\nCreate any missing parent directories yourself. This report is your deliverable: " +
-		"'vexillum release' will refuse to release your camp without it."
+		"'" + cmdname.Name + " release' will refuse to release your camp without it."
 }
 
 // pauseInstructions tells a soldier (mission or scout) how to declare
@@ -548,7 +549,7 @@ func failHerdrTask(projectRoot string, task state.Task, cause error) (state.Task
 // which herdr surfaces as an "agent_not_ready" start failure rather than
 // treating the agent as ready for prompts. Since a camp is always a
 // worktree of a project the general already trusted enough to run
-// `vexillum init` on, startAgent recognizes that specific dialog and
+// `vx init` on, startAgent recognizes that specific dialog and
 // dismisses it - but refuses to guess at any other kind of startup block.
 //
 // A just-created pane can also briefly report "agent_pane_busy" before

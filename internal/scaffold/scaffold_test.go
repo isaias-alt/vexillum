@@ -3,7 +3,11 @@ package scaffold
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 func TestEnsureDir(t *testing.T) {
@@ -214,5 +218,19 @@ func TestUpgradeFile_ForceOverwritesLocalEdits(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(dir, "rule.md"))
 	if string(data) != "new content" {
 		t.Errorf("expected --force to overwrite local edits, got %q", string(data))
+	}
+}
+
+// The commander rules are embedded markdown, so they cannot read
+// cmdname.Name: this pins them to it. Every command example must use the
+// current name, and none may use the pre-rename "vexillum <command>" form
+// (the product name on its own, e.g. "vexillum's own tribunal", is fine).
+func TestCommanderRulesUseCurrentCommandName(t *testing.T) {
+	if !strings.Contains(VexillumCommanderRules, "`"+cmdname.Name+" dispatch") {
+		t.Errorf("expected the rules to invoke `%s dispatch`", cmdname.Name)
+	}
+	stale := regexp.MustCompile(`vexillum (init|upgrade|doctor|dispatch|redispatch|decide|status|land|ship|release|sentinel|forum|banner)\b`)
+	if m := stale.FindString(VexillumCommanderRules); m != "" {
+		t.Errorf("the rules still tell the commander to run %q; use %q", m, cmdname.Name)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/soldier"
@@ -15,7 +16,7 @@ import (
 const dispatchUsage = `Dispatch a soldier (mission or scout) into an isolated camp.
 
 Usage:
-  vexillum dispatch <prompt> [--kind mission|scout] [--model <model>] [--effort <level>]
+  ` + cmdname.Name + ` dispatch <prompt> [--kind mission|scout] [--model <model>] [--effort <level>]
 
 A mission changes code and delivers something to land; a scout only
 investigates and reports back (default: mission).
@@ -32,7 +33,7 @@ fresh git worktree isolated from this project's own working tree, with
 the invoking OS user (no container, chroot, or other sandbox) - the
 worktree only bounds where its commits land, not what it can read,
 write, or exfiltrate elsewhere on the machine. Nothing reaches the
-project's real history until 'vexillum land' is explicitly approved;
+project's real history until '` + cmdname.Name + ` land' is explicitly approved;
 never dispatch against a prompt, repository, or machine where reading
 sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID -
 run this from inside a herdr-managed pane.
@@ -41,10 +42,10 @@ Returns quickly: it only waits out a short quick-settle probe, not the
 soldier's whole task. A trivial prompt may finish within that window and
 report its result immediately; anything else is left running and
 auto-starts a sentinel (if one isn't already watching this project) to
-record its final status - see 'vexillum sentinel'.
+record its final status - see '` + cmdname.Name + ` sentinel'.
 `
 
-// Dispatch runs the "vexillum dispatch" command.
+// Dispatch runs the "vx dispatch" command.
 func Dispatch(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Print(dispatchUsage)
@@ -53,23 +54,23 @@ func Dispatch(args []string) int {
 
 	prompt, kind, model, effort, err := parseDispatchArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 	if err := soldier.ValidateModelEffort(model, effort); err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	projectDir, vexillumHome, err := resolveDirs()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vexillum:", err)
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
 	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
 	if workspaceID == "" {
-		fmt.Fprintln(os.Stderr, "vexillum: HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane")
+		fmt.Fprintln(os.Stderr, cmdname.Name+": HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane")
 		return 1
 	}
 
@@ -120,13 +121,13 @@ func parseDispatchArgs(args []string) (prompt string, kind state.Kind, model, ef
 
 func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind state.Kind, model, effort string, client herdr.Client, stdout, stderr io.Writer) int {
 	if !scaffold.ProjectInitialized(projectDir) {
-		fmt.Fprintln(stderr, "vexillum: project not initialized, run 'vexillum init' first")
+		fmt.Fprintln(stderr, cmdname.Name+": project not initialized, run '"+cmdname.Name+" init' first")
 		return 1
 	}
 
 	task, err := state.New(kind, prompt)
 	if err != nil {
-		fmt.Fprintf(stderr, "vexillum: creating task: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": creating task: %v\n", err)
 		return 1
 	}
 	task.Model = model

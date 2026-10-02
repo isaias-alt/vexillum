@@ -643,7 +643,7 @@ func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 // call - one settles normally, one has its agent confirmed gone
 // (interrupted), one is still genuinely running - none of that interferes
 // with any of the others. Matches a live test: three real parallel
-// `vexillum dispatch` missions, one pane killed on purpose, the other two
+// `vx dispatch` missions, one pane killed on purpose, the other two
 // landed clean while the killed one interrupted independently.
 func TestTick_OneFailingTaskDoesNotAffectItsSiblings(t *testing.T) {
 	home := t.TempDir()

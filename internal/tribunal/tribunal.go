@@ -1,5 +1,5 @@
 // Package tribunal is vexillum's own validation pipeline for a
-// finished mission's camp branch, run synchronously by "vexillum ship"
+// finished mission's camp branch, run synchronously by "vx ship"
 // right before it pushes and opens a real pull request - replacing the
 // former dependency on the third-party github.com/upstream
 // binary (a local git remote fronting a pipeline in its own isolated

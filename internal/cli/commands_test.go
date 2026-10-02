@@ -26,8 +26,8 @@ func TestCommandsRegistryEntriesAreComplete(t *testing.T) {
 		if strings.TrimSpace(c.Usage) == "" {
 			t.Errorf("%s: empty usage", c.Name)
 		}
-		if !strings.Contains(c.Usage, "vexillum "+c.Name) {
-			t.Errorf("%s: usage never mentions \"vexillum %s\"", c.Name, c.Name)
+		if !strings.Contains(c.Usage, "vx "+c.Name) {
+			t.Errorf("%s: usage never mentions \"vx %s\"", c.Name, c.Name)
 		}
 	}
 }

@@ -7,16 +7,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/doctorcheck"
 )
 
 const doctorUsage = `Report on the health of the vexillum environment. Read-only.
 
 Usage:
-  vexillum doctor
+  ` + cmdname.Name + ` doctor
 `
 
-// Doctor runs the "vexillum doctor" command.
+// Doctor runs the "vx doctor" command.
 func Doctor(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Print(doctorUsage)
@@ -25,13 +26,13 @@ func Doctor(args []string) int {
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vexillum: cannot determine current directory: %v\n", err)
+		fmt.Fprintf(os.Stderr, cmdname.Name+": cannot determine current directory: %v\n", err)
 		return 1
 	}
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vexillum: cannot determine home directory: %v\n", err)
+		fmt.Fprintf(os.Stderr, cmdname.Name+": cannot determine home directory: %v\n", err)
 		return 1
 	}
 
@@ -45,6 +46,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.HerdrVersion(),
 		doctorcheck.Binary("tmux", "tmux", false),
 		doctorcheck.GitHubCLI(),
+		doctorcheck.VXShadow(),
 		doctorcheck.VexillumHome(vexillumHome),
 		doctorcheck.ProjectInitialized(projectDir),
 		doctorcheck.GitRepo(projectDir),

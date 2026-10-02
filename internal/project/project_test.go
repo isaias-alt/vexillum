@@ -50,8 +50,8 @@ func TestRoot_NamespacesUnderProjectsDir(t *testing.T) {
 
 // C1-04: Root normalizes symlinks before hashing, so two paths to the
 // same directory - one direct, one through a symlink - resolve to the
-// identical project root. This is what keeps "vexillum dispatch"
-// (resolved from a plain cwd) and "vexillum sentinel drain" (resolved
+// identical project root. This is what keeps "vx dispatch"
+// (resolved from a plain cwd) and "vx sentinel drain" (resolved
 // from "git rev-parse --show-toplevel", which chases symlinks) agreeing
 // on the same project.
 func TestRoot_NormalizesSymlinks(t *testing.T) {

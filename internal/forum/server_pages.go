@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 func (s *Server) pageRoutes() {
@@ -54,7 +56,7 @@ func (s *Server) handleSessionPage(w http.ResponseWriter, r *http.Request) {
 	token, err := s.hub.Token(key)
 	if err != nil {
 		if errors.Is(err, ErrNoSession) {
-			http.Error(w, "No forum session here. Ask your agent to run `vexillum forum <file>` again.", http.StatusNotFound)
+			http.Error(w, "No forum session here. Ask your agent to run `"+cmdname.Name+" forum <file>` again.", http.StatusNotFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
