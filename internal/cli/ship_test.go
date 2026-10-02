@@ -752,3 +752,117 @@ func TestShipOptionsLoadBodyFile(t *testing.T) {
 		}
 	}
 }
+
+// reviewWithPRText is a clean review that also proposes the pull request text.
+func reviewWithPRText(title, description string) string {
+	return fmt.Sprintf(`{"findings": [], "reviewed_paths": ["change.txt"], "risk_level": "low", "risk_rationale": "tiny", "pr_title": %q, "pr_description": %q}`, title, description)
+}
+
+// The reviewer's title and description are the default: the title as is, the
+// description as the What section, with no commit-derived What and no
+// override needed.
+func TestRunShip_UsesTheReviewersTitleAndDescription(t *testing.T) {
+	review := reviewWithPRText("feat: add change.txt for the greeting", "Adds a greeting file.\nIt gives the tests something to read.")
+	args, output, code := shipCapturingGh(t, shipOptions{}, review)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, output)
+	}
+	for _, want := range []string{"--title\nfeat: add change.txt for the greeting\n", "## What\n\nAdds a greeting file.\nIt gives the tests something to read.\n\n## Changes", "## Verification", "verified by tribunal"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("expected the pull request text to contain %q:\n%s", want, args)
+		}
+	}
+	if strings.Contains(args, "- change\n") || strings.Contains(args, "You are a soldier") {
+		t.Errorf("expected neither the commit bullets nor the prompt:\n%s", args)
+	}
+	if strings.Contains(output, "no usable") {
+		t.Errorf("expected no fallback note when the reviewer text is valid, got: %s", output)
+	}
+}
+
+// Missing or invalid reviewer fields fall back, per field, to the text
+// derived from the commits.
+func TestRunShip_FallsBackWhenTheReviewerTextIsMissingOrInvalid(t *testing.T) {
+	for name, tc := range map[string]struct {
+		review        string
+		wantTitle     string
+		wantWhat      string
+		titleFallback bool
+		whatFallback  bool
+	}{
+		"both missing":           {passingReview, "--title\nchange\n", "## What\n\n- change", true, true},
+		"title only valid":       {reviewWithPRText("fix: good title", ""), "--title\nfix: good title\n", "## What\n\n- change", false, true},
+		"description only valid": {reviewWithPRText("", "A fine description."), "--title\nchange\n", "## What\n\nA fine description.", true, false},
+		"not conventional":       {reviewWithPRText("Add things", "ok"), "--title\nchange\n", "## What\n\nok", true, false},
+		"multi line title":       {reviewWithPRText("feat: a\nb", "ok"), "--title\nchange\n", "## What\n\nok", true, false},
+		"heading in description": {reviewWithPRText("feat: ok", "## What\nstuff"), "--title\nfeat: ok\n", "## What\n\n- change", false, true},
+		"wrong json types":       {`{"findings": [], "reviewed_paths": ["change.txt"], "risk_level": "low", "risk_rationale": "tiny", "pr_title": 3, "pr_description": {"a": 1}}`, "--title\nchange\n", "## What\n\n- change", true, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			args, output, code := shipCapturingGh(t, shipOptions{}, tc.review)
+			if code != 0 {
+				t.Fatalf("expected exit 0, got %d: %s", code, output)
+			}
+			for _, want := range []string{tc.wantTitle, tc.wantWhat} {
+				if !strings.Contains(args, want) {
+					t.Errorf("expected the pull request text to contain %q:\n%s", want, args)
+				}
+			}
+			if got := strings.Contains(output, "no usable pr_title"); got != tc.titleFallback {
+				t.Errorf("title fallback note = %v, want %v: %s", got, tc.titleFallback, output)
+			}
+			if got := strings.Contains(output, "no usable pr_description"); got != tc.whatFallback {
+				t.Errorf("description fallback note = %v, want %v: %s", got, tc.whatFallback, output)
+			}
+		})
+	}
+}
+
+// The sanitizer applies to the reviewer's text: anything unsafe is refused and
+// the derived text takes its place, so nothing of it is published.
+func TestRunShip_SanitizesTheReviewersText(t *testing.T) {
+	for name, tc := range map[string]struct{ title, description string }{
+		"home path":      {"fix: read /Users/macuser/x", "Adds x.\nSee /Users/macuser/camps/3."},
+		"localhost port": {"fix: serve on localhost:3000", "Adds x.\nThe dev server on localhost:3000 stays up."},
+		"secret":         {"fix: use ghp_abcdefghijklmnopqrstuvwxyz0123456789", "Adds x.\nAPI_KEY=abcd1234efgh5678"},
+		"prompt copy":    {"feat: Never touch the general's dev server on localhost:3000, work under /Users/macuser/camps/3.", "Finish with all work committed and the tree clean."},
+	} {
+		t.Run(name, func(t *testing.T) {
+			args, output, code := shipCapturingGh(t, shipOptions{}, reviewWithPRText(tc.title, tc.description))
+			if code != 0 {
+				t.Fatalf("expected exit 0, got %d: %s", code, output)
+			}
+			for _, banned := range []string{"/Users/", "localhost", "ghp_", "API_KEY", "tree clean", "Adds x."} {
+				if strings.Contains(args, banned) {
+					t.Errorf("the pull request text must not contain %q:\n%s", banned, args)
+				}
+			}
+			for _, want := range []string{"--title\nchange\n", "## What\n\n- change"} {
+				if !strings.Contains(args, want) {
+					t.Errorf("expected the derived text %q:\n%s", want, args)
+				}
+			}
+		})
+	}
+}
+
+// --title and --body win over what the reviewer proposed, each on its own.
+func TestRunShip_OverridesBeatTheReviewersText(t *testing.T) {
+	review := reviewWithPRText("feat: the reviewer title", "The reviewer description.")
+
+	args, output, code := shipCapturingGh(t, shipOptions{Title: "fix: commander title"}, review)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, output)
+	}
+	if !strings.Contains(args, "--title\nfix: commander title\n") || strings.Contains(args, "the reviewer title") || !strings.Contains(args, "The reviewer description.") {
+		t.Errorf("expected --title to win and the reviewer description to stay:\n%s", args)
+	}
+
+	args, output, code = shipCapturingGh(t, shipOptions{Body: "Commander body.", HasBody: true}, review)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, output)
+	}
+	if !strings.Contains(args, "--title\nfeat: the reviewer title\n") || !strings.Contains(args, "## What\n\nCommander body.\n") || strings.Contains(args, "The reviewer description.") {
+		t.Errorf("expected --body to win and the reviewer title to stay:\n%s", args)
+	}
+}

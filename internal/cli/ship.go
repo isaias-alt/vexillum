@@ -66,25 +66,31 @@ this happens, since it's the one vexillum action with a real, irreversible
 effect outside the machine. Requires "gh" ('` + cmdname.Name + ` doctor' reports
 whether it's installed).
 
-The pull request is public, so its title and body are built from facts and
-never from the mission prompt or its amendments. The title is the subject of
-the branch's only commit, or of its newest feat, fix or docs commit, or of
-its first commit, cut to about 72 characters. The body has a What section
-(the commit subjects as a bullet list), the diff stat and the top-level
-areas touched, a Verification line (the tribunal steps that passed, the
-review rounds and fix rounds), the review's info findings under Tribunal
-notes, and a one-line footer naming the mission. Whatever comes from the
-camp or the reviewer is sanitized first: lines with an absolute home path,
-a localhost port or something that looks like a secret are dropped, as is any
-line quoting the mission prompt.
+The pull request is public, and its text is produced with no manual step.
+The adversarial review, which reads the whole diff and the commits with no
+author context, also proposes a conventional-commit style title (about 72
+characters) and a short factual description (what changed and why, 3 to 8
+lines), written from the diff and never from the mission prompt. vx ship uses
+them as the title and the What section. When the review omits them or returns
+invalid ones, the title is the subject of the branch's only commit, or of its
+newest feat, fix or docs commit, or of its first commit, and What is the
+commit subjects as a bullet list. The body also has the diff stat and the
+top-level areas touched, a Verification line (the tribunal steps that passed,
+the review rounds and fix rounds), the review's info findings under Tribunal
+notes, and a one-line footer naming the mission. Whatever comes from the camp
+or the reviewer is sanitized first: lines with an absolute home path, a
+localhost port or something that looks like a secret are dropped, as is any
+line quoting the mission prompt; reviewer text that fails the check is not
+published half-cut, the derived text replaces it.
 
-  --title <text>        use this pull request title instead of the derived one
-  --body <text>         use this text as the What section instead of the
-                        commit subjects
+Optional overrides, only when the proposed text is not what you want:
+
+  --title <text>        use this pull request title
+  --body <text>         use this text as the What section
   --body-file <path>    same, read from a file ("-" reads standard input);
                         cannot be combined with --body
 
-A supplied body is sanitized like everything else, the diff stat,
+A supplied body is sanitized like everything else; the diff stat,
 Verification, Tribunal notes and footer stay. A supplied title or body only
 matters when the pull request is opened; re-shipping a mission whose PR
 already exists leaves the PR's text alone.
@@ -366,7 +372,7 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 			return 1
 		}
 		var dropped int
-		title, body, dropped, err = shipPRText(sanitizer, task, ship, facts, result, notes)
+		title, body, dropped, err = shipPRText(sanitizer, task, ship, facts, result, notes, stderr)
 		if err != nil {
 			fmt.Fprintln(stderr, cmdname.Name+":", err)
 			return 1
@@ -419,14 +425,33 @@ func amendmentTexts(amendments []state.Amendment) []string {
 	return texts
 }
 
-// shipPRText builds the pull request title and body for task from the
-// branch's facts and the tribunal's outcome, and how many lines the
-// sanitizer dropped. Neither contains the mission prompt.
-func shipPRText(s prbody.Sanitizer, task state.Task, ship shipOptions, facts prbody.Facts, result tribunal.Result, notes []string) (title, body string, dropped int, err error) {
-	title, err = prbody.Title(s, facts.Subjects, ship.Title, "vexillum mission "+task.ID)
-	if err != nil {
-		return "", "", 0, err
+// shipPRText builds the pull request title and body for task and how many
+// lines the sanitizer dropped. Neither contains the mission prompt. The title
+// is --title, else the reviewer's, else derived from the commits; the What
+// section is --body or --body-file, else the reviewer's description, else the
+// commit subjects. The reviewer's text only counts when it passes
+// prbody's checks, and a note on stderr says when it did not.
+func shipPRText(s prbody.Sanitizer, task state.Task, ship shipOptions, facts prbody.Facts, result tribunal.Result, notes []string, stderr io.Writer) (title, body string, dropped int, err error) {
+	var report tribunal.Report
+	if r := result.ReviewReport(); r != nil {
+		report = *r
 	}
+
+	if ship.Title != "" {
+		title, err = prbody.Title(s, facts.Subjects, ship.Title, "")
+		if err != nil {
+			return "", "", 0, err
+		}
+	} else if t, ok := prbody.ReviewerTitle(s, report.PRTitle); ok {
+		title = t
+	} else {
+		fmt.Fprintf(stderr, cmdname.Name+": the review gave no usable pr_title, deriving the title from the commits\n")
+		title, err = prbody.Title(s, facts.Subjects, "", "vexillum mission "+task.ID)
+		if err != nil {
+			return "", "", 0, err
+		}
+	}
+
 	var passed []string
 	for _, sr := range result.Steps {
 		if sr.Passed {
@@ -434,8 +459,15 @@ func shipPRText(s prbody.Sanitizer, task state.Task, ship shipOptions, facts prb
 		}
 	}
 	description := ""
-	if ship.HasBody {
+	switch {
+	case ship.HasBody:
 		description = ship.Body
+	default:
+		if d, ok := prbody.ReviewerDescription(s, report.PRDescription); ok {
+			description = d
+		} else {
+			fmt.Fprintf(stderr, cmdname.Name+": the review gave no usable pr_description, listing the commit subjects instead\n")
+		}
 	}
 	body, dropped = prbody.Body(s, prbody.Input{
 		TaskID:       task.ID,

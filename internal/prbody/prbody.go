@@ -19,6 +19,19 @@ const rootArea = "(repo root)"
 
 var conventionalPrefix = regexp.MustCompile(`^(feat|fix|docs)(\([^)]*\))?!?:`)
 
+// reviewerTitleShape is a conventional-commit title: any common type, an
+// optional scope, an optional "!", then text.
+var reviewerTitleShape = regexp.MustCompile(`^(feat|fix|docs|refactor|perf|test|build|ci|chore|style|revert)(\([^)]*\))?!?: \S`)
+
+// Limits on what is accepted from the reviewer. The title is cut to
+// maxTitleLen after it passes, so the cap here only rejects a reviewer that
+// ignored the length by a wide margin.
+const (
+	maxReviewerTitleLen       = 120
+	maxReviewerDescriptionLen = 2000
+	maxReviewerDescriptionLns = 20
+)
+
 // Facts are what git says about a branch, the only source of a generated
 // pull request description.
 type Facts struct {
@@ -148,6 +161,44 @@ func Title(s Sanitizer, subjects []string, override, fallback string) (string, e
 		}
 	}
 	return truncate(pick, maxTitleLen), nil
+}
+
+// ReviewerTitle validates the pull request title the review proposed. ok is
+// false, and the caller falls back to the commits, when it is missing, is not
+// one line in conventional-commit style, is far too long, or contains text
+// that must not be published.
+func ReviewerTitle(s Sanitizer, title string) (string, bool) {
+	title = strings.TrimSpace(title)
+	if title == "" || strings.ContainsAny(title, "\r\n") || len(title) > maxReviewerTitleLen {
+		return "", false
+	}
+	if !reviewerTitleShape.MatchString(title) || s.Sensitive(title) {
+		return "", false
+	}
+	return truncate(oneLine(title), maxTitleLen), true
+}
+
+// ReviewerDescription validates the description the review proposed. ok is
+// false, and the caller falls back to the commit subjects, when it is
+// missing, too long, uses markdown headings (they would clash with the
+// body's own sections), or has any line that must not be published. A
+// description that needed editing is not published half-cut.
+func ReviewerDescription(s Sanitizer, description string) (string, bool) {
+	description = strings.TrimSpace(strings.ReplaceAll(description, "\r\n", "\n"))
+	if description == "" || len(description) > maxReviewerDescriptionLen {
+		return "", false
+	}
+	lines := strings.Split(description, "\n")
+	if len(lines) > maxReviewerDescriptionLns {
+		return "", false
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") || s.Sensitive(line) {
+			return "", false
+		}
+	}
+	cleaned, _ := s.Text(description)
+	return cleaned, cleaned != ""
 }
 
 // Input is everything Body composes a description from.

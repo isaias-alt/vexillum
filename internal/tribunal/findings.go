@@ -73,6 +73,13 @@ type Report struct {
 	ReviewedPaths []string `json:"reviewed_paths"`
 	RiskLevel     string   `json:"risk_level"`
 	RiskRationale string   `json:"risk_rationale"`
+	// PRTitle and PRDescription are the reviewer's proposal for the pull
+	// request text, written from the diff and the commits. Both are optional
+	// and unvalidated here: a reviewer that omits them or gets them wrong
+	// never fails the review, and vx ship falls back to text derived from the
+	// branch's commits (see internal/prbody).
+	PRTitle       string `json:"pr_title"`
+	PRDescription string `json:"pr_description"`
 }
 
 // Blocking returns the findings that block the ship, in report order.
@@ -112,7 +119,9 @@ const reportSchema = `{
   ],
   "reviewed_paths": ["every changed file you actually read and judged"],
   "risk_level": "low | medium | high",
-  "risk_rationale": "one sentence"
+  "risk_rationale": "one sentence",
+  "pr_title": "feat: concise conventional-commit style title of the whole change, up to about 72 characters",
+  "pr_description": "3 to 8 lines of plain markdown: what changed and why"
 }`
 
 // parseReport extracts the reviewer's JSON object from its raw stdout and
@@ -129,6 +138,10 @@ func parseReport(output string) (Report, error) {
 		ReviewedPaths *[]string  `json:"reviewed_paths"`
 		RiskLevel     string     `json:"risk_level"`
 		RiskRationale string     `json:"risk_rationale"`
+		// Decoded leniently: a wrongly typed pr field is dropped, it must
+		// not reject an otherwise valid report.
+		PRTitle       json.RawMessage `json:"pr_title"`
+		PRDescription json.RawMessage `json:"pr_description"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return Report{}, fmt.Errorf("the JSON does not match the schema: %w", err)
@@ -144,6 +157,8 @@ func parseReport(output string) (Report, error) {
 	report := Report{
 		RiskLevel:     strings.ToLower(strings.TrimSpace(payload.RiskLevel)),
 		RiskRationale: strings.TrimSpace(payload.RiskRationale),
+		PRTitle:       optionalString(payload.PRTitle),
+		PRDescription: optionalString(payload.PRDescription),
 	}
 	if payload.Findings != nil {
 		report.Findings = *payload.Findings
@@ -191,6 +206,16 @@ func parseReport(output string) (Report, error) {
 		return Report{}, errors.New(strings.Join(problems, "; "))
 	}
 	return report, nil
+}
+
+// optionalString decodes raw as a JSON string, returning "" when it is
+// absent, null or not a string.
+func optionalString(raw json.RawMessage) string {
+	var v string
+	if len(raw) == 0 || json.Unmarshal(raw, &v) != nil {
+		return ""
+	}
+	return strings.TrimSpace(v)
 }
 
 // extractReportJSON finds the reviewer's final JSON object in free-form

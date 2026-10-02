@@ -76,3 +76,30 @@ func TestFormatFindings_MostSevereFirst(t *testing.T) {
 		}
 	}
 }
+
+// The pull request fields are optional extras: present, they are kept
+// trimmed; absent or wrongly typed, the report is still valid and they are
+// empty, so a sloppy reviewer never fails the review over them.
+func TestParseReport_PullRequestFields(t *testing.T) {
+	base := `"findings": [], "reviewed_paths": [], "risk_level": "low", "risk_rationale": "r"`
+	for name, tc := range map[string]struct {
+		extra            string
+		wantTitle, wantD string
+	}{
+		"both present":   {`, "pr_title": "  feat: x  ", "pr_description": " Does x.\nBecause y. "`, "feat: x", "Does x.\nBecause y."},
+		"both missing":   {``, "", ""},
+		"null":           {`, "pr_title": null, "pr_description": null`, "", ""},
+		"wrong types":    {`, "pr_title": 7, "pr_description": ["a"]`, "", ""},
+		"only the title": {`, "pr_title": "fix: y"`, "fix: y", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, err := parseReport("{" + base + tc.extra + "}")
+			if err != nil {
+				t.Fatalf("parseReport: %v", err)
+			}
+			if r.PRTitle != tc.wantTitle || r.PRDescription != tc.wantD {
+				t.Errorf("got title %q, description %q; want %q, %q", r.PRTitle, r.PRDescription, tc.wantTitle, tc.wantD)
+			}
+		})
+	}
+}

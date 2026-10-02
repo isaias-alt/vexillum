@@ -54,25 +54,31 @@ this happens, since it's the one vexillum action with a real, irreversible
 effect outside the machine. Requires "gh" ('vx doctor' reports
 whether it's installed).
 
-The pull request is public, so its title and body are built from facts and
-never from the mission prompt or its amendments. The title is the subject of
-the branch's only commit, or of its newest feat, fix or docs commit, or of
-its first commit, cut to about 72 characters. The body has a What section
-(the commit subjects as a bullet list), the diff stat and the top-level
-areas touched, a Verification line (the tribunal steps that passed, the
-review rounds and fix rounds), the review's info findings under Tribunal
-notes, and a one-line footer naming the mission. Whatever comes from the
-camp or the reviewer is sanitized first: lines with an absolute home path,
-a localhost port or something that looks like a secret are dropped, as is any
-line quoting the mission prompt.
+The pull request is public, and its text is produced with no manual step.
+The adversarial review, which reads the whole diff and the commits with no
+author context, also proposes a conventional-commit style title (about 72
+characters) and a short factual description (what changed and why, 3 to 8
+lines), written from the diff and never from the mission prompt. vx ship uses
+them as the title and the What section. When the review omits them or returns
+invalid ones, the title is the subject of the branch's only commit, or of its
+newest feat, fix or docs commit, or of its first commit, and What is the
+commit subjects as a bullet list. The body also has the diff stat and the
+top-level areas touched, a Verification line (the tribunal steps that passed,
+the review rounds and fix rounds), the review's info findings under Tribunal
+notes, and a one-line footer naming the mission. Whatever comes from the camp
+or the reviewer is sanitized first: lines with an absolute home path, a
+localhost port or something that looks like a secret are dropped, as is any
+line quoting the mission prompt; reviewer text that fails the check is not
+published half-cut, the derived text replaces it.
 
-  --title <text>        use this pull request title instead of the derived one
-  --body <text>         use this text as the What section instead of the
-                        commit subjects
+Optional overrides, only when the proposed text is not what you want:
+
+  --title <text>        use this pull request title
+  --body <text>         use this text as the What section
   --body-file <path>    same, read from a file ("-" reads standard input);
                         cannot be combined with --body
 
-A supplied body is sanitized like everything else, the diff stat,
+A supplied body is sanitized like everything else; the diff stat,
 Verification, Tribunal notes and footer stay. A supplied title or body only
 matters when the pull request is opened; re-shipping a mission whose PR
 already exists leaves the PR's text alone.

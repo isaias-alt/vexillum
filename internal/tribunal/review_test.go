@@ -47,7 +47,9 @@ func TestRunReview_PromptHasNoDiffAndNoAuthorContext(t *testing.T) {
 	}
 	baseSHA := strings.TrimSpace(run(t, dir, "rev-parse", "base"))
 	head := strings.TrimSpace(run(t, dir, "rev-parse", "HEAD"))
-	for _, want := range []string{"vexillum/abc", baseSHA, head, "- src/change.txt", "MISSION_STATEMENT add a file", "Read the relevant history and diff yourself", "assume the change is wrong"} {
+	for _, want := range []string{"vexillum/abc", baseSHA, head, "- src/change.txt", "MISSION_STATEMENT add a file", "Read the relevant history and diff yourself", "assume the change is wrong",
+		"Pull request text (pr_title and pr_description", "Write them from the diff and the commits", `"pr_title":`, `"pr_description":`,
+		"never copy or paraphrase it into pr_title or pr_description"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("expected the prompt to contain %q:\n%s", want, prompt)
 		}

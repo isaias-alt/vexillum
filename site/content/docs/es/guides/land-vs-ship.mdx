@@ -41,7 +41,7 @@ La revisión corre en una sesión nueva de Claude Code (nunca una reanudada) que
 
 Cuando la mission tiene prompt, cada componente que el cambio introdujo también se juzga contra ese enunciado más las instrucciones que el general dio después, con `vx prompt` y `vx decide`. Esas quedan registradas en la tarea como amendments (con fecha y el comando de origen, en `vx status --json`) y se listan después del prompt, en orden, así que un componente que pediste más tarde no se reporta como no pedido. Solo esos dos comandos escriben amendments, en el archivo de estado de la tarea y nunca en un archivo del camp, así que un soldier no puede ampliar su propio mandato. Lo que no pidió ni el prompt ni un amendment se reporta como warning con remedio "quitarlo". Una mission sin prompt omite esta pasada, y `ship` lo dice.
 
-El revisor devuelve JSON: hallazgos (`file`, `line`, `severity` error/warning/info, `action` ask-user/auto-fix/no-op, descripción, escenario de fallo, sitios hermanos), los `reviewed_paths` que realmente leyó y un nivel de riesgo. Si el JSON no valida, la revisión se reintenta (hasta dos veces más). Después:
+El revisor devuelve JSON: hallazgos (`file`, `line`, `severity` error/warning/info, `action` ask-user/auto-fix/no-op, descripción, escenario de fallo, sitios hermanos), los `reviewed_paths` que realmente leyó y un nivel de riesgo, más el `pr_title` y el `pr_description` opcionales que pasan a ser el texto del pull request (los inválidos nunca hacen fallar la revisión, ver abajo). Si el JSON no valida, la revisión se reintenta (hasta dos veces más). Después:
 
 - cualquier hallazgo de severidad **error o warning bloquea el ship**, incluidos los `ask-user`, que necesitan tu decisión; los **info** no bloquean;
 - un archivo cambiado que falta en `reviewed_paths` cuenta como no revisado y hace fallar el paso;
@@ -65,13 +65,19 @@ Una mission en `done` o `shipped` puede enviarse de nuevo para empujar seguimien
 
 ### El texto del pull request
 
-El pull request es público, así que `vx ship` nunca copia en él el prompt del despacho ni sus enmiendas. El título es el subject del único commit de la branch, o de su commit `feat`, `fix` o `docs` más reciente, o de su primer commit, cortado a unos 72 caracteres. El cuerpo se arma con hechos: una sección **What** (los subjects de los commits como lista), una línea **Changes** (archivos cambiados, inserciones, borrados y las áreas de primer nivel tocadas), una línea **Verification** (los pasos del tribunal que pasaron, las rondas de revisión y las de arreglo), los hallazgos info de la revisión bajo **Tribunal notes**, y un pie de una línea que nombra la mission.
+El pull request es público y su texto no requiere ningún paso manual. La revisión adversarial lee el diff completo y los commits sin contexto del autor, y además devuelve un `pr_title` en estilo conventional-commit (unos 72 caracteres) y un `pr_description` breve y factual (qué cambió y por qué, de 3 a 8 líneas de markdown plano), escritos a partir del diff y nunca del prompt de la mission. `vx ship` los usa como título y como sección **What**. El resto del cuerpo se arma con hechos: una línea **Changes** (archivos cambiados, inserciones, borrados y las áreas de primer nivel tocadas), una línea **Verification** (los pasos del tribunal que pasaron, las rondas de revisión y las de arreglo), los hallazgos info de la revisión bajo **Tribunal notes**, y un pie de una línea que nombra la mission.
+
+Cuando el revisor omite esos campos o devuelve unos inválidos (un título que no es de una línea en estilo conventional-commit, una descripción con encabezados, o cualquier texto que no pase el saneado), `vx ship` lo informa y recurre, campo por campo, a texto derivado de la branch: el título es el subject del único commit de la branch, o de su commit `feat`, `fix` o `docs` más reciente, o de su primer commit, cortado a unos 72 caracteres, y What es la lista de subjects de los commits.
+
+Todo lo que viene del camp o del revisor se sanea antes de publicar: se descartan las líneas con una ruta absoluta de home (`/Users/...`, `/home/...`), un puerto de localhost o algo que parezca un secreto, y también cualquier línea que cite el prompt de la mission. El texto del revisor que no pasa la comprobación se reemplaza por el texto derivado en lugar de publicarse recortado, y `vx ship` informa cuántas líneas descartó de lo demás.
+
+Los overrides son opcionales:
 
 ```bash
 vx ship <task-id> --title "feat: titulo conciso" --body-file description.md
 ```
 
-`--title` reemplaza el título derivado. `--body "<texto>"` o `--body-file <ruta>` (`-` lee la entrada estándar; no se pueden combinar) reemplaza la sección What; Changes, Verification, Tribunal notes y el pie se mantienen. Todo lo que viene del camp, del revisor o de un cuerpo provisto se sanea antes de publicar: se descartan las líneas con una ruta absoluta de home (`/Users/...`, `/home/...`), un puerto de localhost o algo que parezca un secreto, y también cualquier línea que cite el prompt de la mission; `vx ship` informa cuántas descartó. Un `--title` que no pasa la misma comprobación se rechaza antes de que corra el tribunal. Volver a enviar una mission cuyo pull request ya está abierto no toca el texto del pull request.
+`--title` reemplaza el título. `--body "<texto>"` o `--body-file <ruta>` (`-` lee la entrada estándar; no se pueden combinar) reemplaza la sección What; Changes, Verification, Tribunal notes y el pie se mantienen. Un `--title` que no pasa la comprobación de seguridad se rechaza antes de que corra el tribunal. Volver a enviar una mission cuyo pull request ya está abierto no toca el texto del pull request.
 
 ## Aterrizar una mission enviada
 

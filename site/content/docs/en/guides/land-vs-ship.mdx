@@ -41,7 +41,7 @@ The review runs in a brand-new Claude Code session (never a resumed one) that ha
 
 When the mission has a prompt, every component the change introduced is also judged against that statement plus the instructions the general gave afterward, through `vx prompt` and `vx decide`. Those are recorded on the task as amendments (with a timestamp and the command they came from, in `vx status --json`) and listed after the prompt, in order, so a component you asked for later is not reported as unrequested. Only those two commands write amendments, into the task's state file and never into a file in the camp, so a soldier cannot widen its own mandate. Whatever neither the prompt nor an amendment required is reported as a warning whose remedy is removing it. A mission without a prompt skips this pass, and `ship` says so.
 
-The reviewer returns JSON: findings (`file`, `line`, `severity` error/warning/info, `action` ask-user/auto-fix/no-op, description, failure scenario, sibling sites), the `reviewed_paths` it actually read, and a risk level. If the JSON does not validate, the review is retried (up to two more times). Then:
+The reviewer returns JSON: findings (`file`, `line`, `severity` error/warning/info, `action` ask-user/auto-fix/no-op, description, failure scenario, sibling sites), the `reviewed_paths` it actually read, and a risk level, plus the optional `pr_title` and `pr_description` that become the pull request text (invalid ones never fail the review, see below). If the JSON does not validate, the review is retried (up to two more times). Then:
 
 - any finding of severity **error or warning blocks the ship**, including `ask-user` ones, which need your decision; **info** findings do not block;
 - a changed file missing from `reviewed_paths` counts as unreviewed and fails the step;
@@ -65,13 +65,19 @@ A mission in `done` or `shipped` can be shipped again to push follow-ups onto th
 
 ### The pull request text
 
-The pull request is public, so `vx ship` never copies the dispatch prompt or its amendments into it. The title is the subject of the branch's only commit, or of its newest `feat`, `fix` or `docs` commit, or of its first commit, cut to about 72 characters. The body is built from facts: a **What** section (the commit subjects as a bullet list), a **Changes** line (files changed, insertions, deletions and the top-level areas touched), a **Verification** line (the tribunal steps that passed, the review rounds and the fix rounds), the review's info findings under **Tribunal notes**, and a one-line footer naming the mission.
+The pull request is public, and its text needs no manual step. The adversarial review reads the whole diff and the commits with no author context, and also returns a conventional-commit style `pr_title` (about 72 characters) and a short factual `pr_description` (what changed and why, 3 to 8 lines of plain markdown), written from the diff and never from the mission prompt. `vx ship` uses them as the title and the **What** section. The rest of the body is built from facts: a **Changes** line (files changed, insertions, deletions and the top-level areas touched), a **Verification** line (the tribunal steps that passed, the review rounds and the fix rounds), the review's info findings under **Tribunal notes**, and a one-line footer naming the mission.
+
+When the reviewer omits those fields or returns invalid ones (a title that is not one line in conventional-commit style, a description with headings, or any text that fails the sanitizer), `vx ship` says so and falls back, per field, to text derived from the branch: the title is the subject of the branch's only commit, or of its newest `feat`, `fix` or `docs` commit, or of its first commit, cut to about 72 characters, and What is the commit subjects as a bullet list.
+
+Everything that comes from the camp or the reviewer is sanitized before publishing: lines with an absolute home path (`/Users/...`, `/home/...`), a localhost port or something that looks like a secret are dropped, as is any line quoting the mission prompt. Reviewer text that fails the check is replaced by the derived text rather than published half-cut, and `vx ship` reports how many lines it dropped from anything else.
+
+Overrides are optional:
 
 ```bash
 vx ship <task-id> --title "feat: concise title" --body-file description.md
 ```
 
-`--title` overrides the derived title. `--body "<text>"` or `--body-file <path>` (`-` reads standard input; the two cannot be combined) replaces the What section; Changes, Verification, Tribunal notes and the footer stay. Everything that comes from the camp, the reviewer or a supplied body is sanitized before publishing: lines with an absolute home path (`/Users/...`, `/home/...`), a localhost port or something that looks like a secret are dropped, as is any line quoting the mission prompt, and `vx ship` reports how many it dropped. A `--title` that fails the same check is refused before the tribunal runs. Re-shipping a mission whose pull request is already open leaves the pull request's text alone.
+`--title` replaces the title. `--body "<text>"` or `--body-file <path>` (`-` reads standard input; the two cannot be combined) replaces the What section; Changes, Verification, Tribunal notes and the footer stay. A `--title` that fails the safety check is refused before the tribunal runs. Re-shipping a mission whose pull request is already open leaves the pull request's text alone.
 
 ## Landing a shipped mission
 

@@ -246,3 +246,72 @@ func TestGather(t *testing.T) {
 		t.Error("expected an error for an unknown base")
 	}
 }
+
+func TestReviewerTitle(t *testing.T) {
+	s := NewSanitizer("Secret mission statement that must never be published anywhere.")
+	long := "feat: " + strings.Repeat("word ", 20)
+	for name, tc := range map[string]struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		"valid":              {"feat: add a thing", "feat: add a thing", true},
+		"trimmed":            {"  fix(cli): stop leaking  ", "fix(cli): stop leaking", true},
+		"breaking":           {"feat!: drop the old flag", "feat!: drop the old flag", true},
+		"other type":         {"refactor: split the module", "refactor: split the module", true},
+		"cut to 72":          {long, "", true},
+		"empty":              {"", "", false},
+		"not conventional":   {"Add a thing", "", false},
+		"no space after":     {"feat:add", "", false},
+		"multi line":         {"feat: a\nsecond line", "", false},
+		"far too long":       {"feat: " + strings.Repeat("x", 130), "", false},
+		"home path":          {"fix: handle /Users/me/x", "", false},
+		"localhost port":     {"fix: serve on localhost:3000", "", false},
+		"secret":             {"fix: rotate ghp_abcdefghijklmnopqrstuvwxyz0123456789", "", false},
+		"quotes the mission": {"feat: Secret mission statement that must never be published anywhere.", "", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, ok := ReviewerTitle(s, tc.in)
+			if ok != tc.ok {
+				t.Fatalf("ReviewerTitle(%q) ok = %v, want %v (%q)", tc.in, ok, tc.ok, got)
+			}
+			if name == "cut to 72" {
+				if len(got) > maxTitleLen || !strings.HasSuffix(got, "...") {
+					t.Errorf("expected a cut title, got %q", got)
+				}
+				return
+			}
+			if ok && got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReviewerDescription(t *testing.T) {
+	s := NewSanitizer("Secret mission statement that must never be published anywhere.")
+	for name, tc := range map[string]struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		"valid":          {"Adds x.\nBecause y.\n", "Adds x.\nBecause y.", true},
+		"bullets":        {"- one\n- two\n- three", "- one\n- two\n- three", true},
+		"crlf":           {"a\r\nb", "a\nb", true},
+		"empty":          {"  \n", "", false},
+		"heading":        {"## What\nAdds x.", "", false},
+		"too many lines": {strings.Repeat("line\n", 25), "", false},
+		"too long":       {strings.Repeat("x", 2100), "", false},
+		"home path line": {"Adds x.\nSee /Users/me/x for more.", "", false},
+		"port line":      {"Adds x.\nTested on localhost:8080.", "", false},
+		"quotes mission": {"Adds x.\nSecret mission statement that must never be published anywhere.", "", false},
+		"secret line":    {"Adds x.\nAPI_KEY=abcd1234efgh5678", "", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, ok := ReviewerDescription(s, tc.in)
+			if ok != tc.ok || (ok && got != tc.want) {
+				t.Errorf("ReviewerDescription(%q) = %q, %v; want %q, %v", tc.in, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
