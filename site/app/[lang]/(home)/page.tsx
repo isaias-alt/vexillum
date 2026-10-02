@@ -15,7 +15,7 @@ import { dictionary, localePrefix } from "@/lib/strings";
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-3 text-[11px] tracking-[0.08em] text-text-muted uppercase">
+    <div className="mb-4 text-[11px] tracking-[0.08em] text-text-muted uppercase">
       {children}
     </div>
   );
@@ -69,11 +69,11 @@ export default async function Home({
 
       <main>
         {/* hero */}
-        <section className="site-container pt-16 pb-24 text-center max-sm:pb-16">
+        <section className="site-container pt-(--section-space) pb-(--section-space) text-center">
           <div className="mb-5 text-[11px] tracking-[0.08em] text-text-muted uppercase">
             {t.hero.eyebrow}
           </div>
-          <h1 className="mx-auto mb-5 max-w-[620px] font-serif text-[40px] leading-[1.18] font-semibold text-text max-sm:text-[32px]">
+          <h1 className="display-title mx-auto mb-8 max-w-[18ch]">
             {t.hero.title}
           </h1>
           <p className="mx-auto mb-8 max-w-[480px] text-sm leading-[1.7] text-text-secondary">
@@ -93,10 +93,10 @@ export default async function Home({
         </section>
 
         {/* a minute with vexillum */}
-        <section className="site-container pb-14">
-          <div className="mx-auto mb-9 max-w-[560px] text-center">
+        <section className="site-container pb-(--section-space)">
+          <div className="mx-auto mb-14 max-w-[min(100%,52rem)] text-center">
             <Eyebrow>{t.minute.eyebrow}</Eyebrow>
-            <h2 className="mb-4 font-serif text-[30px] leading-[1.2] font-semibold text-balance text-text max-sm:text-[26px]">
+            <h2 className="section-title mb-5">
               {t.minute.title}
             </h2>
             <p className="text-sm leading-[1.7] text-text-secondary">
@@ -115,10 +115,10 @@ export default async function Home({
 
         {/* vocabulary */}
         <section className="border-t border-border">
-          <div className="site-container py-14">
-            <div className="mx-auto mb-9 max-w-[560px] text-center">
+          <div className="site-container py-(--section-space)">
+            <div className="mx-auto mb-14 max-w-[min(100%,52rem)] text-center">
               <Eyebrow>{t.vocab.eyebrow}</Eyebrow>
-              <h2 className="font-serif text-[26px] font-semibold text-balance text-text">
+              <h2 className="section-title">
                 {t.vocab.title}
               </h2>
             </div>
@@ -141,10 +141,10 @@ export default async function Home({
 
         {/* dispatching */}
         <section className="border-t border-border">
-          <div className="site-container py-14">
-            <div className="mx-auto mb-7 max-w-[560px] text-center">
+          <div className="site-container py-(--section-space)">
+            <div className="mx-auto mb-12 max-w-[min(100%,52rem)] text-center">
               <Eyebrow>{t.dispatching.eyebrow}</Eyebrow>
-              <h2 className="mb-4 font-serif text-[26px] font-semibold text-balance text-text">
+              <h2 className="section-title mb-5">
                 {t.dispatching.title}
               </h2>
               <p className="text-sm leading-[1.7] text-text-secondary">
@@ -160,9 +160,9 @@ export default async function Home({
 
         {/* open source */}
         <section className="border-t border-border">
-          <div className="site-container py-14 text-center">
+          <div className="site-container py-(--section-space) text-center">
           <Eyebrow>{t.oss.eyebrow}</Eyebrow>
-          <h2 className="mb-6 font-serif text-[26px] font-semibold text-text">
+          <h2 className="section-title mb-8">
             {t.oss.title}
           </h2>
           <div className="flex flex-wrap justify-center gap-3">

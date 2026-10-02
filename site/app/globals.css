@@ -48,6 +48,11 @@
   --content-narrow: 720px;
   --content-wide: 960px;
   --content-max: var(--site-max);
+
+  /* Landing type and rhythm. Fluid from a 375px phone to a 2560px display. */
+  --text-display: clamp(2.5rem, 1.55rem + 3.6vw, 5.25rem);
+  --text-section: clamp(2rem, 1.35rem + 2.5vw, 3.75rem);
+  --section-space: clamp(3.5rem, 2rem + 5vw, 8rem);
 }
 @media (min-width: 640px) {
   :root {
@@ -172,6 +177,25 @@ body {
   max-width: calc(var(--site-max) + 2 * var(--site-gutter));
   margin-inline: auto;
   padding-inline: var(--site-gutter);
+}
+/* Landing headings: the serif display face, large and fluid, balanced so a
+   long title never leaves a single orphan word. */
+.display-title,
+.section-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--fr-text);
+  text-wrap: balance;
+}
+.display-title {
+  font-size: var(--text-display);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+}
+.section-title {
+  font-size: var(--text-section);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
 }
 /* The design's buttons (.fr-btn in forum-tokens.css). */
 .btn {
@@ -483,4 +507,87 @@ pre .line {
   #nd-subnav button[aria-controls="nd-sidebar-mobile"] {
     display: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Docs navbar: the search sits in the middle track of a three-track grid whose
+   outer tracks are equal, so it is centered in the viewport (not in whatever
+   space the logo and controls leave). Below md the search is an icon in the
+   controls and the bar is the plain flex row.
+   ------------------------------------------------------------------------ */
+.navbar-grid {
+  display: flex;
+}
+@media (min-width: 768px) {
+  .navbar-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 360px) minmax(0, 1fr);
+  }
+}
+.search-trigger {
+  display: none;
+  height: 36px;
+  width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--fr-border-strong);
+  border-radius: var(--fr-radius-sm);
+  background: transparent;
+  padding: 0 8px 0 10px;
+  font-size: 12.5px;
+  color: var(--fr-text-secondary);
+  transition:
+    background-color 120ms,
+    border-color 120ms,
+    color 120ms;
+}
+@media (min-width: 768px) {
+  .search-trigger {
+    display: inline-flex;
+  }
+}
+.search-trigger:hover {
+  background: var(--fr-surface);
+  color: var(--fr-text);
+}
+.search-trigger kbd {
+  border: 1px solid var(--fr-border-strong);
+  border-radius: var(--fr-radius-sm);
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--fr-text-secondary);
+}
+
+/* ---------------------------------------------------------------------------
+   Icons: every icon in the docs chrome and in the search dialog is the lapis
+   accent (the brand mark keeps its own fills). Contrast against --fr-bg and
+   --fr-surface is >= 3:1 in both themes (WCAG 1.4.11).
+   ------------------------------------------------------------------------ */
+#nd-notebook-layout svg,
+[role="dialog"] svg,
+.search-trigger svg {
+  color: var(--fr-accent);
+}
+/* Callouts: a solid accent glyph with the surface showing through as the
+   exclamation / letter, instead of Fumadocs' per-type fill on a card color. */
+#nd-notebook-layout .prose [style*="--callout-color"] > svg {
+  fill: var(--fr-accent);
+  color: var(--fr-bg);
+}
+#nd-notebook-layout .prose [style*="--callout-color"] > svg.lucide-lightbulb {
+  fill: none;
+  color: var(--fr-accent);
+}
+
+/* The search input keeps a neutral focus indicator: the global accent outline
+   is for everything else, but the field that opens focused is not a call to
+   action. A 2px outline in the secondary text color, 3:1 on the popover. */
+[role="dialog"] input[role="combobox"]:focus-visible {
+  outline: 2px solid var(--fr-text-secondary);
+  outline-offset: 4px;
+  border-radius: var(--fr-radius-sm);
 }
