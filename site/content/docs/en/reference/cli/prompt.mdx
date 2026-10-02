@@ -19,8 +19,8 @@ without any notice, because the sentinel only reports a task leaving
 "running".
 
 Only a task in status "done" or "unconfirmed" whose camp has not been
-released can be prompted. A "blocked" task is answered with 'vx decide',
-an "interrupted" one needs 'vx redispatch', and a "running" one is already
+released can be prompted. A "blocked" task is answered with 'vx decide'
+(or, if it was marked blocked by mistake, cleared with 'vx decide <task-id> --dismiss'), an "interrupted" one needs 'vx redispatch', and a "running" one is already
 working - wait for it to settle.
 
 <text> is delivered to the soldier verbatim. On a fast settle the task's

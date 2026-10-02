@@ -10,6 +10,7 @@ Answer a blocked task's open question so it can continue.
 
 Usage:
   vx decide <task-id> <answer>
+  vx decide <task-id> --dismiss
 
 Only a task in status "blocked" can be answered. Delivers <answer> to the
 soldier's still-open herdr pane and records it against the task's structured
@@ -24,6 +25,15 @@ On a fast settle the task's status updates immediately: running if the
 soldier is still going, blocked again if it asks another question, done or
 failed if it settled that quickly. Otherwise the task is left running for
 the sentinel to record the eventual settle, exactly like a fresh dispatch.
+
+--dismiss clears a task that was marked blocked by mistake - the soldier was
+never really asking anything - without sending it anything: no prompt, no key
+press. The task becomes whatever its pane says it is: running if the soldier
+is still working, done (or unconfirmed) if it has settled, interrupted if the
+pane is gone. It is refused if the pane is genuinely blocked on a question.
+The dismissed question stays on the task (see 'vx status --json'), marked
+dismissed, and does not block it again. Use it when 'vx prompt' or
+'vx ship' refuse a task as blocked and there is nothing to answer.
 
 If the task is actually "interrupted" (its herdr pane is gone - vexillum
 just hadn't noticed yet), this marks it interrupted and refuses: there is

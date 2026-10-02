@@ -16,6 +16,16 @@ vx decide <task-id> "Use the existing helper"
 
 Only a `blocked` task can be answered. If its pane is actually gone, `decide` marks it `interrupted` and refuses.
 
+### A task blocked by mistake
+
+A task is only marked `blocked` when the soldier really asked: Claude Code's question selector, or a `needs-decision:` line written in its final turn with real text. If one is blocked anyway and there is nothing to answer, clear it without sending the soldier anything:
+
+```bash
+vx decide <task-id> --dismiss
+```
+
+The task becomes what its pane says it is: `running` if the soldier is still working, `done` (or `unconfirmed`) if it has settled, `interrupted` if the pane is gone. If the pane really is blocked on a question, `--dismiss` refuses and you answer it instead. The dismissed question stays on the task, marked `dismissed`, and does not block it again. `vx prompt` and `vx ship` refuse a blocked task and name this command in their error.
+
 ## Interrupted: the soldier vanished
 
 `interrupted` means vexillum lost the soldier itself - its pane was closed, or herdr restarted - while it was still working. It does not mean the soldier failed. Before doing anything else, look inside its camp:

@@ -50,6 +50,7 @@ Optional fields are omitted when empty.
 | `asked_at` | when it blocked |
 | `answer`, `answered_at` | set after [`vx decide`](/docs/reference/cli/decide) |
 | `kind` | how it must be answered: a selector overlay is answered with a key press, anything else as text |
+| `dismissed` | `true` when cleared with `vx decide --dismiss` instead of answered; `answered_at` is set, `answer` is not |
 
 A task in `blocked` always carries its question here, not just the word "blocked".
 

@@ -16,6 +16,16 @@ vx decide <task-id> "Use the existing helper"
 
 Solo una tarea `blocked` puede responderse. Si su pane en realidad ya no está, `decide` la marca `interrupted` y se niega.
 
+### Una tarea bloqueada por error
+
+Una tarea solo se marca `blocked` cuando el soldier de verdad preguntó: el selector de preguntas de Claude Code, o una línea `needs-decision:` escrita en su último turno con texto real. Si una queda bloqueada igual y no hay nada que responder, limpiala sin mandarle nada al soldier:
+
+```bash
+vx decide <task-id> --dismiss
+```
+
+La tarea pasa a ser lo que dice su pane: `running` si el soldier sigue trabajando, `done` (o `unconfirmed`) si ya terminó, `interrupted` si el pane no está. Si el pane de verdad está bloqueado en una pregunta, `--dismiss` se niega y la respondés. La pregunta descartada queda en la tarea, marcada `dismissed`, y no la vuelve a bloquear. `vx prompt` y `vx ship` se niegan ante una tarea blocked y nombran este comando en su error.
+
 ## Interrupted: el soldier desapareció
 
 `interrupted` significa que vexillum perdió al soldier mismo - se cerró su pane, o herdr se reinició - mientras seguía trabajando. No significa que el soldier haya fallado. Antes de hacer cualquier otra cosa, mirá dentro de su camp:

@@ -50,6 +50,7 @@ Los campos opcionales se omiten cuando están vacíos.
 | `asked_at` | cuándo quedó blocked |
 | `answer`, `answered_at` | se definen después de [`vx decide`](/es/docs/reference/cli/decide) |
 | `kind` | cómo debe responderse: un overlay selector se responde con una tecla, cualquier otro como texto |
+| `dismissed` | `true` cuando se limpió con `vx decide --dismiss` en vez de responderse; `answered_at` queda definido, `answer` no |
 
 Una tarea en `blocked` siempre lleva su pregunta acá, no solo la palabra "blocked".
 
