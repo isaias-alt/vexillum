@@ -30,12 +30,32 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# The changelog is generated from conventional commits at release time and is
+# never edited by hand. goreleaser publishes it as the GitHub release notes;
+# the docs page /docs/changelog is built from those release notes by
+# site/scripts/changelog.mjs. There is deliberately no CHANGELOG.md in the repo.
 changelog:
   sort: asc
+  abbrev: 7
+  format: "{{ .SHA }} {{ .Message }}"
   filters:
     exclude:
-      - "^binnacle:"
-      - "^docs:"
+      - "^chore(\\(.*\\))?!?:"
+      - "^test(\\(.*\\))?!?:"
+      - "^binnacle(\\(.*\\))?!?:"
+      - "^Merge "
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Documentation
+      regexp: '^.*?docs(\(.+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
 
 brews:
   - name: vexillum
@@ -60,3 +80,5 @@ release:
   github:
     owner: isaias-alt
     name: vexillum
+  footer: |
+    {{ if .PreviousTag }}**Full changelog**: https://github.com/isaias-alt/vexillum/compare/{{ .PreviousTag }}...{{ .Tag }}{{ end }}

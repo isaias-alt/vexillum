@@ -28,3 +28,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      # goreleaser has already published these notes as the GitHub release
+      # body, which is what the docs page /docs/changelog is built from (see
+      # site/scripts/changelog.mjs). Keep the file too, for inspection.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: dist/CHANGELOG.md
