@@ -25,16 +25,11 @@ func measuresHeadings(t *testing.T, artifact string) [][2]int {
 	env.setArtifact(artifact)
 
 	reported := make(chan string, 1)
-	inner := env.ts.Config.Handler
-	env.ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/__gaps" {
-			select {
-			case reported <- r.URL.Query().Get("v"):
-			default:
-			}
-			return
+	env.handle("/__gaps", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case reported <- r.URL.Query().Get("v"):
+		default:
 		}
-		inner.ServeHTTP(w, r)
 	})
 
 	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",

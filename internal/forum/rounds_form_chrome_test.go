@@ -37,15 +37,10 @@ func TestRounds_RealChrome_DecisionFormShowsSentAndAnswered(t *testing.T) {
 
 	var mu sync.Mutex
 	var reports []string
-	inner := env.ts.Config.Handler
-	env.ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/__report" {
-			mu.Lock()
-			reports = append(reports, r.URL.Query().Get("v"))
-			mu.Unlock()
-			return
-		}
-		inner.ServeHTTP(w, r)
+	env.handle("/__report", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		reports = append(reports, r.URL.Query().Get("v"))
+		mu.Unlock()
 	})
 	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
 		"--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+key)

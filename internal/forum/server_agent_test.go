@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,40 @@ type testEnv struct {
 	hub  *forum.Hub
 	ts   *httptest.Server
 	file string
+
+	// mu guards handler, which the running server goroutine reads on every
+	// request while a test may layer extra routes on top via wrap or handle.
+	mu      sync.RWMutex
+	handler http.Handler
+}
+
+// wrap layers a middleware over the server's current handler. It is safe to
+// call after the server started: requests go through a single dispatcher
+// installed by newEnv whose delegate is swapped under a lock.
+func (e *testEnv) wrap(mw func(next http.Handler) http.Handler) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.handler = mw(e.handler)
+}
+
+// handle answers requests for path with fn and passes everything else on.
+func (e *testEnv) handle(path string, fn http.HandlerFunc) {
+	e.wrap(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == path {
+				fn(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+}
+
+func (e *testEnv) dispatch(w http.ResponseWriter, r *http.Request) {
+	e.mu.RLock()
+	h := e.handler
+	e.mu.RUnlock()
+	h.ServeHTTP(w, r)
 }
 
 func newEnv(t *testing.T, grace time.Duration) *testEnv {
@@ -43,7 +78,8 @@ func newEnv(t *testing.T, grace time.Duration) *testEnv {
 		Addr:       ts.Listener.Addr().String(),
 		Shutdown:   func() {},
 	})
-	ts.Config.Handler = srv
+	env.handler = srv
+	ts.Config.Handler = http.HandlerFunc(env.dispatch)
 	ts.Start()
 	t.Cleanup(ts.Close)
 	env.ts = ts

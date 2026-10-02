@@ -74,16 +74,11 @@ func TestWhiteboard_RealChrome_AFrameThatCannotStartSaysWhy(t *testing.T) {
 }, 6000);</script></body></html>`)
 
 	reported := make(chan string, 1)
-	inner := env.ts.Config.Handler
-	env.ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/__status" {
-			select {
-			case reported <- r.URL.Query().Get("v"):
-			default:
-			}
-			return
+	env.handle("/__status", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case reported <- r.URL.Query().Get("v"):
+		default:
 		}
-		inner.ServeHTTP(w, r)
 	})
 
 	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",

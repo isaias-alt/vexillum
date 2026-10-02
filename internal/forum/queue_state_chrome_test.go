@@ -57,15 +57,10 @@ func startQueueFormRun(t *testing.T, prequeue bool) *queueFormRun {
 			}
 		}
 	}
-	inner := env.ts.Config.Handler
-	env.ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/__report" {
-			run.mu.Lock()
-			run.reports = append(run.reports, r.URL.Query().Get("v"))
-			run.mu.Unlock()
-			return
-		}
-		inner.ServeHTTP(w, r)
+	env.handle("/__report", func(w http.ResponseWriter, r *http.Request) {
+		run.mu.Lock()
+		run.reports = append(run.reports, r.URL.Query().Get("v"))
+		run.mu.Unlock()
 	})
 	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
 		"--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+run.key)

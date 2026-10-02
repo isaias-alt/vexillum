@@ -265,15 +265,10 @@ func captureReports(t *testing.T, env *testEnv) func(string) (string, bool) {
 	t.Helper()
 	var mu sync.Mutex
 	reports := map[string]string{}
-	inner := env.ts.Config.Handler
-	env.ts.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/__report" {
-			mu.Lock()
-			reports[r.URL.Query().Get("k")] = r.URL.Query().Get("v")
-			mu.Unlock()
-			return
-		}
-		inner.ServeHTTP(w, r)
+	env.handle("/__report", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		reports[r.URL.Query().Get("k")] = r.URL.Query().Get("v")
+		mu.Unlock()
 	})
 	return func(k string) (string, bool) {
 		mu.Lock()
