@@ -42,7 +42,7 @@ func TestCoreContract(t *testing.T) {
 			if strings.Contains(body, "{{") || strings.Contains(body, "<no value>") {
 				t.Error("unrendered template action left in the body")
 			}
-			if strings.Contains(body, "—") {
+			if strings.Contains(body, "\u2014") {
 				t.Error("body contains an em dash")
 			}
 			if !strings.HasSuffix(body, "\n") || strings.HasSuffix(body, "\n\n") {

@@ -42,7 +42,7 @@ func TestEverySkillIsValid(t *testing.T) {
 			if !strings.Contains(front, "\ndescription: ") {
 				t.Error("frontmatter has no description")
 			}
-			if strings.Contains(text, "—") {
+			if strings.Contains(text, "\u2014") {
 				t.Error("SKILL.md contains an em dash")
 			}
 		})
