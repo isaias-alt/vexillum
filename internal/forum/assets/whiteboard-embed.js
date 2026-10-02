@@ -314,7 +314,7 @@
       width: "100%",
       height: "100%",
       border: "0",
-      background: "#fffbf3",
+      background: "var(--fr-bg, " + (theme() === "dark" ? "#15171A" : "#F2F1EC") + ")",
     });
     overlayCloseButton = document.createElement("button");
     overlayCloseButton.type = "button";

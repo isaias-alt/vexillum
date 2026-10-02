@@ -44,6 +44,7 @@ const whiteboardFrameHTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Whiteboard</title>
+<link rel="stylesheet" href="/forum-assets/forum-tokens.css">
 <link rel="stylesheet" href="/whiteboard-assets/whiteboard.css?v=%[1]s">
 </head>
 <body>

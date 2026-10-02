@@ -43,7 +43,9 @@ body[data-vexillum-whiteboard-theme="dark"] {
      70px wide at 10px from the edge), which floats above this header from
      outside the iframe. */
   padding: 8px 92px 8px 12px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+  border-bottom: 1px solid var(--fr-border-strong, #3a3f47);
+  background: var(--fr-surface-sunken, #20242a);
+  color: var(--fr-text, #e9eaec);
   flex: none;
 }
 
@@ -64,20 +66,45 @@ body[data-vexillum-whiteboard-theme="dark"] {
   font-size: 13px;
 }
 
-#wbHeader button {
-  flex: none;
-  border: 0;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
-  background: #f4c95d;
-  color: #17130a;
+/* The frame's own actions are forum buttons: small, on the --fr-* tokens
+   (the frame page links forum-tokens.css, dark by default), the same size and
+   look as the embedder's "Close" button. Queue feedback is the primary one.
+   The frame has no <html data-fr-theme>, so the light values follow the
+   frame's own theme attribute. */
+body[data-vexillum-whiteboard-theme="light"] {
+  --fr-surface: #ffffff;
+  --fr-surface-sunken: #ecebe4;
+  --fr-border-strong: #c2c0b8;
+  --fr-text: #1a1d22;
+  --fr-accent: #1f4e79;
+  --fr-accent-hover: #173e61;
+  --fr-accent-contrast: #ffffff;
 }
 
-#wbHeader button:hover {
-  background: #ffd877;
+#wbHeader button {
+  flex: none;
+  border: 1px solid var(--fr-border-strong, #3a3f47);
+  border-radius: var(--fr-radius-sm, 4px);
+  padding: 4px 10px;
+  font: 500 13px/1.3 var(--fr-font-sans, system-ui, sans-serif);
+  cursor: pointer;
+  background: var(--fr-surface, #1c1f24);
+  color: var(--fr-text, #e9eaec);
+}
+
+#wbHeader button:hover:not(:disabled) {
+  background: var(--fr-surface-sunken, #20242a);
+}
+
+#wbHeader #wbQueue {
+  background: var(--fr-accent, #6fa1cb);
+  border-color: var(--fr-accent, #6fa1cb);
+  color: var(--fr-accent-contrast, #0f2233);
+}
+
+#wbHeader #wbQueue:hover:not(:disabled) {
+  background: var(--fr-accent-hover, #8bb6d9);
+  border-color: var(--fr-accent-hover, #8bb6d9);
 }
 
 #wbHeader button:disabled {
@@ -94,8 +121,8 @@ body[data-vexillum-whiteboard-theme="dark"] {
 }
 
 .wb-banner-warn {
-  background: rgba(244, 201, 93, 0.18);
-  border-bottom-color: rgba(244, 201, 93, 0.55);
+  background: var(--fr-bronze-soft, rgba(201, 161, 90, 0.18));
+  border-bottom-color: var(--fr-bronze, #c9a15a);
 }
 
 .wb-banner button {
@@ -190,13 +217,13 @@ body[data-vexillum-whiteboard-theme="dark"] {
 }
 
 #wbLinkConfirmOpen {
-  border-color: transparent;
-  background: #f4c95d;
-  color: #17130a;
+  border-color: var(--fr-accent, #6fa1cb);
+  background: var(--fr-accent, #6fa1cb);
+  color: var(--fr-accent-contrast, #0f2233);
 }
 
 #wbLinkConfirmOpen:hover {
-  background: #ffd877;
+  background: var(--fr-accent-hover, #8bb6d9);
 }
 
 body[data-vexillum-whiteboard-theme="dark"] .wb-link-confirm-card {
@@ -208,18 +235,6 @@ body[data-vexillum-whiteboard-theme="dark"] .wb-link-confirm-card {
    the reserved right padding; the fullscreen action takes that corner. */
 body[data-vexillum-whiteboard-mode="inline"] #wbHeader {
   padding-right: 12px;
-}
-
-#wbFullscreen {
-  background: transparent;
-  border: 1px solid rgba(128, 128, 128, 0.45);
-  color: inherit;
-  font-weight: 600;
-}
-
-body[data-vexillum-whiteboard-theme="dark"] #wbFullscreen:hover,
-#wbFullscreen:hover {
-  background: rgba(128, 128, 128, 0.15);
 }
 
 /* Click-catcher that keeps an inline whiteboard in view mode until the user
@@ -242,9 +257,9 @@ body[data-vexillum-whiteboard-theme="dark"] #wbFullscreen:hover,
   letter-spacing: 0.04em;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(23, 19, 10, 0.72);
-  color: #f4c95d;
-  border: 1px solid rgba(244, 201, 93, 0.55);
+  background: var(--fr-surface, #1c1f24);
+  color: var(--fr-text, #e9eaec);
+  border: 1px solid var(--fr-border-strong, #3a3f47);
   opacity: 0.85;
 }
 
