@@ -35,6 +35,13 @@ happens to already be pending at the exact moment a turn is ending.
 reaches any other tool's own Claude Code turns too, which have no task
 for the sentinel to track.
 
+A wake can also be forum feedback: the forum listener (see "vx forum")
+stores a user's prompt in the project's inbox and records a forum wake, which
+both "drain" and "await" report as "forum session <file>: N new messages
+(ended: false). Run vx forum inbox." It is the same hook and the same
+once-only delivery; a forum wake whose messages were already confirmed is
+dropped.
+
 Each "await" records itself under ~/.vexillum/sentinel-awaiters/ and never
 outlives the hook that launched it: it exits as soon as its parent process
 is gone, and a newer "await" from the same session and project replaces the

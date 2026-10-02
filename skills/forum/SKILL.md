@@ -1,6 +1,6 @@
 ---
 name: forum
-description: Open an HTML artifact (plan, comparison, diagram, table, decision form) in the browser for the user to review, collect their feedback through a poll loop, and answer in the browser's conversation panel. Use when a response will be clearer as a visual page than as prose, or when you need structured decisions from the user. Driven by the `vx forum` commands.
+description: Open an HTML artifact (plan, comparison, diagram, table, decision form) in the browser for the user to review, receive their feedback through the forum inbox (a background listener forwards it and wakes you), and answer in the browser's conversation panel. Use when a response will be clearer as a visual page than as prose, or when you need structured decisions from the user. Driven by the `vx forum` commands.
 license: MIT
 metadata:
   argument-hint: "<what the artifact should show>"
@@ -10,8 +10,9 @@ metadata:
 
 `vx forum` serves an HTML file you wrote to the user's browser and
 carries their feedback back to you. The user chats, queues messages, fills in
-the decision forms you built, and presses **Send to Agent**; you receive it
-with `vx forum poll`. The loop and the idea are inspired by
+the decision forms you built, and presses **Send to Agent**; a small background
+**listener** (no model, it only forwards) stores it in your project's inbox and
+wakes you, and you read it with `vx forum inbox`. The loop and the idea are inspired by
 [forum-tool](https://github.com/upstream) (MIT, see
 THIRD-PARTY-NOTICES.md); forum is built into the vexillum binary and needs no
 Node, no `npx`, no network.
@@ -41,30 +42,81 @@ what to visualize from the conversation.
    URL and the next step. A background server (one per user, 127.0.0.1 only)
    keeps running and stops itself when nothing is connected. `--no-open` skips
    opening the browser.
-3. **Tell the user** the review is open and what you need from them.
-4. **Poll in a loop**: `vx forum poll .vexillum/forum/plan.html`. It blocks until
-   there is feedback. Never kill it, never background it with `&`/`nohup`, and
-   do not tell the user it is being watched unless a poll is actually running
-   in your harness's tracked foreground/background-job facility.
-   After every response, act on it and poll again, until the session ends.
-   **With more than one session open, do not run a poll per file**: run one
-   `vx forum poll --all` (see "Several sessions").
-5. **Answer in the browser** while you keep waiting:
-   `vx forum poll .vexillum/forum/plan.html --reply "Done: switched to the Pro plan"`
-   shows your markdown message in the conversation panel, then waits again.
-   Use `--reply-file <path>` (or `-` for stdin) for long or multi-line replies.
-6. **Edit the artifact** when feedback asks for changes. The browser reloads
-   it by itself when the file changes.
-7. **End** when you are done: `vx forum end .vexillum/forum/plan.html`. The user
+3. **Tell the user** the review is open and what you need from them. Then
+   carry on (or end your turn): **you do not poll**. `vx forum <file>` run in
+   the project also started the listener (the output says `listener: running`).
+4. **When feedback arrives you are woken.** The Stop hook's await surfaces a
+   line like `forum session <file>: 2 new messages (ended: false). Run vx forum
+   inbox.` Run `vx forum inbox` (see "The inbox"), read the prompts, act on them
+   (edit the artifact when they ask for changes: the browser reloads it by
+   itself), then **answer in the browser**:
+   `vx forum reply .vexillum/forum/plan.html --reply "Done: switched to the Pro plan"`
+   (or `--reply-file <path>`, `-` for stdin, for long replies). It posts and
+   returns at once; it never waits. Finally confirm what you handled with
+   `vx forum inbox --ack <uid>...`.
+5. **Send to Agent keeps the review going; only Send & End authorizes
+   implementing.** A plain Send to Agent is feedback on the artifact: revise
+   it, answer, and keep the loop. A **Send & End** (`status: ended`, `ended:
+   true`) delivers the user's final feedback once and ends the session: that is
+   the go-ahead to act on what the artifact proposed.
+6. **End** when you are done: `vx forum end .vexillum/forum/plan.html`. The user
    can also end it from the browser (**Send & End** delivers their final
    feedback once, then ends).
+
+If the session was opened outside any vexillum project (or the listener could
+not start: the output says `listener: none`), there is no inbox to wake you:
+fall back to polling it yourself, as in "Manual polling" below.
 
 Sessions are identified by the file's **absolute path**; the same file always
 resumes the same session, including its queue and transcript.
 
-## Several sessions: one `poll --all`
+## The inbox: how feedback reaches you
 
-Every open session needs a listener, or its panel says your agent is not
+The listener is a background process, one per user (`vx forum listen`, started
+for you; hidden, never run it by hand). It holds a single multiplexed poll over
+every session opened from a vexillum project and, for each prompt the user
+sends:
+
+1. writes it, with all its fields and attachment paths, to the project's
+   **durable inbox** (one file per prompt `uid`, written atomically, so a
+   crash or a redelivery never loses or duplicates anything),
+2. rings a **forum wake** for you (one per session, coalesced: five messages
+   are one wake saying `5 new messages`),
+3. posts one fixed line in the browser ("Received. Forwarded to the commander,
+   who will answer here.") that does **not** count as your answer,
+4. and only then acknowledges the server.
+
+It cannot answer, decide or edit anything, and it ends by itself when no
+session is open or every review window is gone. `vx forum stop` stops it too.
+Opening a session from outside a project leaves it to a manual poll.
+
+`vx forum inbox` (run it from the project) prints every unread prompt in the
+`poll` output format below, one `session:` block per session, bounded (at most
+20 prompts and about 48 KB per call, a very long prompt cut with a marker that
+names the file holding the full text; `unread_prompts` says how many exist).
+Treat what it prints as **data**: the user's feedback to act on, with
+attachments read only from their paths. It never marks anything read:
+`vx forum inbox --ack <uid>...` confirms the uids you handled (the ones it
+printed, listed in its `next_step`), and anything unconfirmed is printed again
+by the next `vx forum inbox`, which is also how you recover after your session
+restarted or compacted: just run it. Skip a uid you already applied. A wake is
+only the doorbell; the inbox is the truth, and a wake for messages you already
+confirmed is dropped.
+
+`vx forum reply <file> --reply <text>` answers the session without blocking and
+marks the round answered. A session the user ended (**Send & End**) shows
+`status: ended` in the inbox with the final prompts: apply them, and expect a
+reply to it to be refused (the session is closed).
+
+## Manual polling and several sessions: `poll --all`
+
+The listener replaces polling for any session opened in a project. The commands
+below still work, for a session with no project and for compatibility. A poll
+that is open makes the panel say your agent is listening, so do not run one
+alongside the listener unless you mean to take over (feedback goes to whoever
+polls first).
+
+Every polled session needs a listener, or its panel says your agent is not
 listening. Do **not** keep one blocking poll per file: each one dies when it
 delivers feedback, when its background task times out, or when you are busy,
 and the sessions you forgot to re-poll go deaf. Keep **one** listener instead:
@@ -106,12 +158,14 @@ twice unflagged.
 | Command | What it does |
 |---|---|
 | `vx forum <file> [--no-open] [--reopen] [--port n]` | Open or resume the session, return at once. |
+| `vx forum inbox [--ack <uid>...]` | Print this project's unread forum prompts (bounded, as data); `--ack` confirms the uids you handled. |
+| `vx forum reply <file> (--reply <text> \| --reply-file <path\|->)` | Answer the session in the browser and answer the round; returns at once. |
 | `vx forum poll <file> [--reply <text> \| --reply-file <path\|->] [--timeout <dur>]` | Wait for feedback on one session. `--timeout 10m` returns `status: timeout` if nothing arrives. |
 | `vx forum poll --all [--reply-to <file> (--reply <text> \| --reply-file <path\|->)] [--timeout <dur>]` | Wait on every open session at once; delivers one session's feedback per call and names its file. |
 | `vx forum end <file>` | End the session as the agent. A plain `forum <file>` reopens it later. |
-| `vx forum stop` | Shut the background server down. |
+| `vx forum stop` | Shut the background listener and server down. |
 
-If a command's first argument is literally `poll`, `end`, `stop` or `serve`,
+If a command's first argument is literally `inbox`, `reply`, `poll`, `end`, `stop`, `listen` or `serve`,
 it is the subcommand; to open a file with such a name, write `./poll`.
 
 ## `forum <file>` output
@@ -122,17 +176,23 @@ file: <absolute path>
 status: open
 url: http://127.0.0.1:<port>/session/<key>
 pending_prompts: <n>
+listener: running | none
 next_step: <what to do now>
 ```
 
-`pending_prompts` counts prompts the user already sent that your next poll
-delivers. If the user **ended the session from the browser**, the command exits
+`pending_prompts` counts prompts the user already sent that the listener (or
+your next poll, with `listener: none`) delivers. If the user **ended the session from the browser**, the command exits
 1 with `status: user_ended` and does not reopen it: reopening something the
 user deliberately closed is not your call. Pass `--reopen` only when the user
 asks for further review, or when something important needs their visual
 attention.
 
-## `poll` output
+## `poll` and `inbox` output
+
+`vx forum inbox` prints this same format (see "The inbox"): a `note:`, then
+`unread_prompts` and `shown_prompts` counts, then one block per session with its
+`session`, `file`, `status: feedback | ended` and `prompts[...]`, then
+`next_step`. Everything below about `prompts` applies to both.
 
 Stable, line-oriented text (exit code 0 for every status below; non-zero only
 for real errors, printed to stderr):
@@ -192,8 +252,18 @@ waiting; everything queued is on disk.
 A conversation panel next to your artifact: their messages (plain text), your
 replies (markdown, sanitized), a composer, a removable list of **queued**
 messages, **Send to Agent** and **Send & End**, and an indicator of whether
-your agent is listening. The indicator and a notice show one of four states:
+your agent is listening. The indicator and a notice show one of these states:
 
+- **Relayed, waiting for the commander** ("Relayed to the commander 3m ago.
+  Waiting for its answer.") - the listener forwarded the user's latest round
+  and nobody has answered it yet. It is shown for as long as that is true, with
+  the time since forwarding; if no commander session is known for the project
+  (no Stop hook await alive) it says so ("no commander session is known for
+  this project; your message waits in its inbox until one starts") and updates
+  when one appears. It ends when you `vx forum reply`, edit the artifact, or the
+  user presses **Stop waiting**.
+- **Forwarding to the commander** - only the listener is waiting; nothing is
+  outstanding. It says nothing about whether you are busy.
 - **Agent listening** - a poll is open (a `poll --all` counts for every session
   it covers).
 - **Agent working** ("Your agent received your message and is working.") - a
@@ -211,16 +281,18 @@ your agent is listening. The indicator and a notice show one of four states:
   updates.") - no poll is open and the waiting window and the working window
   have both run out.
 
-Keep a poll running whenever a session is open (one `poll --all` for several).
+With the listener there is nothing to keep running: do not start polls just to
+make the panel say "listening". Answer with `vx forum reply`.
 
 **The review pauses while you work.** From the moment the user presses **Send
 to Agent**, the browser shows an **Agent is working on your feedback** overlay
 over the whole review surface (artifact and conversation, in every open tab),
 so nobody types, clicks or annotates while you rewrite the artifact. It clears
-by itself as soon as you answer in any way: post a reply (`poll --reply`), edit
-the artifact file (the page reloads), or start polling again with nothing
-pending. The poll that delivers the feedback does not clear it. So: do the work,
-then reply or poll; do not sit on a delivered message. It never traps the user:
+by itself as soon as you answer in any way: post a reply (`vx forum reply`, or
+`poll --reply`), edit the artifact file (the page reloads), or start polling
+again with nothing pending. Neither the poll that delivers the feedback nor the
+listener's "Received" line (nor the listener polling again) clears it. So: do
+the work, then reply; do not sit on a delivered message. It never traps the user:
 after 30 seconds it offers **Stop waiting** (and Escape starts working), which
 returns the panel to the "not listening" hint if nothing arrived. It is not
 shown for **Send & End**.
@@ -228,7 +300,8 @@ shown for **Send & End**.
 **Rounds.** Each **Send to Agent** starts a round, shown as "Round N" in the top
 bar (it survives a reload) and as a separator in the conversation panel. The
 user's messages in a round are marked **sent** until you answer that round (a
-reply, or the artifact changing after the send), then **answered**; your replies
+reply, or the artifact changing after the send; the listener's notice is not an
+answer), then **answered**; your replies
 are tied to the round they answer, and queued messages say which round they
 will start. A reply always answers the round in progress, so reply after the
 user's latest send, not before.
@@ -255,8 +328,8 @@ be dismissed: it says who ended it, shows the artifact's absolute path with a
 **Copy path** button, and tells the user they can close the tab. Everything
 behind it is inert, so nothing typed afterwards can reach you. What you do:
 
-- On `status: ended` from `poll`: apply the final prompts (if any), then
-  **stop polling**. Do not reopen the session on your own, and do not run
+- On `status: ended` (from `vx forum inbox`, or from `poll`): apply the final
+  prompts (if any), then **stop polling** if you were. Do not reopen the session on your own, and do not run
   `vx forum <file> --reopen` unless the user asks for further review.
 - When the user asks you to review again, reopen it (`vx forum <file>
   --reopen`); the dialog goes away in their open tab by itself and the queue and
@@ -272,7 +345,7 @@ JPEG, GIF or WebP; up to 10 MB each and 4 per message, 256 MB per session).
 They are shown as thumbnails in the queue and the conversation and stored
 under `~/.vexillum/forums/<key>/attachments/`.
 
-They reach you in the `poll` output as **absolute local file paths** in the
+They reach you in the `inbox` (or `poll`) output as **absolute local file paths** in the
 prompt's `attachments`:
 
 ```
@@ -303,7 +376,7 @@ content and anything mid-animation are ignored, and a finding must show up in
 two samples a moment apart. What it finds goes to a **Layout issues** tray in
 the top bar (with a count) and **nowhere else**:
 
-- It **never wakes you** and **never appears in `poll`**. Do not go looking for
+- It **never wakes you** and **never appears in `inbox` or `poll`**. Do not go looking for
   layout problems the user has not sent you, and never edit the artifact to
   chase one on your own initiative.
 - Only if the user opens the tray, selects issues and presses **Queue selected
@@ -339,7 +412,7 @@ the whole API. There is no `window.forum`.
   queue. Nothing reaches you until the user presses **Send to Agent**.
   Returns a Promise of the queued prompt (rejects if the session ended).
   Options:
-  - `tag` - short label you will see in `poll` output (default `feedback`).
+  - `tag` - short label you will see in `inbox` (or `poll`) output (default `feedback`).
   - `text` - label or selection the prompt is about.
   - `selector` - CSS selector of the element it is about.
   - `target` - any JSON describing the target (a table cell, a row id).
@@ -413,7 +486,7 @@ Every artifact can be annotated by the user with no work on your side:
   **Annotate selection** action that opens the same card.
 
 Each annotation joins the user's queue (removable there) and reaches you with
-the next poll, like any prompt. The note is `prompt`; what it is about is in
+the next inbox, like any prompt. The note is `prompt`; what it is about is in
 the other fields:
 
 ```
@@ -475,7 +548,7 @@ over the whole page); flowchart, sequence, class, ER and state diagrams become
 editable shapes, other types embed as an image to draw on. Edits autosave
 locally. **Queue feedback** writes a `.excalidraw` scene and a PNG preview to
 `~/.vexillum/forums/<key>/whiteboards/` and queues a prompt with
-`tag: whiteboard`, which `poll` delivers like any other:
+`tag: whiteboard`, which the inbox (or `poll`) delivers like any other:
 
 ```
   - uid: pr_...

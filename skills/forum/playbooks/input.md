@@ -38,7 +38,7 @@ Use when: you need to collect user input on decisions, choices, preferences, tri
 ## Images
 
 - The user can attach screenshots to their own messages (paste, drop, **Attach image**); your artifact cannot, and `window.forum.queuePrompt` has no image option. When the answer you need is "show me", ask for it in the artifact's text ("paste a screenshot of the broken state into the conversation") instead of building an upload control.
-- Images arrive in `poll` as local `attachments[].path`: open them before acting on the message.
+- Images arrive in `vx forum inbox` (or `poll`) as local `attachments[].path`: open them before acting on the message.
 
 ## Pitfalls
 
@@ -79,7 +79,7 @@ Tracked batch, the final selected set queued once:
 </form>
 ```
 
-The receipt you give for a tracked batch must assign every submitted ID exactly one outcome: addressed with concrete evidence, deferred with a reason, or rejected with a reason. Before declaring completion, compare the submitted ID set with the receipt's ID set and surface every missing ID. Deliver the receipt with `vx forum poll <file> --reply-file -` (with several sessions open: `vx forum poll --all --reply-to <file> --reply-file -`).
+The receipt you give for a tracked batch must assign every submitted ID exactly one outcome: addressed with concrete evidence, deferred with a reason, or rejected with a reason. Before declaring completion, compare the submitted ID set with the receipt's ID set and surface every missing ID. Deliver the receipt with `vx forum reply <file> --reply-file -` (if you are polling by hand instead: `vx forum poll <file> --reply-file -`, or with several sessions `vx forum poll --all --reply-to <file> --reply-file -`).
 
 A custom (non-native) choice UI should make its option elements update local state, then use a separate Queue answer button to queue the final value.
 

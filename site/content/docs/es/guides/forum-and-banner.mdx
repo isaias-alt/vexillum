@@ -19,11 +19,13 @@ Del lado del agente:
 
 | Comando | Hace |
 | --- | --- |
-| `vx forum <file>` | abre o retoma la sesión y vuelve enseguida |
-| `vx forum poll <file>` | se bloquea hasta que mandás feedback; `--reply` muestra una respuesta en el panel |
-| `vx forum poll --all` | un solo listener para todas las sesiones abiertas a la vez; `--reply-to <file>` dice a qué sesión responde un reply |
+| `vx forum <file>` | abre o retoma la sesión, se asegura de que el listener corra y vuelve enseguida |
+| `vx forum inbox` | imprime el feedback que espera al commander; `--ack <uid>...` confirma lo que ya atendió |
+| `vx forum reply <file>` | muestra una respuesta en el panel y responde la ronda, sin bloquearse |
+| `vx forum poll <file>` | se bloquea hasta que mandás feedback; `--reply` muestra una respuesta en el panel (fallback manual) |
+| `vx forum poll --all` | un solo poll para todas las sesiones abiertas a la vez; `--reply-to <file>` dice a qué sesión responde un reply |
 | `vx forum end <file>` | termina la sesión |
-| `vx forum stop` | apaga el servidor en segundo plano |
+| `vx forum stop` | apaga el listener y el servidor en segundo plano |
 
 Las sesiones se identifican por la ruta absoluta del archivo. forum viene dentro del binario: sin Node, sin `npx`, sin red.
 
@@ -35,9 +37,22 @@ El servidor intenta no moverse ni desaparecer debajo de una pestaña abierta:
 - **No se reemplaza un servidor en uso.** Después de actualizar vexillum, un servidor en marcha puede ser de un build más viejo. El build nuevo lo reemplaza solo cuando no tiene sesión abierta, ni pestaña conectada, ni poll esperando. Si no, el nuevo `vx` lo reutiliza cuando su protocolo es compatible, y se detiene con un error que dice qué hacer cuando no lo es (terminar o cerrar las sesiones y las pestañas, o correr `vx forum stop`). Un servidor demasiado viejo para informar su actividad se reutiliza, nunca se detiene.
 - **Las pestañas se recuperan solas.** Cuando el servidor sí se reinicia, una pestaña abierta muestra un banner de reconexión y reintenta sola contra la misma dirección. Las sesiones, los mensajes encolados y la transcripción se restauran desde disco, y el enlace de la sesión sigue funcionando.
 
+### El listener y el inbox
+
+Antes el agente sostenía un poll bloqueante por sesión, y el poll moría cuando el agente se ocupaba. Ahora lo sostiene un proceso chico en segundo plano: `vx forum listen` (oculto; `vx forum <file>` lo arranca si no está corriendo, uno por usuario, protegido por un pid lock). Es código común, sin ningún modelo detrás, así que solo puede reenviar. Por cada prompt que mandás desde una sesión abierta dentro de un proyecto de vexillum:
+
+1. escribe el prompt, con todos sus campos y las rutas de las imágenes adjuntas, en el inbox durable del proyecto (`forum-inbox/<session>/<uid>.json`, un archivo atómico por prompt, así que un crash o una reentrega nunca pierde ni duplica uno),
+2. registra un **forum wake**, uno por sesión sin importar cuántos mensajes llegaron,
+3. publica una línea fija en el panel ("Received. Forwarded to the commander, who will answer here.") que no cuenta como respuesta,
+4. y recién entonces confirma al servidor.
+
+Al commander lo despierta el mismo Stop hook que usa para los soldiers, con una línea como `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` Corre `vx forum inbox`, que imprime los prompts sin leer en el formato de salida del poll (con tamaño acotado, adjuntos solo por ruta, como datos), actúa, responde con `vx forum reply <file> --reply "..."` y confirma con `vx forum inbox --ack <uid>...`. Un prompt se vuelve a mostrar hasta que se confirma, así que un commander reiniciado no pierde nada. **Send & End** reenvía los prompts finales con `ended: true`; solo eso autoriza al commander a implementar.
+
+Una sesión abierta fuera de cualquier proyecto no tiene commander al que despertar: el listener la deja sin entregar y `vx forum poll` sigue funcionando para ella como antes. El listener termina solo cuando no hay ninguna sesión abierta o se fueron todas las ventanas de revisión, y `vx forum stop` lo detiene primero.
+
 ### Varias sesiones a la vez
 
-Cada sesión abierta necesita un listener, y un poll muere cuando entrega feedback, cuando vence su tarea en segundo plano o cuando el agente está ocupado. Con varias sesiones abiertas eso dejaba a algunas sin nadie escuchando. `vx forum poll --all` lo resuelve con un solo listener para todas:
+Cada sesión con poll necesita un listener, y un poll muere cuando entrega feedback, cuando vence su tarea en segundo plano o cuando el agente está ocupado. Con varias sesiones abiertas eso dejaba a algunas sin nadie escuchando. `vx forum poll --all` lo resuelve con un solo listener para todas:
 
 - Cubre cada sesión abierta (las sesiones que se abren mientras espera se suman), así que todos los paneles muestran al agente escuchando.
 - Cada llamada entrega el feedback de una sola sesión, la que más espera, e imprime su `session` y su `file` para que el agente sepa qué artefacto editar. `other_sessions_pending` indica cuántas más están esperando; la siguiente llamada las entrega.
@@ -54,10 +69,14 @@ Un poll no consume el feedback por devolverlo. Los prompts quedan en el servidor
 
 | Estado | Significado |
 | --- | --- |
+| Relayed, waiting for the commander | el listener reenvió tu última ronda y nadie la respondió; muestra el tiempo desde el reenvío, y avisa cuando no se conoce ninguna sesión de commander para el proyecto |
+| Forwarding to the commander | solo el listener está esperando; no hay nada pendiente |
 | Agent listening | hay un poll abierto (un `poll --all` cuenta para cada sesión que cubre) |
 | Agent working | el agente tomó tus mensajes y no volvió a hacer poll ni respondió; dura hasta 15 minutos |
 | Waiting for your agent to listen | no hay poll ahora, pero el agente estuvo ahí en los últimos 30 segundos (un poll terminó, acaba de responder o de abrir la sesión); todavía sin advertencia, así que no parpadea entre una respuesta y el siguiente poll |
 | Agent not listening | ninguno de los anteriores: pedile a tu agente que haga poll |
+
+Después de apretar Send to Agent, el overlay **Agent is working on your feedback** se queda hasta que el commander responde de verdad (un `vx forum reply`), el artefacto cambia, o apretás **Stop waiting**. La línea "Received" del listener y que vuelva a hacer poll no lo sacan.
 
 El playbook del agente es la [skill](/es/docs/concepts/skills) `forum`, que instala `vx init` (el texto completo está en [Skill: forum](/es/docs/reference/skills/forum)).
 

@@ -18,6 +18,27 @@ appropriate) before actually stopping. Verify before you report a soldier as
 finished: look at `git log` and `git status` in its camp rather than trusting the
 status word alone.
 
+## Forum wakes
+
+The same Stop hook also carries forum feedback. When the user sends feedback
+from a review panel opened in this project, a small background listener (not a
+soldier, no model) stores it in the project's inbox and rings a forum wake. If
+your turn is about to end you are told, in the same hook message and with no
+soldier involved:
+
+```
+forum session <file>: 2 new messages (ended: false). Run vx forum inbox.
+```
+
+That is not a soldier status and needs no `vx status`. Follow the `forum` skill:
+run `vx forum inbox`, act on the prompts, answer with `vx forum reply <file>
+--reply "<what you did>"` (it does not block), then confirm what you handled
+with `vx forum inbox --ack <uid>...`. You never poll for it. The wake is a
+doorbell, delivered once: the inbox is the truth, so after a restart or a long
+absence run `vx forum inbox` to see anything unread. `(ended: true)` means the
+user pressed Send & End: the prompts are final feedback, apply them. A forum
+wake for messages you already confirmed is dropped, like a stale soldier wake.
+
 ## Statuses
 
 - **done**: the soldier finished. For a mission, report what it did and ask

@@ -27,8 +27,11 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | `config.json` | solo después de `init --global` |
 | `models.json` | base global opcional para los [perfiles](/es/docs/reference/models-json); lo creás vos |
 | `sentinel.pid`, `sentinel.log` | el único sentinel por máquina |
+| `forum/listener.pid`, `forum/listener.log` | el único listener de forum por usuario, ver [Forum y banner](/es/docs/guides/forum-and-banner) |
 | `projects/<repo>-<hash>/tasks/<id>.json` | una tarea |
 | `projects/<repo>-<hash>/wakes/<id>.json` | un wake pendiente del sentinel |
+| `projects/<repo>-<hash>/wakes/forum/<session>.json` | un wake de forum pendiente (uno por sesión de revisión) |
+| `projects/<repo>-<hash>/forum-inbox/<session>/<uid>.json` | feedback de forum esperando al commander (los confirmados pasan a `read/`) |
 | `projects/<repo>-<hash>/pending/<id>.json` | una decisión pendiente del commander, ver [`vx pending`](/es/docs/reference/cli/pending) |
 | `projects/<repo>-<hash>/camps/` | el pool de worktrees: `pool.json` y `<slot>/<repo>/` |
 | `projects/<repo>-<hash>/reports/<agent>-<id>.md` | el reporte final de un scout |

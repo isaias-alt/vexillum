@@ -162,12 +162,14 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
      general is already looking at the browser). It returns at once.
    - Both troop mode and pr mode always reach this step - there's no
      "board-less" variant of either.
-   - Then keep the standard forum loop going: tell the general the board is
-     open, and run `vx forum poll .vexillum/forum/muster.html` in the foreground
-     (never `&`/`nohup`, never leave a poll hanging when nothing is waiting on
-     it). Answer questions the general sends with `--reply`; if they ask for a
-     change to the board, edit the file (the browser reloads by itself) and
-     poll again. On `status: ended`, stop polling. When you're done and the
+   - Then follow the forum skill's loop: tell the general the board is open.
+     You do not poll: the forum listener wakes you when they send feedback (run
+     `vx forum inbox`, as the forum skill says; if `vx forum` printed
+     `listener: none`, fall back to `vx forum poll .vexillum/forum/muster.html`
+     in the foreground, never `&`/`nohup`). Answer questions the general sends
+     with `vx forum reply .vexillum/forum/muster.html --reply`; if they ask for
+     a change to the board, edit the file (the browser reloads by itself). On
+     `status: ended`, stop. When you're done and the
      session is still open, close it with `vx forum end
      .vexillum/forum/muster.html`. The board is a read-only snapshot, so if the troop
      changes while it's open, rewrite the file from a fresh `vx status

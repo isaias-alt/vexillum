@@ -12,6 +12,8 @@ Usage:
   vx forum <html-file> [--no-open] [--reopen] [--port <n>]
   vx forum poll <html-file> [--reply <text> | --reply-file <path|->] [--timeout <duration>]
   vx forum poll --all [--reply-to <html-file> (--reply <text> | --reply-file <path|->)] [--timeout <duration>]
+  vx forum inbox [--ack <uid>...]
+  vx forum reply <html-file> (--reply <text> | --reply-file <path|->)
   vx forum end <html-file>
   vx forum stop
 
@@ -51,6 +53,26 @@ acknowledges them once its output was written. If a poll dies before that,
 running poll again delivers the same prompts again, marked redelivered, so
 nothing is lost; skip any uid you already applied.
 
+forum <html-file> run inside a vexillum project also records that project as
+the session's owner and makes sure the forum listener is running. The
+listener is a small background process (no model, nothing it can decide)
+that holds the poll for you: every prompt the user sends is written to the
+project's durable inbox, the Stop hook wakes the commander with a "forum
+session <file>: N new messages" line, and the browser shows the round as
+relayed (with the time since, and a note when no commander session is known)
+until a real answer, an artifact change or the user's Stop waiting. A session
+opened outside any project has no commander to wake: the listener leaves it
+alone, and forum poll works for it as before. The listener exits by itself
+when no session is open or every review window is gone.
+
+forum inbox prints the unread prompts of this project (run it from the
+project) in the poll's output format, bounded in size, attachments by path
+only. It does not mark anything read: forum inbox --ack <uid>... confirms the
+uids you handled (the ones printed), and an unconfirmed prompt is shown again.
+forum reply posts the agent's markdown answer (--reply, or --reply-file; - is
+stdin) to the review panel and answers the round without blocking, so a
+commander that does not poll can answer.
+
 forum end ends the session as the agent (a plain forum <html-file> reopens
-it later). forum stop shuts the background server down.
+it later). forum stop shuts the background listener and server down.
 ```
