@@ -322,7 +322,7 @@ body {
 /* Fumadocs zeroes these on small screens; only widen where it shows them. */
 @media (min-width: 768px) {
   #nd-notebook-layout {
-    --fd-sidebar-width: 244px;
+    --fd-sidebar-width: 256px;
   }
 }
 /* Fumadocs centers sidebar + page + toc in --fd-layout-width and lets the
@@ -337,29 +337,67 @@ body {
   }
 }
 
+/* Docs type scale: one step above Fumadocs' compact defaults. Scoped to the
+   docs layout so the landing keeps its own sizes. */
+#nd-notebook-layout {
+  --docs-text-body: 15px;
+  --docs-text-small: 14px;
+  --docs-text-code: 13.5px;
+  --docs-text-meta: 12px;
+  --docs-text-h1: 33px;
+  --docs-text-h2: 21px;
+  --docs-text-h3: 17px;
+  /* Air between the sidebar, the page and "On this page": the page column's
+     inline padding. Fumadocs' 16/24/32px, plus more as the screen allows. */
+  --docs-page-gutter: 16px;
+}
+@media (min-width: 768px) {
+  #nd-notebook-layout {
+    --docs-page-gutter: 32px;
+  }
+}
+@media (min-width: 1024px) {
+  #nd-notebook-layout {
+    --docs-page-gutter: 40px;
+  }
+}
+@media (min-width: 1280px) {
+  #nd-notebook-layout {
+    --docs-page-gutter: 56px;
+  }
+}
+@media (min-width: 1440px) {
+  #nd-notebook-layout {
+    --docs-page-gutter: 64px;
+  }
+}
+#nd-page {
+  padding-inline: var(--docs-page-gutter);
+}
+
 /* page header: the breadcrumb is the design's small-caps eyebrow */
 #nd-page > div:first-child,
 #nd-page > div:first-child * {
-  font-size: 11px;
+  font-size: var(--docs-text-meta);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--fr-text-muted);
 }
 #nd-page h1 {
   font-family: var(--font-serif);
-  font-size: 32px;
+  font-size: var(--docs-text-h1);
   font-weight: 600;
   line-height: 1.2;
   color: var(--fr-text);
 }
 #nd-page > p {
   margin-bottom: 12px;
-  font-size: 14px;
+  font-size: var(--docs-text-body);
   line-height: 1.75;
   color: var(--fr-text-secondary);
 }
 .prose {
-  font-size: 14px;
+  font-size: var(--docs-text-body);
   line-height: 1.75;
   color: var(--fr-text-secondary);
 }
@@ -369,12 +407,12 @@ body {
   color: var(--fr-text);
 }
 .prose h2 {
-  font-size: 20px;
+  font-size: var(--docs-text-h2);
   margin-top: 36px;
   margin-bottom: 14px;
 }
 .prose h3 {
-  font-size: 16px;
+  font-size: var(--docs-text-h3);
 }
 .prose :where(strong) {
   color: var(--fr-text);
@@ -396,7 +434,7 @@ body {
   font-size: 0.92em;
 }
 .prose :where(table) {
-  font-size: 13px;
+  font-size: var(--docs-text-small);
 }
 .prose :where(th, td) {
   border-color: var(--fr-border);
@@ -411,7 +449,7 @@ figure.shiki,
 }
 figure.shiki pre,
 .prose pre {
-  font-size: 12.5px;
+  font-size: var(--docs-text-code);
   line-height: 1.8;
 }
 /* empty lines (usage text has paragraph breaks) must keep their height */
@@ -423,18 +461,27 @@ pre .line {
 .prose [role="alert"],
 .prose div[class*="callout"] {
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: var(--docs-text-code);
 }
 
 /* sidebar: small-caps group headings, active item with an accent rule */
 #nd-sidebar {
-  font-size: 13px;
+  font-size: var(--docs-text-small);
 }
 #nd-sidebar button {
-  font-size: 11px;
+  font-size: var(--docs-text-meta);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--fr-text-muted);
+}
+
+/* "On this page", in the sidebar column of the page and in the popover that
+   replaces it below xl; Fumadocs sets both in its own text-sm. */
+#nd-toc a,
+#nd-toc h3,
+[data-toc-popover-trigger],
+[data-toc-popover-content] a {
+  font-size: var(--docs-text-body);
 }
 
 /* the design sets code in plain text colors, not a syntax theme */
@@ -461,7 +508,7 @@ pre .line {
   border-radius: 6px;
   background: transparent;
   box-shadow: none;
-  font-size: 12.5px;
+  font-size: var(--docs-text-code);
   line-height: 1.7;
 }
 
@@ -512,8 +559,10 @@ pre .line {
 /* ---------------------------------------------------------------------------
    Docs navbar: the search sits in the middle track of a three-track grid whose
    outer tracks are equal, so it is centered in the viewport (not in whatever
-   space the logo and controls leave). Below md the search is an icon in the
-   controls and the bar is the plain flex row.
+   space the logo and controls leave). The outer tracks never shrink below
+   their content, so a narrow screen squeezes the search, not the controls.
+   Below md the search is an icon in the controls and the bar is the plain flex
+   row.
    ------------------------------------------------------------------------ */
 .navbar-grid {
   display: flex;
@@ -521,7 +570,21 @@ pre .line {
 @media (min-width: 768px) {
   .navbar-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 360px) minmax(0, 1fr);
+    grid-template-columns:
+      minmax(max-content, 1fr) minmax(0, 360px) minmax(max-content, 1fr);
+  }
+}
+/* The docs bar also carries the search icon and the menu trigger, which do not
+   fit a phone beside the full set: the wordmark yields first (the mark stays),
+   then the github link on the narrowest screens. */
+@media (max-width: 479px) {
+  #nd-subnav .navbar-wordmark {
+    display: none;
+  }
+}
+@media (max-width: 359px) {
+  #nd-subnav .navbar-github {
+    display: none;
   }
 }
 .search-trigger {

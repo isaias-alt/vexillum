@@ -41,7 +41,7 @@ export function Navbar({
       >
         <Link href={`${prefix}/`} className="flex shrink-0 items-center gap-[9px]">
           <LogoMark className="h-[22px] w-[22px] shrink-0" />
-          <span className="text-[13.5px] text-text">vexillum</span>
+          <span className="navbar-wordmark text-[13.5px] text-text">vexillum</span>
         </Link>
         {center}
         <nav className="ml-auto flex justify-end items-center gap-2 text-[12.5px] text-text-secondary sm:gap-[26px]">
@@ -55,7 +55,7 @@ export function Navbar({
             href={GITHUB_URL}
             aria-label={t.github}
             title={t.github}
-            className="btn btn-secondary btn-square"
+            className="navbar-github btn btn-secondary btn-square"
           >
             <svg
               viewBox="0 0 24 24"
