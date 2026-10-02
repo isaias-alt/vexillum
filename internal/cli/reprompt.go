@@ -27,8 +27,8 @@ without any notice, because the sentinel only reports a task leaving
 "running".
 
 Only a task in status "done" or "unconfirmed" whose camp has not been
-released can be prompted. A "blocked" task is answered with '` + cmdname.Name + ` decide',
-an "interrupted" one needs '` + cmdname.Name + ` redispatch', and a "running" one is already
+released can be prompted. A "blocked" task is answered with '` + cmdname.Name + ` decide'
+(or, if it was marked blocked by mistake, cleared with '` + cmdname.Name + ` decide <task-id> --dismiss'), an "interrupted" one needs '` + cmdname.Name + ` redispatch', and a "running" one is already
 working - wait for it to settle.
 
 <text> is delivered to the soldier verbatim. On a fast settle the task's
@@ -126,10 +126,22 @@ func repromptRefusal(task state.Task) string {
 	case state.StatusRunning:
 		return fmt.Sprintf("task %s is already running - wait for it to settle", task.ID)
 	case state.StatusBlocked:
-		return fmt.Sprintf("task %s is blocked on a question - answer it with '%s decide %s <answer>'", task.ID, cmdname.Name, task.ID)
+		return blockedHint(task)
 	case state.StatusInterrupted:
 		return fmt.Sprintf("task %s is interrupted, its herdr pane is gone - use '%s redispatch %s' instead", task.ID, cmdname.Name, task.ID)
 	default:
 		return fmt.Sprintf("task %s is %s - only a done or unconfirmed task can be prompted again", task.ID, task.Status)
 	}
+}
+
+// blockedHint is the refusal for a command that needs a task that is not
+// blocked: it names both ways out, answering the question or, when the
+// block was a false positive, dismissing it.
+func blockedHint(task state.Task) string {
+	question := ""
+	if task.Decision != nil && task.Decision.Question != "" {
+		question = fmt.Sprintf(" (%q)", task.Decision.Question)
+	}
+	return fmt.Sprintf("task %s is blocked on a question%s - answer it with '%s decide %s <answer>', or if it was marked blocked by mistake clear it with '%s decide %s --dismiss'",
+		task.ID, question, cmdname.Name, task.ID, cmdname.Name, task.ID)
 }

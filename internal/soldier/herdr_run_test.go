@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
@@ -1326,5 +1327,183 @@ func TestRunInHerdr_PromptIncludesNeedsDecisionInstructions(t *testing.T) {
 	}
 	if !strings.Contains(client.promptCalls[0], "needs-decision:") {
 		t.Errorf("expected the submitted prompt to reference the needs-decision: convention, got: %s", client.promptCalls[0])
+	}
+}
+
+// The bug seen in a real session end to end: a soldier that simply finished
+// has the whole dispatched prompt in its pane, template needs-decision line
+// included, and must settle done - not blocked on the template text.
+func TestRunInHerdr_EchoedPromptDoesNotBlockAFinishedSoldier(t *testing.T) {
+	home := t.TempDir()
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/x"}
+
+	// First run only to learn the exact prompt a soldier is sent.
+	first := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+	if _, err := soldier.RunInHerdr(t.TempDir(), "w1", newMissionTask(t), c, first); err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if len(first.promptCalls) != 1 {
+		t.Fatalf("expected one prompt, got %v", first.promptCalls)
+	}
+	pane := "> " + first.promptCalls[0] + "\n\nDone: committed the change.\n"
+
+	task := newMissionTask(t)
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done", readOutput: pane}
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status == state.StatusBlocked {
+		t.Fatalf("expected the finished soldier not to be blocked, decision=%+v", got.Decision)
+	}
+	if got.Decision != nil {
+		t.Errorf("expected no decision, got %+v", got.Decision)
+	}
+
+	// The same pane, but the soldier really asks after the prompt.
+	client.readOutput = pane + "needs-decision: keep the old API or break it?\n"
+	task = newMissionTask(t)
+	got, err = soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusBlocked || got.Decision == nil || got.Decision.Question != "keep the old API or break it?" {
+		t.Errorf("expected blocked on the real question, got status=%s decision=%+v", got.Status, got.Decision)
+	}
+}
+
+// The instructions every soldier gets and the extractor's own constants
+// must stay in step: the template line is what the extractor refuses, the
+// trailer is where it starts reading.
+func TestRunInHerdr_PromptCarriesTheTemplateAndTrailer(t *testing.T) {
+	home := t.TempDir()
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/x"}
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+	if _, err := soldier.RunInHerdr(home, "w1", newMissionTask(t), c, client); err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	prompt := client.promptCalls[0]
+	if !strings.Contains(prompt, "needs-decision: <a one-line summary of the question and any options>") {
+		t.Errorf("expected the template line in the prompt, got: %s", prompt)
+	}
+	if !strings.HasSuffix(prompt, "do not use it for an ordinary status update.") {
+		t.Errorf("expected the prompt to end with the trailer the extractor skips past, got: %s", prompt)
+	}
+	if d, found := soldier.ExtractNeedsDecisionSignal(prompt); found {
+		t.Errorf("expected the prompt itself to carry no needs-decision signal, got %+v", d)
+	}
+}
+
+func dismissibleTask(t *testing.T, projectRoot string) state.Task {
+	t.Helper()
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+	task.Output = "needs-decision: <a one-line summary of the question and any options>\n"
+	task.Decision = &state.Decision{Question: "<a one-line summary of the question and any options>", Kind: state.DecisionKindProse, AskedAt: time.Now()}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+// Dismissing clears a wrongly blocked task according to what its pane
+// says, and never sends the soldier anything.
+func TestDismissBlocked_SettlesFromTheLivePane(t *testing.T) {
+	cases := []struct {
+		live string
+		want state.Status
+	}{
+		{"idle", state.StatusDone},
+		{"done", state.StatusDone},
+		{"working", state.StatusRunning},
+	}
+	for _, tc := range cases {
+		t.Run(tc.live, func(t *testing.T) {
+			home := t.TempDir()
+			projectRoot := testProjectRoot(t, home)
+			task := dismissibleTask(t, projectRoot)
+
+			client := &fakeHerdr{promptStatus: tc.live, readOutput: "needs-decision: <a one-line summary of the question and any options>\nall done"}
+			got, err := soldier.DismissBlocked(projectRoot, task, client)
+			if err != nil {
+				t.Fatalf("DismissBlocked: %v", err)
+			}
+			if got.Status != tc.want {
+				t.Errorf("expected %s, got %s", tc.want, got.Status)
+			}
+			if len(client.promptCalls) != 0 || len(client.sendKeysCalls) != 0 {
+				t.Errorf("nothing may be sent to the soldier, got prompts=%v keys=%v", client.promptCalls, client.sendKeysCalls)
+			}
+			if got.Decision == nil || !got.Decision.Dismissed || got.Decision.AnsweredAt.IsZero() || got.Decision.Answer != "" {
+				t.Errorf("expected the decision kept and marked dismissed, got %+v", got.Decision)
+			}
+			persisted, err := state.Load(projectRoot, task.ID)
+			if err != nil || persisted.Status != tc.want {
+				t.Errorf("expected %s persisted, got %+v err=%v", tc.want, persisted.Status, err)
+			}
+		})
+	}
+}
+
+// A pane that really is blocked has a real question: dismissing is refused
+// and the task is left exactly as it was.
+func TestDismissBlocked_RefusesAReallyBlockedPane(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := dismissibleTask(t, projectRoot)
+
+	client := &fakeHerdr{promptStatus: "blocked"}
+	_, err := soldier.DismissBlocked(projectRoot, task, client)
+	if err == nil || !strings.Contains(err.Error(), "decide") {
+		t.Fatalf("expected a refusal pointing at decide, got %v", err)
+	}
+	persisted, _ := state.Load(projectRoot, task.ID)
+	if persisted.Status != state.StatusBlocked || persisted.Decision.Dismissed {
+		t.Errorf("expected the task untouched, got status=%s decision=%+v", persisted.Status, persisted.Decision)
+	}
+}
+
+type statusErrHerdr struct {
+	fakeHerdr
+	err error
+}
+
+func (f *statusErrHerdr) AgentStatus(name string) (string, error) { return "", f.err }
+
+// A pane that is gone marks the task interrupted, as vx decide does.
+func TestDismissBlocked_PaneGoneMarksInterrupted(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := dismissibleTask(t, projectRoot)
+
+	client := &statusErrHerdr{err: &herdr.APIError{Code: "agent_not_found", Message: "no such agent"}}
+	got, err := soldier.DismissBlocked(projectRoot, task, client)
+	if err == nil || !strings.Contains(err.Error(), "redispatch") {
+		t.Fatalf("expected an error pointing at redispatch, got %v", err)
+	}
+	if got.Status != state.StatusInterrupted {
+		t.Errorf("expected interrupted, got %s", got.Status)
+	}
+}
+
+// A dismissed question never blocks the task again, even though its line
+// is still in the scrollback when the soldier next settles.
+func TestDismissBlocked_DoesNotReblockOnTheSameLine(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+	line := "needs-decision: should the migration run online?"
+	task.Output = "do not use it for an ordinary status update.\n" + line + "\n"
+	task.Decision = &state.Decision{Question: "should the migration run online?", Kind: state.DecisionKindProse, AskedAt: time.Now()}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeHerdr{promptStatus: "idle", readOutput: task.Output}
+	got, err := soldier.DismissBlocked(projectRoot, task, client)
+	if err != nil {
+		t.Fatalf("DismissBlocked: %v", err)
+	}
+	if got.Status == state.StatusBlocked {
+		t.Fatalf("expected the dismissed question not to block again, got %s", got.Status)
 	}
 }

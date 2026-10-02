@@ -2,6 +2,7 @@ package soldier_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -189,5 +190,94 @@ func TestExtractNeedsDecisionSignal_NoMatch(t *testing.T) {
 	}
 	if _, found := soldier.ExtractNeedsDecisionSignal(""); found {
 		t.Error("expected no signal for an empty transcript")
+	}
+}
+
+// promptTrailer is the last sentence of every dispatched prompt.
+const promptTrailer = "do not use it for an ordinary status update."
+
+// The bug seen in a real session: the pane echoes the whole dispatched
+// prompt, so the template line it teaches ("needs-decision: <a one-line
+// summary ...>") is in the transcript of every soldier. It is documentation,
+// never a question.
+func TestExtractNeedsDecisionSignal_TemplateLineIsNotAQuestion(t *testing.T) {
+	cases := map[string]string{
+		"the template alone":        "needs-decision: <a one-line summary of the question and any options>\n",
+		"the template, indented":    "  needs-decision: <a one-line summary of the question and any options>\n",
+		"another bare placeholder":  "needs-decision: <question>\n",
+		"a placeholder with spaces": "needs-decision:   <one line, any options>  \n",
+	}
+	for name, transcript := range cases {
+		t.Run(name, func(t *testing.T) {
+			if d, found := soldier.ExtractNeedsDecisionSignal(transcript); found {
+				t.Errorf("expected no signal, got %+v", d)
+			}
+		})
+	}
+}
+
+// Angle brackets inside a real question are fine: only text that is
+// entirely one bracketed group is a placeholder.
+func TestExtractNeedsDecisionSignal_AngleBracketsInsideARealQuestion(t *testing.T) {
+	got, found := soldier.ExtractNeedsDecisionSignal("needs-decision: should Foo<T> stay generic or become Foo<int>?\n")
+	if !found || got.Question != "should Foo<T> stay generic or become Foo<int>?" {
+		t.Fatalf("expected the real question, got %+v found=%v", got, found)
+	}
+}
+
+// Only what follows the end of the dispatched prompt counts: a
+// needs-decision line inside the echoed prompt (a task that quotes one, or
+// the template itself) must not block, whatever it says.
+func TestExtractNeedsDecisionSignal_IgnoresTheEchoedPrompt(t *testing.T) {
+	echoed := "> fix the parser. If unsure, write\n" +
+		"needs-decision: which grammar version should I target?\n\n" +
+		"  needs-decision: <a one-line summary of the question and any options>\n\n" +
+		"This is the only way vexillum can tell... " + promptTrailer + "\n"
+
+	if d, found := soldier.ExtractNeedsDecisionSignal(echoed + "\nAll done, opened a PR.\n"); found {
+		t.Errorf("expected nothing from the echoed prompt, got %+v", d)
+	}
+
+	got, found := soldier.ExtractNeedsDecisionSignal(echoed + "\nneeds-decision: use PEG or LALR?\n")
+	if !found || got.Question != "use PEG or LALR?" {
+		t.Errorf("expected the soldier's own line after the prompt, got %+v found=%v", got, found)
+	}
+}
+
+// A placeholder after the prompt does not hide a real question before it
+// from being found, and a real last line still wins.
+func TestExtractNeedsDecisionSignal_SkipsPlaceholdersButKeepsRealLines(t *testing.T) {
+	transcript := promptTrailer + "\nneeds-decision: pick A or B?\nneeds-decision: <question>\n"
+	got, found := soldier.ExtractNeedsDecisionSignal(transcript)
+	if !found || got.Question != "pick A or B?" {
+		t.Errorf("expected the real question, got %+v found=%v", got, found)
+	}
+}
+
+// The scrollback keeps a question after it was answered (or dismissed), so
+// an answered question's line must not block the task again.
+func TestFinalTurnNeedsDecision_IgnoresAnAlreadyAnsweredQuestion(t *testing.T) {
+	transcript := promptTrailer + "\nneeds-decision: which database?\nUse Postgres\nall done\n"
+
+	task := state.Task{}
+	if _, found := soldier.FinalTurnNeedsDecision(task, transcript); !found {
+		t.Fatal("expected the line to count for a task with no earlier decision")
+	}
+
+	task.Decision = &state.Decision{Question: "which database?", AskedAt: time.Now()}
+	if _, found := soldier.FinalTurnNeedsDecision(task, transcript); !found {
+		t.Error("expected an unanswered decision's question to still count (it is the open question)")
+	}
+
+	task.Decision.AnsweredAt = time.Now()
+	if d, found := soldier.FinalTurnNeedsDecision(task, transcript); found {
+		t.Errorf("expected the answered question to be ignored, got %+v", d)
+	}
+
+	// A different question after the answer is a genuinely new block.
+	next := transcript + "needs-decision: and which cache?\n"
+	got, found := soldier.FinalTurnNeedsDecision(task, next)
+	if !found || got.Question != "and which cache?" {
+		t.Errorf("expected the new question to count, got %+v found=%v", got, found)
 	}
 }

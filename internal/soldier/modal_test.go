@@ -134,3 +134,32 @@ func TestParseAskUserQuestionModal_EmptyCapture(t *testing.T) {
 		t.Errorf("expected ErrNotAskUserQuestionModal, got %v", err)
 	}
 }
+
+// The modal sits at the bottom of a pane that still shows the conversation
+// above it: the question is the modal's own, never the first line of the
+// pane, and conversation text that mentions the footer or numbered lists
+// above the modal's header is not part of it.
+func TestParseAskUserQuestionModal_IgnoresConversationAboveTheModal(t *testing.T) {
+	modal := askUserQuestionCapture("Database", "Which database should this use?", []string{"Postgres", "SQLite"})
+	pane := "I looked at the options.\n1. an earlier numbered list item\nPress Enter to select something else later.\n\n" + modal
+
+	got, err := soldier.ParseAskUserQuestionModal(pane)
+	if err != nil {
+		t.Fatalf("ParseAskUserQuestionModal: %v", err)
+	}
+	if got.Question != "Which database should this use?" {
+		t.Errorf("Question = %q, want the modal's own question", got.Question)
+	}
+	want := []string{"Postgres", "SQLite", "Type something.", "Chat about this"}
+	if len(got.Options) != len(want) {
+		t.Fatalf("Options = %v, want %v", got.Options, want)
+	}
+}
+
+// A footer with no modal header above it is not this modal.
+func TestParseAskUserQuestionModal_FooterWithoutHeaderFailsLoud(t *testing.T) {
+	capture := "Some prose\n1. one\n2. two\n\nEnter to select · ↑/↓ to navigate · Esc to cancel\n"
+	if _, err := soldier.ParseAskUserQuestionModal(capture); !errors.Is(err, soldier.ErrNotAskUserQuestionModal) {
+		t.Errorf("expected ErrNotAskUserQuestionModal, got %v", err)
+	}
+}

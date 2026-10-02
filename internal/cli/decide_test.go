@@ -9,6 +9,7 @@ import (
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
+	"github.com/isaias-alt/vexillum/internal/tribunal"
 )
 
 // blockedTestTask persists a task already in StatusBlocked, with a real
@@ -204,5 +205,131 @@ func TestDecide_PaneGoneMarksInterrupted(t *testing.T) {
 	}
 	if reloaded.Status != state.StatusInterrupted {
 		t.Errorf("expected the task marked interrupted, got %s", reloaded.Status)
+	}
+}
+
+// falseBlockedTask persists a task wrongly marked blocked on the dispatch
+// prompt's own template line, the way the bug left it.
+func falseBlockedTask(t *testing.T, projectRoot string) state.Task {
+	t.Helper()
+	task, err := state.New(state.KindMission, "do a thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.HerdrAgentName = "vx-do-a-thing"
+	task.Status = state.StatusBlocked
+	task.Output = "needs-decision: <a one-line summary of the question and any options>\n"
+	task.Decision = &state.Decision{Question: "<a one-line summary of the question and any options>", Kind: state.DecisionKindProse}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+// vx decide --dismiss clears a wrongly blocked task according to its live
+// pane and sends the soldier nothing.
+func TestDecideDismiss_ClearsAWronglyBlockedTask(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := falseBlockedTask(t, projectRoot)
+
+	client := &fakeHerdr{promptStatus: "idle", readOutput: "all done"}
+	var out, errOut bytes.Buffer
+	if code := runDecideDismiss(project, home, task.ID, client, &out, &errOut); code != 0 {
+		t.Fatalf("expected success, got %d: %s%s", code, out.String(), errOut.String())
+	}
+	if len(client.promptCalls) != 0 {
+		t.Errorf("nothing may be sent to the soldier, got %v", client.promptCalls)
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected done, got %s", got.Status)
+	}
+	if got.Decision == nil || !got.Decision.Dismissed {
+		t.Errorf("expected the decision kept and marked dismissed, got %+v", got.Decision)
+	}
+}
+
+func TestDecideDismiss_RefusesAReallyBlockedPane(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := falseBlockedTask(t, projectRoot)
+
+	client := &fakeHerdr{promptStatus: "blocked"}
+	var out, errOut bytes.Buffer
+	if code := runDecideDismiss(project, home, task.ID, client, &out, &errOut); code == 0 {
+		t.Fatal("expected a refusal for a pane that is really blocked")
+	}
+	if !strings.Contains(errOut.String(), "decide") {
+		t.Errorf("expected the refusal to point at answering, got: %s", errOut.String())
+	}
+	got, _ := state.Load(projectRoot, task.ID)
+	if got.Status != state.StatusBlocked {
+		t.Errorf("expected the task untouched, got %s", got.Status)
+	}
+}
+
+func TestDecideDismiss_RefusesANonBlockedTask(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := falseBlockedTask(t, projectRoot)
+	task.Status = state.StatusDone
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := runDecideDismiss(project, home, task.ID, &fakeHerdr{}, &out, &errOut); code == 0 {
+		t.Fatal("expected a refusal for a task that is not blocked")
+	}
+	if !strings.Contains(errOut.String(), "not blocked") {
+		t.Errorf("expected the refusal to say why, got: %s", errOut.String())
+	}
+}
+
+// --dismiss through the real entry point: it takes only the task id.
+func TestDecide_DismissTakesNoAnswer(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if code := Decide([]string{"sometask", "--dismiss", "extra"}); code == 0 {
+		t.Error("expected --dismiss with an answer to be refused")
+	}
+}
+
+// Both commands that refuse a blocked task say how to clear a wrong block.
+func TestRefusalsOfABlockedTaskMentionDismiss(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := falseBlockedTask(t, projectRoot)
+
+	var out bytes.Buffer
+	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code == 0 {
+		t.Fatal("expected ship to refuse a blocked task")
+	}
+	if !strings.Contains(out.String(), "decide "+task.ID+" --dismiss") {
+		t.Errorf("expected ship's refusal to name the way out, got: %s", out.String())
+	}
+
+	out.Reset()
+	if msg := repromptRefusal(task); !strings.Contains(msg, "decide "+task.ID+" --dismiss") {
+		t.Errorf("expected prompt's refusal to name the way out, got: %s", msg)
 	}
 }

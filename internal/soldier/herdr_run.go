@@ -185,7 +185,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 
 	task.Status = corroboratedStatus(projectRoot, task, status)
 	if task.Status == state.StatusBlocked {
-		task.Decision = blockedDecision(client, agentName, status, task.Output)
+		task.Decision = blockedDecision(client, task, agentName, status, task.Output)
 	}
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
@@ -203,11 +203,11 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 // The final fallback is defensive only - corroboratedStatus should never
 // return StatusBlocked without one of the above being true - but a
 // genuinely blocked task must never end up with a nil Decision.
-func blockedDecision(client herdr.Client, agentName, liveStatus, output string) *state.Decision {
+func blockedDecision(client herdr.Client, task state.Task, agentName, liveStatus, output string) *state.Decision {
 	if MapAgentStatus(liveStatus) == state.StatusBlocked {
 		return ResolveBlockedDecision(client, agentName, output)
 	}
-	if d, found := ExtractNeedsDecisionSignal(output); found {
+	if d, found := FinalTurnNeedsDecision(task, output); found {
 		return d
 	}
 	return ExtractDecision(output)
@@ -259,6 +259,65 @@ func AnswerBlocked(projectRoot string, task state.Task, answer string, client he
 	return finishAnswerBlocked(projectRoot, task, answer, status, err, client)
 }
 
+// DismissBlocked clears a task that was marked blocked by mistake (a false
+// positive of the needs-decision: line or the blocked classifier) without
+// delivering anything to its soldier: no prompt, no key press. The caller
+// (internal/cli.Decide) confirms task is StatusBlocked first.
+//
+// The soldier's live herdr status decides what the task becomes: still
+// working means Running, for the sentinel to track as usual; idle or done
+// is settled the same way a fresh settle is (corroboratedStatus); a pane
+// that is actually blocked is refused, since that question is real and
+// needs an answer; a pane that is gone marks the task Interrupted, as
+// AnswerBlocked does. The old question stays on the task, flagged
+// Dismissed and with AnsweredAt set, so its line in the pane's scrollback
+// cannot block the task a second time (FinalTurnNeedsDecision).
+func DismissBlocked(projectRoot string, task state.Task, client herdr.Client) (state.Task, error) {
+	if task.HerdrAgentName == "" {
+		return task, fmt.Errorf("task %s has no herdr agent to check", task.ID)
+	}
+
+	live, err := client.AgentStatus(task.HerdrAgentName)
+	if err != nil {
+		if herdr.IsNotFound(err) || herdr.IsNotRunning(err) {
+			task.Status = state.StatusInterrupted
+			task.UpdatedAt = time.Now().UTC()
+			if task.Output != "" {
+				task.Output += "\n\n"
+			}
+			task.Output += "[vexillum] this soldier's herdr pane is gone - marked interrupted. Use '" + cmdname.Name + " redispatch' instead."
+			if saveErr := state.Save(projectRoot, task); saveErr != nil {
+				return task, fmt.Errorf("persisting interrupted task (after: %v): %w", err, saveErr)
+			}
+			return task, fmt.Errorf("the soldier's herdr pane is gone - marked interrupted, use '"+cmdname.Name+" redispatch' instead: %w", err)
+		}
+		return task, fmt.Errorf("reading the soldier's live status: %w", err)
+	}
+	if MapAgentStatus(live) == state.StatusBlocked {
+		return task, fmt.Errorf("the soldier's pane is really blocked on a question - answer it with '%s decide %s <answer>'", cmdname.Name, task.ID)
+	}
+
+	if task.Decision != nil {
+		task.Decision.Dismissed = true
+		task.Decision.AnsweredAt = time.Now().UTC()
+	}
+	if live == "working" {
+		task.Status = state.StatusRunning
+	} else {
+		if output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines); readErr == nil {
+			task.Output = output
+		}
+		task.Status = corroboratedStatus(projectRoot, task, live)
+	}
+	task.UpdatedAt = time.Now().UTC()
+	task.IdleUnconfirmedSince = time.Time{}
+	task.AgentNotFoundSince = time.Time{}
+	if err := state.Save(projectRoot, task); err != nil {
+		return task, fmt.Errorf("persisting dismissed task: %w", err)
+	}
+	return task, nil
+}
+
 // Reprompt sends text to a soldier that already settled (done, or
 // unconfirmed) and whose herdr pane is still open, and puts the task back to
 // Running so its next settle is a transition internal/sentinel records and
@@ -307,7 +366,7 @@ func Reprompt(projectRoot string, task state.Task, text string, client herdr.Cli
 	}
 	task.Status = corroboratedStatus(projectRoot, task, status)
 	if task.Status == state.StatusBlocked {
-		task.Decision = blockedDecision(client, task.HerdrAgentName, status, task.Output)
+		task.Decision = blockedDecision(client, task, task.HerdrAgentName, status, task.Output)
 	}
 	task.UpdatedAt = time.Now().UTC()
 	if err := state.Save(projectRoot, task); err != nil {
@@ -474,12 +533,23 @@ func needsDecisionInstructions() string {
 	return "\n\n---\n\nIf you need a real decision or answer from the general before you can continue, and " +
 		"you are not using the AskUserQuestion tool for it, end your turn with a line in exactly this " +
 		"format (nothing else on that line):\n\n" +
-		"  needs-decision: <a one-line summary of the question and any options>\n\n" +
+		"  needs-decision: " + needsDecisionPlaceholder + "\n\n" +
 		"This is the only way vexillum can tell a genuine open question apart from your turn simply " +
 		"ending - without it, ordinary prose ending in a question mark is never detected, and your task " +
 		"is recorded as done, not blocked. Only use this for something you truly cannot proceed without; " +
-		"do not use it for an ordinary status update."
+		needsDecisionTrailer
 }
+
+// needsDecisionPlaceholder is the fill-in-the-blank text of the template
+// line in needsDecisionInstructions. The pane echoes the whole dispatched
+// prompt, template included, so ExtractNeedsDecisionSignal must never take
+// this text for a question.
+const needsDecisionPlaceholder = "<a one-line summary of the question and any options>"
+
+// needsDecisionTrailer is the last sentence of needsDecisionInstructions,
+// hence of every dispatched prompt: ExtractNeedsDecisionSignal only looks
+// past its last occurrence in a transcript.
+const needsDecisionTrailer = "do not use it for an ordinary status update."
 
 // herdrAgentName builds a readable candidate name for the soldier's
 // agent (and tab label): "vx-<slug of the task's prompt>". It's only a
@@ -576,7 +646,7 @@ func corroboratedStatus(projectRoot string, task state.Task, liveStatus string) 
 	// most authoritative signal available - more so than a completion
 	// signal or a declared pause, neither of which a soldier would also
 	// have reason to leave behind mid-question.
-	if _, found := ExtractNeedsDecisionSignal(task.Output); found {
+	if _, found := FinalTurnNeedsDecision(task, task.Output); found {
 		return state.StatusBlocked
 	}
 

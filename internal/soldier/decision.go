@@ -90,24 +90,78 @@ func ExtractDecision(transcript string) *state.Decision {
 // exact, documented format - the only thing that can turn a plain-prose
 // question into a real StatusBlocked transition, since herdr's own
 // classifier never does for plain prose (see the durable decision
-// record's design report). Only the last matching line counts, in case an
-// earlier one sits in unrelated context further up the transcript (a past
-// turn, quoted text). Returns false, nil if no such line is present
-// anywhere - callers must never invent a Decision when there isn't one.
+// record's design report).
+//
+// Only text after the end of the dispatched prompt counts (see
+// afterDispatchPrompt): the pane echoes that prompt, and with it the
+// template line "needs-decision: <a one-line summary ...>" that
+// needsDecisionInstructions teaches, which is documentation, not a
+// question. A placeholder (angle-bracket text such as the template's own,
+// see isNeedsDecisionPlaceholder) never counts either, even when it shows
+// up after the prompt. Of what remains only the last matching line counts,
+// in case an earlier one sits in unrelated context further up the
+// transcript (a past turn, quoted text). Returns false, nil if no such
+// line is present anywhere - callers must never invent a Decision when
+// there isn't one.
 func ExtractNeedsDecisionSignal(transcript string) (*state.Decision, bool) {
-	matches := needsDecisionPattern.FindAllStringSubmatch(transcript, -1)
-	if len(matches) == 0 {
+	matches := needsDecisionPattern.FindAllStringSubmatch(afterDispatchPrompt(transcript), -1)
+	for i := len(matches) - 1; i >= 0; i-- {
+		question := strings.TrimSpace(matches[i][1])
+		if question == "" || isNeedsDecisionPlaceholder(question) {
+			continue
+		}
+		return &state.Decision{
+			Question: question,
+			Kind:     state.DecisionKindProse,
+			AskedAt:  time.Now().UTC(),
+		}, true
+	}
+	return nil, false
+}
+
+// FinalTurnNeedsDecision is ExtractNeedsDecisionSignal for a task that may
+// have been asked questions before: it additionally ignores a line whose
+// question is the one task's own Decision already records as answered or
+// dismissed. The pane's scrollback keeps an answered question's line, so
+// without this a soldier that carried on after "vx decide" (or after
+// "vx decide --dismiss") would be blocked again by its own old line the
+// next time it went idle.
+func FinalTurnNeedsDecision(task state.Task, transcript string) (*state.Decision, bool) {
+	d, found := ExtractNeedsDecisionSignal(transcript)
+	if !found {
 		return nil, false
 	}
-	question := strings.TrimSpace(matches[len(matches)-1][1])
-	if question == "" {
+	if prev := task.Decision; prev != nil && !prev.AnsweredAt.IsZero() && prev.Question == d.Question {
 		return nil, false
 	}
-	return &state.Decision{
-		Question: question,
-		Kind:     state.DecisionKindProse,
-		AskedAt:  time.Now().UTC(),
-	}, true
+	return d, true
+}
+
+// afterDispatchPrompt returns the part of transcript after the end of the
+// last copy of the dispatched prompt it contains - the one that ends with
+// needsDecisionTrailer, the final sentence every soldier prompt gets. A
+// transcript without it (the prompt scrolled out of the captured window)
+// is returned whole: then none of the prompt's own lines can be in it
+// either, apart from the template line isNeedsDecisionPlaceholder covers.
+func afterDispatchPrompt(transcript string) string {
+	i := strings.LastIndex(transcript, needsDecisionTrailer)
+	if i < 0 {
+		return transcript
+	}
+	return transcript[i+len(needsDecisionTrailer):]
+}
+
+// placeholderPattern matches text that is entirely one angle-bracket
+// group ("<a one-line summary ...>", "<question>"): a fill-in-the-blank
+// marker from documentation, never something a soldier would actually ask.
+var placeholderPattern = regexp.MustCompile(`^<[^<>]*>$`)
+
+// isNeedsDecisionPlaceholder reports whether question, the text after
+// "needs-decision:", is the template's own placeholder or another bare
+// angle-bracket placeholder rather than a real question.
+func isNeedsDecisionPlaceholder(question string) bool {
+	question = strings.TrimSpace(question)
+	return question == needsDecisionPlaceholder || placeholderPattern.MatchString(question)
 }
 
 // paragraphStart walks lines backward from end (exclusive) to the start of

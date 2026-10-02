@@ -184,6 +184,10 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 		fmt.Fprintf(stderr, cmdname.Name+": task %s is a scout, not a mission - a scout should never have committed anything to ship\n", taskID)
 		return 1
 	}
+	if task.Status == state.StatusBlocked {
+		fmt.Fprintln(stderr, cmdname.Name+": "+blockedHint(task))
+		return 1
+	}
 	if task.Status != state.StatusDone && task.Status != state.StatusShipped {
 		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not done or already shipped - only a finished mission can be shipped\n", taskID, task.Status)
 		return 1

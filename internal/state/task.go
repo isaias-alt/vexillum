@@ -190,6 +190,15 @@ type Decision struct {
 	Answer     string       `json:"answer,omitempty"`
 	AnsweredAt time.Time    `json:"answered_at,omitzero"`
 	Kind       DecisionKind `json:"kind,omitempty"`
+
+	// Dismissed marks a Decision the general cleared with "vx decide
+	// --dismiss" instead of answering it: the task was never really
+	// waiting (a false positive), so nothing was sent to the soldier and
+	// Answer stays empty. AnsweredAt is still set, which is what stops the
+	// same question from blocking the task again (see
+	// internal/soldier.FinalTurnNeedsDecision). Purely additive, no
+	// SchemaVersion bump needed.
+	Dismissed bool `json:"dismissed,omitempty"`
 }
 
 // DecisionKind distinguishes how a Decision's shape needs to be answered

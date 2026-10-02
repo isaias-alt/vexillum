@@ -62,7 +62,8 @@ var ErrNotAskUserQuestionModal = errors.New("visible pane capture is not an AskU
 // ParseAskUserQuestionModal parses visible - a --source visible --ansi
 // capture of a Blocked task's pane - as Claude Code's AskUserQuestion
 // selector, per the exact rendering captured live (durable decision
-// record capture report): a black-on-lavender "☐ <label>" header line, a
+// record capture report): a black-on-lavender "☐ <label>" header line (the
+// anchor everything above is ignored from - see below), a
 // bold-white question line, a numbered option list, and a footer reading
 // "Enter to select · ↑/↓ to navigate · Esc to cancel". Options is every
 // rendered option in order, numbered exactly as displayed - including the
@@ -80,24 +81,40 @@ func ParseAskUserQuestionModal(visible string) (*state.Decision, error) {
 
 	footerIdx := -1
 	for i, line := range lines {
+		// The last one: the modal is the bottom of the screen, and
+		// conversation text above it may mention the same words.
 		if strings.Contains(line, askUserQuestionFooter) {
 			footerIdx = i
-			break
 		}
 	}
 	if footerIdx == -1 {
 		return nil, ErrNotAskUserQuestionModal
 	}
 
+	// The modal sits at the bottom of a screen that still shows the
+	// conversation above it, so only what follows the modal's own
+	// "☐ <label>" header counts: without that anchor the first line of the
+	// pane would be taken for the question. The last header above the
+	// footer is this modal's (earlier ones are scrollback).
+	headerIdx := -1
+	for i := 0; i < footerIdx; i++ {
+		if strings.Contains(lines[i], "☐") {
+			headerIdx = i
+		}
+	}
+	if headerIdx == -1 {
+		return nil, fmt.Errorf("%w: found the footer but no modal header above it", ErrNotAskUserQuestionModal)
+	}
+
 	var question string
 	var options []string
-	for i := 0; i < footerIdx; i++ {
+	for i := headerIdx; i < footerIdx; i++ {
 		if m := modalOptionLine.FindStringSubmatch(lines[i]); m != nil {
 			options = append(options, strings.TrimSpace(m[2]))
 			continue
 		}
 		trimmed := strings.TrimSpace(lines[i])
-		if question == "" && trimmed != "" && !strings.HasPrefix(trimmed, "☐") && !isRuleLine(trimmed) {
+		if question == "" && i != headerIdx && trimmed != "" && !strings.HasPrefix(trimmed, "☐") && !isRuleLine(trimmed) {
 			question = trimmed
 		}
 	}
