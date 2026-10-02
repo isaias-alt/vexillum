@@ -259,6 +259,63 @@ func AnswerBlocked(projectRoot string, task state.Task, answer string, client he
 	return finishAnswerBlocked(projectRoot, task, answer, status, err, client)
 }
 
+// Reprompt sends text to a soldier that already settled (done, or
+// unconfirmed) and whose herdr pane is still open, and puts the task back to
+// Running so its next settle is a transition internal/sentinel records and
+// wakes the commander for. Without it, a soldier re-prompted by hand
+// ("herdr agent prompt") finishes a second time with no transition and no
+// wake. The caller (internal/cli.Reprompt) confirms the status and that the
+// camp is still leased before calling in.
+//
+// task is persisted as Running before the prompt goes out, so the sentinel
+// can never see a stale pre-prompt status for it, and restored exactly as it
+// was if the prompt cannot be delivered. Like RunInHerdr and AnswerBlocked
+// it only probes briefly for a fast settle (quickSettleTimeoutMS); anything
+// longer is left Running for the sentinel to record. text is delivered
+// verbatim: the soldier already has the pause and needs-decision conventions
+// from its original prompt.
+func Reprompt(projectRoot string, task state.Task, text string, client herdr.Client) (state.Task, error) {
+	previous := task
+
+	task.Status = state.StatusRunning
+	task.UpdatedAt = time.Now().UTC()
+	task.IdleUnconfirmedSince = time.Time{}
+	task.AgentNotFoundSince = time.Time{}
+	if err := state.Save(projectRoot, task); err != nil {
+		return previous, fmt.Errorf("persisting running state: %w", err)
+	}
+
+	status, err := promptWithStalledRetry(client, task.HerdrAgentName, text, quickSettleTimeoutMS)
+	if err != nil && !herdr.IsTimeout(err) {
+		if saveErr := state.Save(projectRoot, previous); saveErr != nil {
+			return previous, fmt.Errorf("restoring task after a failed prompt (%v): %w", err, saveErr)
+		}
+		if herdr.IsNotRunning(err) || herdr.IsNotFound(err) {
+			return previous, fmt.Errorf("the soldier's herdr pane is gone, there is nothing to prompt: %w", err)
+		}
+		return previous, fmt.Errorf("prompting soldier: %w", err)
+	}
+	if err != nil {
+		// Timeout: still working past the quick probe - the normal case for
+		// real work. The task stays Running (already persisted above) and
+		// the sentinel owns recording its eventual settle.
+		return task, nil
+	}
+
+	if output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines); readErr == nil {
+		task.Output = output
+	}
+	task.Status = corroboratedStatus(projectRoot, task, status)
+	if task.Status == state.StatusBlocked {
+		task.Decision = blockedDecision(client, task.HerdrAgentName, status, task.Output)
+	}
+	task.UpdatedAt = time.Now().UTC()
+	if err := state.Save(projectRoot, task); err != nil {
+		return task, fmt.Errorf("persisting final state: %w", err)
+	}
+	return task, nil
+}
+
 // finishAnswerBlocked is AnswerBlocked's shared tail, once the answer has
 // actually been delivered - by AgentSendKeys+AgentWait for a modal-shaped
 // Decision's digit-select path, or by AgentPrompt (via

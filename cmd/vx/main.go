@@ -43,6 +43,8 @@ func run(args []string) int {
 		return cli.Redispatch(args[1:])
 	case "decide":
 		return cli.Decide(args[1:])
+	case "prompt":
+		return cli.Reprompt(args[1:])
 	case "status":
 		return cli.Status(args[1:])
 	case "land":
