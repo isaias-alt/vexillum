@@ -364,3 +364,29 @@ func TestLiveAwaiters_CountsOnlyVerifiedAwaitsAndTouchesNothing(t *testing.T) {
 		t.Errorf("no registry: LiveAwaiters = %d, want 0", got)
 	}
 }
+
+func TestHasLiveAwaiter_MatchesTheProjectAndVerifiesTheProcess(t *testing.T) {
+	home := t.TempDir()
+	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: 5001, OwnerPID: 7, ProjectRoot: "/p/a"})
+	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: 5002, OwnerPID: 7, ProjectRoot: "/p/b"})
+	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: 5003, OwnerPID: 7, ProjectRoot: "/p/c"})
+	t.Cleanup(sentinel.SetInspectProcess(func(pid int) (int, string, error) {
+		switch pid {
+		case 5001, 5002:
+			return 7, awaitCmd, nil
+		case 5003:
+			return 99, awaitCmd, nil // reparented: its owner is gone
+		}
+		return 0, "", sentinel.ErrProcessGone
+	}))
+
+	if !sentinel.HasLiveAwaiter(home, "/p/a") || !sentinel.HasLiveAwaiter(home, "/p/b") {
+		t.Error("a verified await of the project must count")
+	}
+	if sentinel.HasLiveAwaiter(home, "/p/c") {
+		t.Error("an orphaned await is not a known commander session")
+	}
+	if sentinel.HasLiveAwaiter(home, "/p/none") || sentinel.HasLiveAwaiter(t.TempDir(), "/p/a") {
+		t.Error("no await for the project must not count")
+	}
+}

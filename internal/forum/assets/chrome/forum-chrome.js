@@ -193,11 +193,23 @@
     const waitingMs = snap.listener_until ? Date.parse(snap.listener_until) - Date.now() : 0;
     const waiting = !ended && !snap.listening && !working && waitingMs > 0;
     clearTimeout(workingTimer);
-    const windowMs = working ? workingMs : waiting ? waitingMs : 0;
+    // Relayed: the listener forwarded the latest round to the commander and
+    // nobody has answered yet. The listener's own polling says nothing about the
+    // commander, so this state wins over "listening" and shows how long ago it
+    // was forwarded (re-rendered every 30s to keep that fresh).
+    const relayed = !ended && snap.relayed ? snap.relayed : null;
+    const forwarding = !ended && !relayed && !snap.listening && !!snap.forwarding;
+    const windowMs = relayed ? 30000 : working ? workingMs : waiting ? waitingMs : 0;
     if (windowMs > 0) workingTimer = setTimeout(() => snapshot && render(snapshot), windowMs + 250);
     if (ended) {
       presence.dataset.state = "ended";
       presenceText.textContent = "Session ended";
+    } else if (relayed) {
+      presence.dataset.state = "relayed";
+      presenceText.textContent = "Relayed, waiting for the commander";
+    } else if (forwarding) {
+      presence.dataset.state = "forwarding";
+      presenceText.textContent = "Forwarding to the commander";
     } else if (snap.listening) {
       presence.dataset.state = "listening";
       presenceText.textContent = "Agent listening";
@@ -211,9 +223,19 @@
       presence.dataset.state = "idle";
       presenceText.textContent = "Agent not listening";
     }
-    $("listenBanner").hidden = ended || snap.listening || working || waiting;
+    $("listenBanner").hidden = ended || snap.listening || working || waiting || !!relayed || forwarding;
     $("waitingBanner").hidden = !waiting;
     $("workingBanner").hidden = !working;
+    const relayBanner = $("relayBanner");
+    relayBanner.hidden = !relayed;
+    if (relayed) {
+      const ago = elapsedText(Date.now() - Date.parse(relayed.since)) + " ago";
+      relayBanner.dataset.commander = relayed.commander;
+      relayBanner.textContent =
+        relayed.commander === "connected"
+          ? "Relayed to the commander " + ago + ". Waiting for its answer."
+          : "Relayed " + ago + ", but no commander session is known for this project. Your message waits in its inbox until one starts.";
+    }
 
     const pending = $("pendingBanner");
     if (!ended && snap.pending > 0) {
@@ -312,15 +334,17 @@
         group.append(list);
         log.append(group);
       }
-      const item = el("li", "msg " + (message.role === "agent" ? "msg-agent" : "msg-user"));
+      const notice = message.kind === "notice";
+      const item = el("li", "msg " + (message.role === "agent" ? "msg-agent" : "msg-user") + (notice ? " msg-notice" : ""));
       const meta = el("div", "msg-meta");
-      meta.append(el("span", "msg-role", message.role === "agent" ? "Agent" : "You"));
+      meta.append(el("span", "msg-role", notice ? "Listener" : message.role === "agent" ? "Agent" : "You"));
       if (message.role !== "agent" && message.tag && message.tag !== "feedback" && message.tag !== "message") {
         meta.append(el("span", "msg-tag", message.tag));
       }
       meta.append(el("time", "msg-time", formatTime(message.at)));
       if (message.role === "agent") {
-        if (round > 0) meta.append(el("span", "msg-status msg-answers", "answers round " + round));
+        // A notice only says the message was forwarded; it never answers a round.
+        if (round > 0 && !notice) meta.append(el("span", "msg-status msg-answers", "answers round " + round));
       } else if (round > 0) {
         const state = round <= answeredThrough ? "answered" : "sent";
         const status = el("span", "msg-status", state);
@@ -515,8 +539,11 @@
     const since = Date.parse(snap.awaiting_since);
     workingSince = Number.isNaN(since) ? Date.now() : since;
     workingSinceRaw = snap.awaiting_since;
-    $("workingDesc").textContent =
-      "Your agent got your message (round " + (snap.round || 1) + ") and is updating the artifact. The review is paused until it answers, so nothing changes under you.";
+    $("workingDesc").textContent = snap.relayed
+      ? snap.relayed.commander === "connected"
+        ? "Your message (round " + (snap.round || 1) + ") was forwarded to the commander, which will update the artifact. The review is paused until it answers, so nothing changes under you."
+        : "Your message (round " + (snap.round || 1) + ") was forwarded, but no commander session is known for this project, so it waits in the inbox. The review is paused until someone answers; you can stop waiting."
+      : "Your agent got your message (round " + (snap.round || 1) + ") and is updating the artifact. The review is paused until it answers, so nothing changes under you.";
     if (workingShown) return tickWorking();
     workingShown = true;
     focusBeforeWorking = document.activeElement;

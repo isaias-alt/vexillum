@@ -21,10 +21,15 @@ type Client struct {
 	http  *http.Client
 }
 
-func newClient(st ServerState) *Client {
+func newClient(st ServerState) *Client { return NewClient(st.Addr, st.AgentToken) }
+
+// NewClient returns a Client for the server at addr (host:port) using the agent
+// token. Production code gets one from EnsureServer or Discover; this exists
+// for callers that already know both (tests running a server in-process).
+func NewClient(addr, agentToken string) *Client {
 	return &Client{
-		base:  "http://" + st.Addr,
-		token: st.AgentToken,
+		base:  "http://" + addr,
+		token: agentToken,
 		// No overall timeout: poll legitimately blocks for as long as the
 		// reviewer takes. Callers bound requests with their context.
 		http: &http.Client{},
@@ -111,6 +116,14 @@ func (c *Client) Open(ctx context.Context, file string, reopen bool) (OpenRespon
 	return out, err
 }
 
+// OpenFor is Open that also records projectRoot (absolute; empty for none) as
+// the project whose commander owns the session.
+func (c *Client) OpenFor(ctx context.Context, file string, reopen bool, projectRoot string) (OpenResponse, error) {
+	var out OpenResponse
+	err := c.do(ctx, http.MethodPost, "/api/agent/open", agentFileRequest{File: file, Reopen: reopen, ProjectRoot: projectRoot}, &out)
+	return out, err
+}
+
 // Poll blocks for the next feedback, session end, browser disconnect, or
 // timeout (0 = none).
 func (c *Client) Poll(ctx context.Context, file string, timeout time.Duration) (PollResponse, error) {
@@ -124,6 +137,24 @@ func (c *Client) Poll(ctx context.Context, file string, timeout time.Duration) (
 func (c *Client) PollAll(ctx context.Context, timeout time.Duration) (PollResponse, error) {
 	var out PollResponse
 	err := c.do(ctx, http.MethodPost, "/api/agent/poll", agentFileRequest{All: true, TimeoutMS: timeout.Milliseconds()}, &out)
+	return out, err
+}
+
+// PollRelay is PollAll as the listener: it covers only sessions that have a
+// project root, and it does not count as the agent listening or end the wait for
+// the commander's answer.
+func (c *Client) PollRelay(ctx context.Context, timeout time.Duration) (PollResponse, error) {
+	var out PollResponse
+	err := c.do(ctx, http.MethodPost, "/api/agent/poll", agentFileRequest{All: true, Relay: true, TimeoutMS: timeout.Milliseconds()}, &out)
+	return out, err
+}
+
+// Relay tells the server the latest round of file was forwarded to the
+// commander (commander is CommanderConnected or CommanderNone) and posts notice
+// once per round without answering it.
+func (c *Client) Relay(ctx context.Context, file, commander, notice string) (RelayResponse, error) {
+	var out RelayResponse
+	err := c.do(ctx, http.MethodPost, "/api/agent/relay", agentFileRequest{File: file, Commander: commander, Text: notice}, &out)
 	return out, err
 }
 

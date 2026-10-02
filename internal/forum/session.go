@@ -111,7 +111,15 @@ type Message struct {
 	// the prompt was queued under, so a decision form can show it was sent.
 	Round    int    `json:"round,omitempty"`
 	QueueKey string `json:"queue_key,omitempty"`
+	// Kind is empty for an ordinary message and MessageKindNotice for the
+	// listener's fixed "received, forwarded" line: a notice never answers a
+	// round.
+	Kind string `json:"kind,omitempty"`
 }
+
+// MessageKindNotice marks a transcript message posted by the listener to say
+// the user's feedback was forwarded to the commander. It is not an answer.
+const MessageKindNotice = "notice"
 
 // sessionRecord is the durable, restart-proof part of a session
 // (<state>/forums/<key>/session.json). Queued holds prompts the user has
@@ -153,7 +161,25 @@ type sessionRecord struct {
 	// what makes every tab block the review surface while the agent rewrites
 	// the artifact. Not meaningful across a server restart (see Hub.get).
 	AwaitingSince time.Time `json:"awaiting_since,omitempty"`
+	// ProjectRoot is the vexillum project root (the directory holding wakes/ and
+	// forum-inbox/) of whoever last opened the session, so the listener knows
+	// which commander to wake. Empty for a session opened outside any project:
+	// the listener leaves it alone.
+	ProjectRoot string `json:"project_root,omitempty"`
+	// RelayedAt is when the listener forwarded the latest round to the commander
+	// (RelayedRound is that round); it stays until a real answer, an artifact
+	// change or the user giving up. Commander says whether a commander session
+	// was known then (RelayCommander* values).
+	RelayedAt    time.Time `json:"relayed_at,omitempty"`
+	RelayedRound int       `json:"relayed_round,omitempty"`
+	Commander    string    `json:"commander,omitempty"`
 }
+
+// What the listener reports about the commander when it relays a round.
+const (
+	CommanderConnected = "connected"
+	CommanderNone      = "none"
+)
 
 const sessionRecordVersion = 1
 

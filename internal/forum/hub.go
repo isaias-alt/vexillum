@@ -93,13 +93,17 @@ type Hub struct {
 }
 
 type liveSession struct {
-	rec         sessionRecord
-	transcript  []Message
-	layout      layoutState
-	version     int64
-	pollers     int
-	browsers    int
-	lastBrowser time.Time
+	rec        sessionRecord
+	transcript []Message
+	layout     layoutState
+	version    int64
+	pollers    int
+	// relayPollers counts the pollers that are the listener (a subset of
+	// pollers): they forward feedback to the commander, so they are not "the
+	// agent listening".
+	relayPollers int
+	browsers     int
+	lastBrowser  time.Time
 	// lastListener is the agent's heartbeat: the last moment something proved
 	// it is there (see Hub.beat). In memory only; a loaded session starts with a
 	// fresh one so a restarted server gives the poll time to reconnect.
@@ -274,6 +278,8 @@ type OpenResult struct {
 	Status           string // StatusOpen, or "user_ended" when a reopen was refused
 	Created          bool
 	BrowserConnected bool
+	// ProjectRoot is the project root the session is now recorded under.
+	ProjectRoot string
 	// Pending counts prompts the user already sent that the next poll will
 	// deliver.
 	Pending int
@@ -287,6 +293,12 @@ const OpenUserEnded = "user_ended"
 // the user ended from the browser is refused unless reopen is set: reviving
 // it silently would reopen a surface the user deliberately closed.
 func (h *Hub) Open(file string, reopen bool) (OpenResult, error) {
+	return h.OpenFor(file, reopen, "")
+}
+
+// OpenFor is Open that also records projectRoot (when not empty) as the
+// project whose commander owns the session, so the listener can wake it.
+func (h *Hub) OpenFor(file string, reopen bool, projectRoot string) (OpenResult, error) {
 	file = filepath.Clean(file)
 	key := SessionKey(file)
 
@@ -336,6 +348,14 @@ func (h *Hub) Open(file string, reopen bool) (OpenResult, error) {
 			return OpenResult{}, err
 		}
 	}
+	if projectRoot != "" && l.rec.ProjectRoot != projectRoot {
+		if err := h.commit(l, func(rec *sessionRecord) error {
+			rec.ProjectRoot = projectRoot
+			return nil
+		}); err != nil {
+			return OpenResult{}, err
+		}
+	}
 	// A fresh open starts the browser's grace period: the page is about to
 	// load (or already is), and a poll must not call it disconnected before
 	// it ever had the chance to connect.
@@ -352,6 +372,7 @@ func (h *Hub) openResult(l *liveSession, status string, created bool) OpenResult
 		Status:           status,
 		Created:          created,
 		BrowserConnected: l.browsers > 0,
+		ProjectRoot:      l.rec.ProjectRoot,
 		Pending:          len(l.rec.Outbox),
 	}
 }
@@ -579,6 +600,8 @@ func (h *Hub) Reply(key, text string) error {
 		rec.DeliveredAt = time.Time{}
 		rec.AwaitingSince = time.Time{}
 		rec.AnsweredThrough = rec.Round
+		rec.RelayedAt = time.Time{}
+		rec.Commander = ""
 		return nil
 	}); err != nil {
 		return err
@@ -590,6 +613,67 @@ func (h *Hub) Reply(key, text string) error {
 	return nil
 }
 
+// RelayResult is what Relay reports back to the listener.
+type RelayResult struct {
+	// Active is true while the latest round is still waiting for the commander
+	// (the listener keeps refreshing the commander status until it is not).
+	Active bool
+	// Posted is true when this call added the notice to the transcript.
+	Posted bool
+}
+
+// Relay records that the listener forwarded key's latest round to the
+// commander. It posts notice (a fixed line, never derived from the user's text)
+// at most once per round, as a non-answering message, and marks the round
+// relayed with the commander's presence. It does NOT answer the round: the
+// review surface keeps waiting until a real reply, an artifact change or the
+// user's Stop waiting. Calling it again for the same round only refreshes
+// commander, so it is safe on redelivery. An ended or already answered session
+// is a no-op (Active false).
+func (h *Hub) Relay(key, commander, notice string) (RelayResult, error) {
+	notice = clip(strings.TrimSpace(notice), maxReplyChars)
+	if commander != CommanderConnected {
+		commander = CommanderNone
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	l, err := h.get(key)
+	if err != nil {
+		return RelayResult{}, err
+	}
+	if l.rec.Status == StatusEnded || l.rec.Round <= l.rec.AnsweredThrough {
+		return RelayResult{}, nil
+	}
+	h.beat(l)
+	first := l.rec.RelayedRound < l.rec.Round || l.rec.RelayedAt.IsZero()
+	if !first && l.rec.Commander == commander {
+		return RelayResult{Active: true}, nil
+	}
+	if err := h.commit(l, func(rec *sessionRecord) error {
+		if first {
+			rec.RelayedAt = h.opts.Now().UTC()
+			rec.RelayedRound = rec.Round
+		}
+		rec.Commander = commander
+		return nil
+	}); err != nil {
+		return RelayResult{}, err
+	}
+	posted := false
+	if first && notice != "" {
+		id, err := newID("m_")
+		if err != nil {
+			return RelayResult{}, err
+		}
+		if err := h.appendTranscript(l, Message{ID: id, Role: RoleAgent, Kind: MessageKindNotice, Text: notice, At: h.opts.Now().UTC(), Round: l.rec.Round}); err != nil {
+			return RelayResult{}, err
+		}
+		posted = true
+	}
+	h.bump(l)
+	return RelayResult{Active: true, Posted: posted}, nil
+}
+
 // PollResult is what one agent poll delivers.
 type PollResult struct {
 	Key     string
@@ -597,6 +681,9 @@ type PollResult struct {
 	Status  string
 	EndedBy string
 	Prompts []Prompt
+	// ProjectRoot is the project root recorded for the session (empty when it
+	// was opened outside any project).
+	ProjectRoot string
 	// Delivery names the lease on Prompts: the agent confirms it with Hub.Ack
 	// once it has read them, and until then they stay on disk (see
 	// sessionRecord.Inflight). Empty when nothing was delivered.
@@ -624,30 +711,43 @@ func (l *liveSession) oldestUndelivered() time.Time {
 }
 
 // beginPoll registers one poller on l. Callers hold h.mu.
-func (h *Hub) beginPoll(l *liveSession) {
+//
+// A relay poll (the listener's) is not the agent: it forwards feedback and
+// re-polls at once, so it never ends the wait for the commander's answer.
+func (h *Hub) beginPoll(l *liveSession, relay bool) {
 	l.pollers++
+	if relay {
+		l.relayPollers++
+	}
 	h.beat(l)
-	// Polling again: the agent is listening, not merely working. A poll that
-	// starts with feedback already waiting is the one about to take it, so only
-	// a poll with nothing to deliver means the agent is done with the last round.
-	idle := !l.hasUndelivered()
-	if (idle && !l.rec.AwaitingSince.IsZero()) || !l.rec.DeliveredAt.IsZero() {
-		if err := h.commit(l, func(rec *sessionRecord) error {
-			rec.DeliveredAt = time.Time{}
-			if idle {
-				rec.AwaitingSince = time.Time{}
+	if !relay {
+		// Polling again: the agent is listening, not merely working. A poll that
+		// starts with feedback already waiting is the one about to take it, so only
+		// a poll with nothing to deliver means the agent is done with the last round.
+		idle := !l.hasUndelivered()
+		if (idle && (!l.rec.AwaitingSince.IsZero() || !l.rec.RelayedAt.IsZero())) || !l.rec.DeliveredAt.IsZero() {
+			if err := h.commit(l, func(rec *sessionRecord) error {
+				rec.DeliveredAt = time.Time{}
+				if idle {
+					rec.AwaitingSince = time.Time{}
+					rec.RelayedAt = time.Time{}
+					rec.Commander = ""
+				}
+				return nil
+			}); err != nil {
+				h.logf("clearing delivered_at: %v", err)
 			}
-			return nil
-		}); err != nil {
-			h.logf("clearing delivered_at: %v", err)
 		}
 	}
 	h.bump(l)
 }
 
 // endPoll drops one poller from l. Callers hold h.mu.
-func (h *Hub) endPoll(l *liveSession) {
+func (h *Hub) endPoll(l *liveSession, relay bool) {
 	l.pollers--
+	if relay {
+		l.relayPollers--
+	}
 	h.beat(l)
 	h.bump(l)
 }
@@ -656,7 +756,7 @@ func (h *Hub) endPoll(l *liveSession) {
 // an earlier delivery first (marked redelivered), then the outbox. The prompts
 // move to Inflight and stay there until Ack, so a poll that dies before its
 // output is read costs nothing. Callers hold h.mu.
-func (h *Hub) deliver(l *liveSession) (PollResult, error) {
+func (h *Hub) deliver(l *liveSession, relay bool) (PollResult, error) {
 	redelivered := len(l.rec.Inflight)
 	all := append(append([]Prompt(nil), l.rec.Inflight...), l.rec.Outbox...)
 	id, err := newID("dl_")
@@ -667,7 +767,9 @@ func (h *Hub) deliver(l *liveSession) (PollResult, error) {
 		rec.Inflight = all
 		rec.InflightID = id
 		rec.Outbox = []Prompt{}
-		rec.DeliveredAt = h.opts.Now().UTC()
+		if !relay {
+			rec.DeliveredAt = h.opts.Now().UTC()
+		}
 		return nil
 	}); err != nil {
 		return PollResult{}, err
@@ -676,7 +778,7 @@ func (h *Hub) deliver(l *liveSession) (PollResult, error) {
 	for i := 0; i < redelivered; i++ {
 		out[i].Redelivered = true
 	}
-	res := PollResult{Key: l.rec.Key, File: l.rec.File, EndedBy: l.rec.EndedBy, Status: PollFeedback, Prompts: out, Delivery: id}
+	res := PollResult{Key: l.rec.Key, File: l.rec.File, EndedBy: l.rec.EndedBy, ProjectRoot: l.rec.ProjectRoot, Status: PollFeedback, Prompts: out, Delivery: id}
 	if l.rec.Status == StatusEnded {
 		res.Status = PollEnded
 	}
@@ -722,14 +824,14 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 		h.mu.Unlock()
 		return PollResult{}, err
 	}
-	h.beginPoll(l)
+	h.beginPoll(l, false)
 	var deadline time.Time
 	if timeout > 0 {
 		deadline = h.opts.Now().Add(timeout)
 	}
 	defer func() {
 		h.mu.Lock()
-		h.endPoll(l)
+		h.endPoll(l, false)
 		h.mu.Unlock()
 	}()
 
@@ -739,10 +841,10 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 			return PollResult{}, err
 		}
 		now := h.opts.Now()
-		res := PollResult{Key: key, File: l.rec.File, EndedBy: l.rec.EndedBy}
+		res := PollResult{Key: key, File: l.rec.File, EndedBy: l.rec.EndedBy, ProjectRoot: l.rec.ProjectRoot}
 
 		if l.hasUndelivered() {
-			res, err := h.deliver(l)
+			res, err := h.deliver(l, false)
 			h.mu.Unlock()
 			return res, err
 		}
@@ -811,13 +913,29 @@ func (h *Hub) wait(ctx context.Context, wake time.Duration) {
 // browser left. Sessions opened while it waits join it. Delivery is leased per
 // session exactly as in Poll.
 func (h *Hub) PollAll(ctx context.Context, timeout time.Duration) (PollResult, error) {
+	return h.PollAllWith(ctx, timeout, PollAllOptions{})
+}
+
+// PollAllOptions tune a multiplexed poll.
+type PollAllOptions struct {
+	// Relay marks the poll as the listener's. It covers only sessions that
+	// have a project root (a session opened outside any project has no
+	// commander to forward to, so it stays undelivered for a manual poll), it
+	// does not count as "the agent listening" in the panel, and it never ends
+	// the wait for the commander's answer.
+	Relay bool
+}
+
+// PollAllWith is PollAll with options.
+func (h *Hub) PollAllWith(ctx context.Context, timeout time.Duration, opts PollAllOptions) (PollResult, error) {
+	relay := opts.Relay
 	h.mu.Lock()
 	h.adoptRecentSessions()
 	tracked := map[string]*liveSession{}
 	defer func() {
 		h.mu.Lock()
 		for _, l := range tracked {
-			h.endPoll(l)
+			h.endPoll(l, relay)
 		}
 		h.mu.Unlock()
 	}()
@@ -835,9 +953,12 @@ func (h *Hub) PollAll(ctx context.Context, timeout time.Duration) (PollResult, e
 		// An ended session still holding undelivered feedback (Send & End) stays
 		// covered until the agent has taken it.
 		for key, l := range h.sessions {
+			if relay && l.rec.ProjectRoot == "" {
+				continue
+			}
 			if tracked[key] == nil && (l.rec.Status == StatusOpen || l.hasUndelivered()) {
 				tracked[key] = l
-				h.beginPoll(l)
+				h.beginPoll(l, relay)
 			}
 		}
 		if len(tracked) == 0 {
@@ -864,14 +985,14 @@ func (h *Hub) PollAll(ctx context.Context, timeout time.Duration) (PollResult, e
 			}
 		}
 		if pick != nil {
-			res, err := h.deliver(pick)
+			res, err := h.deliver(pick, relay)
 			res.OtherPending = waiting - 1
 			h.mu.Unlock()
 			return res, err
 		}
 		for _, key := range keys {
 			if l := tracked[key]; l.rec.Status == StatusEnded {
-				res := PollResult{Key: key, File: l.rec.File, EndedBy: l.rec.EndedBy, Status: PollEnded}
+				res := PollResult{Key: key, File: l.rec.File, EndedBy: l.rec.EndedBy, ProjectRoot: l.rec.ProjectRoot, Status: PollEnded}
 				h.mu.Unlock()
 				return res, nil
 			}
@@ -970,6 +1091,13 @@ type Snapshot struct {
 	// prompts and has neither polled again nor replied: the browser shows
 	// "received your message and is working" until then.
 	WorkingUntil *time.Time `json:"working_until,omitempty"`
+	// Relayed is set from the moment the listener forwarded the latest round to
+	// the commander until a real answer, an artifact change or the user stopping
+	// the wait: the honest state for "somebody got it, nobody has answered".
+	Relayed *RelayView `json:"relayed,omitempty"`
+	// Forwarding is true while the listener (not an agent poll) is what is
+	// waiting for the user's feedback.
+	Forwarding bool `json:"forwarding,omitempty"`
 	// AwaitingSince is set from the user's Send until the agent answers, polls
 	// again, the artifact changes, or the user stops waiting: the browser blocks
 	// the review surface meanwhile, in every tab.
@@ -987,9 +1115,18 @@ type Snapshot struct {
 	LayoutWarnings []LayoutWarningView `json:"layout_warnings"`
 }
 
+// RelayView is the browser's view of a relayed round.
+type RelayView struct {
+	Since time.Time `json:"since"`
+	Round int       `json:"round"`
+	// Commander is CommanderConnected or CommanderNone: whether a commander
+	// session was known when the round was forwarded.
+	Commander string `json:"commander"`
+}
+
 func (l *liveSession) snapshot(now time.Time, listenerGrace time.Duration) Snapshot {
 	var workingUntil *time.Time
-	if until := l.rec.DeliveredAt.Add(AgentWorkingWindow); l.pollers == 0 && l.rec.Status != StatusEnded &&
+	if until := l.rec.DeliveredAt.Add(AgentWorkingWindow); l.pollers-l.relayPollers == 0 && l.rec.Status != StatusEnded &&
 		!l.rec.DeliveredAt.IsZero() && now.Before(until) {
 		workingUntil = &until
 	}
@@ -997,9 +1134,19 @@ func (l *liveSession) snapshot(now time.Time, listenerGrace time.Duration) Snaps
 	if since := l.rec.AwaitingSince; !since.IsZero() && l.rec.Status != StatusEnded {
 		awaitingSince = &since
 	}
+	var relayed *RelayView
+	if !l.rec.RelayedAt.IsZero() && l.rec.Status != StatusEnded && l.rec.Round > l.rec.AnsweredThrough {
+		relayed = &RelayView{Since: l.rec.RelayedAt, Round: l.rec.RelayedRound, Commander: l.rec.Commander}
+	}
+	agentPollers := l.pollers - l.relayPollers
+	forwarding := l.relayPollers > 0 && l.rec.Status != StatusEnded
 	listener, listenerUntil := "none", (*time.Time)(nil)
 	if l.rec.Status != StatusEnded {
 		switch grace := l.lastListener.Add(listenerGrace); {
+		case relayed != nil:
+			listener = "relayed"
+		case agentPollers == 0 && forwarding:
+			listener = "forwarding"
 		case l.pollers > 0:
 			listener = "listening"
 		case workingUntil != nil:
@@ -1020,7 +1167,9 @@ func (l *liveSession) snapshot(now time.Time, listenerGrace time.Duration) Snaps
 		File:            l.rec.File,
 		Status:          l.rec.Status,
 		EndedBy:         l.rec.EndedBy,
-		Listening:       l.pollers > 0,
+		Listening:       agentPollers > 0,
+		Relayed:         relayed,
+		Forwarding:      forwarding,
 		Pending:         len(l.rec.Outbox),
 		Queued:          append([]Prompt{}, l.rec.Queued...),
 		Transcript:      append([]Message{}, l.transcript...),
@@ -1038,6 +1187,8 @@ func (h *Hub) snapshotOf(l *liveSession) Snapshot {
 		if err := h.commit(l, func(rec *sessionRecord) error {
 			rec.AnsweredThrough = rec.Round
 			rec.AwaitingSince = time.Time{}
+			rec.RelayedAt = time.Time{}
+			rec.Commander = ""
 			return nil
 		}); err != nil {
 			h.logf("recording the artifact change: %v", err)
@@ -1057,12 +1208,14 @@ func (h *Hub) StopWaiting(key string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if l.rec.AwaitingSince.IsZero() && l.rec.DeliveredAt.IsZero() {
+	if l.rec.AwaitingSince.IsZero() && l.rec.DeliveredAt.IsZero() && l.rec.RelayedAt.IsZero() {
 		return false, nil
 	}
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		rec.AwaitingSince = time.Time{}
 		rec.DeliveredAt = time.Time{}
+		rec.RelayedAt = time.Time{}
+		rec.Commander = ""
 		return nil
 	}); err != nil {
 		return false, err

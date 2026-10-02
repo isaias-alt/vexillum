@@ -96,6 +96,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/agent/poll", s.agentOnly(s.handleAgentPoll))
 	s.mux.HandleFunc("POST /api/agent/ack", s.agentOnly(s.handleAgentAck))
 	s.mux.HandleFunc("POST /api/agent/reply", s.agentOnly(s.handleAgentReply))
+	s.mux.HandleFunc("POST /api/agent/relay", s.agentOnly(s.handleAgentRelay))
 	s.mux.HandleFunc("POST /api/agent/end", s.agentOnly(s.handleAgentEnd))
 	s.mux.HandleFunc("POST /api/agent/stop", s.agentOnly(s.handleAgentStop))
 	s.mux.HandleFunc("GET /api/agent/status", s.agentOnly(s.handleAgentStatus))
@@ -206,6 +207,13 @@ type agentFileRequest struct {
 	All bool `json:"all"`
 	// Delivery is the lease a poll handed out (ack only).
 	Delivery string `json:"delivery"`
+	// ProjectRoot is the project the opener belongs to (open only).
+	ProjectRoot string `json:"project_root"`
+	// Relay makes a multiplexed poll the listener's (poll with All only).
+	Relay bool `json:"relay"`
+	// Commander is CommanderConnected or CommanderNone (relay only); Text is
+	// the notice to post.
+	Commander string `json:"commander"`
 }
 
 // agentKey validates the absolute artifact path an agent command names and
@@ -227,6 +235,9 @@ type OpenResponse struct {
 	Created          bool   `json:"created"`
 	BrowserConnected bool   `json:"browser_connected"`
 	Pending          int    `json:"pending"`
+	// ProjectRoot echoes the project root the session is recorded under; empty
+	// when the opener sent none, or when the server predates the field.
+	ProjectRoot string `json:"project_root,omitempty"`
 }
 
 func (s *Server) handleAgentOpen(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +248,11 @@ func (s *Server) handleAgentOpen(w http.ResponseWriter, r *http.Request) {
 	if _, ok := agentKey(w, req); !ok {
 		return
 	}
-	res, err := s.hub.Open(req.File, req.Reopen)
+	if req.ProjectRoot != "" && !filepath.IsAbs(req.ProjectRoot) {
+		writeError(w, http.StatusBadRequest, "bad_request", "project_root must be an absolute path")
+		return
+	}
+	res, err := s.hub.OpenFor(req.File, req.Reopen, cleanRoot(req.ProjectRoot))
 	if err != nil {
 		writeHubError(w, err)
 		return
@@ -250,16 +265,20 @@ func (s *Server) handleAgentOpen(w http.ResponseWriter, r *http.Request) {
 		Created:          res.Created,
 		BrowserConnected: res.BrowserConnected,
 		Pending:          res.Pending,
+		ProjectRoot:      res.ProjectRoot,
 	})
 }
 
 // PollResponse is the body of POST /api/agent/poll.
 type PollResponse struct {
-	Session string   `json:"session"`
-	File    string   `json:"file"`
-	Status  string   `json:"status"`
-	EndedBy string   `json:"ended_by,omitempty"`
-	Prompts []Prompt `json:"prompts"`
+	Session string `json:"session"`
+	File    string `json:"file"`
+	Status  string `json:"status"`
+	EndedBy string `json:"ended_by,omitempty"`
+	// ProjectRoot is the project root recorded for the session, so the listener
+	// knows whose inbox the prompts belong to.
+	ProjectRoot string   `json:"project_root,omitempty"`
+	Prompts     []Prompt `json:"prompts"`
 	// All is set when the poll covered every open session; File then says which
 	// one the result is about (empty for a status that is about none of them).
 	All bool `json:"all,omitempty"`
@@ -280,7 +299,7 @@ func (s *Server) handleAgentPoll(w http.ResponseWriter, r *http.Request) {
 	var res PollResult
 	var err error
 	if req.All {
-		res, err = s.hub.PollAll(r.Context(), timeout)
+		res, err = s.hub.PollAllWith(r.Context(), timeout, PollAllOptions{Relay: req.Relay})
 	} else {
 		key, ok := agentKey(w, req)
 		if !ok {
@@ -314,6 +333,7 @@ func (s *Server) handleAgentPoll(w http.ResponseWriter, r *http.Request) {
 		File:         res.File,
 		Status:       res.Status,
 		EndedBy:      res.EndedBy,
+		ProjectRoot:  res.ProjectRoot,
 		Prompts:      delivered,
 		All:          req.All,
 		OtherPending: res.OtherPending,
@@ -351,6 +371,29 @@ func (s *Server) handleAgentReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+}
+
+// RelayResponse is the body of POST /api/agent/relay.
+type RelayResponse struct {
+	Active bool `json:"active"`
+	Posted bool `json:"posted"`
+}
+
+func (s *Server) handleAgentRelay(w http.ResponseWriter, r *http.Request) {
+	var req agentFileRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	key, ok := agentKey(w, req)
+	if !ok {
+		return
+	}
+	res, err := s.hub.Relay(key, req.Commander, req.Text)
+	if err != nil {
+		writeHubError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, RelayResponse{Active: res.Active, Posted: res.Posted})
 }
 
 func (s *Server) handleAgentEnd(w http.ResponseWriter, r *http.Request) {
@@ -407,4 +450,13 @@ func loopbackHost(host string) bool {
 	}
 	h = strings.Trim(h, "[]")
 	return h == "127.0.0.1" || h == "localhost" || h == "::1"
+}
+
+// cleanRoot cleans a non-empty path and leaves an empty one empty (filepath.Clean
+// would turn it into ".").
+func cleanRoot(p string) string {
+	if p == "" {
+		return ""
+	}
+	return filepath.Clean(p)
 }

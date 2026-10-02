@@ -132,6 +132,10 @@ button, textarea { font: inherit; color: inherit; }
 @keyframes working-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--fr-bronze-soft); } 50% { box-shadow: 0 0 0 4px var(--fr-bronze-soft); } }
 .presence[data-state="waiting"] { color: var(--fr-text-secondary); }
 .presence[data-state="waiting"] .presence-dot { background: var(--fr-accent); opacity: 0.55; }
+.presence[data-state="relayed"] { color: var(--fr-text); }
+.presence[data-state="relayed"] .presence-dot { background: var(--fr-bronze); opacity: 1; animation: working-pulse 1.6s ease-in-out infinite; }
+.presence[data-state="forwarding"] { color: var(--fr-text-secondary); }
+.presence[data-state="forwarding"] .presence-dot { background: var(--fr-accent); opacity: 0.55; }
 .presence[data-state="idle"], .presence[data-state="ended"] { color: var(--fr-text-secondary); }
 
 .banner {
@@ -142,6 +146,8 @@ button, textarea { font: inherit; color: inherit; }
   background: var(--fr-surface-sunken); color: var(--fr-text-secondary);
   border-bottom: 1px solid var(--fr-border);
 }
+#relayBanner[data-commander="none"] { color: var(--fr-text); }
+.msg-notice { opacity: 0.85; font-style: italic; }
 .banner-working { display: flex; align-items: center; gap: var(--fr-space-2); background: var(--fr-surface-sunken); color: var(--fr-text); }
 .banner-working[hidden] { display: none; }
 .working-spinner { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fr-border-strong); border-top-color: var(--fr-bronze); animation: working-spin 0.9s linear infinite; }

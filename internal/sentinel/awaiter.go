@@ -228,3 +228,32 @@ func LiveAwaiters(vexillumHome string) int {
 	}
 	return live
 }
+
+// HasLiveAwaiter reports whether a Stop hook "vx sentinel await" is alive for
+// projectRoot: the closest thing to "a commander session is known for this
+// project" (the hook runs on every turn end of an interactive Claude Code
+// session in it, and an await lives only as long as its session). It only
+// reads - it signals nothing and deletes no record.
+func HasLiveAwaiter(vexillumHome, projectRoot string) bool {
+	entries, err := os.ReadDir(awaitersDir(vexillumHome))
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(awaitersDir(vexillumHome), entry.Name()))
+		if err != nil {
+			continue
+		}
+		var rec AwaiterRecord
+		if json.Unmarshal(data, &rec) != nil || rec.PID <= 1 || rec.ProjectRoot != projectRoot {
+			continue
+		}
+		if ppid, command, err := inspectProcess(rec.PID); err == nil && ppid == rec.OwnerPID && isAwaitCommand(command) {
+			return true
+		}
+	}
+	return false
+}
