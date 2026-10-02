@@ -176,6 +176,28 @@ func Resolve(projectDir, vexillumHome string, slot int) (Camp, error) {
 	return Camp{}, fmt.Errorf("camp slot %d not found in pool state for %s", slot, absProject)
 }
 
+// LeasedTasks returns the set of task ids that currently hold a camp lease
+// in the pool under projectRoot (see internal/project.Root) - a task whose
+// camp was released no longer does. internal/sentinel uses it to tell a
+// finished soldier whose pane is still open (worth watching for a re-prompt)
+// from one long since released. It reads the pool without locking it: the
+// pool is only ever replaced atomically (savePool), so a read sees either
+// the old or the new version, never a partial one. A project that never
+// acquired a camp has no pool file and no leases.
+func LeasedTasks(projectRoot string) (map[string]bool, error) {
+	pool, err := loadPool(filepath.Join(projectRoot, "camps"))
+	if err != nil {
+		return nil, err
+	}
+	leased := map[string]bool{}
+	for _, s := range pool.Slots {
+		if s.LeasedBy != "" {
+			leased[s.LeasedBy] = true
+		}
+	}
+	return leased, nil
+}
+
 // Land fast-forwards the project's own checkout to c's branch - the
 // "local-only" delivery mode from upstream-tool (bin/fm-merge-local.sh),
 // which vexillum mirrors here rather than leaving the commander to run

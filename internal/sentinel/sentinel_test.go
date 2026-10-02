@@ -1265,3 +1265,203 @@ func TestTick_NeedsDecisionLineForcesBlockedInsteadOfDone(t *testing.T) {
 		t.Errorf("expected one drained wake for %s -> blocked, got %+v", task.ID, wakes)
 	}
 }
+
+// leaseCamp writes the pool file a real camp.Acquire would leave under
+// projectRoot, with one slot leased to taskID - the signal the sentinel
+// uses to tell a finished soldier whose pane is still open from one whose
+// camp was released.
+func leaseCamp(t *testing.T, projectRoot, taskID string) {
+	t.Helper()
+	dir := filepath.Join(projectRoot, "camps")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating pool dir: %v", err)
+	}
+	pool := `{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"` + taskID + `"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "pool.json"), []byte(pool), 0o644); err != nil {
+		t.Fatalf("writing pool: %v", err)
+	}
+}
+
+// savedTask persists a task in the given status with a herdr agent name,
+// backdated past the settle grace period.
+func savedTask(t *testing.T, projectRoot string, status state.Status) state.Task {
+	t.Helper()
+	task := newRunningTask(t, projectRoot, "vx-do-the-thing")
+	task.Status = status
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return task
+}
+
+// The bug: a soldier re-prompted after it settled never went back to
+// running, so its second finish was not a transition and never woke the
+// commander. Seeing the pane working again must reopen the task, and the
+// next settle must then record a wake.
+func TestTick_ReopensSettledTaskWhenItsAgentIsWorkingAgain(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := savedTask(t, proj, state.StatusDone)
+	leaseCamp(t, proj, task.ID)
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("reopening must not record a wake, got %d", woke)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Fatalf("expected the task reopened to running, got %s", got.Status)
+	}
+	if time.Since(got.UpdatedAt) > time.Minute {
+		t.Errorf("expected a fresh UpdatedAt so the settle grace period applies, got %s", got.UpdatedAt)
+	}
+
+	// Still inside the grace period: a stale idle read must not settle it.
+	client.statuses["vx-do-the-thing"] = "done"
+	if woke, err = sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("expected no settle inside the grace period, woke=%d err=%v", woke, err)
+	}
+
+	// The soldier finishes: that is a transition again, with a wake.
+	got.UpdatedAt = time.Now().Add(-time.Minute)
+	if err := state.Save(proj, got); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	woke, err = sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("expected the second finish to record a wake, got %d", woke)
+	}
+	wakes, err := sentinel.Drain(proj)
+	if err != nil || len(wakes) != 1 || wakes[0].OldStatus != state.StatusRunning || wakes[0].NewStatus != state.StatusDone {
+		t.Fatalf("expected one running -> done wake, got %+v err=%v", wakes, err)
+	}
+}
+
+func TestTick_ReopensBlockedAndUnconfirmedTasksToo(t *testing.T) {
+	for _, status := range []state.Status{state.StatusBlocked, state.StatusUnconfirmed} {
+		t.Run(string(status), func(t *testing.T) {
+			home := t.TempDir()
+			proj := projectRoot(home, "proj1")
+			task := savedTask(t, proj, status)
+			leaseCamp(t, proj, task.ID)
+
+			client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
+			if _, err := sentinel.Tick(home, client); err != nil {
+				t.Fatalf("Tick: %v", err)
+			}
+			got, _ := state.Load(proj, task.ID)
+			if got.Status != state.StatusRunning {
+				t.Errorf("expected %s reopened to running, got %s", status, got.Status)
+			}
+		})
+	}
+}
+
+func TestTick_DoesNotReopenWhenNotWorking(t *testing.T) {
+	for _, live := range []string{"idle", "done", "blocked", "unknown", ""} {
+		t.Run(live, func(t *testing.T) {
+			home := t.TempDir()
+			proj := projectRoot(home, "proj1")
+			task := savedTask(t, proj, state.StatusDone)
+			leaseCamp(t, proj, task.ID)
+
+			client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": live}}
+			if _, err := sentinel.Tick(home, client); err != nil {
+				t.Fatalf("Tick: %v", err)
+			}
+			got, _ := state.Load(proj, task.ID)
+			if got.Status != state.StatusDone {
+				t.Errorf("live=%q: expected done to stay done, got %s", live, got.Status)
+			}
+		})
+	}
+}
+
+// A released camp has no lease and no pane: it is never probed, so a long
+// history of finished tasks costs no herdr calls.
+func TestTick_DoesNotProbeReleasedTasks(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := savedTask(t, proj, state.StatusDone)
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	got, _ := state.Load(proj, task.ID)
+	if got.Status != state.StatusDone {
+		t.Errorf("expected an unleased done task untouched, got %s", got.Status)
+	}
+}
+
+func TestTick_ReopenNeverTouchesInterruptedFailedOrShipped(t *testing.T) {
+	for _, status := range []state.Status{state.StatusInterrupted, state.StatusFailed, state.StatusShipped} {
+		t.Run(string(status), func(t *testing.T) {
+			home := t.TempDir()
+			proj := projectRoot(home, "proj1")
+			task := savedTask(t, proj, status)
+			leaseCamp(t, proj, task.ID)
+
+			client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
+			if _, err := sentinel.Tick(home, client); err != nil {
+				t.Fatalf("Tick: %v", err)
+			}
+			got, _ := state.Load(proj, task.ID)
+			if got.Status != status {
+				t.Errorf("expected %s untouched, got %s", status, got.Status)
+			}
+		})
+	}
+}
+
+// A pane that is gone, or a herdr hiccup, while probing a settled task is
+// not an interruption and not an error: the task is left exactly as it was.
+func TestTick_ReopenProbeFailureLeavesTaskAlone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := savedTask(t, proj, state.StatusDone)
+	leaseCamp(t, proj, task.ID)
+
+	client := &fakeHerdr{err: &herdr.APIError{Code: "agent_not_found", Message: "gone"}}
+	for i := 0; i < 3; i++ {
+		woke, err := sentinel.Tick(home, client)
+		if err != nil || woke != 0 {
+			t.Fatalf("Tick: woke=%d err=%v", woke, err)
+		}
+	}
+	got, _ := state.Load(proj, task.ID)
+	if got.Status != state.StatusDone || !got.AgentNotFoundSince.IsZero() {
+		t.Errorf("expected the done task untouched, got status=%s notFoundSince=%v", got.Status, got.AgentNotFoundSince)
+	}
+}
+
+func TestTick_CorruptPoolSkipsReopenWithoutFailingTheTick(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := savedTask(t, proj, state.StatusDone)
+	if err := os.MkdirAll(filepath.Join(proj, "camps"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "camps", "pool.json"), []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick must tolerate an unreadable pool: %v", err)
+	}
+	got, _ := state.Load(proj, task.ID)
+	if got.Status != state.StatusDone {
+		t.Errorf("expected done untouched, got %s", got.Status)
+	}
+}

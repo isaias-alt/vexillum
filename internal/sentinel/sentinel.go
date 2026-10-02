@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
+	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
@@ -149,6 +150,10 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 		return 0, fmt.Errorf("listing tasks: %w", err)
 	}
 
+	if err := reopenActiveTasks(projectRoot, tasks, client); err != nil {
+		return 0, err
+	}
+
 	woke := 0
 	for _, task := range tasks {
 		if task.Status != state.StatusRunning || task.HerdrAgentName == "" {
@@ -215,6 +220,70 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 		}
 	}
 	return woke, nil
+}
+
+// reopenable reports whether a task in status s can be put back to Running
+// by reopenActiveTasks: a soldier that settled (done, unconfirmed) or asked
+// a question (blocked) and whose pane is still open can be prompted again.
+// interrupted, failed and shipped are deliberately absent: their pane is
+// gone or the PR, not the soldier, is the source of truth.
+func reopenable(s state.Status) bool {
+	return s == state.StatusDone || s == state.StatusBlocked || s == state.StatusUnconfirmed
+}
+
+// reopenActiveTasks puts a settled task back to Running when its herdr
+// agent is working again. The sentinel only ever notifies on a transition
+// out of Running, so a soldier re-prompted after it settled (the commander
+// ran "herdr agent prompt" by hand, or the general typed into its pane)
+// would otherwise finish a second time with no transition and no wake, and
+// the commander would wait forever. Reopening it is what makes the next
+// settle a transition again. No wake is recorded for the reopening itself:
+// whoever re-prompted the soldier already knows.
+//
+// Only a task that still holds its camp lease is probed (camp.LeasedTasks):
+// a released task's pane is closed, and probing every historical task on
+// every tick would cost one herdr call each, forever. A failed probe
+// (pane gone, herdr hiccup) just leaves the task as it was - never marks
+// it interrupted, which is only for tasks the sentinel was watching
+// run. The reopened task gets a fresh UpdatedAt, so tickProject's settle
+// grace period covers the stale-idle window right after a prompt, exactly
+// as it does for a fresh dispatch.
+func reopenActiveTasks(projectRoot string, tasks []state.Task, client herdr.Client) error {
+	var leased map[string]bool
+	leasesLoaded := false
+	for _, task := range tasks {
+		if !reopenable(task.Status) || task.HerdrAgentName == "" {
+			continue
+		}
+		if !leasesLoaded {
+			leasesLoaded = true
+			var err error
+			leased, err = camp.LeasedTasks(projectRoot)
+			if err != nil {
+				// An unreadable pool means "can't tell", not "nothing is
+				// leased": skip the reopen pass this tick, the next one
+				// retries.
+				return nil
+			}
+		}
+		if !leased[task.ID] {
+			continue
+		}
+
+		live, err := client.AgentStatus(task.HerdrAgentName)
+		if err != nil || live != "working" {
+			continue
+		}
+
+		task.Status = state.StatusRunning
+		task.UpdatedAt = time.Now().UTC()
+		task.IdleUnconfirmedSince = time.Time{}
+		task.AgentNotFoundSince = time.Time{}
+		if err := state.Save(projectRoot, task); err != nil {
+			return fmt.Errorf("reopening task %s: %w", task.ID, err)
+		}
+	}
+	return nil
 }
 
 // settleTransition persists task's straightforward transition out of
