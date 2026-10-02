@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================================
-# vexillum - install script
+# vexillum - install script (installs the `vx` command)
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/main/scripts/install.sh | bash
@@ -112,8 +112,27 @@ install_via_binary() {
     esac
 }
 
+# Refuse to clobber a `vx` that is not vexillum (another tool may own that name).
+# Ours identifies itself as "vexillum <version>" on --version.
+check_existing_binary() {
+    local existing out
+    existing="$(command -v "$BINARY_NAME" 2>/dev/null || true)"
+    [ -n "$existing" ] || return 0
+
+    out="$("$existing" --version 2>/dev/null | head -1 || true)"
+    case "$out" in
+        vexillum\ *) return 0 ;;
+    esac
+
+    warn "A different '${BINARY_NAME}' executable is already on your PATH: ${existing}"
+    warn "It does not identify itself as vexillum, so nothing was installed or overwritten."
+    warn "Rename or remove it, then re-run this script."
+    exit 1
+}
+
 main() {
     detect_platform
+    check_existing_binary
 
     if command -v brew >/dev/null 2>&1; then
         install_via_brew
@@ -124,6 +143,10 @@ main() {
     hash -r 2>/dev/null || true
     if command -v "$BINARY_NAME" >/dev/null 2>&1; then
         ok "$("$BINARY_NAME" --version)"
+        info "Run '${BINARY_NAME} init' in a project to get started, and '${BINARY_NAME} doctor' to check your setup."
+    fi
+    if [ -x "${HOME}/go/bin/vexillum" ] || command -v vexillum >/dev/null 2>&1; then
+        info "An older 'vexillum' command is still on this machine (for example a dev build). The command is now '${BINARY_NAME}'; you can remove the old one yourself when convenient."
     fi
 }
 
