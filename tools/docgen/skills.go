@@ -33,6 +33,7 @@ type contentLocale struct {
 	skillsIndexTitle, skillsIndexDescription, skillsIndexIntro string
 	skillHeader, descriptionHeader                             string
 	skillTitle                                                 func(name string) string
+	skillDescription                                           func(name string) string
 	skillIntro                                                 func(name, hash string, n int) string
 	fileHeading                                                func(rel string) string
 
@@ -53,6 +54,9 @@ var (
 		skillHeader:       "Skill",
 		descriptionHeader: "Description",
 		skillTitle:        func(name string) string { return "Skill: " + name },
+		skillDescription: func(name string) string {
+			return "The full text of the " + name + " skill, generated from the files embedded in the vx binary."
+		},
 		skillIntro: func(name, hash string, n int) string {
 			return fmt.Sprintf("This is the full content of the `%s` skill: %d %s, shown verbatim. "+
 				"`"+cmdname.Name+" init` writes them to `.claude/skills/%s/` (or `~/.claude/skills/%s/` with `--global`), and `"+cmdname.Name+" upgrade` keeps them current. "+
@@ -81,6 +85,9 @@ var (
 		skillHeader:       "Skill",
 		descriptionHeader: "Descripción",
 		skillTitle:        func(name string) string { return "Skill: " + name },
+		skillDescription: func(name string) string {
+			return "El texto completo de la skill " + name + ", generado desde los archivos embebidos en el binario vx."
+		},
 		skillIntro: func(name, hash string, n int) string {
 			return fmt.Sprintf("Este es el contenido completo de la skill `%s`: %d %s, mostrados tal cual y en inglés. "+
 				"`"+cmdname.Name+" init` los escribe en `.claude/skills/%s/` (o en `~/.claude/skills/%s/` con `--global`), y `"+cmdname.Name+" upgrade` los mantiene al día. "+
@@ -173,15 +180,8 @@ func skillPage(name string, l contentLocale) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var skillMD string
-	for _, f := range files {
-		if f.Path == "SKILL.md" {
-			skillMD = string(f.Content)
-		}
-	}
-
 	var b strings.Builder
-	b.WriteString(frontmatter(l.skillTitle(name), skillDescription(skillMD)))
+	b.WriteString(frontmatter(l.skillTitle(name), l.skillDescription(name)))
 	b.WriteString(skillsNotice + "\n\n")
 	b.WriteString(l.skillIntro(name, hash, len(files)) + "\n\n")
 	for _, f := range files {

@@ -11,6 +11,10 @@ Start with `vx doctor`: it names what is missing.
 | `current directory is not a git repository` | `init` needs a git repository. |
 | `HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane` | Start Claude Code in a pane herdr manages; `dispatch` and `redispatch` refuse elsewhere. |
 | `running from inside ... which looks like a vexillum-managed camp` | You are in a path under `~/.vexillum`. `cd` back to the real project root. |
+| `not running in a terminal, so nothing was changed.` | `init` or `upgrade` found no terminal to ask in. Re-run with `--yes` (add `--skills` or `--no-skills` to decide about the skills). |
+| `no answer (input closed or not understood) - nothing further was changed; re-run with --yes to accept without questions` | A question got no usable answer, so the run stopped. Re-run, or pass `--yes`. |
+| `AGENTS.md: the vexillum block was edited by hand, so it is left as it is` | You edited inside the block. `vx upgrade --force` replaces it after saving yours to `.vexillum/agents-md-slot.backup.md`. See [The AGENTS.md slot](/docs/concepts/agents-md-slot). |
+| `AGENTS.md: the vexillum block is malformed` | Broken markers. `vx upgrade` lists the repairs and asks first. |
 | `a sentinel is already running (pid N)` | Fine: there is one per machine. Do not start another. |
 | `.claude/settings.json has invalid JSON, leaving it untouched` | Fix the JSON, then run `vx init` again to add the hook. |
 | `no tasks yet in this project.` after moving the project | The state key follows the path; see [State](/docs/concepts/state). |

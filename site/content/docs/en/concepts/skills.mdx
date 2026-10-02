@@ -32,22 +32,28 @@ The skills are embedded in the `vx` binary, so installing them needs no Node, no
 | project (default) | `.claude/skills/<name>/` |
 | global (`vx init --global`) | `~/.claude/skills/<name>/` |
 
-`init` **asks before installing them**: it is one of the questions of the [init flow](/docs/reference/cli/init), and non-interactive runs decide with `--skills` or `--no-skills`. Declining leaves you with the AGENTS.md slot, the sentinel hook and your config only.
+`init` **asks before installing them**: after the consent notice it prints `These skills teach the commander how to use vexillum well.` and asks `Install the vexillum, forum and muster skills? [Y/n]`. Non-interactive runs decide with `--skills` or `--no-skills`, and `--yes` accepts. Declining leaves you with the AGENTS.md slot, the sentinel hook and your config only. Skills that are already installed are never reinstalled.
 
 <Callout title="Without the skills the commander has only the core">
-  The slot alone tells the commander to load the `vexillum` skill. If you declined to install it, the commander has no manual to load. Install the skills with `vx init`, or write them back with `vx upgrade`.
+  The slot alone tells the commander to load the `vexillum` skill. If you declined to install it, the commander has no manual to load. Install the skills later with `vx upgrade --skills`.
 </Callout>
 
 ## How upgrade keeps them current
 
-Each skill has a content hash computed over every one of its files (path and content, in path order). `vx upgrade` compares the installed copy to the one embedded in the new binary:
+`vx init` and `vx upgrade` record a content hash per skill in `.vexillum/config.json`, computed over every file of the skill (path and content, in path order). `vx upgrade` compares each installed skill with the copy embedded in the new binary and with the hash it recorded:
 
-- an installed skill that is **current** is left alone;
-- one that is **outdated** and unedited is refreshed;
-- one **you edited** is not overwritten silently: it is reported, and only replaced with `--force`.
+| Installed skill | What `upgrade` does |
+| --- | --- |
+| current | nothing |
+| older than the binary's copy, and unedited | refreshes it |
+| edited by you | leaves it as it is and says so (`Skill <name>: edited by hand, left as it is; rerun with --force to overwrite it (a backup is saved first)`) |
+| a symlink | leaves it alone: it is managed by you |
+| missing | not reinstalled on its own, so a skill you removed on purpose stays removed; `vx upgrade --skills` installs it. When **no** skill is installed yet (a project being migrated) it offers to install them as `init` does |
 
-`vx doctor` reports the same states for each skill. See [Upgrading](/docs/get-started/upgrading).
+`vx upgrade --force` overwrites an edited skill with the embedded one, after saving your version under `.vexillum/backups/skills/<name>/`. `--no-skills` leaves the skills alone: no install, no refresh.
+
+`vx doctor` reports each skill as `installed, current`, `installed, stale`, `installed, edited by hand` or `missing`, and notes a symlink or a global install. See [Upgrading](/docs/get-started/upgrading).
 
 ## Editing a skill
 
-The installed copies are plain files in your project, so you can read them and tune them. Expect `upgrade` to flag an edited skill instead of replacing it. For values you change often, prefer the dedicated, never-overwritten file: the model and effort table lives in [`models.json`](/docs/reference/models-json), not in the skill.
+The installed copies are plain files in your project, so you can read them and tune them. `upgrade` flags an edited skill instead of replacing it, and `--force` replaces it after a backup. For values you change often, prefer the dedicated, never-overwritten file: the model and effort table lives in [`models.json`](/docs/reference/models-json), not in the skill.

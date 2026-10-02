@@ -56,47 +56,57 @@ Cada marcador está solo en su línea. Claude Code quita los comentarios HTML de
 
 ## Los estados
 
-`vx doctor` reporta el estado del slot, y `init` y `upgrade` actúan según él.
+`vx doctor` reporta el estado del slot (`AGENTS.md vexillum block`), y `init` y `upgrade` actúan según él.
 
 | Estado | Qué significa para vos |
 | --- | --- |
 | absent | No hay marcadores de vexillum en `AGENTS.md`. `init` agrega el bloque después de una línea en blanco (o crea el archivo con solo el bloque). |
-| current | El bloque coincide con lo que escribiría este binario, marcador incluido. No hay nada que hacer. |
-| stale | No tocaste el bloque, pero difiere de la versión de este binario (un binario más nuevo, u otro idioma). `upgrade` lo refresca sin riesgo. |
+| current | El bloque coincide con lo que escribiría este binario, marcador incluido. No hay nada que hacer. `doctor` imprime `current (en)` o `current (es)`. |
+| stale | No tocaste el bloque, pero difiere de la versión de este binario (un binario más nuevo, u otro idioma). `upgrade` lo refresca. |
 | drifted | Editaste **dentro** del bloque: el cuerpo ya no coincide con su hash. vexillum no lo pisa en silencio. |
-| malformed | Los marcadores están rotos: un BEGIN sin END, un END antes del BEGIN, o más de un bloque. No se escribe nada hasta arreglarlo. |
+| malformed | Los marcadores están rotos: un BEGIN sin END, un END antes del BEGIN, o más de un bloque. No se escribe nada hasta que confirmes una reparación. |
 
 ## Cuando editás el bloque
 
 El bloque está pensado para ser administrado, pero el archivo es tuyo. Si cambiás algo dentro de los marcadores:
 
-- vexillum **nunca lo sobrescribe sin `--force`**;
-- te muestra el **diff** entre tu versión y la suya;
-- con `--force`, tu versión se guarda primero en `.vexillum/agents-md-slot.backup.md` y después se reemplaza. Un backup anterior se sobrescribe.
+- `init` y `upgrade` lo dejan como está e imprimen el **diff** entre tu versión ("your edit") y la plantilla actual ("vexillum template");
+- `vx upgrade --force` lo reemplaza con la plantilla actual. Tu versión editada se guarda antes en `.vexillum/agents-md-slot.backup.md`. Un backup anterior se sobrescribe.
 
-Si querés otras reglas siempre activas, editá tu propio texto *fuera* de los marcadores, o la copia de la [skill](/es/docs/concepts/skills) en `.claude/skills/vexillum/`, que `upgrade` también protege.
+`vx doctor` muestra un bloque drifted como `drifted, edited by hand`.
+
+Si querés otras reglas siempre activas, poné tu propio texto *fuera* de los marcadores: es tuyo y nunca se toca.
 
 ## Marcadores malformados y reparación
 
-Un bloque malformado nunca se arregla solo. Cuando confirmás, la reparación es deliberadamente acotada:
+Un bloque malformado nunca se arregla a tus espaldas. `vx upgrade` lista las reparaciones y pregunta `Apply these repairs? [Y/n]` (`--yes` acepta). Antes de escribir, el archivo entero tal como estaba se guarda en `.vexillum/AGENTS.md.backup`. La reparación es deliberadamente acotada:
 
 - conserva el **primer** par BEGIN/END bien formado;
 - borra cualquier otro par duplicado, contenido incluido;
 - borra un marcador BEGIN o END huérfano **solo en esa línea**, nunca el texto que lo rodea.
 
-Después de reparar, el resultado todavía puede estar drifted. La reparación nunca juzga el cuerpo; eso sigue siendo decisión tuya.
+Si decís que no, `AGENTS.md` queda como está. Después de reparar, el bloque todavía puede estar drifted: la reparación nunca juzga el cuerpo, así que un bloque que editaste conserva tu texto hasta que corras `upgrade --force`. `init` nunca repara; reporta el problema y te manda a `upgrade`.
 
-## Desinstalar
+## Quitar el bloque
 
-Quitar el bloque saca exactamente las dos líneas de marcadores, el cuerpo entre ellas y una línea en blanco adyacente, y deja el resto de tu archivo como estaba. El archivo en sí se borra solo cuando lo creó vexillum y no queda nada más en él.
+No hay un comando para desinstalar. Para sacar el bloque, borrá a mano la línea BEGIN, la línea END y todo lo que hay entre ellas (y la línea en blanco de arriba). El resto de tu texto no se toca. Tené en cuenta que `vx init` o `vx upgrade` vuelven a agregar el bloque cuando falta, así que sacalo solo si terminaste con vexillum en ese proyecto.
 
 ## Idioma
 
 El slot viene en inglés y en español. El vocabulario del dominio queda en inglés en ambos.
 
-`init` y `upgrade` detectan el idioma de tu `AGENTS.md` existente con una verificación simple, determinista y offline: cuentan palabras funcionales frecuentes de cada idioma, ignorando código, URLs y el propio bloque de vexillum. Necesita al menos 8 coincidencias y un 70% de participación para decidir; si no, y cuando no hay `AGENTS.md`, usa inglés. El idioma detectado se muestra antes de escribir para que lo puedas corregir.
+Cuando `init` o `upgrade` están por escribir el bloque, el idioma se resuelve en este orden:
 
-Forzalo con `--lang en` o `--lang es`. El hash es por idioma, así que cambiar de idioma es una actualización normal del bloque.
+1. `--lang en` o `--lang es`, si lo pasás;
+2. el idioma de un bloque que ya está en el archivo, para que una nueva corrida no lo cambie porque el texto que lo rodea se lee distinto;
+3. el idioma **detectado** en tu propio `AGENTS.md`;
+4. inglés.
+
+La detección es simple, determinista y offline: cuenta palabras funcionales frecuentes de cada idioma, ignorando código, URLs y el propio bloque de vexillum. Necesita al menos 8 coincidencias y un 70% de participación para decidir; si no, y cuando no hay `AGENTS.md`, usa inglés.
+
+Cuando el idioma se detectó o quedó por defecto (no lo diste con `--lang` ni se leyó de un bloque existente), lo ves antes de que se escriba nada, por ejemplo `Detected language: es (from AGENTS.md).` seguido de `Use es for the vexillum block? [Y/n]`. Si respondés que no, te pregunta `Language (en/es):`. Con `--yes`, o sin terminal, solo se anuncia.
+
+El hash es por idioma, así que cambiar de idioma es una actualización normal del bloque. `vx doctor` reporta el idioma del bloque que encontró.
 
 ## Por qué CLAUDE.md tiene que importar AGENTS.md
 
@@ -106,7 +116,17 @@ Claude Code lee `CLAUDE.md`, no `AGENTS.md`. Para que el slot llegue al commande
 @AGENTS.md
 ```
 
-`init` lo verifica. Si `CLAUDE.md` no existe, propone crearlo con esa línea. Si existe sin el import, propone agregar la línea al final. Un `CLAUDE.md` que es un symlink a `AGENTS.md` ya cuenta. Es el segundo archivo tuyo que toca `init`, así que figura en el aviso y lo cubre el mismo consentimiento.
+`init` lo verifica. Si `CLAUDE.md` no existe, se crea con esa línea, como parte del aviso de consentimiento. Si existe sin el import, es un archivo tuyo con contenido, así que `init` hace una segunda pregunta aparte antes de agregar la línea:
+
+```text
+CLAUDE.md does not import AGENTS.md, so Claude Code would not see the vexillum block. Add the line @AGENTS.md to it? [Y/n]
+```
+
+Si decís que no, `init` avisa que Claude Code no va a ver el bloque y te dice que agregues la línea vos. Un `CLAUDE.md` que es un symlink a `AGENTS.md` ya cuenta como import. `vx doctor` lo reporta como `CLAUDE.md imports AGENTS.md`.
+
+## Con `--global`
+
+`vx init --global` no tiene un `AGENTS.md` de proyecto donde escribir. Escribe el mismo núcleo, sin marcadores, en `~/.claude/rules/vexillum.md`, que Claude Code carga en cada sesión. Mirá [Instalación global](/es/docs/get-started/install#instalación-global).
 
 ## Relacionado
 

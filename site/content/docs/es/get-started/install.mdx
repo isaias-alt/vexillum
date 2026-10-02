@@ -58,28 +58,37 @@ Corré la verificación cuando quieras:
 vx doctor
 ```
 
-`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y cuáles [Agent Skills](/es/docs/guides/muster-skill) opcionales están instalados. Sale con código distinto de cero cuando falla un chequeo requerido.
+`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y, para un proyecto inicializado, el estado del [bloque de AGENTS.md](/es/docs/concepts/agents-md-slot), si `CLAUDE.md` importa `AGENTS.md`, cada [skill](/es/docs/concepts/skills) y si [`models.json`](/es/docs/reference/models-json) es válido:
+
+```text
+[ok] AGENTS.md vexillum block - current (en)
+[ok] CLAUDE.md imports AGENTS.md
+[ok] skill vexillum - installed, current
+[ok] models.json - valid, 5 profiles
+```
+
+Sale con código distinto de cero cuando falla un chequeo requerido.
 
 ## Instalación global
 
-Por defecto `vx init` es local: prepara un solo proyecto. Para que las reglas del commander apliquen en todas las sesiones de Claude Code de la máquina, activalo una vez:
+Por defecto `vx init` es local: prepara un solo proyecto. Para que el commander aplique en todas las sesiones de Claude Code de la máquina, activalo una vez:
 
 ```bash
 vx init --global
 ```
 
-Esto escribe las reglas del commander en `~/.claude/rules/vexillum.md` (y `~/.vexillum/config.json` si falta), así Claude Code las carga en todos lados, sin necesidad de un `init` por proyecto para las reglas.
+En ese caso no hay un `AGENTS.md` de proyecto, así que el mismo núcleo se escribe, sin marcadores, en `~/.claude/rules/vexillum.md`, que Claude Code carga en cada sesión. Las skills van a `~/.claude/skills/` y se crea `~/.vexillum/config.json` si falta. Corre el mismo flujo de consentimiento que el `init` de proyecto: lista `~/.claude/rules/vexillum.md` como un archivo tuyo que va a cambiar, y pregunta antes.
 
 <Callout type="warn" title="Afecta a todas las sesiones">
   Las reglas globales aplican a **todas** las sesiones de Claude Code de esta máquina, no solo a los proyectos de vexillum. No lo uses salvo que quieras eso. El hook `Stop` del sentinel sigue siendo por proyecto y viene de `vx init` dentro de un proyecto.
 </Callout>
 
-`init --global` nunca pisa un `~/.claude/rules/vexillum.md` existente. Para refrescarlo después de instalar un binario más nuevo, corré:
+Para refrescarlo después de instalar un binario más nuevo, corré:
 
 ```bash
 vx upgrade --global
 ```
 
-Igual que en la versión de proyecto, solo reescribe el archivo si no lo editaste desde que vexillum lo escribió; `--force` descarta tus ediciones.
+El archivo de reglas se reemplaza solo cuando no cambió desde que vexillum lo escribió; si lo editaste, `upgrade --global --force` lo reemplaza después de guardar tu versión en `~/.vexillum/backups/rules-vexillum.md`. Las skills instaladas siguen las mismas reglas que en un proyecto. Mirá [Actualización](/es/docs/get-started/upgrading).
 
 Siguiente: el [Quickstart](/es/docs/get-started/quickstart).

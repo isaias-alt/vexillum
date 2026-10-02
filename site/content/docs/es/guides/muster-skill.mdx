@@ -3,15 +3,11 @@ title: Skill muster
 description: Un skill first-party de Claude Code que convierte vx status en un tablero de la tropa.
 ---
 
-`muster` es un Agent Skill de Claude Code que viene en el repositorio de vexillum. Lee `vx status --json` y agrupa las tareas del proyecto para que veas de un vistazo qué te necesita.
+`muster` es un Agent Skill de Claude Code que viene dentro del binario de vexillum. Lee `vx status --json` y agrupa las tareas del proyecto para que veas de un vistazo qué te necesita.
 
 ## Instalación
 
-```bash
-npx skills add isaias-alt/vexillum --skill muster
-```
-
-`vx doctor` informa si está instalado. Nunca lo instala por vos.
+`vx init` ofrece instalarlo junto con las otras [skills](/es/docs/concepts/skills) (en `.claude/skills/muster/`), y `vx upgrade --skills` lo instala después. No interviene Node ni `npx`. `vx doctor` informa `skill muster - installed, current`. El texto completo está en [Skill: muster](/es/docs/reference/skills/muster).
 
 ## Uso
 

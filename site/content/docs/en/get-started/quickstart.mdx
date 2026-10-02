@@ -13,18 +13,42 @@ From the root of a git repository:
 vx init
 ```
 
-This is local to the project and idempotent. It creates:
+`init` changes files of yours, so it tells you which ones and asks first. Step by step:
 
-- `.vexillum/config.json`;
-- `.claude/rules/vexillum.md`, the commander rules Claude Code loads every session;
-- an async `Stop` hook in `.claude/settings.json` (`vx sentinel await`) that lets the sentinel wake the commander. Existing settings and hooks are merged, never overwritten.
+1. **The notice.** It lists the files of yours it is about to change, then vexillum's own files:
 
-It also creates `~/.vexillum/` if it is missing.
+   ```text
+   vx init will change these files of yours in /path/to/project:
+     AGENTS.md                  add the vexillum block
+     CLAUDE.md                  create it with the @AGENTS.md import, so Claude Code sees the block
+     .claude/settings.json      add the sentinel Stop hook
+   It also writes vexillum's own files: .vexillum/config.json; .vexillum/.gitignore; .vexillum/models.json; .claude/skills/ (vexillum, forum and muster, you are asked first).
+   Continue? [Y/n]
+   ```
 
-To have the commander rules apply in every Claude Code session instead of one project at a time, see [Install globally](/docs/get-started/install#install-globally) (`vx init --global`, opt-in, affects all sessions).
+   Answer `n` and nothing is changed.
+2. **The [AGENTS.md slot](/docs/concepts/agents-md-slot).** The commander core is written between markers in your `AGENTS.md` (created if missing), in the language it detects there. You confirm or override the language.
+3. **The CLAUDE.md import.** `CLAUDE.md` gets the line `@AGENTS.md` so Claude Code sees the block. An existing `CLAUDE.md` is edited only after a second question.
+4. **The [skills](/docs/concepts/skills).** `Install the vexillum, forum and muster skills? [Y/n]`. Yes writes them to `.claude/skills/`.
+5. **[`models.json`](/docs/reference/models-json).** `.vexillum/models.json` is written with the default model and effort profiles. An existing one is never overwritten.
+6. **The sentinel hook.** An async `Stop` hook in `.claude/settings.json` (`vx sentinel await`) lets the sentinel wake the commander. Existing settings and hooks are merged, never overwritten.
+
+It also creates `~/.vexillum/` if it is missing, and running `init` again changes nothing that is already in place.
+
+Without a terminal (scripts, CI) `init` asks nothing and changes nothing unless you pass `--yes`:
+
+| Flag | Effect |
+| --- | --- |
+| `--yes`, `-y` | Accept every question, including editing an existing `CLAUDE.md` and installing the skills. |
+| `--skills` | Install the skills without asking. |
+| `--no-skills` | Do not install the skills, without asking. |
+| `--lang en\|es` | Language of the AGENTS.md block, instead of detecting it. |
+| `--global` | Scaffold for every project on this machine instead of this one. |
+
+To have the commander apply in every Claude Code session instead of one project at a time, see [Install globally](/docs/get-started/install#install-globally) (`vx init --global`, opt-in, affects all sessions).
 
 <Callout title="Commit the scaffold early">
-  `vx land` refuses to run while your checkout is dirty, and a fresh `init` leaves new files uncommitted. Commit `.claude/` and `.vexillum/` before you dispatch your first mission.
+  `vx land` refuses to run while your checkout is dirty, and a fresh `init` leaves new files uncommitted. Commit `AGENTS.md`, `CLAUDE.md`, `.claude/` and `.vexillum/` before you dispatch your first mission.
 </Callout>
 
 ## 2. Check the environment
