@@ -533,3 +533,201 @@ func TestDiscard_RefusesWrongOwner(t *testing.T) {
 		t.Errorf("expected slot to remain leased by task-1, got %q", pool.Slots[0].LeasedBy)
 	}
 }
+
+// divergedAfterRemoteMerge sets up the case the content check refuses
+// forever: the camp's change was merged remotely (its content reached the base
+// as one commit) and a later commit on the base touched the same lines. It
+// returns the camp, the commit that carried the merge and the camp's HEAD.
+func divergedAfterRemoteMerge(t *testing.T) (c Camp, mergeCommit, head string) {
+	t.Helper()
+	project := initProjectRepo(t)
+	home := t.TempDir()
+
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "change.txt"), []byte("camp version\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, c.Path, "camp change")
+	head = strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(project, "change.txt"), []byte("camp version\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, project, "squash-merge camp change")
+	mergeCommit = strings.TrimSpace(runGitT(t, project, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(project, "change.txt"), []byte("later version\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, project, "later change to the same lines")
+	return c, mergeCommit, head
+}
+
+func TestRelease_ContentCheckRefusesWhenLaterCommitsTouchedTheSameLines(t *testing.T) {
+	c, _, _ := divergedAfterRemoteMerge(t)
+	if err := Release(c, "task-1"); err == nil {
+		t.Fatal("expected the content check to refuse, which is the problem a merged PR report solves")
+	}
+}
+
+func TestReleaseWith_ShippedRefusalSaysToMergeAndPull(t *testing.T) {
+	c, _, _ := divergedAfterRemoteMerge(t)
+	_, err := ReleaseWith(c, "task-1", ReleaseOptions{Shipped: true})
+	if err == nil {
+		t.Fatal("expected a refusal")
+	}
+	for _, want := range []string{"shipped as a pull request", "merge the pull request", "git pull on main", "then retry"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected the refusal to contain %q, got: %v", want, err)
+		}
+	}
+}
+
+func TestReleaseWith_MergedPullRequestBeatsTheContentCheck(t *testing.T) {
+	c, mergeCommit, head := divergedAfterRemoteMerge(t)
+	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: mergeCommit, HeadCommit: head}}); err != nil {
+		t.Fatalf("expected a merged PR whose merge commit is on the base to release, got: %v", err)
+	}
+}
+
+func TestReleaseWith_MergedPullRequestNotPulledYetSaysToPull(t *testing.T) {
+	c, _, head := divergedAfterRemoteMerge(t)
+	// A merge commit this repository has never seen, as before a git pull.
+	unseen := "0123456789abcdef0123456789abcdef01234567"
+	_, err := ReleaseWith(c, "task-1", ReleaseOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: unseen, HeadCommit: head}})
+	if err == nil {
+		t.Fatal("expected a refusal")
+	}
+	for _, want := range []string{"merged on GitHub", "not on main yet", "git pull on main"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected the refusal to contain %q, got: %v", want, err)
+		}
+	}
+}
+
+// A commit that exists locally but is not on the base (not pulled, or on
+// another branch) does not prove the work landed.
+func TestReleaseWith_MergeCommitOffTheBaseIsNotProof(t *testing.T) {
+	c, _, head := divergedAfterRemoteMerge(t)
+	other := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "HEAD"))
+	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{PRMerged: &PRMerge{MergeCommit: other, HeadCommit: head}}); err == nil {
+		t.Fatal("expected the camp's own unmerged commit not to count as the merge commit")
+	}
+}
+
+func TestReleaseWith_MergedPullRequestMissingMergeCommitIsRefused(t *testing.T) {
+	c, _, head := divergedAfterRemoteMerge(t)
+	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{PRMerged: &PRMerge{HeadCommit: head}}); err == nil {
+		t.Fatal("expected a refusal without a merge commit to verify")
+	}
+}
+
+// Commits the camp made after the pull request's head are real unlanded work,
+// merged PR or not.
+func TestReleaseWith_MergedPullRequestDoesNotCoverLaterCampCommits(t *testing.T) {
+	c, mergeCommit, head := divergedAfterRemoteMerge(t)
+	if err := os.WriteFile(filepath.Join(c.Path, "extra.txt"), []byte("never pushed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, c.Path, "work after the PR head")
+
+	_, err := ReleaseWith(c, "task-1", ReleaseOptions{PRMerged: &PRMerge{MergeCommit: mergeCommit, HeadCommit: head}})
+	if err == nil || !strings.Contains(err.Error(), "not in it") {
+		t.Fatalf("expected a refusal naming the commits the PR never carried, got: %v", err)
+	}
+}
+
+func TestReleaseWith_DiscardReportsUnlandedCommitsAndCleansTheSlot(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "one.txt"), []byte("1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, c.Path, "first unlanded")
+	if err := os.WriteFile(filepath.Join(c.Path, "two.txt"), []byte("2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, c.Path, "second unlanded")
+	short := strings.Fields(runGitT(t, c.Path, "log", "-1", "--format=%h"))[0]
+	if err := os.WriteFile(filepath.Join(c.Path, "scratch.txt"), []byte("wip\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Release(c, "task-1"); err == nil {
+		t.Fatal("control: a plain release must refuse")
+	}
+	report, err := ReleaseWith(c, "task-1", ReleaseOptions{Discard: true})
+	if err != nil {
+		t.Fatalf("expected --discard to release, got: %v", err)
+	}
+	if len(report.DiscardedCommits) != 2 || report.DiscardedCommits[0] != short+" second unlanded" || !strings.HasSuffix(report.DiscardedCommits[1], " first unlanded") {
+		t.Errorf("expected both commits with hashes and subjects, newest first, got %q", report.DiscardedCommits)
+	}
+	if len(report.DiscardedChanges) != 1 || !strings.Contains(report.DiscardedChanges[0], "scratch.txt") {
+		t.Errorf("expected the uncommitted file listed, got %q", report.DiscardedChanges)
+	}
+
+	// The slot is reusable: a dirty one would be skipped by Acquire for good.
+	again, err := Acquire(project, home, "task-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Slot != c.Slot {
+		t.Errorf("expected the discarded slot %d reused, got slot %d", c.Slot, again.Slot)
+	}
+}
+
+func TestReleaseWith_DiscardIsNeededForUncommittedChangesOnALandedCamp(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "scratch.txt"), []byte("wip\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{}); err == nil {
+		t.Fatal("expected uncommitted changes to refuse without --discard")
+	}
+	report, err := ReleaseWith(c, "task-1", ReleaseOptions{Discard: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.DiscardedCommits) != 0 || len(report.DiscardedChanges) != 1 {
+		t.Errorf("expected only the uncommitted change reported, got %+v", report)
+	}
+}
+
+func TestReleaseWith_DiscardOnALandedCleanCampDiscardsNothing(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := ReleaseWith(c, "task-1", ReleaseOptions{Discard: true})
+	if err != nil || len(report.DiscardedCommits) != 0 || len(report.DiscardedChanges) != 0 {
+		t.Errorf("expected a plain release with an empty report, got %+v err=%v", report, err)
+	}
+}
+
+// --discard never lets one task release another task's camp.
+func TestReleaseWith_DiscardStillRefusesTheWrongOwner(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReleaseWith(c, "task-2", ReleaseOptions{Discard: true}); err == nil {
+		t.Fatal("expected a refusal for the wrong owner")
+	}
+}

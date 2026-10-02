@@ -246,6 +246,45 @@ func Land(c Camp) error {
 	return nil
 }
 
+// PRMerge is what GitHub reports about a merged pull request, handed to
+// ReleaseWith so a remote merge counts as landed work.
+type PRMerge struct {
+	// MergeCommit is the commit the merge created on the base branch. It
+	// must be reachable from the local base branch: until the general has
+	// pulled, the work is merged on GitHub but not here.
+	MergeCommit string
+	// HeadCommit is the pull request's head when it merged. The camp's own
+	// HEAD must be part of it, or the camp holds work the pull request
+	// never carried.
+	HeadCommit string
+}
+
+// ReleaseOptions tunes ReleaseWith. The zero value is Release's behavior.
+type ReleaseOptions struct {
+	// Shipped marks a mission whose work travels as a pull request, so the
+	// refusal for commits that are not on the base says to merge it and
+	// pull.
+	Shipped bool
+	// PRMerged, when set, is GitHub's report that the camp's pull request
+	// merged. It replaces the content check as the proof of landing, once
+	// the merge commit is verified on the local base.
+	PRMerged *PRMerge
+	// Discard releases the camp even when it is dirty or holds commits that
+	// are not on the base. ReleaseReport says exactly what was thrown away.
+	// Only for work the general confirmed is already on the base or
+	// abandoned.
+	Discard bool
+}
+
+// ReleaseReport lists what a Discard release threw away.
+type ReleaseReport struct {
+	// DiscardedCommits are the unlanded commits, one "hash subject" each.
+	DiscardedCommits []string
+	// DiscardedChanges are the uncommitted changes, one "git status
+	// --porcelain" line each.
+	DiscardedChanges []string
+}
+
 // Release returns c's slot to the pool for reuse, but only when it's safe:
 // taskID must be the slot's recorded owner, the worktree must have no
 // uncommitted changes, and its branch must already be landed (merged) on
@@ -253,15 +292,25 @@ func Land(c Camp) error {
 // released slot stays on disk, ready for the next Acquire to reset and
 // reuse.
 func Release(c Camp, taskID string) error {
+	_, err := ReleaseWith(c, taskID, ReleaseOptions{})
+	return err
+}
+
+// ReleaseWith is Release with options: proof of landing from a merged pull
+// request, a refusal that fits a shipped mission, and the explicit Discard
+// override.
+func ReleaseWith(c Camp, taskID string, opts ReleaseOptions) (ReleaseReport, error) {
+	var report ReleaseReport
+
 	unlock, err := lockPool(c.PoolRoot)
 	if err != nil {
-		return err
+		return report, err
 	}
 	defer unlock()
 
 	pool, err := loadPool(c.PoolRoot)
 	if err != nil {
-		return err
+		return report, err
 	}
 
 	idx := -1
@@ -272,54 +321,142 @@ func Release(c Camp, taskID string) error {
 		}
 	}
 	if idx == -1 {
-		return fmt.Errorf("camp slot %d not found in pool state", c.Slot)
+		return report, fmt.Errorf("camp slot %d not found in pool state", c.Slot)
 	}
 
 	slot := pool.Slots[idx]
 	if slot.LeasedBy == "" {
-		return fmt.Errorf("camp slot %d is not leased, nothing to release", c.Slot)
+		return report, fmt.Errorf("camp slot %d is not leased, nothing to release", c.Slot)
 	}
 	if slot.LeasedBy != taskID {
-		return fmt.Errorf("camp slot %d is leased by task %s, not %s, refusing to release", c.Slot, slot.LeasedBy, taskID)
+		return report, fmt.Errorf("camp slot %d is leased by task %s, not %s, refusing to release", c.Slot, slot.LeasedBy, taskID)
 	}
 
 	dirty, err := isDirty(c.Path)
 	if err != nil {
-		return fmt.Errorf("checking camp for uncommitted changes: %w", err)
+		return report, fmt.Errorf("checking camp for uncommitted changes: %w", err)
 	}
-	if dirty {
-		return fmt.Errorf("camp %s has uncommitted changes, refusing to release", c.Path)
+	if dirty && !opts.Discard {
+		return report, fmt.Errorf("camp %s has uncommitted changes, refusing to release", c.Path)
 	}
 
 	base, err := currentBranch(c.ProjectDir)
 	if err != nil {
-		return fmt.Errorf("resolving base branch: %w", err)
+		return report, fmt.Errorf("resolving base branch: %w", err)
 	}
-	landed, err := isAncestor(c.Path, "HEAD", base)
-	if err != nil {
-		return fmt.Errorf("checking whether camp branch landed: %w", err)
+	landed, why, err := campLanded(c, base, opts)
+	if err != nil && !opts.Discard {
+		return report, err
 	}
-	if !landed {
-		// A plain ancestor check only proves a "vx land"
-		// fast-forward. A shipped mission whose PR merged via squash or
-		// rebase on GitHub never satisfies it, even after a real local
-		// pull - the merge commit's parent is the pre-merge base, not
-		// this camp's tip. Fall back to a content check: does merging
-		// this branch into the current base introduce anything base
-		// doesn't already have? If not, the work already landed, just
-		// under different commit SHAs. Same technique
-		// github.com/upstream uses for this exact case.
-		landed, err = contentAlreadyInBase(c.Path, base)
-		if err != nil {
-			return fmt.Errorf("checking whether camp content already landed: %w", err)
+	if !landed && !opts.Discard {
+		msg := fmt.Sprintf("camp %s branch %s has commits not yet landed on %s, refusing to release", c.Path, c.Branch, base)
+		if why != "" {
+			msg += ": " + why
+		} else if opts.Shipped {
+			msg += fmt.Sprintf(": this mission was shipped as a pull request - merge the pull request, run git pull on %s in %s, then retry", base, c.ProjectDir)
 		}
+		return report, errors.New(msg)
 	}
+
 	if !landed {
-		return fmt.Errorf("camp %s branch %s has commits not yet landed on %s, refusing to release", c.Path, c.Branch, base)
+		out, err := runGit(c.Path, "log", "--format=%h %s", base+"..HEAD")
+		if err != nil {
+			return report, fmt.Errorf("listing the commits to discard: %w", err)
+		}
+		report.DiscardedCommits = nonEmptyLines(out)
+	}
+	if dirty {
+		out, err := runGit(c.Path, "status", "--porcelain")
+		if err != nil {
+			return report, fmt.Errorf("listing the uncommitted changes to discard: %w", err)
+		}
+		report.DiscardedChanges = nonEmptyLines(out)
+		// A dirty slot is never reused by Acquire, so a discarded release
+		// must leave the worktree clean or the slot would leak for good.
+		if _, err := runGit(c.Path, "reset", "--hard"); err != nil {
+			return report, fmt.Errorf("resetting camp worktree: %w", err)
+		}
+		if _, err := runGit(c.Path, "clean", "-fd"); err != nil {
+			return report, fmt.Errorf("cleaning camp worktree: %w", err)
+		}
 	}
 
 	pool.Slots[idx].LeasedBy = ""
-	return savePool(c.PoolRoot, pool)
+	return report, savePool(c.PoolRoot, pool)
+}
+
+// campLanded reports whether c's work is on base. When it is not, why may
+// explain what is missing (set only when a merged pull request was
+// supplied). A plain ancestor check proves a "vx land" fast-forward; a
+// merged pull request is proof of its own; otherwise a content check
+// covers a squash or rebase merge that was pulled locally.
+func campLanded(c Camp, base string, opts ReleaseOptions) (landed bool, why string, err error) {
+	landed, err = isAncestor(c.Path, "HEAD", base)
+	if err != nil {
+		return false, "", fmt.Errorf("checking whether camp branch landed: %w", err)
+	}
+	if landed {
+		return true, "", nil
+	}
+
+	if opts.PRMerged != nil {
+		// GitHub's word beats the content check, which refuses forever
+		// once later commits touched the same lines. The merge commit has
+		// to be on the local base first: that is what tells the general
+		// has pulled.
+		landed, why = verifyMerged(c, base, *opts.PRMerged)
+		return landed, why, nil
+	}
+
+	// A shipped mission whose PR merged via squash or rebase on GitHub
+	// never satisfies the ancestor check, even after a real local pull -
+	// the merge commit's parent is the pre-merge base, not this camp's
+	// tip. Fall back to a content check: does merging this branch into the
+	// current base introduce anything base doesn't already have? If not,
+	// the work already landed, just under different commit SHAs. Same
+	// technique github.com/upstream uses for this exact case.
+	landed, err = contentAlreadyInBase(c.Path, base)
+	if err != nil {
+		return false, "", fmt.Errorf("checking whether camp content already landed: %w", err)
+	}
+	return landed, "", nil
+}
+
+// verifyMerged checks GitHub's report of a merged pull request against the
+// local repository, returning why it does not prove the camp landed.
+func verifyMerged(c Camp, base string, m PRMerge) (bool, string) {
+	if m.MergeCommit == "" {
+		return false, "the pull request is merged on GitHub, but GitHub reported no merge commit to check against " + base
+	}
+	if !commitExists(c.Path, m.MergeCommit) || !reachable(c.Path, m.MergeCommit, base) {
+		return false, fmt.Sprintf("the pull request is merged on GitHub, but its merge commit is not on %s yet - run git pull on %s in %s, then retry", base, base, c.ProjectDir)
+	}
+	if m.HeadCommit != "" && (!commitExists(c.Path, m.HeadCommit) || !reachable(c.Path, "HEAD", m.HeadCommit)) {
+		return false, "the pull request is merged, but this camp has commits that were not in it"
+	}
+	return true, ""
+}
+
+func commitExists(dir, rev string) bool {
+	cmd := exec.Command("git", "cat-file", "-e", rev+"^{commit}")
+	cmd.Dir = dir
+	return cmd.Run() == nil
+}
+
+// reachable is isAncestor with "cannot tell" read as "no".
+func reachable(dir, ancestor, descendant string) bool {
+	ok, err := isAncestor(dir, ancestor, descendant)
+	return err == nil && ok
+}
+
+func nonEmptyLines(s string) []string {
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 // Discard is Release's deliberately destructive counterpart (PRD v2,

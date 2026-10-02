@@ -482,17 +482,25 @@ const (
 // If camp.Release refuses, neither the browser nor the pane is touched -
 // there's still something worth looking at.
 func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir string) error {
-	if err := camp.Release(c, task.ID); err != nil {
-		return err
+	_, err := ReleaseInHerdrWith(task, c, client, homeDir, camp.ReleaseOptions{})
+	return err
+}
+
+// ReleaseInHerdrWith is ReleaseInHerdr with camp.ReleaseOptions, returning
+// what a Discard release threw away.
+func ReleaseInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, homeDir string, opts camp.ReleaseOptions) (camp.ReleaseReport, error) {
+	report, err := camp.ReleaseWith(c, task.ID, opts)
+	if err != nil {
+		return report, err
 	}
 	stopOrphanBrowser(task.ID, homeDir)
 	if task.HerdrTabID == "" {
-		return nil
+		return report, nil
 	}
 	if err := client.TabClose(task.HerdrTabID); err != nil {
-		return fmt.Errorf("closing soldier pane: %w", err)
+		return report, fmt.Errorf("closing soldier pane: %w", err)
 	}
-	return nil
+	return report, nil
 }
 
 // DiscardInHerdr is ReleaseInHerdr's destructive counterpart (PRD v2,

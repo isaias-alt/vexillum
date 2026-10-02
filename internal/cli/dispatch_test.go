@@ -409,7 +409,7 @@ func TestRunDispatch_CreateTabFails_TaskIsRecoverable(t *testing.T) {
 	// release and redispatch require state.Load to succeed first, and no
 	// task file existed for it at all.
 	out.Reset()
-	if code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out); code != 0 {
+	if code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
 		t.Fatalf("expected the stranded task's camp to be releasable, got exit %d: %s", code, out.String())
 	}
 }
@@ -481,7 +481,7 @@ func TestRunLand_AutoReleasesCamp(t *testing.T) {
 	// The camp is already released - a second, independent release call
 	// for the same task must find nothing left to do.
 	out.Reset()
-	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected a follow-up 'vx release' to fail, camp was already released; got exit 0: %s", out.String())
 	}
@@ -521,7 +521,7 @@ func TestRunLand_RefusalLeavesCampUntouched(t *testing.T) {
 	// The camp is still leased and untouched: releasing it directly still
 	// refuses too, since the mission's commit never actually landed.
 	out.Reset()
-	code = runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+	code = runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected release to still refuse an un-landed camp, got exit 0: %s", out.String())
 	}
@@ -575,7 +575,7 @@ func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
 		t.Fatalf("removing leftover file: %v", err)
 	}
 	out.Reset()
-	if code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out); code != 0 {
+	if code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
 		t.Fatalf("expected the manual follow-up release to succeed once the camp is clean, got %d: %s", code, out.String())
 	}
 }
@@ -608,7 +608,7 @@ func TestRunLand_RejectsInvalidTaskID(t *testing.T) {
 
 func TestRunRelease_RejectsInvalidTaskID(t *testing.T) {
 	var out bytes.Buffer
-	code := runRelease("/does/not/matter", "/does/not/matter", "/does/not/matter", "../../etc/passwd", false, &fakeHerdr{}, &out, &out)
+	code := runRelease("/does/not/matter", "/does/not/matter", "/does/not/matter", "../../etc/passwd", releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an invalid task id")
@@ -655,7 +655,7 @@ func TestRunRelease_RefusesScoutWithoutReport(t *testing.T) {
 	task, projectRoot := newReleaseTestScoutTask(t, project, home)
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected a non-zero exit for a scout with no report")
@@ -680,7 +680,7 @@ func TestRunRelease_ScoutWithReportSucceeds(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 for a scout with a report, got %d: %s", code, out.String())
@@ -695,7 +695,7 @@ func TestRunRelease_ForceSkipsReportGate(t *testing.T) {
 	task, _ := newReleaseTestScoutTask(t, project, home)
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, true, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{Force: true}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 with --force despite the missing report, got %d: %s", code, out.String())
@@ -731,7 +731,7 @@ func TestRunRelease_MissionNeverRequiresReport(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, false, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 for a mission with no report, got %d: %s", code, out.String())
@@ -744,19 +744,22 @@ func TestParseReleaseArgs(t *testing.T) {
 		name       string
 		args       []string
 		wantTaskID string
-		wantForce  bool
+		want       releaseOptions
 		wantErr    bool
 	}{
-		{"task id only", []string{"abc123"}, "abc123", false, false},
-		{"force after id", []string{"abc123", "--force"}, "abc123", true, false},
-		{"force before id", []string{"--force", "abc123"}, "abc123", true, false},
-		{"missing task id", []string{"--force"}, "", false, true},
-		{"no args", []string{}, "", false, true},
-		{"two positional args", []string{"abc123", "def456"}, "", false, true},
+		{"task id only", []string{"abc123"}, "abc123", releaseOptions{}, false},
+		{"force after id", []string{"abc123", "--force"}, "abc123", releaseOptions{Force: true}, false},
+		{"force before id", []string{"--force", "abc123"}, "abc123", releaseOptions{Force: true}, false},
+		{"discard", []string{"abc123", "--discard"}, "abc123", releaseOptions{Discard: true}, false},
+		{"force and discard", []string{"--discard", "abc123", "--force"}, "abc123", releaseOptions{Force: true, Discard: true}, false},
+		{"missing task id", []string{"--force"}, "", releaseOptions{}, true},
+		{"no args", []string{}, "", releaseOptions{}, true},
+		{"two positional args", []string{"abc123", "def456"}, "", releaseOptions{}, true},
+		{"unknown flag", []string{"abc123", "--nope"}, "", releaseOptions{}, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			taskID, force, err := parseReleaseArgs(c.args)
+			taskID, opts, err := parseReleaseArgs(c.args)
 			if c.wantErr {
 				if err == nil {
 					t.Fatal("expected an error")
@@ -766,8 +769,8 @@ func TestParseReleaseArgs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if taskID != c.wantTaskID || force != c.wantForce {
-				t.Errorf("got taskID=%q force=%v, want taskID=%q force=%v", taskID, force, c.wantTaskID, c.wantForce)
+			if taskID != c.wantTaskID || opts != c.want {
+				t.Errorf("got taskID=%q opts=%+v, want taskID=%q opts=%+v", taskID, opts, c.wantTaskID, c.want)
 			}
 		})
 	}
