@@ -114,7 +114,7 @@
     </div>
 
     <div style="border:1px solid #292D33; border-radius:4px; padding:40px;">
-      <div style="font-family:'JetBrains Mono', monospace; font-size:15px; line-height:1.8; color:#E9EAEC; white-space:pre;">$ vexillum mission run deploy-staging
+      <div style="font-family:'JetBrains Mono', monospace; font-size:15px; line-height:1.8; color:#E9EAEC; white-space:pre;">$ vx mission run deploy-staging
   spawning soldier in camp/deploy-staging &hellip;
   sentinel watching for input &hellip; <span style="color:#6FA1CB;">3 soldiers active</span></div>
       <div style="font-size:11px; color:#6E7177; letter-spacing:0.04em; text-transform:uppercase; margin-top:20px;">JetBrains Mono &middot; 400/500 &middot; body, code, UI, commands</div>
@@ -144,7 +144,7 @@
         </div>
       </div>
       <div style="padding:24px; background:#15171A; font-size:13px; line-height:1.9; color:#A0A3A9;">
-        <div style="color:#E9EAEC;">$ vexillum camp list</div>
+        <div style="color:#E9EAEC;">$ vx camp list</div>
         <div>deploy-staging &nbsp;&nbsp;<span style="color:#6FA1CB;">running</span> &nbsp;&nbsp;2 soldiers</div>
         <div>migrate-db &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6E7177;">idle</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0 soldiers</div>
       </div>
@@ -270,11 +270,11 @@
       <div style="font-size:14px; line-height:1.7; color:var(--fr-text-secondary); max-width:480px; margin-bottom:28px;">You already talk to your commander in Claude Code. Ask it to dispatch a soldier, and it calls vexillum for you.</div>
       <div class="fr-artifact-frame" style="max-width:720px; padding:20px 24px; font-size:12.5px; line-height:1.9;">
         <div style="color:var(--fr-text);">&gt; dispatch a soldier to refactor the payment module</div>
-        <div style="color:var(--fr-accent);">Bash(vexillum dispatch "refactor the payment module" --kind mission --model sonnet)</div>
+        <div style="color:var(--fr-accent);">Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)</div>
         <div style="color:var(--fr-text-muted); padding-left:14px;">&#8627; dispatched &middot; camp/refactor-payment-module</div>
         <div style="color:var(--fr-text-muted); padding-left:14px; margin-bottom:12px;">&#8627; soldier running &middot; sentinel watching</div>
         <div style="color:var(--fr-text);">&gt; also have someone trace that memory leak, just investigate for now</div>
-        <div style="color:var(--fr-accent);">Bash(vexillum dispatch "trace the memory leak" --kind scout)</div>
+        <div style="color:var(--fr-accent);">Bash(vx dispatch "trace the memory leak" --kind scout)</div>
         <div style="color:var(--fr-text-muted); padding-left:14px;">&#8627; dispatched &middot; camp/trace-memory-leak</div>
       </div>
     </div>
