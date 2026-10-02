@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "mission-big": {
+      "effort": "xhigh"
+    },
+    "docs-writer": {
+      "model": "sonnet",
+      "effort": "low",
+      "when": "Mission that only edits prose documentation."
+    }
+  },
+  "default": {
+    "model": "sonnet",
+    "effort": "medium"
+  }
+}

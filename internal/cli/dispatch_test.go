@@ -95,28 +95,32 @@ func TestRefuseInsideVexillumHome(t *testing.T) {
 
 func TestParseDispatchArgs(t *testing.T) {
 	cases := []struct {
-		name       string
-		args       []string
-		wantPrompt string
-		wantKind   state.Kind
-		wantModel  string
-		wantEffort string
-		wantErr    bool
+		name        string
+		args        []string
+		wantPrompt  string
+		wantKind    state.Kind
+		wantModel   string
+		wantEffort  string
+		wantProfile string
+		wantErr     bool
 	}{
-		{"defaults to mission", []string{"do", "the", "thing"}, "do the thing", state.KindMission, "", "", false},
-		{"explicit mission", []string{"--kind", "mission", "do it"}, "do it", state.KindMission, "", "", false},
-		{"explicit scout", []string{"--kind", "scout", "look into it"}, "look into it", state.KindScout, "", "", false},
-		{"unknown kind", []string{"--kind", "bogus", "x"}, "", "", "", "", true},
-		{"kind without value", []string{"--kind"}, "", "", "", "", true},
-		{"missing prompt", []string{"--kind", "scout"}, "", "", "", "", true},
-		{"model and effort", []string{"--model", "haiku", "--effort", "low", "do it"}, "do it", state.KindMission, "haiku", "low", false},
-		{"model without value", []string{"--model"}, "", "", "", "", true},
-		{"effort without value", []string{"--effort"}, "", "", "", "", true},
-		{"flags mixed with prompt words", []string{"do", "--model", "sonnet", "the", "thing"}, "do the thing", state.KindMission, "sonnet", "", false},
+		{"defaults to mission", []string{"do", "the", "thing"}, "do the thing", state.KindMission, "", "", "", false},
+		{"explicit mission", []string{"--kind", "mission", "do it"}, "do it", state.KindMission, "", "", "", false},
+		{"explicit scout", []string{"--kind", "scout", "look into it"}, "look into it", state.KindScout, "", "", "", false},
+		{"unknown kind", []string{"--kind", "bogus", "x"}, "", "", "", "", "", true},
+		{"kind without value", []string{"--kind"}, "", "", "", "", "", true},
+		{"missing prompt", []string{"--kind", "scout"}, "", "", "", "", "", true},
+		{"model and effort", []string{"--model", "haiku", "--effort", "low", "do it"}, "do it", state.KindMission, "haiku", "low", "", false},
+		{"model without value", []string{"--model"}, "", "", "", "", "", true},
+		{"effort without value", []string{"--effort"}, "", "", "", "", "", true},
+		{"flags mixed with prompt words", []string{"do", "--model", "sonnet", "the", "thing"}, "do the thing", state.KindMission, "sonnet", "", "", false},
+		{"profile", []string{"--profile", "mission-big", "do it"}, "do it", state.KindMission, "", "", "mission-big", false},
+		{"profile with explicit override", []string{"--profile", "mission-big", "--effort", "max", "do it"}, "do it", state.KindMission, "", "max", "mission-big", false},
+		{"profile without value", []string{"--profile"}, "", "", "", "", "", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			prompt, kind, model, effort, err := parseDispatchArgs(c.args)
+			prompt, kind, model, effort, profile, err := parseDispatchArgs(c.args)
 			if c.wantErr {
 				if err == nil {
 					t.Fatal("expected an error")
@@ -126,9 +130,9 @@ func TestParseDispatchArgs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if prompt != c.wantPrompt || kind != c.wantKind || model != c.wantModel || effort != c.wantEffort {
-				t.Errorf("got prompt=%q kind=%q model=%q effort=%q, want prompt=%q kind=%q model=%q effort=%q",
-					prompt, kind, model, effort, c.wantPrompt, c.wantKind, c.wantModel, c.wantEffort)
+			if prompt != c.wantPrompt || kind != c.wantKind || model != c.wantModel || effort != c.wantEffort || profile != c.wantProfile {
+				t.Errorf("got prompt=%q kind=%q model=%q effort=%q profile=%q, want prompt=%q kind=%q model=%q effort=%q profile=%q",
+					prompt, kind, model, effort, profile, c.wantPrompt, c.wantKind, c.wantModel, c.wantEffort, c.wantProfile)
 			}
 		})
 	}
@@ -767,4 +771,64 @@ func TestParseReleaseArgs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveProfile(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+
+	t.Run("no profile is a no-op", func(t *testing.T) {
+		m, e, err := resolveProfile(project, home, "", "haiku", "")
+		if err != nil || m != "haiku" || e != "" {
+			t.Errorf("got %q %q %v", m, e, err)
+		}
+	})
+	t.Run("profile fills both", func(t *testing.T) {
+		m, e, err := resolveProfile(project, home, "mission-big", "", "")
+		if err != nil || m != "sonnet" || e != "high" {
+			t.Errorf("got %q %q %v", m, e, err)
+		}
+	})
+	t.Run("explicit flags win", func(t *testing.T) {
+		m, e, err := resolveProfile(project, home, "mission-big", "opus", "")
+		if err != nil || m != "opus" || e != "high" {
+			t.Errorf("got %q %q %v", m, e, err)
+		}
+		m, e, err = resolveProfile(project, home, "mission-big", "", "max")
+		if err != nil || m != "sonnet" || e != "max" {
+			t.Errorf("got %q %q %v", m, e, err)
+		}
+	})
+	t.Run("default", func(t *testing.T) {
+		m, e, err := resolveProfile(project, home, "default", "", "")
+		if err != nil || m != "sonnet" || e != "medium" {
+			t.Errorf("got %q %q %v", m, e, err)
+		}
+	})
+	t.Run("unknown lists the valid ones", func(t *testing.T) {
+		_, _, err := resolveProfile(project, home, "nope", "", "")
+		if err == nil || !strings.Contains(err.Error(), "scout-facts") || !strings.Contains(err.Error(), `"nope"`) {
+			t.Errorf("got %v", err)
+		}
+	})
+	t.Run("project file overrides", func(t *testing.T) {
+		if err := os.MkdirAll(filepath.Join(project, ".vexillum"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(`{"profiles": {"mission-big": {"model": "opus"}}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		m, e, err := resolveProfile(project, home, "mission-big", "", "")
+		if err != nil || m != "opus" || e != "high" {
+			t.Errorf("got %q %q %v", m, e, err)
+		}
+	})
+	t.Run("invalid models file is an error", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(`{"default": {"model": "x"}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := resolveProfile(project, home, "mission-big", "", ""); err == nil {
+			t.Error("expected an error")
+		}
+	})
 }

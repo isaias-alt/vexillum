@@ -37,6 +37,8 @@ func run(args []string) int {
 		return cli.Doctor(args[1:])
 	case "dispatch":
 		return cli.Dispatch(args[1:])
+	case "models":
+		return cli.Models(args[1:])
 	case "redispatch":
 		return cli.Redispatch(args[1:])
 	case "decide":

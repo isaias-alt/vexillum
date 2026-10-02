@@ -9,7 +9,7 @@ description: "Dispatch a soldier (mission or scout) into an isolated camp"
 Dispatch a soldier (mission or scout) into an isolated camp.
 
 Usage:
-  vx dispatch <prompt> [--kind mission|scout] [--model <model>] [--effort <level>]
+  vx dispatch <prompt> [--kind mission|scout] [--profile <name>] [--model <model>] [--effort <level>]
 
 A mission changes code and delivers something to land; a scout only
 investigates and reports back (default: mission).
@@ -17,8 +17,14 @@ investigates and reports back (default: mission).
 --model and --effort are passed straight through to the real claude CLI
 (--model: haiku, sonnet, opus, fable; --effort: low, medium, high,
 xhigh, max). vexillum only validates the value is one claude accepts -
-it never picks one for you; see the product AGENTS.md's "Choosing a
-model and effort" section for how to choose.
+it never picks one for you.
+
+--profile <name> looks the model and effort up in the profile table
+('vx models' lists it: <project>/.vexillum/models.json over the
+optional ~/.vexillum/models.json over the built-in defaults). An explicit
+--model or --effort still wins over the profile. An unknown profile is
+an error listing the valid ones; "default" selects the table's default
+entry. Which profile fits a task is your call - see the vexillum skill.
 
 Runs a real, interactive Claude Code session in a herdr pane, inside a
 fresh git worktree isolated from this project's own working tree, with
