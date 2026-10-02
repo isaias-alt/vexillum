@@ -205,3 +205,85 @@ func TestReprompt_ValidatesInput(t *testing.T) {
 		t.Error("expected an unknown task to be rejected")
 	}
 }
+
+// vx prompt records the text as an amendment on the task, with its source
+// and a timestamp, and leaves the dispatch prompt alone. The amendment lives
+// in the task's state file only, never in a file inside the camp the soldier
+// can write to.
+func TestReprompt_RecordsAnAmendmentOutsideTheCamp(t *testing.T) {
+	project, home, projectRoot, task := repromptFixture(t, state.StatusDone, true)
+
+	client := &fakeHerdr{promptStatus: "done", readOutput: "all done"}
+	var out, errOut bytes.Buffer
+	text := "also restyle the banner AMENDMENT_MARKER"
+	if code := runReprompt(project, home, task.ID, text, client, &out, &errOut); code != 0 {
+		t.Fatalf("expected success, got %d: %s%s", code, out.String(), errOut.String())
+	}
+
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Prompt != task.Prompt {
+		t.Errorf("the dispatch prompt must stay untouched, got %q", got.Prompt)
+	}
+	if len(got.Amendments) != 1 || got.Amendments[0].Text != text || got.Amendments[0].Source != state.AmendmentSourcePrompt || got.Amendments[0].At.IsZero() {
+		t.Fatalf("expected one vx prompt amendment, got %+v", got.Amendments)
+	}
+	if !strings.Contains(got.Intent(), text) {
+		t.Errorf("expected the intent to include the amendment, got %q", got.Intent())
+	}
+
+	// Nothing under the camp carries the amendment.
+	err = filepath.WalkDir(task.CampPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if data, readErr := os.ReadFile(path); readErr == nil && strings.Contains(string(data), "AMENDMENT_MARKER") {
+			t.Errorf("amendment text leaked into a camp file: %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A prompt that never reached the soldier is not an instruction it received,
+// so it leaves no amendment.
+func TestReprompt_FailedDeliveryRecordsNoAmendment(t *testing.T) {
+	project, home, projectRoot, task := repromptFixture(t, state.StatusDone, true)
+
+	client := &fakeHerdr{promptErr: &herdr.APIError{Code: "agent_not_running", Message: "pane closed"}}
+	var out, errOut bytes.Buffer
+	if code := runReprompt(project, home, task.ID, "do more", client, &out, &errOut); code == 0 {
+		t.Fatal("expected a failure")
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Amendments) != 0 {
+		t.Errorf("expected no amendment for an undelivered prompt, got %+v", got.Amendments)
+	}
+}
+
+// Amendments accumulate across prompts, in the order given.
+func TestReprompt_AmendmentsAccumulateInOrder(t *testing.T) {
+	project, home, projectRoot, task := repromptFixture(t, state.StatusDone, true)
+
+	for _, text := range []string{"first extra", "second extra"} {
+		client := &fakeHerdr{promptStatus: "done", readOutput: "all done"}
+		var out, errOut bytes.Buffer
+		if code := runReprompt(project, home, task.ID, text, client, &out, &errOut); code != 0 {
+			t.Fatalf("expected success, got %d: %s%s", code, out.String(), errOut.String())
+		}
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Amendments) != 2 || got.Amendments[0].Text != "first extra" || got.Amendments[1].Text != "second extra" {
+		t.Errorf("expected both amendments in order, got %+v", got.Amendments)
+	}
+}

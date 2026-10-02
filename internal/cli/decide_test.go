@@ -333,3 +333,114 @@ func TestRefusalsOfABlockedTaskMentionDismiss(t *testing.T) {
 		t.Errorf("expected prompt's refusal to name the way out, got: %s", msg)
 	}
 }
+
+// vx decide records the answer as an amendment, with the question it
+// answered; --dismiss answers nothing and records nothing.
+func TestDecide_RecordsAnAmendmentWithTheQuestion(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := blockedTestTask(t, projectRoot)
+
+	client := &fakeHerdr{promptStatus: "done", readOutput: "went with Postgres, done"}
+	var out bytes.Buffer
+	if code := runDecide(project, home, task.ID, "Use Postgres, and add a retry", client, &out, &out); code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Prompt != task.Prompt {
+		t.Errorf("the dispatch prompt must stay untouched, got %q", got.Prompt)
+	}
+	if len(got.Amendments) != 1 || got.Amendments[0].Source != state.AmendmentSourceDecide {
+		t.Fatalf("expected one vx decide amendment, got %+v", got.Amendments)
+	}
+	for _, want := range []string{"Which database should this use?", "Use Postgres, and add a retry"} {
+		if !strings.Contains(got.Amendments[0].Text, want) {
+			t.Errorf("expected the amendment to contain %q, got %q", want, got.Amendments[0].Text)
+		}
+	}
+}
+
+// A modal pick typed as a digit is recorded as the option it selected: "2"
+// alone would tell the tribunal nothing.
+func TestDecide_ModalPickIsRecordedAsTheOptionLabel(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := blockedTestTask(t, projectRoot)
+	task.Decision.Kind = state.DecisionKindModal
+	task.Decision.Options = []string{"Postgres", "ClickHouse"}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeHerdr{promptStatus: "done", readOutput: "ok"}
+	var out bytes.Buffer
+	if code := runDecide(project, home, task.ID, "2", client, &out, &out); code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Amendments) != 1 || !strings.HasSuffix(got.Amendments[0].Text, "ClickHouse") {
+		t.Errorf("expected the amendment to name the chosen option, got %+v", got.Amendments)
+	}
+}
+
+// An answer that could not be delivered (pane gone) is no instruction.
+func TestDecide_PaneGoneRecordsNoAmendment(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := blockedTestTask(t, projectRoot)
+
+	client := &fakeHerdr{promptErr: &herdr.APIError{Code: "agent_not_running", Message: "pane closed"}}
+	var out bytes.Buffer
+	if code := runDecide(project, home, task.ID, "Use Postgres", client, &out, &out); code == 0 {
+		t.Fatal("expected a failure")
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Amendments) != 0 {
+		t.Errorf("expected no amendment, got %+v", got.Amendments)
+	}
+}
+
+func TestDecideDismiss_RecordsNoAmendment(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := falseBlockedTask(t, projectRoot)
+
+	client := &fakeHerdr{promptStatus: "idle", readOutput: "all done"}
+	var out, errOut bytes.Buffer
+	if code := runDecideDismiss(project, home, task.ID, client, &out, &errOut); code != 0 {
+		t.Fatalf("expected success, got %d: %s%s", code, out.String(), errOut.String())
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Amendments) != 0 {
+		t.Errorf("a dismissal sends nothing and must record nothing, got %+v", got.Amendments)
+	}
+}

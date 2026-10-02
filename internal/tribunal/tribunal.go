@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/isaias-alt/vexillum/internal/state"
 )
 
 // Name is tribunal's own domain-vocabulary name, used anywhere it needs
@@ -55,6 +57,12 @@ type Options struct {
 	// TaskPrompt is state.Task.Prompt, the original mission statement the
 	// simplification pass judges the change against. Empty skips that pass.
 	TaskPrompt string
+	// TaskAmendments is state.Task.Amendments: the instructions the general
+	// gave after the dispatch. They follow TaskPrompt, labeled, in the intent
+	// the review and the fixer see (see intent), so a component any of them
+	// asks for is not reported as unrequested. They come from the task's
+	// state file, never from a file in the camp.
+	TaskAmendments []state.Amendment
 	// Fix turns on the review -> fix -> review loop. Off, a blocking review
 	// just fails the run.
 	Fix bool
@@ -67,6 +75,12 @@ type Options struct {
 	// Log, when set, receives one-line progress messages: a run is
 	// synchronous and a review can take minutes.
 	Log func(msg string)
+}
+
+// intent is the mission intent the reviewer and the fixer are given: the
+// original prompt followed by the general's later instructions.
+func (o Options) intent() string {
+	return state.ComposeIntent(o.TaskPrompt, o.TaskAmendments)
 }
 
 func (o Options) timeout() time.Duration {

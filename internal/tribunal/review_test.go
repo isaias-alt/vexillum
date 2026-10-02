@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/isaias-alt/vexillum/internal/state"
 )
 
 func TestRunReview_NoChangesSkipsWithoutInvokingClaude(t *testing.T) {
@@ -236,5 +238,87 @@ func TestRunReview_TimeoutFails(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 25*time.Second {
 		t.Errorf("the timeout took %s to take effect", elapsed)
+	}
+}
+
+// The general's later instructions reach the reviewer as part of the intent:
+// after the original prompt, numbered in the order given, labeled as coming
+// afterward, and the simplification rule counts them as required scope.
+func TestRunReview_IntentIncludesTheGeneralsLaterInstructions(t *testing.T) {
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "change.txt", "hi\n")
+	stub := newClaudeStub(t)
+	stub.out(0, reportJSON("", "change.txt"))
+
+	at := time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)
+	opts := Options{
+		Branch:     "b",
+		TaskPrompt: "ORIGINAL_PROMPT add a file",
+		TaskAmendments: []state.Amendment{
+			{Text: "FIRST_LATER restyle it", At: at, Source: state.AmendmentSourcePrompt},
+			{Text: "SECOND_LATER add a retry", At: at.Add(time.Hour), Source: state.AmendmentSourceDecide},
+		},
+	}
+	sr, err := runReview(dir, "base", opts, "")
+	if err != nil {
+		t.Fatalf("runReview: %v", err)
+	}
+	if !sr.Passed {
+		t.Fatalf("expected a pass, got %+v", sr)
+	}
+
+	prompt := stub.prompt(1)
+	mission := prompt[strings.Index(prompt, "<mission>"):strings.Index(prompt, "</mission>")]
+	order := []string{"ORIGINAL_PROMPT add a file", "Instructions the general gave afterward", "1. [2026-10-02T09:00:00Z, via vx prompt] FIRST_LATER restyle it", "2. [2026-10-02T10:00:00Z, via vx decide] SECOND_LATER add a retry"}
+	last := -1
+	for _, want := range order {
+		i := strings.Index(mission, want)
+		if i < 0 {
+			t.Fatalf("expected the mission to contain %q:\n%s", want, mission)
+		}
+		if i < last {
+			t.Errorf("%q is out of order in the mission:\n%s", want, mission)
+		}
+		last = i
+	}
+
+	// Required by an instruction is not unrequested, but required by neither
+	// is still reported.
+	for _, want := range []string{"a component any of them asks for is required", "neither the original request nor a later instruction strictly requires", `severity "warning" and action "ask-user"`} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("expected the simplification rules to contain %q:\n%s", want, prompt)
+		}
+	}
+}
+
+// With no amendments the intent is exactly the prompt, as before.
+func TestRunReview_NoAmendmentsLeavesTheIntentAsThePrompt(t *testing.T) {
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "change.txt", "hi\n")
+	stub := newClaudeStub(t)
+	stub.out(0, reportJSON("", "change.txt"))
+
+	if _, err := runReview(dir, "base", Options{Branch: "b", TaskPrompt: "just this"}, ""); err != nil {
+		t.Fatalf("runReview: %v", err)
+	}
+	if strings.Contains(stub.prompt(1), "Instructions the general gave afterward") {
+		t.Error("expected no later-instructions section without amendments")
+	}
+	if !strings.Contains(stub.prompt(1), "<mission>\njust this\n</mission>") {
+		t.Errorf("expected the bare prompt as the mission:\n%s", stub.prompt(1))
+	}
+}
+
+// The fixer judges "required" against the same intent as the reviewer.
+func TestOptionsIntent_FeedsTheFixerToo(t *testing.T) {
+	opts := Options{
+		TaskPrompt:     "ORIGINAL",
+		TaskAmendments: []state.Amendment{{Text: "LATER_ASK", At: time.Unix(0, 0), Source: state.AmendmentSourcePrompt}},
+	}
+	prompt := buildFixPrompt([]Finding{{File: "a.go", Line: 1, Severity: SeverityWarning, Description: "d"}}, opts.intent(), "b")
+	for _, want := range []string{"ORIGINAL", "LATER_ASK", "Instructions the general gave afterward"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("expected the fix prompt to contain %q:\n%s", want, prompt)
+		}
 	}
 }

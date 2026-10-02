@@ -177,6 +177,13 @@ type Task struct {
 	// task has gone Blocked at least once; a task that never blocks never
 	// carries one. Purely additive, no SchemaVersion bump needed.
 	Decision *Decision `json:"decision,omitempty"`
+
+	// Amendments are the instructions the general gave this task after its
+	// dispatch prompt, recorded by "vx prompt" and "vx decide" (see
+	// Amendment). Prompt itself is never touched. Purely additive, no
+	// SchemaVersion bump needed: an older task file decodes to nil, which
+	// already means "no later instructions".
+	Amendments []Amendment `json:"amendments,omitempty"`
 }
 
 // Decision is the actual question a soldier asked when its task went

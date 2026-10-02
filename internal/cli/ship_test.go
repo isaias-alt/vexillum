@@ -515,3 +515,42 @@ func TestParseShipArgs(t *testing.T) {
 		}
 	}
 }
+
+// vx ship hands the task's amendments to the tribunal: the reviewer's prompt
+// carries the dispatch prompt followed by what the general said afterward,
+// read from the task state.
+func TestRunShip_ReviewerSeesTheTasksAmendments(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	task.AddAmendment(state.AmendmentSourcePrompt, "LATER_INSTRUCTION add a retry", time.Now())
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	toolsDir := shipToolsPath(t, passingReview, ghCreatesNewPR)
+	argsLog := filepath.Join(t.TempDir(), "claude-args.log")
+	recorder := "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '" + argsLog + "'\ncat <<'TRIBUNAL_EOF'\n" + passingReview + "\nTRIBUNAL_EOF\n"
+	if err := os.WriteFile(filepath.Join(toolsDir, "claude"), []byte(recorder), 0o755); err != nil {
+		t.Fatalf("writing claude stub: %v", err)
+	}
+	t.Setenv("PATH", toolsDir)
+
+	var out bytes.Buffer
+	if code := runShip(project, home, task.ID, tribunal.Options{}, &out, &out); code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	logged, err := os.ReadFile(argsLog)
+	if err != nil {
+		t.Fatalf("reading the recorded reviewer args: %v", err)
+	}
+	for _, want := range []string{"do a thing", "Instructions the general gave afterward", "via vx prompt] LATER_INSTRUCTION add a retry"} {
+		if !strings.Contains(string(logged), want) {
+			t.Errorf("expected the reviewer's prompt to contain %q:\n%s", want, logged)
+		}
+	}
+}

@@ -247,7 +247,9 @@ func AnswerBlocked(projectRoot string, task state.Task, answer string, client he
 				return task, fmt.Errorf("selecting option %d on the soldier's pane: %w", n, err)
 			}
 			status, err := client.AgentWait(task.HerdrAgentName, nil, quickSettleTimeoutMS)
-			return finishAnswerBlocked(projectRoot, task, answer, status, err, client)
+			// The amendment names the option, not the digit the general may
+			// have typed: "1" means nothing to the tribunal.
+			return finishAnswerBlocked(projectRoot, task, answer, label, status, err, client)
 		}
 		// Either the answer didn't confidently resolve to a rendered
 		// option, or it resolved to "Type something." - either way this
@@ -256,7 +258,7 @@ func AnswerBlocked(projectRoot string, task state.Task, answer string, client he
 	}
 
 	status, err := promptWithStalledRetry(client, task.HerdrAgentName, answer, quickSettleTimeoutMS)
-	return finishAnswerBlocked(projectRoot, task, answer, status, err, client)
+	return finishAnswerBlocked(projectRoot, task, answer, answer, status, err, client)
 }
 
 // DismissBlocked clears a task that was marked blocked by mistake (a false
@@ -328,7 +330,10 @@ func DismissBlocked(projectRoot string, task state.Task, client herdr.Client) (s
 //
 // task is persisted as Running before the prompt goes out, so the sentinel
 // can never see a stale pre-prompt status for it, and restored exactly as it
-// was if the prompt cannot be delivered. Like RunInHerdr and AnswerBlocked
+// was if the prompt cannot be delivered. The prompt is also recorded as an
+// amendment on the task (state.Task.Amendments) in that same write, so the
+// tribunal counts it as part of the mission's intent; a prompt that was never
+// delivered leaves no amendment behind. Like RunInHerdr and AnswerBlocked
 // it only probes briefly for a fast settle (quickSettleTimeoutMS); anything
 // longer is left Running for the sentinel to record. text is delivered
 // verbatim: the soldier already has the pause and needs-decision conventions
@@ -336,8 +341,10 @@ func DismissBlocked(projectRoot string, task state.Task, client herdr.Client) (s
 func Reprompt(projectRoot string, task state.Task, text string, client herdr.Client) (state.Task, error) {
 	previous := task
 
+	now := time.Now().UTC()
+	task.AddAmendment(state.AmendmentSourcePrompt, text, now)
 	task.Status = state.StatusRunning
-	task.UpdatedAt = time.Now().UTC()
+	task.UpdatedAt = now
 	task.IdleUnconfirmedSince = time.Time{}
 	task.AgentNotFoundSince = time.Time{}
 	if err := state.Save(projectRoot, task); err != nil {
@@ -382,7 +389,12 @@ func Reprompt(projectRoot string, task state.Task, text string, client herdr.Cli
 // that delivery's own settle-wait returned (an APIError from AgentWait or
 // AgentPrompt alike - both share the same settled-state error vocabulary,
 // see herdr.IsNotRunning's own doc comment).
-func finishAnswerBlocked(projectRoot string, task state.Task, answer, status string, settleErr error, client herdr.Client) (state.Task, error) {
+//
+// answer is what the general typed and is stored on the decision; chosen is
+// what that answer amounts to (the option's label for a modal pick, answer
+// itself otherwise) and is what gets recorded as an amendment, with the
+// question it answered, once the answer is known to have been delivered.
+func finishAnswerBlocked(projectRoot string, task state.Task, answer, chosen, status string, settleErr error, client herdr.Client) (state.Task, error) {
 	if settleErr != nil {
 		if herdr.IsNotRunning(settleErr) {
 			task.Status = state.StatusInterrupted
@@ -413,6 +425,7 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, status str
 		task.Decision.Answer = answer
 		task.Decision.AnsweredAt = time.Now().UTC()
 	}
+	task.AddAmendment(state.AmendmentSourceDecide, decisionAmendmentText(task.Decision, chosen), time.Now().UTC())
 
 	if settleErr == nil {
 		task.Status = MapAgentStatus(status)
@@ -432,6 +445,25 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, status str
 		return task, fmt.Errorf("persisting answered task: %w", err)
 	}
 	return task, nil
+}
+
+// maxAmendmentQuestionRunes bounds the question quoted in a decide amendment,
+// so a long question cannot crowd out the answer inside the amendment cap.
+const maxAmendmentQuestionRunes = 300
+
+// decisionAmendmentText is the text recorded as an amendment for an answer
+// to d: the answer, prefixed with the question it answered when known, since
+// a bare "Use Auth0" says little to a reviewer reading it later.
+func decisionAmendmentText(d *state.Decision, chosen string) string {
+	chosen = strings.TrimSpace(chosen)
+	if chosen == "" || d == nil || strings.TrimSpace(d.Question) == "" {
+		return chosen
+	}
+	question := strings.Join(strings.Fields(d.Question), " ")
+	if runes := []rune(question); len(runes) > maxAmendmentQuestionRunes {
+		question = string(runes[:maxAmendmentQuestionRunes]) + "..."
+	}
+	return fmt.Sprintf("Asked %q, the general answered: %s", question, chosen)
 }
 
 const (

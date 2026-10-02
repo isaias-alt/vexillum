@@ -31,7 +31,16 @@ released can be prompted. A "blocked" task is answered with '` + cmdname.Name + 
 (or, if it was marked blocked by mistake, cleared with '` + cmdname.Name + ` decide <task-id> --dismiss'), an "interrupted" one needs '` + cmdname.Name + ` redispatch', and a "running" one is already
 working - wait for it to settle.
 
-<text> is delivered to the soldier verbatim. On a fast settle the task's
+<text> is delivered to the soldier verbatim. It is also recorded on the task
+as an amendment (see '` + cmdname.Name + ` status --json', field "amendments"), with a timestamp and
+its source command, once it has been delivered: a mission's tribunal review
+judges the change against the dispatch prompt followed by these later
+instructions, so what you asked for here is not reported as unrequested. The
+dispatch prompt itself is never changed. Amendments are written only by this
+command and by '` + cmdname.Name + ` decide', into the task's state file, never into a file in the
+camp. Each is capped at 2000 characters and a task keeps its 20 most recent.
+
+On a fast settle the task's
 status updates immediately: running if the soldier is still going, blocked if
 it asks a question, done if it settled that quickly. Otherwise the task is
 left running for the sentinel to record the eventual settle, exactly like a

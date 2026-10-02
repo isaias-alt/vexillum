@@ -34,8 +34,10 @@ author's context: it reads the diff itself with git, assumes the change is
 wrong and tries to break it, and reports structured findings (file, line,
 severity, action, a concrete failure scenario, sibling sites) plus the
 files it actually read. When the mission has a prompt, every component the
-change introduced is also judged against it, and anything not required is
-reported as a warning whose remedy is removing it. Any finding of severity
+change introduced is also judged against it, followed by any instructions the
+general gave afterward through '` + cmdname.Name + ` prompt' and '` + cmdname.Name + ` decide' (recorded on the
+task as amendments), and anything none of them required is reported as a
+warning whose remedy is removing it. Any finding of severity
 error or warning blocks the ship (including those that need a human
 decision); info findings do not block and are added to the pull request
 body. A changed file the reviewer did not report reading, an answer that
@@ -206,6 +208,7 @@ func runShip(projectDir, vexillumHome, taskID string, opts tribunal.Options, std
 
 	opts.Branch = c.Branch
 	opts.TaskPrompt = task.Prompt
+	opts.TaskAmendments = task.Amendments
 	opts.Log = func(msg string) { fmt.Fprintf(stderr, "%s: %s\n", tribunal.Name, msg) }
 	result, err := tribunal.Run(c.Path, task.CampBase, opts)
 	if err != nil {

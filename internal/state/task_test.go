@@ -50,7 +50,7 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if got != original {
+			if !reflect.DeepEqual(got, original) {
 				t.Errorf("round-trip mismatch:\n got:  %+v\n want: %+v", got, original)
 			}
 		})
