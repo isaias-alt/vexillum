@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -91,15 +92,21 @@ Optional overrides, only when the proposed text is not what you want:
                         cannot be combined with --body
 
 A supplied body is sanitized like everything else; the diff stat,
-Verification, Tribunal notes and footer stay. A supplied title or body only
-matters when the pull request is opened; re-shipping a mission whose PR
-already exists leaves the PR's text alone.
+Verification, Tribunal notes and footer stay.
 
 A mission already shipped can be shipped again, to push follow-up commits
-onto the same open PR - only "done" and "shipped" are valid starting
-states; a re-ship still runs the full tribunal pipeline first. Once
-shipped, land the PR with '` + cmdname.Name + ` land <task-id>' rather than '` + cmdname.Name + `
-land'-ing the camp locally.
+onto the same open PR - "done" and "shipped" are the valid starting states,
+and a re-ship still runs the full tribunal pipeline first. A shipped
+mission's soldier stays open until the PR is merged, so follow-up work is
+requested with '` + cmdname.Name + ` prompt <task-id> <text>' (the task goes
+running, then back to done) and delivered with '` + cmdname.Name + ` ship
+<task-id>' again. Whenever a PR for the branch already exists, whether the
+task is done or shipped, ship reuses it instead of opening a second one: it
+pushes to the same branch and refreshes the PR's title and description from
+the new review (or from --title and --body). A PR that is already merged or
+closed is not reused: ship refuses before running anything. Once shipped,
+land the PR with '` + cmdname.Name + ` land <task-id>' rather than
+'` + cmdname.Name + ` land'-ing the camp locally.
 `
 
 // Ship runs the "vx ship" command.
@@ -316,6 +323,16 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 		return 1
 	}
 
+	// A branch that already has a pull request (the task was shipped, or
+	// shipped, prompted and is done again) gets that one updated, never a
+	// second one. Looked up before the tribunal runs so a merged or closed
+	// pull request, or a gh failure, costs nothing.
+	existing, err := existingPullRequest(projectDir, c.Branch, task.Status == state.StatusShipped)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
+		return 1
+	}
+
 	opts := ship.Tribunal
 	opts.Branch = c.Branch
 	opts.TaskPrompt = task.Prompt
@@ -360,26 +377,18 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 	}
 
 	// Built before the push so a failure here leaves nothing half-done.
-	var title, body string
-	if task.Status == state.StatusShipped {
-		if ship.Title != "" || ship.HasBody {
-			fmt.Fprintln(stderr, cmdname.Name+": the pull request already exists, ignoring --title and --body")
-		}
-	} else {
-		facts, err := prbody.Gather(c.Path, task.CampBase)
-		if err != nil {
-			fmt.Fprintf(stderr, cmdname.Name+": reading the branch's commits and diff: %v\n", err)
-			return 1
-		}
-		var dropped int
-		title, body, dropped, err = shipPRText(sanitizer, task, ship, facts, result, notes, stderr)
-		if err != nil {
-			fmt.Fprintln(stderr, cmdname.Name+":", err)
-			return 1
-		}
-		if dropped > 0 {
-			fmt.Fprintf(stderr, cmdname.Name+": dropped %d line(s) from the pull request text: home paths, localhost ports, secrets or the mission prompt must not be published\n", dropped)
-		}
+	facts, err := prbody.Gather(c.Path, task.CampBase)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": reading the branch's commits and diff: %v\n", err)
+		return 1
+	}
+	title, body, dropped, err := shipPRText(sanitizer, task, ship, facts, result, notes, stderr)
+	if err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	if dropped > 0 {
+		fmt.Fprintf(stderr, cmdname.Name+": dropped %d line(s) from the pull request text: home paths, localhost ports, secrets or the mission prompt must not be published\n", dropped)
 	}
 
 	pushCmd := exec.Command("git", "push", "origin", c.Branch)
@@ -390,13 +399,8 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 	}
 
 	var prURL string
-	if task.Status == state.StatusShipped {
-		pr, err := ghpr.View(projectDir, c.Branch)
-		if err != nil {
-			fmt.Fprintf(stderr, cmdname.Name+": pushed follow-up commits, but couldn't look up the existing pull request: %v\n", err)
-			return 1
-		}
-		prURL = pr.URL
+	if existing != nil {
+		prURL = existing.URL
 	} else {
 		prURL, err = ghpr.Create(projectDir, c.Branch, task.CampBase, title, body)
 		if err != nil {
@@ -412,8 +416,39 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 		return 1
 	}
 
+	if existing != nil {
+		// The code is on the pull request already; a text that could not be
+		// refreshed is worth saying, not worth failing a ship that worked.
+		if err := ghpr.Edit(projectDir, existing.Number, title, body); err != nil {
+			fmt.Fprintf(stderr, cmdname.Name+": pushed %s, but the pull request's title and description were not refreshed: %v\n", c.Branch, err)
+		}
+	}
+
 	fmt.Fprintf(stdout, "%s passed, pushed %s, pull request: %s\n", tribunal.Name, c.Branch, prURL)
 	return 0
+}
+
+// existingPullRequest returns the open pull request of branch, or nil when
+// the branch has none yet. A pull request that is merged or closed cannot
+// take more commits, so it is an error, as is any lookup failure other than
+// "no pull request": guessing "none" would open a second pull request. A
+// shipped task must have one.
+func existingPullRequest(projectDir, branch string, shipped bool) (*ghpr.PullRequest, error) {
+	pr, err := ghpr.View(projectDir, branch)
+	if errors.Is(err, ghpr.ErrNoPullRequest) && !shipped {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("looking up the pull request for %s: %w", branch, err)
+	}
+	switch pr.State {
+	case "OPEN":
+		return &pr, nil
+	case ghpr.StateMerged:
+		return nil, fmt.Errorf("the pull request %s is already merged, so new commits on %s would never reach it - run git pull on the base branch, release the camp and dispatch a new mission for the follow-up", pr.URL, branch)
+	default:
+		return nil, fmt.Errorf("the pull request %s is %s, not open - reopen it on GitHub first, or the follow-up work has nowhere to go", pr.URL, strings.ToLower(pr.State))
+	}
 }
 
 // amendmentTexts returns the text of each amendment.

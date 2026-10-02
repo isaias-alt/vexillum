@@ -134,7 +134,13 @@ func shipToolsPath(t *testing.T, claudeVerdict, ghScript string) string {
 		t.Fatalf("writing claude stub: %v", err)
 	}
 
-	ghBody := "#!/bin/sh\n" + ghScript + "\n"
+	// A script that does not answer "pr view" describes a branch with no
+	// pull request yet, the way gh does.
+	noPRView := ""
+	if !strings.Contains(ghScript, `"pr view"`) {
+		noPRView = "if [ \"$1 $2\" = \"pr view\" ]; then echo 'no pull requests found for branch' >&2; exit 1; fi\n"
+	}
+	ghBody := "#!/bin/sh\n" + noPRView + ghScript + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(ghBody), 0o755); err != nil {
 		t.Fatalf("writing gh stub: %v", err)
 	}
@@ -665,8 +671,9 @@ func TestRunShip_RefusesUnsafeTitle(t *testing.T) {
 	assertNoShipSideEffects(t, project, home, task, out.String())
 }
 
-// Re-shipping a mission whose PR exists never touches the PR's text.
-func TestRunShip_ReshipIgnoresTitleAndBody(t *testing.T) {
+// Re-shipping a mission whose PR exists refreshes the PR's text from the new
+// review, never opening a second PR, and honors --title and --body.
+func TestRunShip_ReshipRefreshesTheTitleAndBody(t *testing.T) {
 	project := shipTestProject(t)
 	home := t.TempDir()
 	task := doneMissionTask(t, project, home)
@@ -678,20 +685,116 @@ func TestRunShip_ReshipIgnoresTitleAndBody(t *testing.T) {
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
+	argsFile := filepath.Join(t.TempDir(), "gh-edit-args")
 	t.Setenv("PATH", shipToolsPath(t, passingReview, `case "$1 $2" in
-  "pr view") echo '{"number":1,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","headRefOid":"abc123","url":"https://github.com/x/y/pull/1"}' ;;
-  "pr create"|"pr edit") echo "PR TEXT SHOULD NOT HAVE BEEN TOUCHED" >&2; exit 1 ;;
+  "pr view") echo '{"number":7,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","headRefOid":"abc123","url":"https://github.com/x/y/pull/7"}' ;;
+  "pr create") echo "PR CREATE SHOULD NOT HAVE BEEN CALLED" >&2; exit 1 ;;
+  "pr edit") printf '%s\n' "$@" > '`+argsFile+`' ;;
 esac`))
 
 	var out bytes.Buffer
-	code := runShip(project, home, task.ID, shipOptions{Title: "feat: x", Body: "y", HasBody: true}, &out, &out)
+	code := runShip(project, home, task.ID, shipOptions{Title: "feat: a refreshed title", Body: "Refreshed summary.", HasBody: true}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
 	}
-	if !strings.Contains(out.String(), "ignoring --title and --body") {
-		t.Errorf("expected a note that the flags were ignored, got: %s", out.String())
+	edited, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("expected the pull request to be edited: %v\n%s", err, out.String())
 	}
+	for _, want := range []string{"pr\nedit\n7\n", "--title\nfeat: a refreshed title\n", "## What\n\nRefreshed summary.\n", "## Verification"} {
+		if !strings.Contains(string(edited), want) {
+			t.Errorf("expected gh pr edit to receive %q:\n%s", want, edited)
+		}
+	}
+	if strings.Contains(out.String(), "ignoring") {
+		t.Errorf("--title and --body are no longer ignored, got: %s", out.String())
+	}
+}
+
+// The case that motivates reusing a PR: a shipped soldier was prompted, so the
+// task is done again but its branch already has an open PR. Ship pushes to the
+// same branch, edits that PR and never opens another; the task is shipped again.
+func TestRunShip_DoneTaskWhoseBranchHasAnOpenPRReusesIt(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	argsFile := filepath.Join(t.TempDir(), "gh-edit-args")
+	t.Setenv("PATH", shipToolsPath(t, passingReview, `case "$1 $2" in
+  "pr view") echo '{"number":7,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","headRefOid":"abc123","url":"https://github.com/x/y/pull/7"}' ;;
+  "pr create") echo "PR CREATE SHOULD NOT HAVE BEEN CALLED" >&2; exit 1 ;;
+  "pr edit") printf '%s\n' "$@" > '`+argsFile+`' ;;
+esac`))
+
+	var out bytes.Buffer
+	if code := runShip(project, home, task.ID, shipOptions{}, &out, &out); code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "https://github.com/x/y/pull/7") {
+		t.Errorf("expected the existing pull request's URL, got: %s", out.String())
+	}
+	if _, err := os.Stat(argsFile); err != nil {
+		t.Errorf("expected the existing pull request to be edited: %v", err)
+	}
+	projectRoot, _ := vxproject.Root(home, project)
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil || got.Status != state.StatusShipped {
+		t.Errorf("expected the task shipped again, got %q err=%v", got.Status, err)
+	}
+	// The commits reached the same branch on origin.
+	lsRemote := exec.Command("git", "ls-remote", "origin", task.CampBranch)
+	lsRemote.Dir = project
+	if refs, err := lsRemote.CombinedOutput(); err != nil || !strings.Contains(string(refs), task.CampBranch) {
+		t.Errorf("expected %s pushed to origin (err=%v): %s", task.CampBranch, err, refs)
+	}
+}
+
+// A pull request that can no longer take commits stops the ship before the
+// tribunal runs: nothing is pushed, edited or created.
+func TestRunShip_RefusesAMergedOrClosedPullRequest(t *testing.T) {
+	for _, prState := range []string{"MERGED", "CLOSED"} {
+		t.Run(prState, func(t *testing.T) {
+			project := shipTestProject(t)
+			home := t.TempDir()
+			task := doneMissionTask(t, project, home)
+			t.Setenv("PATH", shipToolsPath(t, "no verdict line here at all", `case "$1 $2" in
+  "pr view") echo '{"number":7,"state":"`+prState+`","isDraft":false,"mergeable":"UNKNOWN","headRefOid":"abc123","url":"https://github.com/x/y/pull/7"}' ;;
+  "pr create"|"pr edit") echo "NOTHING SHOULD HAVE BEEN TOUCHED" >&2; exit 1 ;;
+esac`))
+
+			var out bytes.Buffer
+			code := runShip(project, home, task.ID, shipOptions{}, &out, &out)
+
+			if code != 1 {
+				t.Fatalf("expected exit 1, got %d: %s", code, out.String())
+			}
+			if !strings.Contains(out.String(), "https://github.com/x/y/pull/7") || strings.Contains(out.String(), "[FAILED]") || strings.Contains(out.String(), "[ok]") {
+				t.Errorf("expected a refusal naming the pull request before any tribunal step, got: %s", out.String())
+			}
+			assertNoShipSideEffects(t, project, home, task, out.String())
+		})
+	}
+}
+
+// A gh failure that is not "no pull request" must never be read as "none":
+// that would open a second pull request on top of the first.
+func TestRunShip_LookupFailureIsNotReadAsNoPullRequest(t *testing.T) {
+	project := shipTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	t.Setenv("PATH", shipToolsPath(t, passingReview, `case "$1 $2" in
+  "pr view") echo 'HTTP 502 from api.github.com' >&2; exit 1 ;;
+  "pr create") echo "PR CREATE SHOULD NOT HAVE BEEN CALLED" >&2; exit 1 ;;
+esac`))
+
+	var out bytes.Buffer
+	if code := runShip(project, home, task.ID, shipOptions{}, &out, &out); code != 1 {
+		t.Fatalf("expected exit 1, got %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "looking up the pull request") {
+		t.Errorf("expected the lookup failure to be reported, got: %s", out.String())
+	}
+	assertNoShipSideEffects(t, project, home, task, out.String())
 }
 
 func TestParseShipArgs_TitleAndBodyFlags(t *testing.T) {

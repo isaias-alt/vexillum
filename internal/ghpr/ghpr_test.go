@@ -1,6 +1,7 @@
 package ghpr
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,5 +167,73 @@ esac`))
 	}
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("expected gh's own error output surfaced, got: %v", err)
+	}
+}
+
+func TestView_ParsesTheMergeCommitOfAMergedPullRequest(t *testing.T) {
+	t.Setenv("PATH", ghStub(t, `case "$1 $2" in
+  "pr view") echo '{"number":42,"state":"MERGED","isDraft":false,"mergeable":"UNKNOWN","headRefOid":"abc123","url":"https://github.com/x/y/pull/42","mergeCommit":{"oid":"def456"}}' ;;
+esac`))
+
+	pr, err := View(t.TempDir(), "vexillum/abc123")
+	if err != nil {
+		t.Fatalf("View: %v", err)
+	}
+	if pr.State != StateMerged || pr.MergeCommit == nil || pr.MergeCommit.Oid != "def456" {
+		t.Errorf("expected the merge commit parsed, got %+v", pr)
+	}
+}
+
+func TestView_OpenPullRequestHasNoMergeCommit(t *testing.T) {
+	t.Setenv("PATH", ghStub(t, `echo '{"number":42,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","headRefOid":"abc123","url":"u","mergeCommit":null}'`))
+
+	pr, err := View(t.TempDir(), "vexillum/abc123")
+	if err != nil || pr.MergeCommit != nil {
+		t.Errorf("expected no merge commit for an open PR, got %+v err=%v", pr, err)
+	}
+}
+
+func TestView_NoPullRequestIsATypedError(t *testing.T) {
+	t.Setenv("PATH", ghStub(t, `echo 'no pull requests found for branch "vexillum/abc123"' >&2; exit 1`))
+	if _, err := View(t.TempDir(), "vexillum/abc123"); !errors.Is(err, ErrNoPullRequest) {
+		t.Errorf("expected ErrNoPullRequest, got: %v", err)
+	}
+
+	t.Setenv("PATH", ghStub(t, `echo 'HTTP 502' >&2; exit 1`))
+	if _, err := View(t.TempDir(), "vexillum/abc123"); err == nil || errors.Is(err, ErrNoPullRequest) {
+		t.Errorf("expected a plain error for any other failure, got: %v", err)
+	}
+}
+
+func TestLoggedIn(t *testing.T) {
+	t.Setenv("PATH", ghStub(t, `[ "$1 $2" = "auth status" ] && exit 0; exit 2`))
+	if !LoggedIn() {
+		t.Error("expected LoggedIn when gh auth status succeeds")
+	}
+	t.Setenv("PATH", ghStub(t, `exit 1`))
+	if LoggedIn() {
+		t.Error("expected not LoggedIn when gh auth status fails")
+	}
+	t.Setenv("PATH", t.TempDir())
+	if LoggedIn() {
+		t.Error("expected not LoggedIn without a gh binary")
+	}
+}
+
+func TestEdit_PassesNumberTitleAndBody(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	t.Setenv("PATH", ghStub(t, `printf '%s\n' "$@" > '`+argsFile+`'`))
+
+	if err := Edit(t.TempDir(), 7, "feat: x", "the body"); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+	got, _ := os.ReadFile(argsFile)
+	if string(got) != "pr\nedit\n7\n--title\nfeat: x\n--body\nthe body\n" {
+		t.Errorf("unexpected gh arguments: %q", got)
+	}
+
+	t.Setenv("PATH", ghStub(t, `echo nope >&2; exit 1`))
+	if err := Edit(t.TempDir(), 7, "t", "b"); err == nil || !strings.Contains(err.Error(), "#7") {
+		t.Errorf("expected an error naming the pull request, got: %v", err)
 	}
 }
