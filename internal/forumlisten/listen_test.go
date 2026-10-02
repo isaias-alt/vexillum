@@ -72,9 +72,17 @@ func (e *env) session(project string) (key, file string) {
 	if err != nil {
 		e.t.Fatal(err)
 	}
+	// The tab goroutine must be stopped and joined before the temp dirs go:
+	// State can still commit to the session dir (artifact changed) after the
+	// cancel, which would race the home removal.
 	ctx, cancel := context.WithCancel(context.Background())
-	e.t.Cleanup(cancel)
+	tabDone := make(chan struct{})
+	e.t.Cleanup(func() {
+		cancel()
+		<-tabDone
+	})
 	go func() {
+		defer close(tabDone)
 		var since int64
 		for ctx.Err() == nil {
 			snap, err := e.hub.State(ctx, open.Key, since, time.Hour)
@@ -113,10 +121,21 @@ func (e *env) options() forumlisten.Options {
 	}
 }
 
-// run starts the listener and returns a channel with its result.
+// run starts the listener and returns a channel with its result. Whatever
+// path the test takes (a Fatal included), the cleanup cancels the listener and
+// joins it before the server and the temp dirs go.
 func (e *env) run(ctx context.Context, opts forumlisten.Options) <-chan error {
+	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan error, 1)
-	go func() { done <- forumlisten.Run(ctx, opts) }()
+	exited := make(chan struct{})
+	go func() {
+		defer close(exited)
+		done <- forumlisten.Run(ctx, opts)
+	}()
+	e.t.Cleanup(func() {
+		cancel()
+		<-exited
+	})
 	return done
 }
 
