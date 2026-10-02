@@ -21,6 +21,11 @@ rendered number) is delivered as a single key press - the same mechanism a
 human picking from that menu would use - unless it resolves to "Type
 something.", which falls back to plain text like every other decision.
 
+Once the answer is delivered it is also recorded on the task as an amendment
+(field "amendments" in 'vx status --json'), together with the question it answered,
+so a mission's tribunal review counts it as part of the mission's intent. A
+selector pick is recorded as the option's text. --dismiss records nothing.
+
 On a fast settle the task's status updates immediately: running if the
 soldier is still going, blocked again if it asks another question, done or
 failed if it settled that quickly. Otherwise the task is left running for

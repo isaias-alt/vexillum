@@ -17,6 +17,24 @@ refuses up front and says so if it is missing. There is no other setup: the
 pipeline runs entirely inside vexillum, with no external tool to install or
 configure.
 
+## The general's later instructions count as intent
+
+The review judges every component the change introduced against the mission's
+intent: the dispatch prompt followed by the instructions the general gave
+afterward. What you send with `vx prompt` and the answers you give with
+`vx decide` (not `--dismiss`) are recorded on the task as amendments, with a
+timestamp and the command they came from, and `vx ship` lists them after the
+prompt, in order, labeled as given afterward. So a restyle, a removed shortcut
+or an added retry the general asked for through those commands is not reported
+as "not required"; whatever neither the prompt nor an amendment required still
+is. The dispatch prompt itself is never rewritten.
+
+Only those two commands, run by you, write amendments, and they live in the
+task's state file, never in a file inside the camp, so a soldier cannot widen
+its own mandate. Each is capped at 2000 characters and a task keeps its 20 most
+recent. Scope changes given by hand in the soldier's pane are not recorded: when
+the general widens the mission, relay it through `vx prompt` or `vx decide`.
+
 ## When a step fails
 
 `vx ship` reports which step failed and why, and nothing is pushed. A review that

@@ -38,6 +38,7 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 | `redispatches` | number | cuántas veces se re-despachó la tarea |
 | `model`, `effort` | string | la elección del soldier; vacío significa el default de claude |
 | `decision` | object | presente una vez que la tarea quedó blocked al menos una vez |
+| `amendments` | array | instrucciones que el general dio después del dispatch, con `vx prompt` y `vx decide` (no `--dismiss`); ver abajo |
 
 Los campos opcionales se omiten cuando están vacíos.
 
@@ -53,6 +54,16 @@ Los campos opcionales se omiten cuando están vacíos.
 | `dismissed` | `true` cuando se limpió con `vx decide --dismiss` en vez de responderse; `answered_at` queda definido, `answer` no |
 
 Una tarea en `blocked` siempre lleva su pregunta acá, no solo la palabra "blocked".
+
+## amendments
+
+| Campo | Notas |
+| --- | --- |
+| `text` | lo que dijo el general; para `vx decide`, la pregunta y la respuesta (una elección de selector como el texto de la opción). Máximo 2000 caracteres, el texto más largo se corta y se marca `[truncated]` |
+| `at` | hora RFC 3339 en que se registró |
+| `source` | `vx prompt` o `vx decide` |
+
+Se omite cuando está vacío. Una tarea conserva sus 20 amendments más recientes. `prompt` nunca cambia: [`vx ship`](/es/docs/guides/land-vs-ship) le da a la revisión del tribunal el prompt seguido de los amendments, así que lo que el general pidió después cuenta como pedido. Solo `vx prompt` y `vx decide` los escriben, en el archivo de estado de la tarea, nunca en un archivo del camp.
 
 ## Compatibilidad
 

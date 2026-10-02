@@ -63,6 +63,19 @@ prompted (a `blocked` one is answered with `vx decide`, an `interrupted` one
 needs `vx redispatch`). It waits a few seconds for a trivial prompt to settle,
 otherwise leaves the task running, like a fresh dispatch.
 
+What you send with `vx prompt` (and the answer text you send with `vx decide`,
+not `--dismiss`) also counts as the general's intent for the tribunal: once
+delivered, it is recorded on the task as an amendment, with a timestamp and the
+command it came from. `vx ship` hands the review the dispatch prompt followed by
+these amendments, labeled as instructions the general gave afterward, so a
+component you asked for after dispatch is not reported as "not required". The
+dispatch prompt is never rewritten. Only these two commands, run by you, write
+amendments, and they live in the task's state file, never in a file inside the
+camp, so a soldier cannot widen its own mandate. Each is capped at 2000
+characters and a task keeps its 20 most recent. So when the general widens the
+scope, relay it through `vx prompt` or `vx decide` rather than by hand in the
+pane, or the review will not know about it.
+
 Do not prompt the soldier's pane by hand with `herdr agent prompt`: the task
 would stay `done` and a second finish would never notify you. The sentinel does
 reopen a settled task it later sees working again, but only on a poll, so a

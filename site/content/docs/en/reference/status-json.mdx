@@ -38,6 +38,7 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 | `redispatches` | number | how many times the task was re-dispatched |
 | `model`, `effort` | string | the soldier's choice; empty means claude's default |
 | `decision` | object | present once the task has blocked at least once |
+| `amendments` | array | instructions the general gave after dispatch, via `vx prompt` and `vx decide` (not `--dismiss`); see below |
 
 Optional fields are omitted when empty.
 
@@ -53,6 +54,16 @@ Optional fields are omitted when empty.
 | `dismissed` | `true` when cleared with `vx decide --dismiss` instead of answered; `answered_at` is set, `answer` is not |
 
 A task in `blocked` always carries its question here, not just the word "blocked".
+
+## amendments
+
+| Field | Notes |
+| --- | --- |
+| `text` | what the general said; for `vx decide`, the question and the answer (a selector pick as the option's text). At most 2000 characters, longer text is cut and marked `[truncated]` |
+| `at` | RFC 3339 time it was recorded |
+| `source` | `vx prompt` or `vx decide` |
+
+Omitted when empty. A task keeps its 20 most recent amendments. `prompt` never changes: [`vx ship`](/docs/guides/land-vs-ship) gives the tribunal review the prompt followed by the amendments, so what the general asked for later counts as requested. Only `vx prompt` and `vx decide` write them, into the task's state file, never into a file in the camp.
 
 ## Compatibility
 
