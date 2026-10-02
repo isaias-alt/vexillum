@@ -118,7 +118,7 @@ function makeEnv(chromePath, boot, opts = {}) {
     addEventListener(type, fn) { (winListeners[type] ||= []).push(fn); },
     removeEventListener() {},
     forumTheme: { current: () => "dark", toggle() {} },
-    forumPrefs: { annotate: () => true, setAnnotate() {} },
+    forumPrefs: { annotate: () => true, setAnnotate() {}, marks: () => true, setMarks() {} },
     location: { href: "http://127.0.0.1/session/x" },
     innerWidth: 1200, innerHeight: 800,
     getSelection: () => ({ removeAllRanges() {}, addRange() {} }),

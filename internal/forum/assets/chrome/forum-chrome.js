@@ -239,6 +239,7 @@
     renderQueue(snap.queued || [], ended, (snap.round || 0) + 1);
     syncQueueKeys(queueKeys(snap.queued || []));
     syncRoundKeys(roundKeysOf(snap));
+    syncMarks(snap);
     renderLayout(snap.layout_warnings || [], ended);
     syncEndedDialog(snap);
     syncWorkingDialog(snap);
@@ -919,6 +920,48 @@
     toFrame({ type: "forum:rounds", rounds });
   }
 
+  // Badges in the artifact on every annotated element or selection the user
+  // sent (forum-sdk.js draws them): the selector it was sent with, the newest
+  // round for it, and whether that round was answered. Forms are matched by
+  // their queue key instead (forum:rounds above), so a message with a queue key
+  // is not repeated here.
+  let marksOn = window.forumPrefs.marks();
+  let sentMarks = null;
+  function annotationMarksOf(snap) {
+    const answeredThrough = snap.answered_through || 0;
+    const bySelector = new Map();
+    for (const message of snap.transcript || []) {
+      if (message.role === "agent" || message.queue_key || !message.selector || !message.round) continue;
+      const known = bySelector.get(message.selector);
+      bySelector.set(message.selector, {
+        selector: message.selector,
+        round: message.round,
+        state: message.round <= answeredThrough ? "answered" : "sent",
+        count: (known ? known.count : 0) + 1,
+        text: clipText(message.text, 160),
+      });
+    }
+    return [...bySelector.values()].slice(-100);
+  }
+  function syncMarks(snap, force) {
+    const payload = { type: "forum:marks", visible: marksOn, annotations: snap ? annotationMarksOf(snap) : [] };
+    const encoded = JSON.stringify(payload);
+    if (!force && encoded === sentMarks) return;
+    sentMarks = encoded;
+    toFrame(payload);
+  }
+  function syncMarksSwitch() {
+    $("marksSwitch").setAttribute("aria-checked", String(marksOn));
+    $("marksState").textContent = marksOn ? "On" : "Off";
+  }
+  $("marksSwitch").addEventListener("click", () => {
+    marksOn = !marksOn;
+    window.forumPrefs.setMarks(marksOn);
+    syncMarksSwitch();
+    syncMarks(snapshot, true);
+  });
+  syncMarksSwitch();
+
   // The switch and the artifact follow the user's choice, except that a
   // finished session can no longer be annotated.
   function syncMode() {
@@ -1049,6 +1092,7 @@
       case "forum:ready":
         syncQueueKeys(queueKeys((snapshot && snapshot.queued) || []), true);
         syncRoundKeys(snapshot ? roundKeysOf(snapshot) : {}, true);
+        syncMarks(snapshot, true);
         syncMode();
         syncThemeButton();
         break;

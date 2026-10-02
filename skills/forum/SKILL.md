@@ -315,11 +315,19 @@ the whole API. There is no `window.forum`.
   own `disabled` buttons are left alone.
   Once the user has sent a form's answer, the form also gets
   `data-forum-sent="sent"` (or `"answered"` once you answered that round) and
-  `data-forum-round="<n>"`; with the forum look (`forum-artifact.css`) it prints
-  "Sent in round 2" / "Answered in round 2" under the form, and a form with its
-  own look can style the attributes. A form never sent has neither.
+  `data-forum-round="<n>"` (styling hooks; a form never sent has neither), and
   `window.forum.sentStatus(key)` returns `{round, state}` or `null` for a key.
-  Nothing is added to the artifact's DOM beyond these attributes.
+  **Status badges.** forum itself draws a small badge on every such form,
+  whatever its markup, saying "Sent in round 2" or "Answered in round 2", and
+  on every element or text selection the user annotated and sent (found again
+  by the selector it was sent with, so it survives you rewriting the artifact;
+  if the selector no longer matches, the badge is skipped and the comment is
+  still in the conversation panel). "Answered" means you replied or the
+  artifact changed after that round. The badges are a fixed, pointer-transparent
+  overlay in a shadow root: they never move your layout, and you add nothing.
+  The user can hide them all with the **Marks** switch next to Annotate. Keep
+  stable selectors (ids, `data-forum-question`) on what the user is likely to
+  comment on, so the badges find their element after a rewrite.
 - `window.forum.sendQueuedPrompts()` - sends everything queued right away,
   instead of waiting for the user to press Send to Agent. Use it only for a
   control whose whole purpose is "submit this to the agent now".

@@ -249,6 +249,7 @@
   function setQueuedKeys(keys) {
     queuedKeys = new Set(Array.isArray(keys) ? keys.map(str) : []);
     syncForms();
+    marksSchedule();
     for (const listener of [...queueListeners]) {
       try {
         listener([...queuedKeys]);
@@ -316,7 +317,131 @@
       }
     }
     syncSentRounds();
+    marksSchedule();
   }
+
+  // ----------------------------------------------------------- status marks
+
+  // A small badge in the artifact on everything the user already sent: every
+  // decision form (data-forum-question / data-forum-queue-key, whatever its
+  // markup) and every annotated element or selection, saying "Sent in round N"
+  // or "Answered in round N", so the user sees at a glance which parts of the
+  // plan were dealt with. The chrome reports what was sent (forum:rounds for
+  // forms, forum:marks for annotations, by the selector the annotation was
+  // sent with) and the badges are re-attached from that after every reload of
+  // the artifact; one whose selector no longer matches is silently skipped
+  // (the conversation panel still lists it). They never touch the artifact's
+  // layout: the layer is position:fixed over the viewport, zero-sized, inside a
+  // shadow root (the artifact's CSS cannot restyle it), and only the
+  // badge itself takes pointer events. The user can hide them all from the
+  // chrome's "Marks" switch.
+  const MARKS_CSS =
+    ":host{all:initial}" +
+    ".layer{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none}" +
+    ".mark{position:fixed;display:inline-flex;align-items:center;gap:4px;box-sizing:border-box;max-width:min(280px,calc(100vw - 16px));padding:1px 8px;border-radius:999px;" +
+    "border:1px solid var(--b);background:var(--s);color:var(--c);box-shadow:var(--fr-shadow-sm,0 1px 2px rgba(0,0,0,.3));" +
+    "font:600 11px/1.6 var(--fr-font-sans,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" +
+    "pointer-events:auto;cursor:default;transform:translate(calc(-100% - 8px),-50%)}" +
+    ".mark{--s:var(--fr-surface,#1C1F24)}" +
+    ".mark[data-state=sent]{--b:var(--fr-bronze,#C9A15A);--c:var(--fr-bronze,#C9A15A)}" +
+    ".mark[data-state=answered]{--b:var(--fr-success,#6FBE9A);--c:var(--fr-success,#6FBE9A)}" +
+    ":host([data-theme=light]) .mark{--s:var(--fr-surface,#FFFFFF)}" +
+    ":host([data-theme=light]) .mark[data-state=sent]{--b:var(--fr-bronze,#9C7A3F);--c:var(--fr-bronze,#9C7A3F)}" +
+    ":host([data-theme=light]) .mark[data-state=answered]{--b:var(--fr-success,#2F6B54);--c:var(--fr-success,#2F6B54)}";
+  const MAX_MARKS = 100;
+  let marksVisible = true;
+  let annotationMarks = []; // {selector, round, state, count, text}
+  let marksHost = null;
+  let marksLayer = null;
+  let marksFrame = 0;
+
+  function markTargets() {
+    const found = new Map(); // element -> target; a form's own state wins over a comment on it
+    if (!marksVisible) return [];
+    for (const form of document.querySelectorAll(FORM_SELECTOR)) {
+      let best = null;
+      for (const key of formQueueKeys(form)) {
+        const entry = sentStatus(key);
+        if (entry && (!best || entry.round > best.round)) best = entry;
+      }
+      // An answer waiting in the queue again is the live state; the old send is history.
+      if (best && !form.hasAttribute("data-forum-queued")) found.set(form, { el: form, kind: "decision", round: best.round, state: best.state, count: 1, text: "" });
+    }
+    for (const mark of annotationMarks) {
+      let el = null;
+      try {
+        el = document.querySelector(mark.selector);
+      } catch {
+        el = null; // a selector the page no longer understands
+      }
+      if (el && !found.has(el) && !(el.closest && el.closest("[data-forum-ui]"))) found.set(el, { el, kind: "comment", ...mark });
+    }
+    return [...found.values()];
+  }
+
+  function markLabel(target) {
+    const where = "round " + target.round;
+    return target.state === "answered" ? "\u2713 Answered in " + where : "Sent in " + where;
+  }
+
+  function markTitle(target) {
+    const what = target.kind === "decision" ? "Your answer to this question" : target.count > 1 ? "Your " + target.count + " comments here" : "Your comment here";
+    const status = target.state === "answered" ? "was answered by the agent (or the plan changed) after round " + target.round + "." : "was sent to the agent in round " + target.round + " and is not answered yet.";
+    return what + " " + status + (target.text ? "\n\u201c" + target.text + "\u201d" : "");
+  }
+
+  function renderMarks() {
+    marksFrame = 0;
+    const targets = markTargets();
+    if (!marksHost && targets.length === 0) return;
+    if (!marksHost || !marksHost.isConnected) {
+      marksHost = document.createElement("div");
+      marksHost.setAttribute("data-forum-ui", "marks");
+      marksHost.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;z-index:2147483646;pointer-events:none";
+      const root = marksHost.attachShadow({ mode: "open" });
+      const style = document.createElement("style");
+      style.textContent = MARKS_CSS;
+      marksLayer = document.createElement("div");
+      marksLayer.className = "layer";
+      root.append(style, marksLayer);
+      document.documentElement.appendChild(marksHost);
+    }
+    marksHost.setAttribute("data-theme", document.documentElement.getAttribute("data-fr-theme") === "light" ? "light" : "dark");
+    const badges = [];
+    for (const target of targets) {
+      const rect = target.el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > window.innerHeight) continue;
+      const badge = document.createElement("div");
+      badge.className = "mark";
+      badge.dataset.state = target.state;
+      badge.dataset.kind = target.kind;
+      badge.setAttribute("role", "note");
+      badge.title = markTitle(target);
+      badge.textContent = markLabel(target);
+      // Straddling the top edge at the right; a tall element scrolled past its top keeps it in view.
+      const top = Math.max(12, Math.min(rect.top, rect.bottom - 14, window.innerHeight - 14));
+      badge.style.left = Math.max(120, Math.min(rect.right, window.innerWidth)) + "px";
+      badge.style.top = top + "px";
+      badges.push(badge);
+    }
+    marksLayer.replaceChildren(...badges);
+  }
+
+  function marksSchedule() {
+    if (!marksFrame) marksFrame = window.requestAnimationFrame(renderMarks);
+  }
+
+  function setMarks(message) {
+    marksVisible = message.visible !== false;
+    annotationMarks = (Array.isArray(message.annotations) ? message.annotations : [])
+      .filter((m) => m && typeof m.selector === "string" && m.selector && Number.isInteger(m.round) && m.round > 0)
+      .slice(0, MAX_MARKS)
+      .map((m) => ({ selector: m.selector.slice(0, 512), round: m.round, state: m.state === "answered" ? "answered" : "sent", count: Number.isInteger(m.count) && m.count > 0 ? m.count : 1, text: str(m.text).slice(0, 160) }));
+    marksSchedule();
+  }
+
+  window.addEventListener("scroll", marksSchedule, { capture: true, passive: true });
+  window.addEventListener("resize", marksSchedule);
 
   // Forms that appear after the report (rendered by the artifact's own script)
   // get the state too.
@@ -329,6 +454,7 @@
         pendingSync = false;
         syncForms();
         syncSentRounds();
+        marksSchedule();
       });
     }).observe(document, { childList: true, subtree: true });
   }
@@ -590,6 +716,8 @@
       setQueuedKeys(message.keys);
     } else if (message.type === "forum:rounds") {
       setSentRounds(message.rounds);
+    } else if (message.type === "forum:marks") {
+      setMarks(message);
     } else if (message.type === "forum:theme") {
       // The artifact follows the chrome's theme; the server already rendered
       // the right one, this keeps it in step when the user flips the switch.

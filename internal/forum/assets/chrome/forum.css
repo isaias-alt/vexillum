@@ -84,8 +84,16 @@ button, textarea { font: inherit; color: inherit; }
   font-weight: 600;
   background: var(--fr-success-soft); color: var(--fr-success);
 }
-.round-chip { flex: none; padding: 2px var(--fr-space-2); border: 1px solid var(--fr-border-strong); border-radius: 999px; font-size: var(--fr-text-size-small); font-weight: 600; color: var(--fr-text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* A compact toolbar chip: the same height, border, radius and type as the switches beside it. */
+.round-chip {
+  flex: none; display: inline-flex; align-items: center; gap: var(--fr-space-1);
+  padding: var(--fr-space-1) var(--fr-space-3);
+  border: 1px solid var(--fr-border-strong); border-radius: 999px;
+  font-size: var(--fr-text-size-small); font-weight: 500; line-height: var(--fr-line-height); white-space: nowrap;
+  color: var(--fr-text-secondary); font-variant-numeric: tabular-nums;
+}
 .round-chip[data-state="open"] { border-color: var(--fr-bronze); color: var(--fr-text); }
+.round-chip #roundNum { font-weight: 600; color: var(--fr-text); }
 .badge[data-state="ended"] { background: var(--fr-surface-sunken); color: var(--fr-text-secondary); }
 
 /* Layout */

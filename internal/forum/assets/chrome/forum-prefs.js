@@ -23,5 +23,26 @@
     return !!on;
   }
 
-  root.forumPrefs = Object.freeze({ annotate, setAnnotate });
+  // Status marks (the badges in the artifact on what was already sent) are On
+  // unless the user hid them.
+  const MARKS_KEY = "forum-marks";
+
+  function marks() {
+    try {
+      return root.localStorage.getItem(MARKS_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  }
+
+  function setMarks(on) {
+    try {
+      root.localStorage.setItem(MARKS_KEY, on ? "on" : "off");
+    } catch {
+      /* the choice still applies for this page view */
+    }
+    return !!on;
+  }
+
+  root.forumPrefs = Object.freeze({ annotate, setAnnotate, marks, setMarks });
 })(window);

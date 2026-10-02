@@ -153,3 +153,42 @@ func TestChromeWorkingOverlay_MarkupIsAModalWithAHiddenWayOut(t *testing.T) {
 		t.Errorf("the only control must be the initially hidden Stop waiting button, got %v", buttons)
 	}
 }
+
+// The Marks switch and the annotation badges the chrome asks the artifact to draw.
+func TestChromeMarks_SwitchAndAnnotationReport(t *testing.T) {
+	runChromeNodeTest(t, "chrome_marks_test.js")
+}
+
+// The round counter is a toolbar control like its neighbours: it sits in the
+// same row (topbar-actions) and has the same box (padding, border, radius,
+// type) as the switches.
+func TestChromeRoundChip_IsAToolbarControlWithTheSwitchBox(t *testing.T) {
+	htmlData, err := os.ReadFile("assets/chrome/chrome.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(htmlData)
+	actions := html[strings.Index(html, `class="topbar-actions"`):strings.Index(html, "</header>")]
+	for _, id := range []string{"layoutBtn", "annotateSwitch", "marksSwitch", "themeSwitch", "roundChip", "sessionBadge"} {
+		if !strings.Contains(actions, `id="`+id+`"`) {
+			t.Errorf("%s is not in the top bar's controls row", id)
+		}
+	}
+	cssData, err := os.ReadFile("assets/chrome/forum.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssData)
+	rule := func(sel string) string {
+		i := strings.Index(css, "\n"+sel+" {")
+		if i < 0 {
+			t.Fatalf("no %s rule", sel)
+		}
+		return css[i : i+strings.Index(css[i:], "}")]
+	}
+	for _, want := range []string{"padding: var(--fr-space-1) var(--fr-space-3)", "border: 1px solid var(--fr-border-strong)", "border-radius: 999px", "font-size: var(--fr-text-size-small)"} {
+		if !strings.Contains(rule(".switch"), want) || !strings.Contains(rule(".round-chip"), want) {
+			t.Errorf("the switches and the round chip no longer share %q", want)
+		}
+	}
+}

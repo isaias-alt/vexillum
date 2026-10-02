@@ -146,12 +146,6 @@
   .fr-choice small { display: block; }
   .fr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fr-space-2); }
 
-  /* A decision form the user already sent says so (forum-sdk.js sets the two
-     attributes from what the chrome reports); a form whose answer is queued
-     again for the next round says nothing here, the queue already does. */
-  form[data-forum-sent]:not([data-forum-queued])::after { content: "Sent in round " attr(data-forum-round); display: block; font-size: 0.85em; font-weight: 600; color: var(--fr-text-secondary); }
-  form[data-forum-sent="answered"]:not([data-forum-queued])::after { content: "Answered in round " attr(data-forum-round); color: var(--fr-success); }
-
   .fr-stat { display: flex; flex-direction: column; gap: var(--fr-space-1); }
   .fr-stat-value { font-size: 1.8rem; font-weight: 600; line-height: 1.1; color: var(--fr-text); }
   .fr-stat-label { font-size: 0.85em; color: var(--fr-text-secondary); }
