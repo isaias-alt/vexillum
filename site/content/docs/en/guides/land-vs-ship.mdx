@@ -67,6 +67,18 @@ With neither `go.mod` nor `package.json`, lint and tests pass with a note that n
 
 A mission in `done` or `shipped` can be shipped again to push follow-ups onto the same PR; it re-runs the full pipeline first. Whenever a pull request for the branch already exists, `vx ship` reuses it instead of opening a second one: it pushes to the same branch and refreshes the pull request's title and description from the new review (see below). A pull request that is already merged or closed cannot take more commits, so `vx ship` refuses before running anything.
 
+### A rebased branch
+
+If the soldier rebased or amended a branch that `vx ship` already pushed, the next push is rejected as non-fast-forward. `vx ship` records the tip of every push it makes on the task (`last_pushed_sha`), and on that rejection it reads the tip origin holds for the branch. When that tip is exactly the recorded one, the rewrite is vexillum's own work, so it retries once with a lease pinned to that commit:
+
+```bash
+git push --force-with-lease=<branch>:<recorded sha> origin <branch>
+```
+
+The lease names the mission branch only, never the base branch or any other ref, and git refuses it if origin moved in the meantime. `vx ship` prints one line (`rewrote the PR branch <branch> on origin (force-with-lease) from <old> to <new>`), refreshes the pull request's title and description and prints its URL.
+
+When origin's tip is anything else, because somebody else pushed to the branch, or when no push is recorded (a task shipped before this was tracked), `vx ship` never forces. It fails and says what origin holds and how to decide: run `git fetch origin <branch>` in the camp and inspect it, or authorize one manual lease push with the origin SHA it printed, then run `vx ship <task-id>` again.
+
 ### The pull request text
 
 The pull request is public, and its text needs no manual step. The adversarial review reads the whole diff and the commits with no author context, and also returns a conventional-commit style `pr_title` (about 72 characters) and a short factual `pr_description` (what changed and why, 3 to 8 lines of plain markdown), written from the diff and never from the mission prompt. `vx ship` uses them as the title and the **What** section. The rest of the body is built from facts: a **Changes** line (files changed, insertions, deletions and the top-level areas touched), a **Verification** line (the tribunal steps that passed, the review rounds and the fix rounds), the review's info findings under **Tribunal notes**, and a one-line footer naming the mission.

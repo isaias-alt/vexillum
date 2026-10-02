@@ -108,6 +108,23 @@ one) and refreshes its title and description. If that PR is already merged or wa
 closed, `vx ship` refuses before running anything: a merged one needs `git pull`,
 `vx release` and a new mission for the follow-up.
 
+If the soldier rebased or amended the branch (for example after you asked it to
+catch up with the base), the next push is non-fast-forward, and `vx ship` handles
+it by itself, safely. After each successful push it records the tip it pushed on
+the task. When origin rejects a push as non-fast-forward it reads origin's tip for
+the branch: if that is exactly the recorded tip, the rewrite is its own, so it
+retries once with `git push --force-with-lease=<branch>:<recorded sha>` (the
+mission branch only, never the base branch or any other ref) and prints one line,
+"rewrote the PR branch ... from <old> to <new>". It then refreshes the PR and
+prints its URL as usual. Do not force-push the branch yourself.
+
+When the tip is anything else, or no push is recorded (a task shipped before this
+was tracked), `vx ship` never forces. It fails saying what is on origin and how to
+decide, so bring that to the general: they can run `git fetch origin <branch>` in
+the camp and inspect it, or authorize one manual
+`git push --force-with-lease=<branch>:<origin sha> origin <branch>`, after which
+`vx ship <task-id>` is run again. Never take that decision for them.
+
 To finish it, merge the PR (the general on GitHub, or `vx land <task-id>`, which
 merges the real PR once it is open, not a draft, mergeable and green). Then, in
 the same turn:

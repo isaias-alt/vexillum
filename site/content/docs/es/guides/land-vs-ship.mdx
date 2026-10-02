@@ -67,6 +67,18 @@ Sin `go.mod` ni `package.json`, lint y tests pasan con una nota de que no se det
 
 Una mission en `done` o `shipped` puede enviarse de nuevo para empujar seguimientos al mismo PR; vuelve a correr el pipeline completo primero. Siempre que ya exista un pull request para la branch, `vx ship` lo reutiliza en vez de abrir un segundo: hace push a la misma branch y refresca el título y la descripción del pull request con la nueva revisión (ver más abajo). Un pull request que ya está mergeado o cerrado no puede recibir más commits, así que `vx ship` se niega antes de correr nada.
 
+### Una branch rebaseada
+
+Si el soldier hizo rebase o amend de una branch que `vx ship` ya había pusheado, el siguiente push se rechaza como non-fast-forward. `vx ship` registra en la tarea el tip de cada push que hace (`last_pushed_sha`) y, ante ese rechazo, lee el tip que tiene origin para la branch. Cuando ese tip es exactamente el registrado, la reescritura es obra de vexillum, así que reintenta una vez con un lease atado a ese commit:
+
+```bash
+git push --force-with-lease=<branch>:<sha registrado> origin <branch>
+```
+
+El lease nombra solo la branch de la mission, nunca la branch base ni ninguna otra ref, y git lo rechaza si origin se movió mientras tanto. `vx ship` imprime una línea (`rewrote the PR branch <branch> on origin (force-with-lease) from <old> to <new>`), refresca el título y la descripción del pull request e imprime su URL.
+
+Cuando el tip de origin es cualquier otro, porque alguien más pusheó a la branch, o cuando no hay ningún push registrado (una tarea shipped antes de que se registrara), `vx ship` nunca fuerza. Falla y dice qué hay en origin y cómo decidir: corré `git fetch origin <branch>` en el camp e inspeccionalo, o autorizá un push con lease manual con el SHA de origin que imprimió, y después corré `vx ship <task-id>` de nuevo.
+
 ### El texto del pull request
 
 El pull request es público y su texto no requiere ningún paso manual. La revisión adversarial lee el diff completo y los commits sin contexto del autor, y además devuelve un `pr_title` en estilo conventional-commit (unos 72 caracteres) y un `pr_description` breve y factual (qué cambió y por qué, de 3 a 8 líneas de markdown plano), escritos a partir del diff y nunca del prompt de la mission. `vx ship` los usa como título y como sección **What**. El resto del cuerpo se arma con hechos: una línea **Changes** (archivos cambiados, inserciones, borrados y las áreas de primer nivel tocadas), una línea **Verification** (los pasos del tribunal que pasaron, las rondas de revisión y las de arreglo), los hallazgos info de la revisión bajo **Tribunal notes**, y un pie de una línea que nombra la mission.

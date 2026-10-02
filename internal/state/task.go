@@ -184,6 +184,16 @@ type Task struct {
 	// SchemaVersion bump needed: an older task file decodes to nil, which
 	// already means "no later instructions".
 	Amendments []Amendment `json:"amendments,omitempty"`
+
+	// LastPushedSHA is the tip of the camp branch as the last successful
+	// "vx ship" push left it on origin, written right after that push. It
+	// is what lets a later ship tell a branch it rewrote itself (a rebase
+	// of the soldier's own commits) from one somebody else pushed to: only
+	// a remote tip equal to it may be replaced with a lease push. Empty
+	// until the first push. Purely additive, no SchemaVersion bump needed:
+	// an older task file decodes to "", which already means "no push
+	// recorded, never force".
+	LastPushedSHA string `json:"last_pushed_sha,omitempty"`
 }
 
 // Decision is the actual question a soldier asked when its task went

@@ -91,7 +91,20 @@ running, then back to done) and delivered with 'vx ship
 task is done or shipped, ship reuses it instead of opening a second one: it
 pushes to the same branch and refreshes the PR's title and description from
 the new review (or from --title and --body). A PR that is already merged or
-closed is not reused: ship refuses before running anything. Once shipped,
+closed is not reused: ship refuses before running anything.
+
+A soldier that rebased or amended a branch ship already pushed makes the next
+push non-fast-forward. After every successful push ship records the pushed tip
+on the task. When a push is rejected as non-fast-forward it reads origin's tip
+for the branch: if that tip is exactly the recorded one, the rewrite is
+vexillum's own work and ship retries once with a lease pinned to that commit
+('git push --force-with-lease=<branch>:<sha>', the mission branch only, never
+the base branch or any other ref), printing one line that says it rewrote the
+PR branch and from which commit to which. If the tip is anything else (somebody
+else pushed) or no push is recorded (a task shipped before this was tracked),
+ship never forces: it fails and says what origin holds and how to decide -
+'git fetch origin <branch>' and inspect it, or authorize one manual lease push
+and ship again. Once shipped,
 land the PR with 'vx land <task-id>' rather than
 'vx land'-ing the camp locally.
 ```

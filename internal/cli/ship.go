@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -104,7 +103,20 @@ running, then back to done) and delivered with '` + cmdname.Name + ` ship
 task is done or shipped, ship reuses it instead of opening a second one: it
 pushes to the same branch and refreshes the PR's title and description from
 the new review (or from --title and --body). A PR that is already merged or
-closed is not reused: ship refuses before running anything. Once shipped,
+closed is not reused: ship refuses before running anything.
+
+A soldier that rebased or amended a branch ship already pushed makes the next
+push non-fast-forward. After every successful push ship records the pushed tip
+on the task. When a push is rejected as non-fast-forward it reads origin's tip
+for the branch: if that tip is exactly the recorded one, the rewrite is
+vexillum's own work and ship retries once with a lease pinned to that commit
+('git push --force-with-lease=<branch>:<sha>', the mission branch only, never
+the base branch or any other ref), printing one line that says it rewrote the
+PR branch and from which commit to which. If the tip is anything else (somebody
+else pushed) or no push is recorded (a task shipped before this was tracked),
+ship never forces: it fails and says what origin holds and how to decide -
+'git fetch origin <branch>' and inspect it, or authorize one manual lease push
+and ship again. Once shipped,
 land the PR with '` + cmdname.Name + ` land <task-id>' rather than
 '` + cmdname.Name + ` land'-ing the camp locally.
 `
@@ -391,11 +403,17 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 		fmt.Fprintf(stderr, cmdname.Name+": dropped %d line(s) from the pull request text: home paths, localhost ports, secrets or the mission prompt must not be published\n", dropped)
 	}
 
-	pushCmd := exec.Command("git", "push", "origin", c.Branch)
-	pushCmd.Dir = c.Path
-	if out, err := pushCmd.CombinedOutput(); err != nil {
-		fmt.Fprintf(stderr, cmdname.Name+": pushing %s to origin: %v\n%s\n", c.Branch, err, strings.TrimSpace(string(out)))
+	pushed, err := pushShipBranch(c.Path, c.Branch, task.CampBase, task.LastPushedSHA, stdout)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)
 		return 1
+	}
+	// Recorded at once: it is what lets a later ship recognize this tip as
+	// its own after the soldier rebases. The save at the end of the ship
+	// carries it too, so a failure here costs nothing yet.
+	task.LastPushedSHA = pushed
+	if err := state.Save(projectRoot, task); err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": pushed %s, but failed to record the pushed commit: %v\n", c.Branch, err)
 	}
 
 	var prURL string
