@@ -5,7 +5,7 @@ description: Merge a mission locally, or push it through the tribunal pipeline i
 
 A finished mission leaves its camp in one of two ways. Both are explicit, and neither is silent.
 
-| | `vexillum land` | `vexillum ship` |
+| | `vx land` | `vx ship` |
 | --- | --- | --- |
 | Result | local fast-forward of your checkout | a real GitHub pull request |
 | Review pipeline | none; you reviewed it | lint, tests, an adversarial review, a docs check |
@@ -17,7 +17,7 @@ By default the commander asks before landing. Once you tell it to land without a
 ## Land
 
 ```bash
-vexillum land <task-id>
+vx land <task-id>
 ```
 
 Fast-forwards your project's own checkout to the mission's branch, then releases the camp and closes its pane. It refuses, leaving everything untouched, if your checkout is dirty or the branch has diverged from the base. It never forces or rebases.
@@ -25,7 +25,7 @@ Fast-forwards your project's own checkout to the mission's branch, then releases
 ## Ship
 
 ```bash
-vexillum ship <task-id>
+vx ship <task-id>
 ```
 
 Runs, in order, inside the mission's camp, stopping at the first failure without pushing anything:
@@ -47,12 +47,12 @@ The reviewer returns JSON: findings (`file`, `line`, `severity` error/warning/in
 - a changed file missing from `reviewed_paths` counts as unreviewed and fails the step;
 - no valid JSON after the retries, or a timeout, fails the step. Neither is ever a pass.
 
-Findings are printed in the output of `vexillum ship`. If the ship passes, the info findings are added to the pull request body.
+Findings are printed in the output of `vx ship`. If the ship passes, the info findings are added to the pull request body.
 
 ### Review, fix, review (opt-in)
 
 ```bash
-vexillum ship <task-id> --fix [--max-rounds 2] [--timeout 20m]
+vx ship <task-id> --fix [--max-rounds 2] [--timeout 20m]
 ```
 
 Without `--fix`, a blocking review only rejects the ship and prints the findings. With `--fix`, findings marked `auto-fix` go to a headless fixer in the camp, which fixes the invariant at every sibling site (and prefers removing an unrequired component to hardening it). vexillum commits its work, runs lint and tests again, and a new reviewer reviews again, told that the fixer's commits are unreviewed code and must meet the same standard. Whoever prescribed a fix never certifies it.
@@ -66,7 +66,7 @@ A mission in `done` or `shipped` can be shipped again to push follow-ups onto th
 ## Landing a shipped mission
 
 ```bash
-vexillum land <task-id>
+vx land <task-id>
 ```
 
 For a shipped task, `land` merges the **real pull request** instead. It requires `gh` and refuses unless the PR is open, not a draft, mergeable and every check is green; the merge is bound to the exact head it just verified. It does not release the camp: the branch is still in flight until the PR is actually merged.

@@ -3,16 +3,16 @@ title: Troubleshooting
 description: The errors you are most likely to meet, and what they mean.
 ---
 
-Start with `vexillum doctor`: it names what is missing.
+Start with `vx doctor`: it names what is missing.
 
 | Message | Cause and fix |
 | --- | --- |
-| `project not initialized, run 'vexillum init' first` | `dispatch` found no `.vexillum/config.json`. Run `vexillum init` at the project root. |
+| `project not initialized, run 'vx init' first` | `dispatch` found no `.vexillum/config.json`. Run `vx init` at the project root. |
 | `current directory is not a git repository` | `init` needs a git repository. |
 | `HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane` | Start Claude Code in a pane herdr manages; `dispatch` and `redispatch` refuse elsewhere. |
 | `running from inside ... which looks like a vexillum-managed camp` | You are in a path under `~/.vexillum`. `cd` back to the real project root. |
 | `a sentinel is already running (pid N)` | Fine: there is one per machine. Do not start another. |
-| `.claude/settings.json has invalid JSON, leaving it untouched` | Fix the JSON, then run `vexillum init` again to add the hook. |
+| `.claude/settings.json has invalid JSON, leaving it untouched` | Fix the JSON, then run `vx init` again to add the hook. |
 | `no tasks yet in this project.` after moving the project | The state key follows the path; see [State](/docs/concepts/state). |
 
 ## Landing and releasing
@@ -20,7 +20,7 @@ Start with `vexillum doctor`: it names what is missing.
 | Situation | What to do |
 | --- | --- |
 | `land refused` | Your checkout is dirty, or the branch diverged from the base. Commit or stash, or ask the soldier to rebase. See [Parallel missions](/docs/guides/parallel-missions). A dirty checkout is often just `init`'s uncommitted scaffold. |
-| `landed, but automatic release failed` | The merge is not undone. Run `vexillum release <task-id>` by hand. |
+| `landed, but automatic release failed` | The merge is not undone. Run `vx release <task-id>` by hand. |
 | `release refused` | The camp has uncommitted changes or unlanded commits. Land or discard the work first. |
 | `release refused: scout task ... has no report` | The report is the scout's work product. Have it write the report, or pass `--force`. |
 | `'gh' is not installed` | `ship`, and landing a shipped PR, need the GitHub CLI. |
@@ -31,4 +31,4 @@ Start with `vexillum doctor`: it names what is missing.
 
 ## A soldier seems stuck
 
-Check `vexillum status`. `blocked` is waiting on you: use [`decide`](/docs/reference/cli/decide). `unconfirmed` or `interrupted` need a look at the camp; see [Blocked and interrupted](/docs/guides/blocked-and-interrupted). If the commander never reports a settled soldier, confirm the sentinel runs (`~/.vexillum/sentinel.log`) and that `.claude/settings.json` has the `vexillum sentinel await` hook.
+Check `vx status`. `blocked` is waiting on you: use [`decide`](/docs/reference/cli/decide). `unconfirmed` or `interrupted` need a look at the camp; see [Blocked and interrupted](/docs/guides/blocked-and-interrupted). If the commander never reports a settled soldier, confirm the sentinel runs (`~/.vexillum/sentinel.log`) and that `.claude/settings.json` has the `vx sentinel await` hook.

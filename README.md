@@ -45,7 +45,7 @@ script verifies the release checksum before installing.
 | `vx banner` | Publish an HTML artifact to a public URL, or update one already published |
 <!-- docgen:commands:end -->
 
-Run `vexillum --help` for the full command list, or `vexillum <command> -h`
+Run `vx --help` for the full command list, or `vx <command> -h`
 for a specific command.
 
 ## Contributing
@@ -57,7 +57,7 @@ have a feature request? Open an issue using the templates in
 ### Regenerating the command reference
 
 The command list is defined once, in the registry in `internal/cli/commands.go`
-(name, one-line summary, full usage). `vexillum --help`, the table above, and
+(name, one-line summary, full usage). `vx --help`, the table above, and
 the per-command pages under `site/content/docs/en/reference/cli/` are all derived
 from it - do not edit the generated parts by hand. After adding or changing a
 command, regenerate and commit the result:
@@ -68,7 +68,7 @@ go run ./tools/docgen
 
 `go test ./...` fails with that same instruction if the committed files drift
 from the registry. `tools/docgen` is a dev-only tool: it is never part of the
-`vexillum` binary or its installation.
+`vx` binary or its installation.
 
 ## License
 

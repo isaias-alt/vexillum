@@ -2,7 +2,7 @@
 
 vexillum's Go binary vendors third-party browser software into
 `internal/forum/assets/whiteboard/` for the whiteboard feature of
-`vexillum forum` (see that package's doc comment). It is built by
+`vx forum` (see that package's doc comment). It is built by
 `tools/whiteboard-bundle/build.js` (dev-only, never run at vexillum's own
 build or install time - see that directory's README) and go:embedded into
 the binary. Each component remains under its own license; the notices
@@ -109,7 +109,7 @@ copyright notice as above):
   size, count and disk limits of `src/attachment-store.js`, the transcript cap
   of `src/chat-messages.js` and the SSE live feed of `src/server.js`.
 - `skills/forum/playbooks/*.md` (plan, comparison, input, diagram, table):
-  rewritten for `window.forum` and the `vexillum forum` commands from
+  rewritten for `window.forum` and the `vx forum` commands from
   `src/playbooks.js`.
 
 Each adapted file's own header comment describes what changed from
@@ -121,7 +121,7 @@ wrong before assuming it's a vexillum-specific bug.
 
 ## Adapted into `internal/tribunal/` (review and fix prompts)
 
-The adversarial review step of `vexillum ship` (`internal/tribunal/review.go`
+The adversarial review step of `vx ship` (`internal/tribunal/review.go`
 and `internal/tribunal/fix.go`) adapts prompt text, rules and the findings
 vocabulary (severity error/warning/info, action ask-user/auto-fix/no-op,
 `reviewed_paths` coverage record, fix-round provenance clause, simplification

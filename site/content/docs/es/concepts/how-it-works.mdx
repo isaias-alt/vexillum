@@ -18,7 +18,7 @@ description: Los roles, y la vida de una tarea desde el dispatch hasta el releas
 ## La vida de una tarea
 
 1. **Pedís.** En Claude Code decís qué querés.
-2. **El commander despacha.** Siguiendo las reglas del proyecto corre `vexillum dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
+2. **El commander despacha.** Siguiendo las reglas del proyecto corre `vx dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
 3. **Se adquiere un camp.** vexillum toma un worktree limpio del [pool](/es/docs/concepts/camps) del proyecto (o crea uno) en una branch nueva, `vexillum/<task-id>`, bifurcada de tu branch actual.
 4. **Arranca un soldier.** Se abre una sesión real e interactiva de Claude Code en un pane de herdr dentro de ese camp. El comando vuelve rápido: solo espera un breve probe para los prompts triviales que terminan enseguida.
 5. **El sentinel vigila.** Consulta el estado en vivo del soldier y registra el resultado en disco. Ver [Sentinel](/es/docs/concepts/sentinel).

@@ -24,9 +24,9 @@ Una tarea nueva toma del pool un slot **libre, limpio y ya aterrizado** cuando e
 
 ## Release
 
-Un camp vuelve al pool solo cuando es seguro reutilizarlo: el worktree no tiene cambios sin commitear y, para una mission, sus commits ya están en la branch base. `vexillum release <task-id>` lo exige y se niega en caso contrario. A un scout además se le exige que exista su reporte; `--force` se salta solo ese chequeo del reporte, nunca el de limpio-y-aterrizado.
+Un camp vuelve al pool solo cuando es seguro reutilizarlo: el worktree no tiene cambios sin commitear y, para una mission, sus commits ya están en la branch base. `vx release <task-id>` lo exige y se niega en caso contrario. A un scout además se le exige que exista su reporte; `--force` se salta solo ese chequeo del reporte, nunca el de limpio-y-aterrizado.
 
-`vexillum land` hace el release del camp por vos después de un fast-forward local exitoso. Una mission enviada con ship es la excepción: su pull request es la fuente de verdad, así que su camp queda hasta que mergees el PR. Ver [Land vs ship](/es/docs/guides/land-vs-ship).
+`vx land` hace el release del camp por vos después de un fast-forward local exitoso. Una mission enviada con ship es la excepción: su pull request es la fuente de verdad, así que su camp queda hasta que mergees el PR. Ver [Land vs ship](/es/docs/guides/land-vs-ship).
 
 <Callout title="Corré vexillum desde la raíz del proyecto">
   vexillum se niega a correr desde dentro de un camp (cualquier ruta bajo `~/.vexillum`). Un segundo dispatch desde ahí crearía un pool separado, con clave en la ruta del propio camp, invisible para todos los comandos posteriores.

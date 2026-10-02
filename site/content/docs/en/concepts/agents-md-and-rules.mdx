@@ -6,7 +6,7 @@ description: The commander's behavior is markdown scaffolded into your project, 
 ## Two different files
 
 - **vexillum's own `AGENTS.md`** (in the vexillum repository) governs how vexillum itself is built. It is not what you get.
-- **`.claude/rules/vexillum.md`** is the *product* rules file. `vexillum init` scaffolds it into your project. Claude Code loads it every session, unconditionally - alongside whatever `AGENTS.md` or `CLAUDE.md` the project already has, which vexillum never touches.
+- **`.claude/rules/vexillum.md`** is the *product* rules file. `vx init` scaffolds it into your project. Claude Code loads it every session, unconditionally - alongside whatever `AGENTS.md` or `CLAUDE.md` the project already has, which vexillum never touches.
 
 This is the product's central design decision: the commander's intelligence is markdown, the binary is plumbing.
 
@@ -18,7 +18,7 @@ This is the product's central design decision: the commander's intelligence is m
 | Vocabulary, Authority | The terms; an explicit instruction from you overrides a rule, but the commander must say which rule it set aside. |
 | Tone | How to address you and when to drop the flavor (bad news is reported plainly). |
 | The sentinel | What the `Stop` hook means and how to react to `interrupted`. |
-| Dispatching a soldier | Always `vexillum dispatch`, never the commander's own subagent tool. |
+| Dispatching a soldier | Always `vx dispatch`, never the commander's own subagent tool. |
 | Choosing a model and effort | The decision table below. |
 | Landing, Shipping, Releasing | Ask before landing; release right after. |
 
@@ -39,4 +39,4 @@ The first matching rule wins. vexillum validates the values but never picks them
 
 The file is yours to edit: tune the table, the tone, the landing posture. `init` writes it once and never overwrites it; [`upgrade`](/docs/get-started/upgrading) refreshes it only when it is unmodified, or with `--force`.
 
-`vexillum init --global` writes the rules to `~/.claude/rules/vexillum.md` instead, applying the commander persona to every Claude Code session on the machine. It is opt-in for that reason.
+`vx init --global` writes the rules to `~/.claude/rules/vexillum.md` instead, applying the commander persona to every Claude Code session on the machine. It is opt-in for that reason.

@@ -12,7 +12,7 @@ description: Los dos tipos de tarea, y los estados por los que pasa una tarea.
 | Entrega | commits en `vexillum/<task-id>`, aterrizados con [`land`](/es/docs/reference/cli/land) o abiertos como PR con [`ship`](/es/docs/reference/cli/ship) | un reporte en markdown |
 | Done significa | produjo commits por delante de su base | existe su archivo de reporte |
 
-`vexillum dispatch` usa `--kind mission` por defecto. Un scout escribe su reporte en `~/.vexillum/projects/<repo>-<hash>/reports/<agent-name>-<task-id>.md`, fuera del camp, así sobrevive al `release`. Nunca uses un scout para trabajo que deba cambiar código.
+`vx dispatch` usa `--kind mission` por defecto. Un scout escribe su reporte en `~/.vexillum/projects/<repo>-<hash>/reports/<agent-name>-<task-id>.md`, fuera del camp, así sobrevive al `release`. Nunca uses un scout para trabajo que deba cambiar código.
 
 `--model` y `--effort` se pasan directo al CLI `claude`; vexillum solo verifica que Claude Code acepte el valor. Elegirlos es trabajo del commander, ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).
 

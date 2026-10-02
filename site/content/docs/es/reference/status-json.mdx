@@ -4,7 +4,7 @@ description: El snapshot de la tropa legible por máquinas, y el schema de tarea
 ---
 
 ```bash
-vexillum status --json
+vx status --json
 ```
 
 imprime un único objeto JSON. Es de solo lectura y no agrega nada a la tarea persistida: `tasks` es exactamente el schema `Task` que vexillum mismo lee de `<project root>/tasks/*.json`, así un consumidor como el [skill muster](/es/docs/guides/muster-skill) nunca trabaja con una reinterpretación aparte. El agrupamiento, el filtrado y los juicios (qué cuenta como "needs attention", el enriquecimiento con GitHub) le corresponden al consumidor.
@@ -48,7 +48,7 @@ Los campos opcionales se omiten cuando están vacíos.
 | `question` | lo que preguntó el soldier |
 | `options` | opciones que ofreció, si hubo |
 | `asked_at` | cuándo quedó blocked |
-| `answer`, `answered_at` | se definen después de [`vexillum decide`](/es/docs/reference/cli/decide) |
+| `answer`, `answered_at` | se definen después de [`vx decide`](/es/docs/reference/cli/decide) |
 | `kind` | cómo debe responderse: un overlay selector se responde con una tecla, cualquier otro como texto |
 
 Una tarea en `blocked` siempre lleva su pregunta acá, no solo la palabra "blocked".

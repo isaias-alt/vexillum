@@ -5,19 +5,19 @@ description: vexillum orquesta agentes de código desde tu terminal - un command
 
 vexillum es un orquestador de agentes de código por CLI, escrito en Go. Le hablás a un solo agente, el **commander** (Claude Code). Él despacha **soldiers** - más sesiones de Claude Code - en paralelo. Cada soldier trabaja en su propio git worktree, un **camp**, así el trabajo en paralelo nunca choca, y devuelve un cambio para aterrizar (una **mission**) o un reporte escrito (un **scout**). Un **sentinel** en segundo plano vigila a los soldiers y despierta al commander solo cuando algo necesita atención.
 
-No hay una interfaz nueva que aprender: seguís hablando con Claude Code y el commander llama a `vexillum` por vos.
+No hay una interfaz nueva que aprender: seguís hablando con Claude Code y el commander llama a `vx` por vos.
 
 ```text
 > dispatch a soldier to refactor the payment module
-Bash(vexillum dispatch "refactor the payment module" --kind mission --model sonnet)
+Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)
 ```
 
 ## Qué es vexillum, y qué no
 
 - **Un único binario en Go.** Hace plomería determinista: crea worktrees, inicia sesiones, lleva el estado en disco y rechaza operaciones inseguras. Se instala con Homebrew o con un script de curl, sin dependencias de runtime.
-- **No es el cerebro.** El criterio del commander - cuándo despachar, qué modelo elegir, cuándo preguntarte - vive en un archivo de reglas en markdown, `.claude/rules/vexillum.md`, que `vexillum init` crea en tu proyecto. Podés leerlo y editarlo. Ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).
+- **No es el cerebro.** El criterio del commander - cuándo despachar, qué modelo elegir, cuándo preguntarte - vive en un archivo de reglas en markdown, `.claude/rules/vexillum.md`, que `vx init` crea en tu proyecto. Podés leerlo y editarlo. Ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).
 - **Solo Claude Code, por ahora.** El harness de los soldiers es Claude Code. Todavía no se soportan otros.
-- **herdr para los panes.** Los soldiers corren en panes de [herdr](https://herdr.dev); tmux es un backend de control opcional. `vexillum doctor` los verifica pero nunca los instala.
+- **herdr para los panes.** Los soldiers corren en panes de [herdr](https://herdr.dev); tmux es un backend de control opcional. `vx doctor` los verifica pero nunca los instala.
 
 ## Siguientes pasos
 

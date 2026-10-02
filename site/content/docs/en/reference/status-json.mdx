@@ -4,7 +4,7 @@ description: The machine-readable troop snapshot, and the task schema behind it.
 ---
 
 ```bash
-vexillum status --json
+vx status --json
 ```
 
 prints one JSON object. It is read-only and adds nothing to the persisted task: `tasks` is exactly the `Task` schema vexillum itself reads from `<project root>/tasks/*.json`, so a consumer such as the [muster skill](/docs/guides/muster-skill) never works from a separate reinterpretation. Grouping, filtering and judgment calls (what counts as "needs attention", GitHub enrichment) belong to the consumer.
@@ -48,7 +48,7 @@ Optional fields are omitted when empty.
 | `question` | what the soldier asked |
 | `options` | choices it offered, if any |
 | `asked_at` | when it blocked |
-| `answer`, `answered_at` | set after [`vexillum decide`](/docs/reference/cli/decide) |
+| `answer`, `answered_at` | set after [`vx decide`](/docs/reference/cli/decide) |
 | `kind` | how it must be answered: a selector overlay is answered with a key press, anything else as text |
 
 A task in `blocked` always carries its question here, not just the word "blocked".

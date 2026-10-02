@@ -6,7 +6,7 @@ description: El comportamiento del commander es markdown creado en tu proyecto, 
 ## Dos archivos distintos
 
 - **El `AGENTS.md` propio de vexillum** (en el repositorio de vexillum) gobierna cómo se construye vexillum. No es lo que recibís.
-- **`.claude/rules/vexillum.md`** es el archivo de reglas del *producto*. `vexillum init` lo crea en tu proyecto. Claude Code lo carga en cada sesión, de forma incondicional - junto con el `AGENTS.md` o `CLAUDE.md` que el proyecto ya tenga, que vexillum nunca toca.
+- **`.claude/rules/vexillum.md`** es el archivo de reglas del *producto*. `vx init` lo crea en tu proyecto. Claude Code lo carga en cada sesión, de forma incondicional - junto con el `AGENTS.md` o `CLAUDE.md` que el proyecto ya tenga, que vexillum nunca toca.
 
 Esta es la decisión central del producto: la inteligencia del commander es markdown, el binario es plomería.
 
@@ -18,7 +18,7 @@ Esta es la decisión central del producto: la inteligencia del commander es mark
 | Vocabulary, Authority | Los términos; una instrucción explícita tuya anula una regla, pero el commander debe decir cuál dejó de lado. |
 | Tone | Cómo dirigirse a vos y cuándo dejar el color (las malas noticias se reportan sin adornos). |
 | The sentinel | Qué significa el hook `Stop` y cómo reaccionar ante `interrupted`. |
-| Dispatching a soldier | Siempre `vexillum dispatch`, nunca la herramienta de subagentes propia del commander. |
+| Dispatching a soldier | Siempre `vx dispatch`, nunca la herramienta de subagentes propia del commander. |
 | Choosing a model and effort | La tabla de decisión de abajo. |
 | Landing, Shipping, Releasing | Preguntar antes de aterrizar; hacer release enseguida. |
 
@@ -39,4 +39,4 @@ Gana la primera regla que coincide. vexillum valida los valores pero nunca los e
 
 El archivo es tuyo para editar: ajustá la tabla, el tono, la postura de landing. `init` lo escribe una vez y nunca lo pisa; [`upgrade`](/es/docs/get-started/upgrading) lo refresca solo cuando no fue modificado, o con `--force`.
 
-`vexillum init --global` escribe las reglas en `~/.claude/rules/vexillum.md`, y aplica la persona del commander a cada sesión de Claude Code de la máquina. Por eso es opt-in.
+`vx init --global` escribe las reglas en `~/.claude/rules/vexillum.md`, y aplica la persona del commander a cada sesión de Claude Code de la máquina. Por eso es opt-in.

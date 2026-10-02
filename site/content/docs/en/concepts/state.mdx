@@ -9,7 +9,7 @@ vexillum keeps no daemon memory. Every fact it relies on is a file, so a restart
 
 ```text
 ~/.vexillum/
-  config.json              only after `vexillum init --global`
+  config.json              only after `vx init --global`
   sentinel.pid  sentinel.log
   projects/
     <repo>-<hash>/         one namespace per project
@@ -32,7 +32,7 @@ A project's namespace is `<repo>-<hash>`: the directory name plus the first 8 he
 
 ## Tasks
 
-A task file is the `Task` schema (currently version 3): id, kind, prompt, status, timestamps, the camp slot, path, branch and base, the herdr pane identifiers, the model and effort, and, once blocked, a structured `decision`. `vexillum status --json` prints exactly this schema; see [status --json](/docs/reference/status-json).
+A task file is the `Task` schema (currently version 3): id, kind, prompt, status, timestamps, the camp slot, path, branch and base, the herdr pane identifiers, the model and effort, and, once blocked, a structured `decision`. `vx status --json` prints exactly this schema; see [status --json](/docs/reference/status-json).
 
 ## Atomic writes
 

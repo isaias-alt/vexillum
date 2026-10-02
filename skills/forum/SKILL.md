@@ -1,6 +1,6 @@
 ---
 name: forum
-description: Open an HTML artifact (plan, comparison, diagram, table, decision form) in the browser for the user to review, collect their feedback through a poll loop, and answer in the browser's conversation panel. Use when a response will be clearer as a visual page than as prose, or when you need structured decisions from the user. Driven by the `vexillum forum` commands.
+description: Open an HTML artifact (plan, comparison, diagram, table, decision form) in the browser for the user to review, collect their feedback through a poll loop, and answer in the browser's conversation panel. Use when a response will be clearer as a visual page than as prose, or when you need structured decisions from the user. Driven by the `vx forum` commands.
 license: MIT
 metadata:
   argument-hint: "<what the artifact should show>"
@@ -8,10 +8,10 @@ metadata:
 
 # Forum
 
-`vexillum forum` serves an HTML file you wrote to the user's browser and
+`vx forum` serves an HTML file you wrote to the user's browser and
 carries their feedback back to you. The user chats, queues messages, fills in
 the decision forms you built, and presses **Send to Agent**; you receive it
-with `vexillum forum poll`. The loop and the idea are inspired by
+with `vx forum poll`. The loop and the idea are inspired by
 [forum-tool](https://github.com/upstream) (MIT, see
 THIRD-PARTY-NOTICES.md); forum is built into the vexillum binary and needs no
 Node, no `npx`, no network.
@@ -31,29 +31,29 @@ what to visualize from the conversation.
 ## The flow
 
 1. **Write the artifact** as one HTML file, by default under `.vexillum/forum/` in the
-   current directory (`vexillum init` makes `.vexillum/.gitignore` ignore it; in a
+   current directory (`vx init` makes `.vexillum/.gitignore` ignore it; in a
    project without that file, add `.vexillum/forum/` to `.gitignore`). Open the matching playbook first (below). Assets (images, CSS,
    scripts) go next to the HTML file and are referenced by **relative** paths -
    never start a path with `/`. Only files in the artifact's own directory are
    served, and dot-files never are.
-2. **Open it**: `vexillum forum .vexillum/forum/plan.html`. It opens (or resumes) the
+2. **Open it**: `vx forum .vexillum/forum/plan.html`. It opens (or resumes) the
    session, opens the browser, **returns immediately**, and prints the session
    URL and the next step. A background server (one per user, 127.0.0.1 only)
    keeps running and stops itself when nothing is connected. `--no-open` skips
    opening the browser.
 3. **Tell the user** the review is open and what you need from them.
-4. **Poll in a loop**: `vexillum forum poll .vexillum/forum/plan.html`. It blocks until
+4. **Poll in a loop**: `vx forum poll .vexillum/forum/plan.html`. It blocks until
    there is feedback. Never kill it, never background it with `&`/`nohup`, and
    do not tell the user it is being watched unless a poll is actually running
    in your harness's tracked foreground/background-job facility.
    After every response, act on it and poll again, until the session ends.
 5. **Answer in the browser** while you keep waiting:
-   `vexillum forum poll .vexillum/forum/plan.html --reply "Done: switched to the Pro plan"`
+   `vx forum poll .vexillum/forum/plan.html --reply "Done: switched to the Pro plan"`
    shows your markdown message in the conversation panel, then waits again.
    Use `--reply-file <path>` (or `-` for stdin) for long or multi-line replies.
 6. **Edit the artifact** when feedback asks for changes. The browser reloads
    it by itself when the file changes.
-7. **End** when you are done: `vexillum forum end .vexillum/forum/plan.html`. The user
+7. **End** when you are done: `vx forum end .vexillum/forum/plan.html`. The user
    can also end it from the browser (**Send & End** delivers their final
    feedback once, then ends).
 
@@ -64,10 +64,10 @@ resumes the same session, including its queue and transcript.
 
 | Command | What it does |
 |---|---|
-| `vexillum forum <file> [--no-open] [--reopen] [--port n]` | Open or resume the session, return at once. |
-| `vexillum forum poll <file> [--reply <text> \| --reply-file <path\|->] [--timeout <dur>]` | Wait for feedback (consuming it). `--timeout 10m` returns `status: timeout` if nothing arrives. |
-| `vexillum forum end <file>` | End the session as the agent. A plain `forum <file>` reopens it later. |
-| `vexillum forum stop` | Shut the background server down. |
+| `vx forum <file> [--no-open] [--reopen] [--port n]` | Open or resume the session, return at once. |
+| `vx forum poll <file> [--reply <text> \| --reply-file <path\|->] [--timeout <dur>]` | Wait for feedback (consuming it). `--timeout 10m` returns `status: timeout` if nothing arrives. |
+| `vx forum end <file>` | End the session as the agent. A plain `forum <file>` reopens it later. |
+| `vx forum stop` | Shut the background server down. |
 
 If a command's first argument is literally `poll`, `end`, `stop` or `serve`,
 it is the subcommand; to open a file with such a name, write `./poll`.
@@ -129,7 +129,7 @@ next_step: <what to do now>
   not reopen the session uninvited.
 - `status: browser_disconnected` - the review window has been gone past a grace
   period (about 30 seconds) but the session is still resumable and nothing is
-  lost. Ask the user whether to reopen it (`vexillum forum <file>`) or end it;
+  lost. Ask the user whether to reopen it (`vx forum <file>`) or end it;
   do neither on your own, and do not tight-loop on this status.
 - `status: timeout` - only with `--timeout`; poll again.
 - Common `tag` values: `message` (typed in the composer), `feedback` (default
@@ -197,15 +197,15 @@ push older messages out sooner; prefer `--reply` summaries over dumps.
 ## When the session ends
 
 When the session ends (the user pressed **Send & End**, or you ran
-`vexillum forum end`) the browser shows a **Session ended** dialog that cannot
+`vx forum end`) the browser shows a **Session ended** dialog that cannot
 be dismissed: it says who ended it, shows the artifact's absolute path with a
 **Copy path** button, and tells the user they can close the tab. Everything
 behind it is inert, so nothing typed afterwards can reach you. What you do:
 
 - On `status: ended` from `poll`: apply the final prompts (if any), then
   **stop polling**. Do not reopen the session on your own, and do not run
-  `vexillum forum <file> --reopen` unless the user asks for further review.
-- When the user asks you to review again, reopen it (`vexillum forum <file>
+  `vx forum <file> --reopen` unless the user asks for further review.
+- When the user asks you to review again, reopen it (`vx forum <file>
   --reopen`); the dialog goes away in their open tab by itself and the queue and
   transcript are still there.
 - If you ended it yourself, say so in your final message so the user is not
@@ -337,7 +337,7 @@ labels, `<summary>`, links inside forms) **always act exactly as authored**, in
 every mode: a plain click on them never annotates and is never intercepted, so
 decision forms need no special treatment. Only Alt/Option+click annotates a
 control (see "Annotations"). `window.forum` only exists when the page is opened
-through `vexillum forum`; a copy opened from disk has no `window.forum`, so
+through `vx forum`; a copy opened from disk has no `window.forum`, so
 guard calls or tell the user how to open it.
 
 ## Annotations

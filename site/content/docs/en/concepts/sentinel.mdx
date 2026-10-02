@@ -9,23 +9,23 @@ The sentinel is what lets you walk away. It watches every dispatched soldier and
 
 One sentinel runs per machine. Every 5 seconds it polls the live herdr status of every task in `running`, across every project vexillum has seen. When a task settles (done or blocked) it persists the new status and writes a durable **wake** under that task's own project (`wakes/<task-id>.json`). It also notices tasks that became `interrupted` or `unconfirmed`, only after confirming over a window rather than on one observation.
 
-`vexillum dispatch` starts a sentinel automatically if none is running. If that fails it warns on stderr, and you can run `vexillum sentinel` yourself in the background. A second one refuses to start and names the pid of the first. Its pid and log live in `~/.vexillum/sentinel.pid` and `~/.vexillum/sentinel.log`.
+`vx dispatch` starts a sentinel automatically if none is running. If that fails it warns on stderr, and you can run `vx sentinel` yourself in the background. A second one refuses to start and names the pid of the first. Its pid and log live in `~/.vexillum/sentinel.pid` and `~/.vexillum/sentinel.log`.
 
 ## How the commander is woken
 
-`vexillum init` registers an async `Stop` hook in the project's `.claude/settings.json`:
+`vx init` registers an async `Stop` hook in the project's `.claude/settings.json`:
 
 ```json
-{ "type": "command", "command": "vexillum sentinel await" }
+{ "type": "command", "command": "vx sentinel await" }
 ```
 
 registered with `asyncRewake` and a one-hour timeout. `await` blocks, re-checking every 5 seconds, until a wake for *this project* arrives, then answers `{"decision":"block","reason":...}` so Claude Code reports the change instead of quietly ending its turn - even if the turn ended before the soldier settled. The reason lists each change, for example `- mission <task-id>: running -> done`.
 
 | Subcommand | Behavior |
 | --- | --- |
-| `vexillum sentinel` | poll forever (run it in the background) |
-| `vexillum sentinel await` | block until a wake arrives or time runs out; what the hook calls |
-| `vexillum sentinel drain` | check once, instantly: a `block` decision if something is pending, `{}` otherwise |
+| `vx sentinel` | poll forever (run it in the background) |
+| `vx sentinel await` | block until a wake arrives or time runs out; what the hook calls |
+| `vx sentinel drain` | check once, instantly: a `block` decision if something is pending, `{}` otherwise |
 
 Outside a herdr-managed pane (no `HERDR_WORKSPACE_ID`), `await` and `drain` exit silently: the hook is committed with the project, so it also fires in unrelated Claude Code turns, such as a camp's own headless review, which have no soldier to wait for.
 

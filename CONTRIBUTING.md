@@ -4,7 +4,7 @@ vexillum is a Go CLI, built in incremental layers (see `AGENTS.md`). This
 document is for anyone sending a PR or filing an issue against the binary
 itself - if you're looking for how the product AGENTS.md that vexillum
 scaffolds into *your* project behaves, that's a different document (the one
-`vexillum init` writes into your own repo).
+`vx init` writes into your own repo).
 
 ## Before you start
 
@@ -19,12 +19,12 @@ bucket, ask in the issue before writing code.
 ```sh
 git clone https://github.com/isaias-alt/vexillum.git
 cd vexillum
-go build -o vexillum ./cmd/vexillum
+go build -o vx ./cmd/vx
 ```
 
 No other runtime dependency is required to build or test the binary itself.
 (Exercising `dispatch`/`sentinel` end-to-end additionally needs Claude Code
-and herdr installed - `vexillum doctor` tells you what's missing.)
+and herdr installed - `vx doctor` tells you what's missing.)
 
 ## Before opening a PR
 

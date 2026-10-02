@@ -15,7 +15,7 @@ The commander dispatches three tasks. They run side by side; the sentinel wakes 
 ## Keep an eye on the troop
 
 ```bash
-vexillum status
+vx status
 ```
 
 prints one line per task, most recently updated first: id, kind, status, camp branch and the start of the prompt. A blocked task also prints its question on an indented line. For a richer view, use the [muster skill](/docs/guides/muster-skill).
@@ -24,9 +24,9 @@ prints one line per task, most recently updated first: id, kind, status, camp br
 
 Landing is a fast-forward and vexillum never rebases for you. So when sibling missions were all dispatched from the same starting point, landing the first moves your base branch, and every other mission stops being a clean fast-forward. That is expected, not an error:
 
-1. Land the first: `vexillum land <task-id>`.
+1. Land the first: `vx land <task-id>`.
 2. For the next one, ask **its own soldier** (re-prompt its still-open pane) to rebase its branch onto the updated base. It has the full context of its change.
-3. Retry `vexillum land`.
+3. Retry `vx land`.
 
 If the soldier's pane already closed, no fresh soldier can rebase a branch it never touched; the commander tells you instead of guessing.
 

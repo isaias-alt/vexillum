@@ -18,7 +18,7 @@ description: The roles, and the life of a task from dispatch to release.
 ## The life of a task
 
 1. **You ask.** In Claude Code you say what you want.
-2. **The commander dispatches.** Following the project's rules it runs `vexillum dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
+2. **The commander dispatches.** Following the project's rules it runs `vx dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
 3. **A camp is acquired.** vexillum takes a clean worktree from the project's [pool](/docs/concepts/camps) (or creates one) on a new branch, `vexillum/<task-id>`, forked from your current branch.
 4. **A soldier starts.** A real, interactive Claude Code session opens in a herdr pane inside that camp. The command returns quickly: it only waits out a short probe for trivial prompts that settle at once.
 5. **The sentinel watches.** It polls the soldier's live status and records the outcome on disk. See [Sentinel](/docs/concepts/sentinel).

@@ -8,10 +8,10 @@ Dos comandos permiten a los agentes mostrarte algo más rico que texto de termin
 ## forum: revisar en tu navegador
 
 ```bash
-vexillum forum .vexillum/forum/plan.html
+vx forum .vexillum/forum/plan.html
 ```
 
-Los agentes escriben sus artifacts en `.vexillum/forum/` dentro del proyecto. `vexillum init` agrega un `.vexillum/.gitignore` que mantiene esa carpeta fuera de git; cualquier ruta que pases por la línea de comandos sigue funcionando, incluida una carpeta `.forum/` vieja.
+Los agentes escriben sus artifacts en `.vexillum/forum/` dentro del proyecto. `vx init` agrega un `.vexillum/.gitignore` que mantiene esa carpeta fuera de git; cualquier ruta que pases por la línea de comandos sigue funcionando, incluida una carpeta `.forum/` vieja.
 
 Sirve un archivo HTML que escribió el agente a tu navegador y le lleva tu feedback de vuelta. Un servidor local por usuario corre en `127.0.0.1` y se detiene solo cuando no hay nada conectado. Podés chatear, encolar mensajes, completar formularios de decisión y anotar elementos, y mandarlo todo al agente. Un diagrama Mermaid se convierte en una pizarra editable.
 
@@ -19,10 +19,10 @@ Del lado del agente:
 
 | Comando | Hace |
 | --- | --- |
-| `vexillum forum <file>` | abre o retoma la sesión y vuelve enseguida |
-| `vexillum forum poll <file>` | se bloquea hasta que mandás feedback; `--reply` muestra una respuesta en el panel |
-| `vexillum forum end <file>` | termina la sesión |
-| `vexillum forum stop` | apaga el servidor en segundo plano |
+| `vx forum <file>` | abre o retoma la sesión y vuelve enseguida |
+| `vx forum poll <file>` | se bloquea hasta que mandás feedback; `--reply` muestra una respuesta en el panel |
+| `vx forum end <file>` | termina la sesión |
+| `vx forum stop` | apaga el servidor en segundo plano |
 
 Las sesiones se identifican por la ruta absoluta del archivo. forum viene dentro del binario: sin Node, sin `npx`, sin red.
 
@@ -31,7 +31,7 @@ Instalá el playbook del agente con `npx skills add isaias-alt/vexillum --skill 
 ## banner: publicar públicamente
 
 ```bash
-vexillum banner report.html
+vx banner report.html
 ```
 
 <Callout type="warn" title="Esto publica en un tercero">

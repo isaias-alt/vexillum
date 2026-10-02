@@ -8,10 +8,10 @@ Two commands let agents show you something richer than terminal text.
 ## forum: review in your browser
 
 ```bash
-vexillum forum .vexillum/forum/plan.html
+vx forum .vexillum/forum/plan.html
 ```
 
-Agents write their artifacts to `.vexillum/forum/` in the project. `vexillum init` adds a `.vexillum/.gitignore` that keeps that folder out of git; any path you pass on the command line still works, including an old `.forum/` folder.
+Agents write their artifacts to `.vexillum/forum/` in the project. `vx init` adds a `.vexillum/.gitignore` that keeps that folder out of git; any path you pass on the command line still works, including an old `.forum/` folder.
 
 Serves an HTML file the agent wrote to your browser and carries your feedback back to it. One local server per user runs on `127.0.0.1` and stops itself when nothing is connected. You can chat, queue messages, fill in decision forms and annotate elements, then send it all to the agent. A Mermaid diagram becomes an editable whiteboard.
 
@@ -19,10 +19,10 @@ On the agent's side:
 
 | Command | Does |
 | --- | --- |
-| `vexillum forum <file>` | opens or resumes the session and returns right away |
-| `vexillum forum poll <file>` | blocks until you send feedback; `--reply` shows an answer in the panel |
-| `vexillum forum end <file>` | ends the session |
-| `vexillum forum stop` | shuts the background server down |
+| `vx forum <file>` | opens or resumes the session and returns right away |
+| `vx forum poll <file>` | blocks until you send feedback; `--reply` shows an answer in the panel |
+| `vx forum end <file>` | ends the session |
+| `vx forum stop` | shuts the background server down |
 
 Sessions are identified by the file's absolute path. forum is built into the binary: no Node, no `npx`, no network.
 
@@ -31,7 +31,7 @@ Install the agent's playbook with `npx skills add isaias-alt/vexillum --skill fo
 ## banner: publish publicly
 
 ```bash
-vexillum banner report.html
+vx banner report.html
 ```
 
 <Callout type="warn" title="This publishes to a third party">

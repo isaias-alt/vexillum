@@ -1,6 +1,6 @@
 ---
 name: muster
-description: Snapshot vexillum's troop of missions and scouts for this project into a categorized digest (needs attention, awaiting land approval, in flight, finished, shipped), opened as a board in the browser with vexillum forum. Use /muster for the full troop, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
+description: Snapshot vexillum's troop of missions and scouts for this project into a categorized digest (needs attention, awaiting land approval, in flight, finished, shipped), opened as a board in the browser with vx forum. Use /muster for the full troop, /muster pr to scope to missions with a real GitHub PR enriched with live status, /muster sitrep for a terminal-only recap of just this session's own dispatches - never opens a board. Use when the commander (or the general) wants to see what vexillum's soldiers are doing without reading raw task output.
 license: MIT
 metadata:
   argument-hint: "[pr|sitrep]"
@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Data source
 
-Run `vexillum status --json` from the project root. Its output is the exact
+Run `vx status --json` from the project root. Its output is the exact
 `internal/state.Task` schema (schema v3) vexillum itself persists to
 `<project root>/tasks/*.json` - the single source of truth for what a task
 is and what state it's in. Read that JSON, don't reinvent it: don't read
@@ -26,7 +26,7 @@ is and what state it's in. Read that JSON, don't reinvent it: don't read
 symlink resolution live in vexillum itself, not here), and don't infer a
 status vexillum didn't report.
 
-If the command fails (not a git repository, `vexillum` not on PATH, project
+If the command fails (not a git repository, `vx` not on PATH, project
 never initialized), say so plainly and stop - don't fall back to guessing.
 
 ## Modes
@@ -41,17 +41,17 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 
 ### Troop mode and pr mode - both always open a board
 
-1. Run `vexillum status --json`.
+1. Run `vx status --json`.
 2. Group every task into five sections, using these headings verbatim so the
    board's shape stays stable run to run:
    - **Needs attention** - status `blocked`, `interrupted`, or `failed`. A
      `blocked` task carries its open question in its `decision` field
      (`question`, and `options` if the soldier offered any) - show that
      question on the board itself, not just the word "blocked". Once
-     answered (`vexillum decide`), `decision.answer` is also set.
+     answered (`vx decide`), `decision.answer` is also set.
    - **Awaiting land approval** - `kind` mission, status `done`, and not yet
      landed on its base branch. This is a decision on the commander's side
-     (ask the general whether to `vexillum land`), unlike **Needs attention**,
+     (ask the general whether to `vx land`), unlike **Needs attention**,
      which is the soldier being stuck. Which done missions belong here is
      decided with git, see "Classifying done missions" below.
    - **In flight** - status `pending` or `running`.
@@ -64,14 +64,14 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
      live state).
    Missions the classification couldn't verify are not listed anywhere as
    pending; see "Classifying done missions" for how they're counted.
-   Within each section, keep the order `vexillum status --json` already
+   Within each section, keep the order `vx status --json` already
    returns tasks in (most recently updated first).
    **Classifying done missions.** For each task with `kind` mission and
    status `done`, run these from the git project root (the directory you ran
-   `vexillum status --json` from; camp branches are plain local branches of
+   `vx status --json` from; camp branches are plain local branches of
    that repo). `camp_base` is the branch the camp was forked from; if it's
    empty (tasks persisted before vexillum recorded it), use the project's
-   current branch instead - that's exactly what `vexillum land` itself lands
+   current branch instead - that's exactly what `vx land` itself lands
    onto - and mark the item "base assumed".
    ```
    base=<camp_base, or: git rev-parse --abbrev-ref HEAD>
@@ -83,8 +83,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    ```
    Apply in this order, first match wins:
    1. Branch doesn't exist, or `base` can't be resolved (`git rev-parse
-      --verify -q refs/heads/$base` fails): **unverifiable**. `vexillum
-      release` never deletes a camp branch (only `vexillum redispatch`
+      --verify -q refs/heads/$base` fails): **unverifiable**. `vxrelease` never deletes a camp branch (only `vx redispatch`
       does), so a missing branch means it was discarded or the repo was
       re-cloned - old history, not a pending decision. Don't list it as
       pending; just count it in one line under **Finished**, e.g. "N older
@@ -100,7 +99,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    5. Otherwise: **needs rebase**. Lists under **Awaiting land approval**,
       shown distinctly, with the note that the commander asks the soldier to
       rebase its own branch onto the base (re-prompt its pane, don't
-      dispatch a new one), then retries `vexillum land`.
+      dispatch a new one), then retries `vx land`.
    Each item in **Awaiting land approval** shows its id, prompt, camp_branch,
    the verdict (`ready to land` or `needs rebase`), and the commit count from
    `git rev-list --count $base..<camp_branch>` ("N commits ahead"), plus
@@ -109,7 +108,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 3. **pr mode only** - narrow to missions with a real PR. The only status
    vexillum ever pushes a real branch through its tribunal pipeline for is
    `shipped`, so start from that section. For each shipped task, look up its
-   live PR the same way `vexillum land` itself does - by camp branch, not a
+   live PR the same way `vx land` itself does - by camp branch, not a
    stored PR number, since vexillum never stores one:
    ```
    gh pr view <camp_branch> --json number,state,isDraft,mergeable,headRefOid,url,title
@@ -123,7 +122,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    instead of refusing outright.
 4. Build the digest as a self-contained HTML board (grouped by the sections
    above; each task shows at least its id, kind, status or live PR state,
-   prompt, and camp branch), rendered and kept alive with `vexillum forum`.
+   prompt, and camp branch), rendered and kept alive with `vx forum`.
    Read the `forum` skill (`skills/forum/SKILL.md`) first - don't assume this
    file's idea of forum's workflow is still accurate. For the board:
    - Write one HTML file, by default `.vexillum/forum/muster.html` in the project root
@@ -138,19 +137,19 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
      a blocked task's `decision.question`, `fr-table-wrap` around any table.
      Never raw hex; use `--fr-*` tokens through `style="..."` attributes if a
      tweak is unavoidable.
-   - Open it with `vexillum forum .vexillum/forum/muster.html` (add `--no-open` if the
+   - Open it with `vx forum .vexillum/forum/muster.html` (add `--no-open` if the
      general is already looking at the browser). It returns at once.
    - Both troop mode and pr mode always reach this step - there's no
      "board-less" variant of either.
    - Then keep the standard forum loop going: tell the general the board is
-     open, and run `vexillum forum poll .vexillum/forum/muster.html` in the foreground
+     open, and run `vx forum poll .vexillum/forum/muster.html` in the foreground
      (never `&`/`nohup`, never leave a poll hanging when nothing is waiting on
      it). Answer questions the general sends with `--reply`; if they ask for a
      change to the board, edit the file (the browser reloads by itself) and
      poll again. On `status: ended`, stop polling. When you're done and the
-     session is still open, close it with `vexillum forum end
+     session is still open, close it with `vx forum end
      .vexillum/forum/muster.html`. The board is a read-only snapshot, so if the troop
-     changes while it's open, rewrite the file from a fresh `vexillum status
+     changes while it's open, rewrite the file from a fresh `vx status
      --json` rather than patching it by hand.
    - Feedback on the board (annotations, messages) is conversation, not
      commands: never turn it into a `land`, `release` or `redispatch` on your
@@ -160,7 +159,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 
 1. From your own conversation so far (not vexillum's state), recall which
    task IDs you dispatched this session.
-2. Run `vexillum status --json` and look up only those IDs, so you report
+2. Run `vx status --json` and look up only those IDs, so you report
    their current real status instead of trusting your own possibly-stale
    memory of it.
 3. Recap in chat, plainly: one line per task you dispatched this session
@@ -178,7 +177,7 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
 ## Scope
 
 This is Phase A: a read-only board. Do not add a click-to-act path (e.g.
-a board button that runs, or queues a prompt that runs, `vexillum land
+a board button that runs, or queues a prompt that runs, `vx land
 <task-id>`) on your own judgment even if it looks easy - that was left as an explicit open question for the
 general to decide, not something to resolve unilaterally from inside this
 skill.

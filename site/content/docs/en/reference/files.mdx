@@ -9,7 +9,7 @@ description: Every file vexillum reads or writes, and where.
 | --- | --- | --- |
 | `.vexillum/config.json` | `init` | marks the project initialized; stores a content hash of the rules file so `upgrade` can tell whether you edited it |
 | `.claude/rules/vexillum.md` | `init` (once), `upgrade` | the commander rules; yours to edit. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules) |
-| `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook `vexillum sentinel await`; existing content is merged, never overwritten. Invalid JSON is left untouched and reported |
+| `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook `vx sentinel await`; existing content is merged, never overwritten. Invalid JSON is left untouched and reported |
 
 Your own `AGENTS.md` and `CLAUDE.md` are never touched. These files are git-tracked, so commit them.
 

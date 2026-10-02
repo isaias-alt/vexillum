@@ -1,7 +1,7 @@
 <!--
 Adapted from upstream (MIT License, Copyright (c) 2026 the upstream author),
-src/playbooks.js at v0.1.80 (commit a2a199c), rewritten for vexillum forum
-(window.forum and the `vexillum forum` commands). See THIRD-PARTY-NOTICES.md at
+src/playbooks.js at v0.1.80 (commit a2a199c), rewritten for vx forum
+(window.forum and the `vx forum` commands). See THIRD-PARTY-NOTICES.md at
 the vexillum repo root.
 -->
 
@@ -79,7 +79,7 @@ Tracked batch, the final selected set queued once:
 </form>
 ```
 
-The receipt you give for a tracked batch must assign every submitted ID exactly one outcome: addressed with concrete evidence, deferred with a reason, or rejected with a reason. Before declaring completion, compare the submitted ID set with the receipt's ID set and surface every missing ID. Deliver the receipt with `vexillum forum poll <file> --reply-file -`.
+The receipt you give for a tracked batch must assign every submitted ID exactly one outcome: addressed with concrete evidence, deferred with a reason, or rejected with a reason. Before declaring completion, compare the submitted ID set with the receipt's ID set and surface every missing ID. Deliver the receipt with `vx forum poll <file> --reply-file -`.
 
 A custom (non-native) choice UI should make its option elements update local state, then use a separate Queue answer button to queue the final value.
 

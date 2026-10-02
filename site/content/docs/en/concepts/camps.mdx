@@ -24,9 +24,9 @@ A new task takes an **idle, clean, already-landed** slot from the pool when one 
 
 ## Release
 
-A camp returns to the pool only when it is safe to reuse: the worktree has no uncommitted changes and, for a mission, its commits are already on the base branch. `vexillum release <task-id>` enforces this and refuses otherwise. A scout is also gated on its report existing; `--force` skips only that report check, never the clean-and-landed check.
+A camp returns to the pool only when it is safe to reuse: the worktree has no uncommitted changes and, for a mission, its commits are already on the base branch. `vx release <task-id>` enforces this and refuses otherwise. A scout is also gated on its report existing; `--force` skips only that report check, never the clean-and-landed check.
 
-`vexillum land` releases the camp for you after a successful local fast-forward. A shipped mission is the exception: its pull request is the source of truth, so its camp stays until you merge the PR. See [Land vs ship](/docs/guides/land-vs-ship).
+`vx land` releases the camp for you after a successful local fast-forward. A shipped mission is the exception: its pull request is the source of truth, so its camp stays until you merge the PR. See [Land vs ship](/docs/guides/land-vs-ship).
 
 <Callout title="Run vexillum from the project root">
   vexillum refuses to run from inside a camp (any path under `~/.vexillum`). A second dispatch from there would create a separate pool keyed on the camp's own path, invisible to every later command.

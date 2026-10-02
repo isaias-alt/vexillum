@@ -1,7 +1,7 @@
 <!--
 Adapted from upstream (MIT License, Copyright (c) 2026 the upstream author),
-src/playbooks.js at v0.1.80 (commit a2a199c), rewritten for vexillum forum
-(window.forum and the `vexillum forum` commands). See THIRD-PARTY-NOTICES.md at
+src/playbooks.js at v0.1.80 (commit a2a199c), rewritten for vx forum
+(window.forum and the `vx forum` commands). See THIRD-PARTY-NOTICES.md at
 the vexillum repo root.
 -->
 

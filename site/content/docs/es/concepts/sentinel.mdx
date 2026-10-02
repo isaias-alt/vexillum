@@ -9,23 +9,23 @@ El sentinel es lo que te deja alejarte. Vigila a cada soldier despachado e inter
 
 Corre un sentinel por máquina. Cada 5 segundos consulta el estado en vivo de herdr de cada tarea en `running`, en todos los proyectos que vexillum haya visto. Cuando una tarea termina (done o blocked) persiste el nuevo status y escribe un **wake** durable bajo el proyecto de esa tarea (`wakes/<task-id>.json`). También detecta tareas que pasaron a `interrupted` o `unconfirmed`, y solo después de confirmarlo durante una ventana, no por una sola observación.
 
-`vexillum dispatch` inicia un sentinel automáticamente si no hay uno corriendo. Si eso falla avisa por stderr, y podés correr `vexillum sentinel` vos mismo en segundo plano. Un segundo sentinel se niega a arrancar y nombra el pid del primero. Su pid y su log están en `~/.vexillum/sentinel.pid` y `~/.vexillum/sentinel.log`.
+`vx dispatch` inicia un sentinel automáticamente si no hay uno corriendo. Si eso falla avisa por stderr, y podés correr `vx sentinel` vos mismo en segundo plano. Un segundo sentinel se niega a arrancar y nombra el pid del primero. Su pid y su log están en `~/.vexillum/sentinel.pid` y `~/.vexillum/sentinel.log`.
 
 ## Cómo se despierta al commander
 
-`vexillum init` registra un hook `Stop` asíncrono en el `.claude/settings.json` del proyecto:
+`vx init` registra un hook `Stop` asíncrono en el `.claude/settings.json` del proyecto:
 
 ```json
-{ "type": "command", "command": "vexillum sentinel await" }
+{ "type": "command", "command": "vx sentinel await" }
 ```
 
 registrado con `asyncRewake` y un timeout de una hora. `await` se bloquea, revisando cada 5 segundos, hasta que llega un wake para *este proyecto*, y entonces responde `{"decision":"block","reason":...}` para que Claude Code reporte el cambio en lugar de terminar su turno en silencio - incluso si el turno terminó antes de que el soldier acabara. El reason lista cada cambio, por ejemplo `- mission <task-id>: running -> done`.
 
 | Subcomando | Comportamiento |
 | --- | --- |
-| `vexillum sentinel` | consulta para siempre (corrélo en segundo plano) |
-| `vexillum sentinel await` | se bloquea hasta que llega un wake o se agota el tiempo; lo que llama el hook |
-| `vexillum sentinel drain` | revisa una vez, al instante: una decisión `block` si hay algo pendiente, `{}` si no |
+| `vx sentinel` | consulta para siempre (corrélo en segundo plano) |
+| `vx sentinel await` | se bloquea hasta que llega un wake o se agota el tiempo; lo que llama el hook |
+| `vx sentinel drain` | revisa una vez, al instante: una decisión `block` si hay algo pendiente, `{}` si no |
 
 Fuera de un pane administrado por herdr (sin `HERDR_WORKSPACE_ID`), `await` y `drain` salen en silencio: el hook se commitea con el proyecto, así que también se dispara en turnos de Claude Code ajenos, como la revisión headless de un camp, que no tienen ningún soldier que esperar.
 
