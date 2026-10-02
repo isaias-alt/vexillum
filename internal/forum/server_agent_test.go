@@ -317,3 +317,73 @@ func TestFormatPoll_EmptyStatuses(t *testing.T) {
 		}
 	}
 }
+
+// POST /api/agent/poll with all covers every open session and names the file;
+// the delivery stays leased until POST /api/agent/ack confirms it.
+func TestAgentAPI_PollAllLeasesUntilAcknowledged(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	open := env.open()
+	other := filepath.Join(t.TempDir(), "other.html")
+	writeFile(t, other, "<p>other</p>")
+	if resp, data := env.agent("POST", "/api/agent/open", map[string]any{"file": other}); resp.StatusCode != 200 {
+		t.Fatalf("open other = %d %s", resp.StatusCode, data)
+	}
+	env.browser("POST", "/api/s/"+open.Key+"/queue", open.Key, map[string]any{"prompt": "tweak it"})
+	env.browser("POST", "/api/s/"+open.Key+"/send", open.Key, map[string]any{})
+
+	poll := func() forum.PollResponse {
+		t.Helper()
+		_, data := env.agent("POST", "/api/agent/poll", map[string]any{"all": true, "timeout_ms": 300})
+		var out forum.PollResponse
+		if err := json.Unmarshal(data, &out); err != nil {
+			t.Fatalf("decoding %s: %v", data, err)
+		}
+		return out
+	}
+	first := poll()
+	if !first.All || first.Status != forum.PollFeedback || first.File != env.file || first.Session != open.Key || len(first.Prompts) != 1 || first.Delivery == "" {
+		t.Fatalf("first = %+v", first)
+	}
+	// The client never confirmed (it died): the same prompt comes back, flagged.
+	second := poll()
+	if len(second.Prompts) != 1 || !second.Prompts[0].Redelivered || second.Prompts[0].UID != first.Prompts[0].UID {
+		t.Fatalf("second = %+v, want the same prompt redelivered", second)
+	}
+	resp, data := env.agent("POST", "/api/agent/ack", map[string]any{"file": env.file, "delivery": second.Delivery})
+	if resp.StatusCode != 200 {
+		t.Fatalf("ack = %d %s", resp.StatusCode, data)
+	}
+	if third := poll(); third.Status != forum.PollTimeout || len(third.Prompts) != 0 {
+		t.Errorf("after the ack = %+v, want a timeout", third)
+	}
+	if resp, _ := env.agent("POST", "/api/agent/ack", map[string]any{"delivery": "x"}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("ack without a file = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestFormatPoll_MultiplexedResult(t *testing.T) {
+	res := forum.PollResponse{
+		Session: "abc", File: "/x/a b.html", Status: forum.PollFeedback, All: true, OtherPending: 2,
+		Prompts: []forum.Prompt{{UID: "pr_1", Tag: "message", Prompt: "hi", Redelivered: true}},
+	}
+	out := forum.FormatPoll("", res)
+	for _, want := range []string{
+		"session: abc\n", "file: /x/a b.html\n", "status: feedback\n", "other_sessions_pending: 2\n",
+		"  - uid: pr_1\n    redelivered: true\n    tag: message\n",
+		"`vx forum poll --all --reply-to '/x/a b.html' --reply \"<what you did>\"`",
+		"2 other session(s)", "skip any uid you already applied",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+	none := forum.FormatPoll("", forum.PollResponse{Status: forum.PollNoSessions, All: true})
+	if strings.Contains(none, "session:") || strings.Contains(none, "file:") || !strings.Contains(none, "status: no_sessions\nprompts[0]:\n") {
+		t.Errorf("a result about no session must not name one:\n%s", none)
+	}
+	// The per-file format is unchanged: no redelivery noise on a first delivery.
+	single := forum.FormatPoll("/x/a.html", forum.PollResponse{Session: "abc", Status: forum.PollTimeout})
+	if strings.Contains(single, "other_sessions_pending") || !strings.Contains(single, "vx forum poll /x/a.html") {
+		t.Errorf("single poll output:\n%s", single)
+	}
+}

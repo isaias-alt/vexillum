@@ -107,6 +107,7 @@ func TestBrowserAPI_SendAndEnd_FinalFeedbackOnceThenEnded(t *testing.T) {
 	if first.Status != forum.PollEnded || first.EndedBy != "user" || len(first.Prompts) != 1 {
 		t.Fatalf("first poll = %s", data)
 	}
+	env.agent("POST", "/api/agent/ack", map[string]any{"file": env.file, "delivery": first.Delivery})
 	_, data = env.agent("POST", "/api/agent/poll", map[string]any{"file": env.file})
 	var second forum.PollResponse
 	_ = json.Unmarshal(data, &second)

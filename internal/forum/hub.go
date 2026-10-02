@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +38,9 @@ const (
 	PollEnded               = "ended"
 	PollBrowserDisconnected = "browser_disconnected"
 	PollTimeout             = "timeout"
+	// PollNoSessions is only reported by a multiplexed poll: no session is
+	// open, so there is nothing left to listen to.
+	PollNoSessions = "no_sessions"
 )
 
 // HubOptions tune timing; zero values mean the production defaults. Tests
@@ -44,13 +49,26 @@ type HubOptions struct {
 	// BrowserGrace is how long a session's browser may be gone (no open
 	// state request) before an agent poll reports browser_disconnected.
 	BrowserGrace time.Duration
+	// ListenerGrace is how long after an agent's last sign of life (a poll
+	// starting or ending, a reply, an open, an ack) the panel keeps saying the
+	// agent is about to listen again instead of warning that nobody is.
+	ListenerGrace time.Duration
 	// Now overrides the clock.
 	Now func() time.Time
 	// Logf receives non-fatal persistence problems.
 	Logf func(format string, args ...any)
 }
 
-const defaultBrowserGrace = 30 * time.Second
+const (
+	defaultBrowserGrace  = 30 * time.Second
+	defaultListenerGrace = 30 * time.Second
+)
+
+// pollAllRecentWindow bounds which on-disk sessions a multiplexed poll
+// adopts when it starts: abandoned sessions from long ago stay unloaded until
+// their browser reconnects (which loads them and wakes the poll) or the agent
+// opens them again.
+const pollAllRecentWindow = 7 * 24 * time.Hour
 
 // AgentWorkingWindow is how long after delivering prompts to a poll the
 // browser keeps saying the agent is working. The agent has no way to say "I am
@@ -82,12 +100,19 @@ type liveSession struct {
 	pollers     int
 	browsers    int
 	lastBrowser time.Time
+	// lastListener is the agent's heartbeat: the last moment something proved
+	// it is there (see Hub.beat). In memory only; a loaded session starts with a
+	// fresh one so a restarted server gives the poll time to reconnect.
+	lastListener time.Time
 }
 
 // NewHub returns a Hub persisting under home (the ~/.vexillum directory).
 func NewHub(home string, opts HubOptions) *Hub {
 	if opts.BrowserGrace <= 0 {
 		opts.BrowserGrace = defaultBrowserGrace
+	}
+	if opts.ListenerGrace <= 0 {
+		opts.ListenerGrace = defaultListenerGrace
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -152,11 +177,12 @@ func (h *Hub) get(key string) (*liveSession, error) {
 	// blocks the review surface on it.
 	rec.AwaitingSince = time.Time{}
 	l := &liveSession{
-		rec:         *rec,
-		transcript:  transcript,
-		layout:      layout,
-		version:     h.opts.Now().UnixNano(),
-		lastBrowser: h.opts.Now(),
+		rec:          *rec,
+		transcript:   transcript,
+		layout:       layout,
+		version:      h.opts.Now().UnixNano(),
+		lastBrowser:  h.opts.Now(),
+		lastListener: h.opts.Now(),
 	}
 	h.sessions[key] = l
 	if len(trimmed) > 0 {
@@ -175,6 +201,7 @@ func (h *Hub) commit(l *liveSession, fn func(rec *sessionRecord) error) error {
 	next := l.rec
 	next.Queued = append([]Prompt(nil), l.rec.Queued...)
 	next.Outbox = append([]Prompt(nil), l.rec.Outbox...)
+	next.Inflight = append([]Prompt(nil), l.rec.Inflight...)
 	if err := fn(&next); err != nil {
 		return err
 	}
@@ -184,6 +211,11 @@ func (h *Hub) commit(l *liveSession, fn func(rec *sessionRecord) error) error {
 	}
 	l.rec = next
 	return nil
+}
+
+// beat records a sign of life from the agent on l. Callers hold h.mu.
+func (h *Hub) beat(l *liveSession) {
+	l.lastListener = h.opts.Now()
 }
 
 // appendTranscript adds msgs to l's transcript, keeping the newest messages
@@ -308,6 +340,7 @@ func (h *Hub) Open(file string, reopen bool) (OpenResult, error) {
 	// load (or already is), and a poll must not call it disconnected before
 	// it ever had the chance to connect.
 	l.lastBrowser = h.opts.Now()
+	h.beat(l)
 	h.bump(l)
 	return h.openResult(l, StatusOpen, created), nil
 }
@@ -540,6 +573,7 @@ func (h *Hub) Reply(key, text string) error {
 	if err != nil {
 		return err
 	}
+	h.beat(l)
 	// A reply answers the round in progress: nothing is awaited any more.
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		rec.DeliveredAt = time.Time{}
@@ -563,28 +597,44 @@ type PollResult struct {
 	Status  string
 	EndedBy string
 	Prompts []Prompt
+	// Delivery names the lease on Prompts: the agent confirms it with Hub.Ack
+	// once it has read them, and until then they stay on disk (see
+	// sessionRecord.Inflight). Empty when nothing was delivered.
+	Delivery string
+	// OtherPending counts the other sessions a multiplexed poll left with
+	// feedback still waiting; it is 0 for a poll of one session.
+	OtherPending int
 }
 
-// Poll blocks until key's user has sent feedback, the session ended, the
-// browser has been gone past the grace period, or timeout elapsed (0 means
-// wait indefinitely). Delivered prompts are consumed. While it waits the
-// session counts as "listening" in the browser. A canceled ctx consumes
-// nothing.
-func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (PollResult, error) {
-	h.mu.Lock()
-	l, err := h.get(key)
-	if err != nil {
-		h.mu.Unlock()
-		return PollResult{}, err
+// hasUndelivered reports whether l holds prompts no acknowledged poll has
+// delivered: sent and waiting, or handed out and never confirmed.
+func (l *liveSession) hasUndelivered() bool {
+	return len(l.rec.Outbox) > 0 || len(l.rec.Inflight) > 0
+}
+
+// oldestUndelivered is when the oldest prompt waiting for delivery was queued.
+func (l *liveSession) oldestUndelivered() time.Time {
+	if len(l.rec.Inflight) > 0 {
+		return l.rec.Inflight[0].QueuedAt
 	}
+	if len(l.rec.Outbox) > 0 {
+		return l.rec.Outbox[0].QueuedAt
+	}
+	return time.Time{}
+}
+
+// beginPoll registers one poller on l. Callers hold h.mu.
+func (h *Hub) beginPoll(l *liveSession) {
 	l.pollers++
+	h.beat(l)
 	// Polling again: the agent is listening, not merely working. A poll that
 	// starts with feedback already waiting is the one about to take it, so only
-	// a poll with an empty outbox means the agent is done with the last round.
-	if resumed := len(l.rec.Outbox) == 0 && !l.rec.AwaitingSince.IsZero(); resumed || !l.rec.DeliveredAt.IsZero() {
+	// a poll with nothing to deliver means the agent is done with the last round.
+	idle := !l.hasUndelivered()
+	if (idle && !l.rec.AwaitingSince.IsZero()) || !l.rec.DeliveredAt.IsZero() {
 		if err := h.commit(l, func(rec *sessionRecord) error {
 			rec.DeliveredAt = time.Time{}
-			if len(rec.Outbox) == 0 {
+			if idle {
 				rec.AwaitingSince = time.Time{}
 			}
 			return nil
@@ -593,14 +643,93 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 		}
 	}
 	h.bump(l)
+}
+
+// endPoll drops one poller from l. Callers hold h.mu.
+func (h *Hub) endPoll(l *liveSession) {
+	l.pollers--
+	h.beat(l)
+	h.bump(l)
+}
+
+// deliver leases everything waiting on l to the caller: unconfirmed prompts of
+// an earlier delivery first (marked redelivered), then the outbox. The prompts
+// move to Inflight and stay there until Ack, so a poll that dies before its
+// output is read costs nothing. Callers hold h.mu.
+func (h *Hub) deliver(l *liveSession) (PollResult, error) {
+	redelivered := len(l.rec.Inflight)
+	all := append(append([]Prompt(nil), l.rec.Inflight...), l.rec.Outbox...)
+	id, err := newID("dl_")
+	if err != nil {
+		return PollResult{}, err
+	}
+	if err := h.commit(l, func(rec *sessionRecord) error {
+		rec.Inflight = all
+		rec.InflightID = id
+		rec.Outbox = []Prompt{}
+		rec.DeliveredAt = h.opts.Now().UTC()
+		return nil
+	}); err != nil {
+		return PollResult{}, err
+	}
+	out := append([]Prompt(nil), all...)
+	for i := 0; i < redelivered; i++ {
+		out[i].Redelivered = true
+	}
+	res := PollResult{Key: l.rec.Key, File: l.rec.File, EndedBy: l.rec.EndedBy, Status: PollFeedback, Prompts: out, Delivery: id}
+	if l.rec.Status == StatusEnded {
+		res.Status = PollEnded
+	}
+	h.bump(l)
+	return res, nil
+}
+
+// Ack confirms that the agent read delivery's prompts, releasing them. An
+// unknown or stale delivery (a newer one replaced it, or it was already
+// acknowledged) is ignored, so acknowledging twice is harmless. A poll that is
+// never acknowledged is not an error: its prompts come back with the next poll.
+func (h *Hub) Ack(key, delivery string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	l, err := h.get(key)
+	if err != nil {
+		return err
+	}
+	h.beat(l)
+	if delivery == "" || l.rec.InflightID != delivery {
+		return nil
+	}
+	if err := h.commit(l, func(rec *sessionRecord) error {
+		rec.Inflight = []Prompt{}
+		rec.InflightID = ""
+		return nil
+	}); err != nil {
+		return err
+	}
+	h.notify()
+	return nil
+}
+
+// Poll blocks until key's user has sent feedback, the session ended, the
+// browser has been gone past the grace period, or timeout elapsed (0 means
+// wait indefinitely). Delivered prompts are leased, not dropped: see Ack. While
+// it waits the session counts as "listening" in the browser. A canceled ctx
+// consumes nothing.
+func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (PollResult, error) {
+	h.mu.Lock()
+	l, err := h.get(key)
+	if err != nil {
+		h.mu.Unlock()
+		return PollResult{}, err
+	}
+	h.beginPoll(l)
 	var deadline time.Time
 	if timeout > 0 {
 		deadline = h.opts.Now().Add(timeout)
 	}
 	defer func() {
 		h.mu.Lock()
-		l.pollers--
-		h.bump(l)
+		h.endPoll(l)
 		h.mu.Unlock()
 	}()
 
@@ -612,24 +741,10 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 		now := h.opts.Now()
 		res := PollResult{Key: key, File: l.rec.File, EndedBy: l.rec.EndedBy}
 
-		if len(l.rec.Outbox) > 0 {
-			taken := append([]Prompt(nil), l.rec.Outbox...)
-			if err := h.commit(l, func(rec *sessionRecord) error {
-				rec.Outbox = []Prompt{}
-				rec.DeliveredAt = h.opts.Now().UTC()
-				return nil
-			}); err != nil {
-				h.mu.Unlock()
-				return PollResult{}, err
-			}
-			res.Prompts = taken
-			res.Status = PollFeedback
-			if l.rec.Status == StatusEnded {
-				res.Status = PollEnded
-			}
-			h.bump(l)
+		if l.hasUndelivered() {
+			res, err := h.deliver(l)
 			h.mu.Unlock()
-			return res, nil
+			return res, err
 		}
 		if l.rec.Status == StatusEnded {
 			res.Status = PollEnded
@@ -661,48 +776,179 @@ func (h *Hub) Poll(ctx context.Context, key string, timeout time.Duration) (Poll
 				wake = remaining
 			}
 		}
-
-		changed := h.changed
-		h.mu.Unlock()
-		var timer <-chan time.Time
-		var t *time.Timer
-		if wake >= 0 {
-			t = time.NewTimer(wake)
-			timer = t.C
-		}
-		select {
-		case <-changed:
-		case <-timer:
-		case <-ctx.Done():
-		}
-		if t != nil {
-			t.Stop()
-		}
-		h.mu.Lock()
+		h.wait(ctx, wake)
 	}
 }
 
-// Restore puts prompts a poll consumed back at the front of key's outbox,
-// for a poll whose client went away before it could read the response.
-func (h *Hub) Restore(key string, prompts []Prompt) error {
-	if len(prompts) == 0 {
-		return nil
+// wait releases h.mu until something changes, wake elapses (negative means
+// never) or ctx ends, then takes h.mu back. Callers hold h.mu.
+func (h *Hub) wait(ctx context.Context, wake time.Duration) {
+	changed := h.changed
+	h.mu.Unlock()
+	var timer <-chan time.Time
+	var t *time.Timer
+	if wake >= 0 {
+		t = time.NewTimer(wake)
+		timer = t.C
+	}
+	select {
+	case <-changed:
+	case <-timer:
+	case <-ctx.Done():
+	}
+	if t != nil {
+		t.Stop()
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	l, err := h.get(key)
+}
+
+// PollAll is Poll over every open session at once, so one agent listener
+// covers N review windows. It delivers the feedback of one session per call
+// (the one waiting longest; OtherPending says how many more are waiting), and
+// each session it covers counts as "listening" while it runs. A session that
+// ends while it waits is reported once, as ended. It reports no_sessions when
+// nothing is open, and browser_disconnected only when no covered session has a
+// browser left. Sessions opened while it waits join it. Delivery is leased per
+// session exactly as in Poll.
+func (h *Hub) PollAll(ctx context.Context, timeout time.Duration) (PollResult, error) {
+	h.mu.Lock()
+	h.adoptRecentSessions()
+	tracked := map[string]*liveSession{}
+	defer func() {
+		h.mu.Lock()
+		for _, l := range tracked {
+			h.endPoll(l)
+		}
+		h.mu.Unlock()
+	}()
+	var deadline time.Time
+	if timeout > 0 {
+		deadline = h.opts.Now().Add(timeout)
+	}
+
+	for {
+		if err := ctx.Err(); err != nil {
+			h.mu.Unlock()
+			return PollResult{}, err
+		}
+		now := h.opts.Now()
+		// An ended session still holding undelivered feedback (Send & End) stays
+		// covered until the agent has taken it.
+		for key, l := range h.sessions {
+			if tracked[key] == nil && (l.rec.Status == StatusOpen || l.hasUndelivered()) {
+				tracked[key] = l
+				h.beginPoll(l)
+			}
+		}
+		if len(tracked) == 0 {
+			h.mu.Unlock()
+			return PollResult{Status: PollNoSessions}, nil
+		}
+
+		keys := make([]string, 0, len(tracked))
+		for key := range tracked {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		var pick *liveSession
+		waiting := 0
+		for _, key := range keys {
+			l := tracked[key]
+			if !l.hasUndelivered() {
+				continue
+			}
+			waiting++
+			if pick == nil || l.oldestUndelivered().Before(pick.oldestUndelivered()) {
+				pick = l
+			}
+		}
+		if pick != nil {
+			res, err := h.deliver(pick)
+			res.OtherPending = waiting - 1
+			h.mu.Unlock()
+			return res, err
+		}
+		for _, key := range keys {
+			if l := tracked[key]; l.rec.Status == StatusEnded {
+				res := PollResult{Key: key, File: l.rec.File, EndedBy: l.rec.EndedBy, Status: PollEnded}
+				h.mu.Unlock()
+				return res, nil
+			}
+		}
+
+		wake := time.Duration(-1)
+		connected := false
+		var allGone time.Time
+		for _, l := range tracked {
+			if l.browsers > 0 {
+				connected = true
+				break
+			}
+			if gone := l.lastBrowser.Add(h.opts.BrowserGrace); gone.After(allGone) {
+				allGone = gone
+			}
+		}
+		if !connected {
+			remaining := allGone.Sub(now)
+			if remaining <= 0 {
+				// As in Poll, reporting it restarts every grace period.
+				for _, l := range tracked {
+					l.lastBrowser = now
+				}
+				h.mu.Unlock()
+				return PollResult{Status: PollBrowserDisconnected}, nil
+			}
+			wake = remaining
+		}
+		if !deadline.IsZero() {
+			remaining := deadline.Sub(now)
+			if remaining <= 0 {
+				h.mu.Unlock()
+				return PollResult{Status: PollTimeout}, nil
+			}
+			if wake < 0 || remaining < wake {
+				wake = remaining
+			}
+		}
+		h.wait(ctx, wake)
+	}
+}
+
+// adoptRecentSessions loads the sessions persisted on disk that a multiplexed
+// poll should cover although nothing has touched them since the server
+// started: recently updated open ones, and any still holding undelivered
+// feedback. Callers hold h.mu.
+func (h *Hub) adoptRecentSessions() {
+	entries, err := os.ReadDir(filepath.Join(h.home, "forums"))
 	if err != nil {
-		return err
+		if !errors.Is(err, os.ErrNotExist) {
+			h.logf("forum: listing sessions: %v", err)
+		}
+		return
 	}
-	if err := h.commit(l, func(rec *sessionRecord) error {
-		rec.Outbox = append(append([]Prompt(nil), prompts...), rec.Outbox...)
-		rec.DeliveredAt = time.Time{} // never reached the agent
-		return nil
-	}); err != nil {
-		return err
+	for _, e := range entries {
+		key := e.Name()
+		if !e.IsDir() || !ValidSessionKey(key) || h.sessions[key] != nil {
+			continue
+		}
+		rec, err := loadRecord(h.home, key)
+		if err != nil {
+			h.logf("forum: %v", err)
+			continue
+		}
+		if rec == nil {
+			continue
+		}
+		undelivered := len(rec.Outbox) > 0 || len(rec.Inflight) > 0
+		recent := h.opts.Now().Sub(rec.UpdatedAt) <= pollAllRecentWindow
+		if !undelivered && (rec.Status != StatusOpen || !recent) {
+			continue
+		}
+		if _, err := h.get(key); err != nil {
+			h.logf("forum: %v", err)
+		}
 	}
-	h.bump(l)
-	return nil
 }
 
 // Snapshot is the browser's view of a session.
@@ -713,6 +959,13 @@ type Snapshot struct {
 	Status    string `json:"status"`
 	EndedBy   string `json:"ended_by,omitempty"`
 	Listening bool   `json:"listening"`
+	// Listener is the agent's presence for the panel: "listening" (a poll is
+	// open), "working" (it took the user's prompts and has not polled or replied
+	// since), "waiting" (no poll right now but the agent was there a moment ago,
+	// so a new poll is expected: no warning yet) or "none".
+	Listener string `json:"listener"`
+	// ListenerUntil is when "waiting" runs out and becomes "none".
+	ListenerUntil *time.Time `json:"listener_until,omitempty"`
 	// WorkingUntil is set while the agent is not polling but took the user's
 	// prompts and has neither polled again nor replied: the browser shows
 	// "received your message and is working" until then.
@@ -734,7 +987,7 @@ type Snapshot struct {
 	LayoutWarnings []LayoutWarningView `json:"layout_warnings"`
 }
 
-func (l *liveSession) snapshot(now time.Time) Snapshot {
+func (l *liveSession) snapshot(now time.Time, listenerGrace time.Duration) Snapshot {
 	var workingUntil *time.Time
 	if until := l.rec.DeliveredAt.Add(AgentWorkingWindow); l.pollers == 0 && l.rec.Status != StatusEnded &&
 		!l.rec.DeliveredAt.IsZero() && now.Before(until) {
@@ -744,7 +997,20 @@ func (l *liveSession) snapshot(now time.Time) Snapshot {
 	if since := l.rec.AwaitingSince; !since.IsZero() && l.rec.Status != StatusEnded {
 		awaitingSince = &since
 	}
+	listener, listenerUntil := "none", (*time.Time)(nil)
+	if l.rec.Status != StatusEnded {
+		switch grace := l.lastListener.Add(listenerGrace); {
+		case l.pollers > 0:
+			listener = "listening"
+		case workingUntil != nil:
+			listener = "working"
+		case !l.lastListener.IsZero() && now.Before(grace):
+			listener, listenerUntil = "waiting", &grace
+		}
+	}
 	return Snapshot{
+		Listener:        listener,
+		ListenerUntil:   listenerUntil,
 		WorkingUntil:    workingUntil,
 		AwaitingSince:   awaitingSince,
 		Round:           l.rec.Round,
@@ -777,7 +1043,7 @@ func (h *Hub) snapshotOf(l *liveSession) Snapshot {
 			h.logf("recording the artifact change: %v", err)
 		}
 	}
-	return l.snapshot(h.opts.Now())
+	return l.snapshot(h.opts.Now(), h.opts.ListenerGrace)
 }
 
 // StopWaiting ends the wait for the agent on the user's say-so (the overlay's
@@ -1050,7 +1316,7 @@ func (h *Hub) DismissLayoutWarning(key, id string) (bool, error) {
 // warning another one is about.
 func (l *liveSession) unreferencedLayoutIDs(ids []string) []string {
 	held := map[string]bool{}
-	for _, list := range [][]Prompt{l.rec.Queued, l.rec.Outbox} {
+	for _, list := range [][]Prompt{l.rec.Queued, l.rec.Outbox, l.rec.Inflight} {
 		for _, p := range list {
 			for _, id := range p.LayoutIDs {
 				held[id] = true

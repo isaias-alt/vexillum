@@ -21,6 +21,7 @@ Del lado del agente:
 | --- | --- |
 | `vx forum <file>` | abre o retoma la sesión y vuelve enseguida |
 | `vx forum poll <file>` | se bloquea hasta que mandás feedback; `--reply` muestra una respuesta en el panel |
+| `vx forum poll --all` | un solo listener para todas las sesiones abiertas a la vez; `--reply-to <file>` dice a qué sesión responde un reply |
 | `vx forum end <file>` | termina la sesión |
 | `vx forum stop` | apaga el servidor en segundo plano |
 
@@ -33,6 +34,30 @@ El servidor intenta no moverse ni desaparecer debajo de una pestaña abierta:
 - **Mismo puerto.** Registra el puerto que ocupó en `~/.vexillum/forum/last-port` y lo prefiere en el siguiente arranque (esperando unos segundos a que el servidor anterior lo libere), así que una pestaña abierta sigue funcionando. Solo si otro proceso sigue ocupando ese puerto cae a uno libre y registra ese.
 - **No se reemplaza un servidor en uso.** Después de actualizar vexillum, un servidor en marcha puede ser de un build más viejo. El build nuevo lo reemplaza solo cuando no tiene sesión abierta, ni pestaña conectada, ni poll esperando. Si no, el nuevo `vx` lo reutiliza cuando su protocolo es compatible, y se detiene con un error que dice qué hacer cuando no lo es (terminar o cerrar las sesiones y las pestañas, o correr `vx forum stop`). Un servidor demasiado viejo para informar su actividad se reutiliza, nunca se detiene.
 - **Las pestañas se recuperan solas.** Cuando el servidor sí se reinicia, una pestaña abierta muestra un banner de reconexión y reintenta sola contra la misma dirección. Las sesiones, los mensajes encolados y la transcripción se restauran desde disco, y el enlace de la sesión sigue funcionando.
+
+### Varias sesiones a la vez
+
+Cada sesión abierta necesita un listener, y un poll muere cuando entrega feedback, cuando vence su tarea en segundo plano o cuando el agente está ocupado. Con varias sesiones abiertas eso dejaba a algunas sin nadie escuchando. `vx forum poll --all` lo resuelve con un solo listener para todas:
+
+- Cubre cada sesión abierta (las sesiones que se abren mientras espera se suman), así que todos los paneles muestran al agente escuchando.
+- Cada llamada entrega el feedback de una sola sesión, la que más espera, e imprime su `session` y su `file` para que el agente sepa qué artefacto editar. `other_sessions_pending` indica cuántas más están esperando; la siguiente llamada las entrega.
+- `--reply-to <file>` nombra la sesión a la que responde un `--reply`.
+- Una sesión que termina mientras espera se informa una sola vez como `ended`. `no_sessions` significa que no hay ninguna abierta. `browser_disconnected` significa que todas las ventanas de revisión se fueron.
+
+`vx forum poll <file>` sigue funcionando para una sola sesión.
+
+### Un poll que muere nunca pierde feedback
+
+Un poll no consume el feedback por devolverlo. Los prompts quedan en el servidor hasta que el comando confirma que los imprimió. Si el poll fue matado, venció o perdió su salida en el medio, volver a correr `poll` entrega los mismos prompts otra vez, marcados `redelivered: true`, con los mismos `uid` y antes que cualquier cosa más nueva, para que el agente se salte lo que ya aplicó. Esto sobrevive a un reinicio del servidor.
+
+### Qué dice el panel sobre tu agente
+
+| Estado | Significado |
+| --- | --- |
+| Agent listening | hay un poll abierto (un `poll --all` cuenta para cada sesión que cubre) |
+| Agent working | el agente tomó tus mensajes y no volvió a hacer poll ni respondió; dura hasta 15 minutos |
+| Waiting for your agent to listen | no hay poll ahora, pero el agente estuvo ahí en los últimos 30 segundos (un poll terminó, acaba de responder o de abrir la sesión); todavía sin advertencia, así que no parpadea entre una respuesta y el siguiente poll |
+| Agent not listening | ninguno de los anteriores: pedile a tu agente que haga poll |
 
 El playbook del agente es la [skill](/es/docs/concepts/skills) `forum`, que instala `vx init` (el texto completo está en [Skill: forum](/es/docs/reference/skills/forum)).
 

@@ -21,6 +21,7 @@ On the agent's side:
 | --- | --- |
 | `vx forum <file>` | opens or resumes the session and returns right away |
 | `vx forum poll <file>` | blocks until you send feedback; `--reply` shows an answer in the panel |
+| `vx forum poll --all` | one listener for every open session at once; `--reply-to <file>` says which session a reply answers |
 | `vx forum end <file>` | ends the session |
 | `vx forum stop` | shuts the background server down |
 
@@ -33,6 +34,30 @@ The server tries hard not to move or disappear under an open tab:
 - **Same port.** It records the port it bound in `~/.vexillum/forum/last-port` and prefers it on the next start (waiting a few seconds for the previous server to release it), so an open tab keeps working. Only if that port stays taken by something else does it fall back to a free one and record that.
 - **No replacing a server in use.** After you upgrade vexillum, a running server may come from an older build. It is replaced by the new build only when it has no open session, no connected tab and no waiting poll. Otherwise the new `vx` reuses it when its protocol is compatible, and stops with an error telling you what to do when it is not (finish or end the sessions and close the tabs, or run `vx forum stop`). A server too old to report its activity is reused, never stopped.
 - **Tabs recover on their own.** When the server does restart, an open tab shows a reconnecting banner and retries on its own against the same address. Sessions, queued messages and the transcript are restored from disk, and the session link keeps working.
+
+### Several sessions at once
+
+Every open session needs a listener, and a poll dies when it delivers feedback, when its background task times out, or when the agent is busy. With several sessions open that used to leave some of them with nobody listening. `vx forum poll --all` fixes it with one listener for all of them:
+
+- It covers every open session (sessions opened while it waits join it), so every panel shows the agent as listening.
+- Each call delivers the feedback of one session, the one waiting longest, and prints its `session` and `file` so the agent knows which artifact to edit. `other_sessions_pending` says how many more are waiting; the next call delivers them.
+- `--reply-to <file>` names the session a `--reply` answers.
+- A session that ends while it waits is reported once as `ended`. `no_sessions` means none is open. `browser_disconnected` means every review window is gone.
+
+`vx forum poll <file>` keeps working for a single session.
+
+### A dying poll never loses feedback
+
+A poll does not consume feedback by returning it. The prompts stay on the server until the command confirms it printed them. If the poll was killed, timed out or lost its output in between, running `poll` again delivers the same prompts again, marked `redelivered: true` with the same `uid`s and ahead of anything newer, so the agent can skip what it already applied. This survives a server restart.
+
+### What the panel says about your agent
+
+| State | Meaning |
+| --- | --- |
+| Agent listening | a poll is open (a `poll --all` counts for every session it covers) |
+| Agent working | the agent took your messages and has not polled or replied since; holds up to 15 minutes |
+| Waiting for your agent to listen | no poll right now, but the agent was there in the last 30 seconds (a poll just ended, it just replied or opened the session); no warning yet, so it does not flicker between a reply and the next poll |
+| Agent not listening | none of the above: ask your agent to poll |
 
 The agent's playbook is the `forum` [skill](/docs/concepts/skills), installed by `vx init` (full text on [Skill: forum](/docs/reference/skills/forum)).
 

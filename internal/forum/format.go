@@ -10,11 +10,13 @@ import (
 // FormatPoll renders a poll response in the stable text format agents parse
 // (documented in skills/forum/SKILL.md):
 //
-//	session: <key>
-//	file: <absolute path>
-//	status: feedback | ended | browser_disconnected | timeout
+//	session: <key>                    (omitted when no session is meant)
+//	file: <absolute path>             (omitted when no session is meant)
+//	status: feedback | ended | browser_disconnected | timeout | no_sessions
+//	other_sessions_pending: <n>       (only with poll --all, when n > 0)
 //	prompts[N]:
 //	  - uid: <id>
+//	    redelivered: true             (omitted unless an earlier delivery went unconfirmed)
 //	    tag: <tag>
 //	    prompt: <text>
 //	    selector: <css selector>      (omitted when empty)
@@ -29,19 +31,33 @@ import (
 // A multi-line value is written as `key: |` followed by its lines indented
 // two spaces deeper than the key; everything else is `key: value` on one
 // line. file is a path
-// the user chose, written verbatim.
+// the user chose, written verbatim; an empty file means the result names its
+// own (a multiplexed poll).
 func FormatPoll(file string, res PollResponse) string {
+	if file == "" {
+		file = res.File
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "session: %s\n", res.Session)
-	writeField(&b, "", "file", file)
+	if res.Session != "" {
+		fmt.Fprintf(&b, "session: %s\n", res.Session)
+	}
+	if file != "" {
+		writeField(&b, "", "file", file)
+	}
 	fmt.Fprintf(&b, "status: %s\n", res.Status)
 	if res.EndedBy != "" {
 		fmt.Fprintf(&b, "ended_by: %s\n", res.EndedBy)
+	}
+	if res.OtherPending > 0 {
+		fmt.Fprintf(&b, "other_sessions_pending: %d\n", res.OtherPending)
 	}
 	fmt.Fprintf(&b, "prompts[%d]:\n", len(res.Prompts))
 	for _, p := range res.Prompts {
 		b.WriteString("  - ")
 		writeField(&b, "", "uid", p.UID)
+		if p.Redelivered {
+			writeField(&b, "    ", "redelivered", "true")
+		}
 		writeField(&b, "    ", "tag", p.Tag)
 		writeField(&b, "    ", "prompt", p.Prompt)
 		if p.Selector != "" {
@@ -84,30 +100,63 @@ func writeField(b *strings.Builder, indent, key, value string) {
 }
 
 // PollNextStep is the one-sentence instruction printed after a poll: what
-// the agent should do now, per status.
+// the agent should do now, per status. A multiplexed poll (res.All) keeps the
+// agent on `poll --all`, naming the session to reply to.
 func PollNextStep(file string, res PollResponse) string {
-	poll := cmdname.Name + " forum poll " + shellQuote(file)
+	if file == "" {
+		file = res.File
+	}
+	again := cmdname.Name + " forum poll " + shellQuote(file)
+	reply := again + " --reply \"<what you did>\""
+	if res.All {
+		again = cmdname.Name + " forum poll --all"
+		reply = again + " --reply-to " + shellQuote(file) + " --reply \"<what you did>\""
+	}
+	step := pollStatusStep(file, res, again, reply)
+	if res.Status != PollNoSessions && hasRedelivered(res.Prompts) {
+		step += " Prompts marked redelivered were delivered by an earlier poll that never confirmed it: skip any uid you already applied."
+	}
+	return step
+}
+
+func pollStatusStep(file string, res PollResponse, again, reply string) string {
 	switch res.Status {
 	case PollFeedback:
-		if hasAttachments(res.Prompts) {
-			return "Some prompts carry attachments: read each image from its path (your file-reading tool can open images) before acting. Apply this feedback, then run `" + poll + " --reply \"<what you did>\"` to answer in the browser and keep waiting for more."
+		lead := "Apply this feedback, then run `" + reply + "` to answer in the browser and keep waiting for more."
+		if res.All && res.OtherPending > 0 {
+			lead = fmt.Sprintf("Apply this feedback, then run `%s` to answer in the browser and keep waiting; %d other session(s) already have feedback waiting, the next poll delivers it.", reply, res.OtherPending)
 		}
-		return "Apply this feedback, then run `" + poll + " --reply \"<what you did>\"` to answer in the browser and keep waiting for more."
+		if hasAttachments(res.Prompts) {
+			return "Some prompts carry attachments: read each image from its path (your file-reading tool can open images) before acting. " + lead
+		}
+		return lead
 	case PollEnded:
 		who := "The session ended"
 		if res.EndedBy == EndedByUser {
 			who = "The user ended the session from the browser"
+		}
+		if res.All {
+			tail := " Do not reopen it unless the user asks. Run `" + again + "` again to keep listening to the other open sessions (it reports no_sessions when none are left)."
+			if len(res.Prompts) > 0 {
+				return who + ". This was the final feedback of that session, delivered once: apply it." + tail
+			}
+			return who + "." + tail
 		}
 		if len(res.Prompts) > 0 {
 			return who + ". This was the final feedback, delivered once: apply it. Do not poll again and do not reopen the session unless the user asks."
 		}
 		return who + ". Stop polling and do not reopen the session unless the user asks."
 	case PollBrowserDisconnected:
+		if res.All {
+			return "Every review window went away but the sessions are still resumable. Ask the user whether to reopen them (`" + cmdname.Name + " forum <file>`) or end them (`" + cmdname.Name + " forum end <file>`); do neither uninvited."
+		}
 		return "The browser window went away but the session is still resumable. Ask the user whether to reopen it (`" + cmdname.Name + " forum " + shellQuote(file) + "`) or end it (`" + cmdname.Name + " forum end " + shellQuote(file) + "`); do neither uninvited."
+	case PollNoSessions:
+		return "No forum session is open, so there is nothing to listen to. Stop polling; open an artifact with `" + cmdname.Name + " forum <file>` when there is something to review."
 	case PollTimeout:
-		return "No feedback yet. Run `" + poll + "` again to keep waiting."
+		return "No feedback yet. Run `" + again + "` again to keep waiting."
 	default:
-		return "Run `" + poll + "` again."
+		return "Run `" + again + "` again."
 	}
 }
 
@@ -121,7 +170,7 @@ func OpenNextStep(file string, res OpenResponse) string {
 	if res.Pending > 0 {
 		return fmt.Sprintf("The user already sent %d prompt(s). Run `%s` now to receive them; keep polling in a loop after that.", res.Pending, poll)
 	}
-	return "Tell the user the review is open at the URL above, then run `" + poll + "` to wait for their feedback (keep polling in a loop; never kill the poll)."
+	return "Tell the user the review is open at the URL above, then run `" + poll + "` to wait for their feedback (keep polling in a loop; never kill the poll). With several sessions open, run one `" + cmdname.Name + " forum poll --all` instead of a poll per file."
 }
 
 // shellQuote quotes s for a POSIX shell only when it needs it.
@@ -137,6 +186,15 @@ func shellQuote(s string) string {
 func hasAttachments(prompts []Prompt) bool {
 	for _, p := range prompts {
 		if len(p.Attachments) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRedelivered(prompts []Prompt) bool {
+	for _, p := range prompts {
+		if p.Redelivered {
 			return true
 		}
 	}

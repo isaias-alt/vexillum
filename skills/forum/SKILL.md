@@ -47,6 +47,8 @@ what to visualize from the conversation.
    do not tell the user it is being watched unless a poll is actually running
    in your harness's tracked foreground/background-job facility.
    After every response, act on it and poll again, until the session ends.
+   **With more than one session open, do not run a poll per file**: run one
+   `vx forum poll --all` (see "Several sessions").
 5. **Answer in the browser** while you keep waiting:
    `vx forum poll .vexillum/forum/plan.html --reply "Done: switched to the Pro plan"`
    shows your markdown message in the conversation panel, then waits again.
@@ -60,12 +62,52 @@ what to visualize from the conversation.
 Sessions are identified by the file's **absolute path**; the same file always
 resumes the same session, including its queue and transcript.
 
+## Several sessions: one `poll --all`
+
+Every open session needs a listener, or its panel says your agent is not
+listening. Do **not** keep one blocking poll per file: each one dies when it
+delivers feedback, when its background task times out, or when you are busy,
+and the sessions you forgot to re-poll go deaf. Keep **one** listener instead:
+
+```
+vx forum poll --all
+vx forum poll --all --reply-to .vexillum/forum/plan.html --reply "Done: switched to Pro"
+```
+
+- It listens to **every open session at once** (sessions opened while it waits
+  join it), so every panel shows the agent as listening.
+- Each call delivers the feedback of **one** session, the one waiting longest, and
+  names it: the output has `session:` and `file:` for it, so you know which
+  artifact to edit and reply to. `other_sessions_pending: <n>` says how many more
+  sessions have feedback waiting; poll again and the next one comes out.
+  Nothing is dropped or merged across sessions.
+- `--reply-to <file>` says which session a `--reply` answers (the poll itself
+  has no file). Reply to the session the feedback came from, in the same call
+  that resumes listening.
+- Same loop as always: apply the feedback, then `poll --all` again (usually with
+  `--reply-to` and `--reply`). Open each artifact with `vx forum <file>` first;
+  `--no-open` skips the browser for ones the user already has open.
+- A session that ends while you wait comes back **once** as `status: ended`
+  (with its `file`); keep polling `--all` for the others. `status: no_sessions`
+  means nothing is open: stop. `status: browser_disconnected` means **every**
+  review window is gone (one open window is enough to keep it quiet).
+- The per-file `vx forum poll <file>` keeps working for a single session.
+
+**If your poll dies, just run it again.** A poll does not consume feedback by
+returning it: the prompts stay on the server until the command confirms it
+printed them. If the process was killed, timed out or lost its output in
+between, the next `poll` (per-file or `--all`) delivers those prompts again,
+marked `redelivered: true` with the same `uid`s, ahead of anything newer. Skip a
+`uid` you already applied; apply the rest. Nothing is lost and nothing arrives
+twice unflagged.
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `vx forum <file> [--no-open] [--reopen] [--port n]` | Open or resume the session, return at once. |
-| `vx forum poll <file> [--reply <text> \| --reply-file <path\|->] [--timeout <dur>]` | Wait for feedback (consuming it). `--timeout 10m` returns `status: timeout` if nothing arrives. |
+| `vx forum poll <file> [--reply <text> \| --reply-file <path\|->] [--timeout <dur>]` | Wait for feedback on one session. `--timeout 10m` returns `status: timeout` if nothing arrives. |
+| `vx forum poll --all [--reply-to <file> (--reply <text> \| --reply-file <path\|->)] [--timeout <dur>]` | Wait on every open session at once; delivers one session's feedback per call and names its file. |
 | `vx forum end <file>` | End the session as the agent. A plain `forum <file>` reopens it later. |
 | `vx forum stop` | Shut the background server down. |
 
@@ -96,12 +138,14 @@ Stable, line-oriented text (exit code 0 for every status below; non-zero only
 for real errors, printed to stderr):
 
 ```
-session: <key>
-file: <absolute path>
-status: feedback | ended | browser_disconnected | timeout
+session: <key>                    (omitted when the status is about no session)
+file: <absolute path>             (omitted when the status is about no session)
+status: feedback | ended | browser_disconnected | timeout | no_sessions
 ended_by: user | agent            (only when the session ended)
+other_sessions_pending: <n>       (only with poll --all, when n > 0)
 prompts[<n>]:
   - uid: <prompt id>
+    redelivered: true             (omitted unless an earlier delivery went unconfirmed)
     tag: <tag>
     prompt: <text>
     selector: <css selector>      (omitted when empty)
@@ -120,8 +164,9 @@ next_step: <what to do now>
 - A multi-line value is written as `key: |` followed by its lines indented two
   spaces deeper than the key. Everything else is `key: value` on one line.
 - `prompts[0]:` means no prompts. Prompts arrive in the order the user queued
-  them. Feedback is **consumed** by the poll that returns it - read the whole
-  response; it is not delivered twice.
+  them. Feedback is **confirmed** once the command has printed it - read the
+  whole response; it is not delivered again, except `redelivered: true` prompts
+  after a poll that died before confirming (see "Several sessions").
 - `status: feedback` - act on the prompts, then poll again (usually with
   `--reply`).
 - `status: ended` - the session ended (`ended_by` says who). Prompts, if any,
@@ -132,6 +177,7 @@ next_step: <what to do now>
   lost. Ask the user whether to reopen it (`vx forum <file>`) or end it;
   do neither on your own, and do not tight-loop on this status.
 - `status: timeout` - only with `--timeout`; poll again.
+- `status: no_sessions` - only with `--all`: no session is open. Stop polling.
 - Common `tag` values: `message` (typed in the composer), `feedback` (default
   for `queuePrompt`), `whiteboard` (see below), `layout-warnings` (layout
   issues the user chose to send, see "Layout issues"), `text` (an annotated
@@ -146,19 +192,26 @@ waiting; everything queued is on disk.
 A conversation panel next to your artifact: their messages (plain text), your
 replies (markdown, sanitized), a composer, a removable list of **queued**
 messages, **Send to Agent** and **Send & End**, and an indicator of whether
-your agent is listening. The indicator and a notice show one of three states:
+your agent is listening. The indicator and a notice show one of four states:
 
-- **Agent listening** - a poll is open.
+- **Agent listening** - a poll is open (a `poll --all` counts for every session
+  it covers).
 - **Agent working** ("Your agent received your message and is working.") - a
   poll just delivered the user's messages and you have neither polled again nor
   replied since. This holds for up to 15 minutes (it survives a server
   restart), which is why you should reply (`--reply`) or poll again as soon as
   you can instead of going silent.
+- **Waiting for your agent to listen** ("Waiting for your agent to poll
+  again.") - no poll is open right now, but you were
+  there a moment ago: a poll just ended, you just replied, or you just opened the
+  session. It holds for 30 seconds after your last sign of life, so the warning
+  does not flicker between a reply and your next poll. Poll again within it and
+  the panel never shows a warning.
 - **Agent not listening** ("Your agent is not listening. Ask it to poll for
-  updates.") - no poll is open and nothing was delivered recently (or the
-  working window ran out).
+  updates.") - no poll is open and the waiting window and the working window
+  have both run out.
 
-Keep a poll running whenever the session is open.
+Keep a poll running whenever a session is open (one `poll --all` for several).
 
 **The review pauses while you work.** From the moment the user presses **Send
 to Agent**, the browser shows an **Agent is working on your feedback** overlay

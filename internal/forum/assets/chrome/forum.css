@@ -130,6 +130,8 @@ button, textarea { font: inherit; color: inherit; }
 .presence[data-state="working"] { color: var(--fr-text); }
 .presence[data-state="working"] .presence-dot { background: var(--fr-bronze); opacity: 1; animation: working-pulse 1.6s ease-in-out infinite; }
 @keyframes working-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--fr-bronze-soft); } 50% { box-shadow: 0 0 0 4px var(--fr-bronze-soft); } }
+.presence[data-state="waiting"] { color: var(--fr-text-secondary); }
+.presence[data-state="waiting"] .presence-dot { background: var(--fr-accent); opacity: 0.55; }
 .presence[data-state="idle"], .presence[data-state="ended"] { color: var(--fr-text-secondary); }
 
 .banner {

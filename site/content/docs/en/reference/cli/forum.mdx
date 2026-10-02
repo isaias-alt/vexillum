@@ -11,6 +11,7 @@ Open a local HTML artifact for visual review and collect the user's feedback.
 Usage:
   vx forum <html-file> [--no-open] [--reopen] [--port <n>]
   vx forum poll <html-file> [--reply <text> | --reply-file <path|->] [--timeout <duration>]
+  vx forum poll --all [--reply-to <html-file> (--reply <text> | --reply-file <path|->)] [--timeout <duration>]
   vx forum end <html-file>
   vx forum stop
 
@@ -35,6 +36,20 @@ the agent's markdown answer in the browser's conversation panel before it
 waits again; --reply-file reads it from a file (- is stdin). --timeout
 returns status timeout if nothing arrives in time. Run it again after each
 response; see skills/forum/SKILL.md for the exact output format.
+
+forum poll --all listens to every open session at once, so one poll covers
+several review windows. Each call delivers the feedback of one session (the
+one waiting longest) and names it in the output (session and file);
+other_sessions_pending says how many more are waiting, and the next call
+delivers them. A session that ends while it waits is reported once as ended,
+and no_sessions means nothing is open. Sessions opened while it waits join it.
+--reply-to names the session a --reply answers, since the poll itself has no
+file.
+
+Delivery is confirmed, not assumed: a poll leases its prompts and the command
+acknowledges them once its output was written. If a poll dies before that,
+running poll again delivers the same prompts again, marked redelivered, so
+nothing is lost; skip any uid you already applied.
 
 forum end ends the session as the agent (a plain forum <html-file> reopens
 it later). forum stop shuts the background server down.

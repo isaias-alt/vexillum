@@ -25,27 +25,37 @@ func transcriptFile(home, key string) string {
 	return filepath.Join(sessionDir(home, key), "transcript.json")
 }
 
+// loadRecord reads a session's durable record without its transcript, or
+// returns (nil, nil) if the session has never been persisted.
+func loadRecord(home, key string) (*sessionRecord, error) {
+	if !ValidSessionKey(key) {
+		return nil, fmt.Errorf("invalid forum session key: %q", key)
+	}
+	data, err := os.ReadFile(sessionFile(home, key))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading session %s: %w", key, err)
+	}
+	var rec sessionRecord
+	if err := json.Unmarshal(data, &rec); err != nil {
+		return nil, fmt.Errorf("parsing session %s: %w", key, err)
+	}
+	if rec.Key != key {
+		return nil, fmt.Errorf("session file for %s names key %q", key, rec.Key)
+	}
+	return &rec, nil
+}
+
 // loadSession reads a session's durable state, or returns (nil, nil, nil)
 // if the session has never been persisted. A transcript that is missing
 // (never written) is empty; one that is unreadable is an error rather than
 // silently dropped.
 func loadSession(home, key string) (*sessionRecord, []Message, error) {
-	if !ValidSessionKey(key) {
-		return nil, nil, fmt.Errorf("invalid forum session key: %q", key)
-	}
-	data, err := os.ReadFile(sessionFile(home, key))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil, nil
-		}
-		return nil, nil, fmt.Errorf("reading session %s: %w", key, err)
-	}
-	var rec sessionRecord
-	if err := json.Unmarshal(data, &rec); err != nil {
-		return nil, nil, fmt.Errorf("parsing session %s: %w", key, err)
-	}
-	if rec.Key != key {
-		return nil, nil, fmt.Errorf("session file for %s names key %q", key, rec.Key)
+	rec, err := loadRecord(home, key)
+	if err != nil || rec == nil {
+		return nil, nil, err
 	}
 
 	var transcript []Message
@@ -58,7 +68,7 @@ func loadSession(home, key string) (*sessionRecord, []Message, error) {
 	case !errors.Is(err, os.ErrNotExist):
 		return nil, nil, fmt.Errorf("reading transcript %s: %w", key, err)
 	}
-	return &rec, transcript, nil
+	return rec, transcript, nil
 }
 
 func saveRecord(home string, rec *sessionRecord) error {

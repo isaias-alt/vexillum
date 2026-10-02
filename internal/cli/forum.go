@@ -24,6 +24,7 @@ const forumUsage = `Open a local HTML artifact for visual review and collect the
 Usage:
   ` + cmdname.Name + ` forum <html-file> [--no-open] [--reopen] [--port <n>]
   ` + cmdname.Name + ` forum poll <html-file> [--reply <text> | --reply-file <path|->] [--timeout <duration>]
+  ` + cmdname.Name + ` forum poll --all [--reply-to <html-file> (--reply <text> | --reply-file <path|->)] [--timeout <duration>]
   ` + cmdname.Name + ` forum end <html-file>
   ` + cmdname.Name + ` forum stop
 
@@ -48,6 +49,20 @@ the agent's markdown answer in the browser's conversation panel before it
 waits again; --reply-file reads it from a file (- is stdin). --timeout
 returns status timeout if nothing arrives in time. Run it again after each
 response; see skills/forum/SKILL.md for the exact output format.
+
+forum poll --all listens to every open session at once, so one poll covers
+several review windows. Each call delivers the feedback of one session (the
+one waiting longest) and names it in the output (session and file);
+other_sessions_pending says how many more are waiting, and the next call
+delivers them. A session that ends while it waits is reported once as ended,
+and no_sessions means nothing is open. Sessions opened while it waits join it.
+--reply-to names the session a --reply answers, since the poll itself has no
+file.
+
+Delivery is confirmed, not assumed: a poll leases its prompts and the command
+acknowledges them once its output was written. If a poll dies before that,
+running poll again delivers the same prompts again, marked redelivered, so
+nothing is lost; skip any uid you already applied.
 
 forum end ends the session as the agent (a plain forum <html-file> reopens
 it later). forum stop shuts the background server down.
@@ -216,6 +231,8 @@ func runForumOpen(ctx context.Context, home string, args []string, stdout, stder
 
 type forumPollArgs struct {
 	file      string
+	all       bool
+	replyTo   string
 	reply     string
 	replyFile string
 	hasReply  bool
@@ -226,12 +243,16 @@ func parseForumPollArgs(args []string) (forumPollArgs, error) {
 	var a forumPollArgs
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i]; arg {
-		case "--reply", "--reply-file", "--timeout":
+		case "--all":
+			a.all = true
+		case "--reply", "--reply-file", "--reply-to", "--timeout":
 			i++
 			if i >= len(args) {
 				return a, fmt.Errorf("%s requires a value", arg)
 			}
 			switch arg {
+			case "--reply-to":
+				a.replyTo = args[i]
 			case "--reply":
 				a.reply, a.hasReply = args[i], true
 			case "--reply-file":
@@ -253,11 +274,25 @@ func parseForumPollArgs(args []string) (forumPollArgs, error) {
 			a.file = arg
 		}
 	}
-	if a.file == "" {
-		return a, fmt.Errorf("missing html file")
-	}
 	if a.reply != "" && a.replyFile != "" {
 		return a, fmt.Errorf("pass --reply or --reply-file, not both")
+	}
+	if a.all {
+		switch {
+		case a.file != "":
+			return a, fmt.Errorf("pass --all or an html file, not both")
+		case a.hasReply && a.replyTo == "":
+			return a, fmt.Errorf("--all needs --reply-to <html-file> to say which session a reply answers")
+		case !a.hasReply && a.replyTo != "":
+			return a, fmt.Errorf("--reply-to needs --reply or --reply-file")
+		}
+		return a, nil
+	}
+	if a.replyTo != "" {
+		return a, fmt.Errorf("--reply-to only goes with --all; name the file instead")
+	}
+	if a.file == "" {
+		return a, fmt.Errorf("missing html file")
 	}
 	return a, nil
 }
@@ -268,10 +303,17 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
-	abs, err := filepath.Abs(a.file)
-	if err != nil {
-		fmt.Fprintf(stderr, cmdname.Name+": resolving %s: %v\n", a.file, err)
-		return 1
+	// The session a reply goes to; a multiplexed poll has no file of its own.
+	target := a.file
+	if a.all {
+		target = a.replyTo
+	}
+	abs := ""
+	if target != "" {
+		if abs, err = filepath.Abs(target); err != nil {
+			fmt.Fprintf(stderr, cmdname.Name+": resolving %s: %v\n", target, err)
+			return 1
+		}
 	}
 
 	reply := a.reply
@@ -320,9 +362,24 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 	const maxReconnects = 5
 	failures := 0
 	for {
-		res, err := client.Poll(ctx, abs, a.timeout)
+		var res forum.PollResponse
+		if a.all {
+			res, err = client.PollAll(ctx, a.timeout)
+		} else {
+			res, err = client.Poll(ctx, abs, a.timeout)
+		}
 		if err == nil {
-			fmt.Fprint(stdout, forum.FormatPoll(abs, res))
+			out := forum.FormatPoll(abs, res)
+			if a.all {
+				out = forum.FormatPoll("", res)
+			}
+			if _, werr := fmt.Fprint(stdout, out); werr != nil {
+				// Nobody read it: leave the prompts unconfirmed so the next
+				// poll delivers them again.
+				fmt.Fprintf(stderr, cmdname.Name+": writing the poll result: %v\n", werr)
+				return 1
+			}
+			ackDelivery(client, res, stderr)
 			return 0
 		}
 		if ctx.Err() != nil {
@@ -351,6 +408,21 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 			fmt.Fprintln(stderr, cmdname.Name+":", err)
 			return 1
 		}
+	}
+}
+
+// ackDelivery tells the server the prompts in res were read. Best effort: an
+// unconfirmed delivery is not lost, it comes back with the next poll marked
+// redelivered. It uses its own short deadline because the poll's context may
+// already be canceled by the signal that is ending this process.
+func ackDelivery(client *forum.Client, res forum.PollResponse, stderr io.Writer) {
+	if res.Delivery == "" || res.File == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := client.Ack(ctx, res.File, res.Delivery); err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": warning: could not confirm delivery (the prompts will be redelivered by the next poll): %v\n", err)
 	}
 }
 

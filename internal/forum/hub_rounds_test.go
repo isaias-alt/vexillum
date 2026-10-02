@@ -111,9 +111,11 @@ func TestHub_AwaitingEndsOnEveryAnswer(t *testing.T) {
 	t.Run("delivering poll keeps waiting, the next one ends it", func(t *testing.T) {
 		h, key, _ := roundSession(t, t.TempDir())
 		sendFeedback(t, h, key, "x", "")
-		if res, err := h.Poll(context.Background(), key, time.Second); err != nil || res.Status != forum.PollFeedback {
+		res, err := h.Poll(context.Background(), key, time.Second)
+		if err != nil || res.Status != forum.PollFeedback {
 			t.Fatalf("poll = %+v %v", res, err)
 		}
+		ack(t, h, key, res)
 		if !awaiting(h, key) {
 			t.Fatal("the poll that delivered the feedback must not end the wait")
 		}
@@ -142,9 +144,11 @@ func TestHub_AwaitingEndsOnEveryAnswer(t *testing.T) {
 	t.Run("artifact change after the agent resumed polling still answers", func(t *testing.T) {
 		h, key, file := roundSession(t, t.TempDir())
 		sendFeedback(t, h, key, "x", "")
-		if _, err := h.Poll(context.Background(), key, time.Second); err != nil {
+		res, err := h.Poll(context.Background(), key, time.Second)
+		if err != nil {
 			t.Fatal(err)
 		}
+		ack(t, h, key, res)
 		if _, err := h.Poll(context.Background(), key, 20*time.Millisecond); err != nil {
 			t.Fatal(err)
 		}

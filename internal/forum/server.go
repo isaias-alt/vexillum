@@ -94,6 +94,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
 	s.mux.HandleFunc("POST /api/agent/open", s.agentOnly(s.handleAgentOpen))
 	s.mux.HandleFunc("POST /api/agent/poll", s.agentOnly(s.handleAgentPoll))
+	s.mux.HandleFunc("POST /api/agent/ack", s.agentOnly(s.handleAgentAck))
 	s.mux.HandleFunc("POST /api/agent/reply", s.agentOnly(s.handleAgentReply))
 	s.mux.HandleFunc("POST /api/agent/end", s.agentOnly(s.handleAgentEnd))
 	s.mux.HandleFunc("POST /api/agent/stop", s.agentOnly(s.handleAgentStop))
@@ -201,6 +202,10 @@ type agentFileRequest struct {
 	Reopen    bool   `json:"reopen"`
 	Text      string `json:"text"`
 	TimeoutMS int64  `json:"timeout_ms"`
+	// All polls every open session instead of File's (poll only).
+	All bool `json:"all"`
+	// Delivery is the lease a poll handed out (ack only).
+	Delivery string `json:"delivery"`
 }
 
 // agentKey validates the absolute artifact path an agent command names and
@@ -255,9 +260,68 @@ type PollResponse struct {
 	Status  string   `json:"status"`
 	EndedBy string   `json:"ended_by,omitempty"`
 	Prompts []Prompt `json:"prompts"`
+	// All is set when the poll covered every open session; File then says which
+	// one the result is about (empty for a status that is about none of them).
+	All bool `json:"all,omitempty"`
+	// OtherPending counts the other sessions a multiplexed poll left with
+	// feedback still waiting.
+	OtherPending int `json:"other_pending,omitempty"`
+	// Delivery is the lease to confirm with POST /api/agent/ack once the prompts
+	// were read; until then they are delivered again by the next poll.
+	Delivery string `json:"delivery,omitempty"`
 }
 
 func (s *Server) handleAgentPoll(w http.ResponseWriter, r *http.Request) {
+	var req agentFileRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	timeout := time.Duration(req.TimeoutMS) * time.Millisecond
+	var res PollResult
+	var err error
+	if req.All {
+		res, err = s.hub.PollAll(r.Context(), timeout)
+	} else {
+		key, ok := agentKey(w, req)
+		if !ok {
+			return
+		}
+		res, err = s.hub.Poll(r.Context(), key, timeout)
+	}
+	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
+		writeHubError(w, err)
+		return
+	}
+	// QueueKey is browser-only bookkeeping; the agent never sees it.
+	delivered := make([]Prompt, len(res.Prompts))
+	for i, p := range res.Prompts {
+		p.QueueKey = ""
+		p.LayoutIDs = nil
+		// The agent reads attachments from disk: hand it their local paths.
+		p.Attachments = append([]Attachment(nil), p.Attachments...)
+		for j := range p.Attachments {
+			p.Attachments[j].Path = s.hub.AttachmentPath(res.Key, p.Attachments[j].ID)
+		}
+		delivered[i] = p
+	}
+	// Nothing to undo if the client vanished before reading this: the prompts
+	// are leased, not consumed, and the next poll delivers them again.
+	writeJSON(w, http.StatusOK, PollResponse{
+		Session:      res.Key,
+		File:         res.File,
+		Status:       res.Status,
+		EndedBy:      res.EndedBy,
+		Prompts:      delivered,
+		All:          req.All,
+		OtherPending: res.OtherPending,
+		Delivery:     res.Delivery,
+	})
+}
+
+func (s *Server) handleAgentAck(w http.ResponseWriter, r *http.Request) {
 	var req agentFileRequest
 	if !decodeBody(w, r, &req) {
 		return
@@ -266,40 +330,11 @@ func (s *Server) handleAgentPoll(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := s.hub.Poll(r.Context(), key, time.Duration(req.TimeoutMS)*time.Millisecond)
-	if err != nil {
-		if r.Context().Err() != nil {
-			return
-		}
+	if err := s.hub.Ack(key, req.Delivery); err != nil {
 		writeHubError(w, err)
 		return
 	}
-	prompts := res.Prompts
-	if prompts == nil {
-		prompts = []Prompt{}
-	}
-	// QueueKey is browser-only bookkeeping; the agent never sees it.
-	delivered := make([]Prompt, len(prompts))
-	for i, p := range prompts {
-		p.QueueKey = ""
-		p.LayoutIDs = nil
-		// The agent reads attachments from disk: hand it their local paths.
-		p.Attachments = append([]Attachment(nil), p.Attachments...)
-		for j := range p.Attachments {
-			p.Attachments[j].Path = s.hub.AttachmentPath(key, p.Attachments[j].ID)
-		}
-		delivered[i] = p
-	}
-	writeJSON(w, http.StatusOK, PollResponse{Session: res.Key, File: res.File, Status: res.Status, EndedBy: res.EndedBy, Prompts: delivered})
-	// A client that vanished before it could read what was just consumed
-	// gets it back in the outbox, so the next poll delivers it.
-	if len(prompts) > 0 {
-		if flushErr := http.NewResponseController(w).Flush(); flushErr != nil && !errors.Is(flushErr, http.ErrNotSupported) || r.Context().Err() != nil {
-			if rerr := s.hub.Restore(key, prompts); rerr != nil {
-				s.hub.logf("forum: restoring undelivered prompts for %s: %v", key, rerr)
-			}
-		}
-	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "acknowledged"})
 }
 
 func (s *Server) handleAgentReply(w http.ResponseWriter, r *http.Request) {

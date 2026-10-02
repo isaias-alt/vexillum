@@ -79,7 +79,7 @@ Tracked batch, the final selected set queued once:
 </form>
 ```
 
-The receipt you give for a tracked batch must assign every submitted ID exactly one outcome: addressed with concrete evidence, deferred with a reason, or rejected with a reason. Before declaring completion, compare the submitted ID set with the receipt's ID set and surface every missing ID. Deliver the receipt with `vx forum poll <file> --reply-file -`.
+The receipt you give for a tracked batch must assign every submitted ID exactly one outcome: addressed with concrete evidence, deferred with a reason, or rejected with a reason. Before declaring completion, compare the submitted ID set with the receipt's ID set and surface every missing ID. Deliver the receipt with `vx forum poll <file> --reply-file -` (with several sessions open: `vx forum poll --all --reply-to <file> --reply-file -`).
 
 A custom (non-native) choice UI should make its option elements update local state, then use a separate Queue answer button to queue the final value.
 

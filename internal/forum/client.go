@@ -119,6 +119,20 @@ func (c *Client) Poll(ctx context.Context, file string, timeout time.Duration) (
 	return out, err
 }
 
+// PollAll is Poll over every open session at once; the result names the session
+// it is about.
+func (c *Client) PollAll(ctx context.Context, timeout time.Duration) (PollResponse, error) {
+	var out PollResponse
+	err := c.do(ctx, http.MethodPost, "/api/agent/poll", agentFileRequest{All: true, TimeoutMS: timeout.Milliseconds()}, &out)
+	return out, err
+}
+
+// Ack confirms that the prompts of a poll's delivery were read, so the server
+// stops holding them for redelivery.
+func (c *Client) Ack(ctx context.Context, file, delivery string) error {
+	return c.do(ctx, http.MethodPost, "/api/agent/ack", agentFileRequest{File: file, Delivery: delivery}, nil)
+}
+
 // Reply shows text (markdown) in the browser's conversation panel.
 func (c *Client) Reply(ctx context.Context, file, text string) error {
 	return c.do(ctx, http.MethodPost, "/api/agent/reply", agentFileRequest{File: file, Text: text}, nil)

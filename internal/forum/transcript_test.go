@@ -152,9 +152,11 @@ func TestTranscript_EvictedImagesAreFreedOnceDelivered(t *testing.T) {
 	if _, err := h.Send(key, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.Poll(context.Background(), key, time.Second); err != nil {
+	res, err := h.Poll(context.Background(), key, time.Second)
+	if err != nil {
 		t.Fatal(err)
 	}
+	ack(t, h, key, res)
 	if h.AttachmentPath(key, att.ID) == "" {
 		t.Fatal("a delivered image still in the transcript must stay")
 	}

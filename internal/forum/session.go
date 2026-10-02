@@ -75,6 +75,10 @@ type Prompt struct {
 	// the artifact queues can claim, or release, a warning. Never delivered to
 	// the agent.
 	LayoutIDs []string `json:"layout_ids,omitempty"`
+	// Redelivered is set only on the copy a poll hands out, never on a stored
+	// prompt: an earlier poll already delivered this prompt but never confirmed
+	// it (see Hub.Ack), so the agent may have seen it.
+	Redelivered bool `json:"redelivered,omitempty"`
 }
 
 // PromptInput is the client-controllable part of a Prompt.
@@ -112,7 +116,7 @@ type Message struct {
 // sessionRecord is the durable, restart-proof part of a session
 // (<state>/forums/<key>/session.json). Queued holds prompts the user has
 // drafted but not sent; Outbox holds prompts the user sent that no poll has
-// consumed yet. Both survive a server restart.
+// delivered yet. Both survive a server restart.
 type sessionRecord struct {
 	Version   int       `json:"version"`
 	Key       string    `json:"key"`
@@ -124,6 +128,13 @@ type sessionRecord struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Queued    []Prompt  `json:"queued"`
 	Outbox    []Prompt  `json:"outbox"`
+	// Inflight holds prompts a poll handed out that the agent has not
+	// acknowledged yet (InflightID names that delivery). They stay on disk until
+	// Hub.Ack, so a poll that dies after the server consumed the outbox but
+	// before its output was read loses nothing: the next poll delivers them again,
+	// marked redelivered.
+	Inflight   []Prompt `json:"inflight,omitempty"`
+	InflightID string   `json:"inflight_id,omitempty"`
 	// DeliveredAt is when a poll last took prompts from the outbox and the
 	// agent has not polled again or replied since. It is what lets the browser
 	// say "your agent received your message and is working" instead of "not

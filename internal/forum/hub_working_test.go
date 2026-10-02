@@ -41,9 +41,11 @@ func deliveredSession(t *testing.T, home string, clock *fakeClock) (*forum.Hub, 
 	if _, err := h.Send(open.Key, false); err != nil {
 		t.Fatal(err)
 	}
-	if res, err := h.Poll(context.Background(), open.Key, time.Second); err != nil || res.Status != forum.PollFeedback {
+	res, err := h.Poll(context.Background(), open.Key, time.Second)
+	if err != nil || res.Status != forum.PollFeedback {
 		t.Fatalf("poll = %+v %v, want the feedback", res, err)
 	}
+	ack(t, h, open.Key, res)
 	return h, open.Key
 }
 

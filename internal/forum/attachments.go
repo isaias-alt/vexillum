@@ -114,6 +114,9 @@ func (l *liveSession) referencedAttachments() map[string]bool {
 	for _, p := range l.rec.Outbox {
 		add(p.Attachments)
 	}
+	for _, p := range l.rec.Inflight {
+		add(p.Attachments)
+	}
 	for _, m := range l.transcript {
 		add(m.Attachments)
 	}

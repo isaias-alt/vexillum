@@ -68,6 +68,15 @@ func waitResult(t *testing.T, ch <-chan forum.PollResult) forum.PollResult {
 	}
 }
 
+// ack confirms res's delivery the way the CLI does once it has written the
+// poll output.
+func ack(t *testing.T, h *forum.Hub, key string, res forum.PollResult) {
+	t.Helper()
+	if err := h.Ack(key, res.Delivery); err != nil {
+		t.Fatalf("Ack: %v", err)
+	}
+}
+
 func TestHub_QueueSendPoll_DeliversOnceAndConsumes(t *testing.T) {
 	h := newHub(t, t.TempDir(), time.Minute)
 	file := filepath.Join(t.TempDir(), "a.html")
@@ -99,7 +108,8 @@ func TestHub_QueueSendPoll_DeliversOnceAndConsumes(t *testing.T) {
 		t.Errorf("prompt fields lost: %+v", res.Prompts[0])
 	}
 
-	// Consumed: a second poll must not see it again.
+	// Consumed once the agent confirmed it: a second poll must not see it again.
+	ack(t, h, open.Key, res)
 	again, err := h.Poll(context.Background(), open.Key, 80*time.Millisecond)
 	if err != nil {
 		t.Fatalf("second Poll: %v", err)
@@ -171,6 +181,7 @@ func TestHub_SendAndEnd_DeliversFinalFeedbackOnceThenEnded(t *testing.T) {
 	if res.Status != forum.PollEnded || res.EndedBy != forum.EndedByUser || len(res.Prompts) != 1 {
 		t.Fatalf("first poll = %+v, want ended with the final prompt", res)
 	}
+	ack(t, h, open.Key, res)
 	res, _ = h.Poll(context.Background(), open.Key, time.Second)
 	if res.Status != forum.PollEnded || len(res.Prompts) != 0 {
 		t.Errorf("second poll = %+v, want ended with nothing", res)
@@ -262,24 +273,6 @@ func TestHub_CanceledPollConsumesNothing(t *testing.T) {
 	res, err := h.Poll(context.Background(), open.Key, time.Second)
 	if err != nil || len(res.Prompts) != 1 {
 		t.Fatalf("prompt lost by a canceled poll: %+v, %v", res, err)
-	}
-}
-
-func TestHub_RestoreReturnsPromptsToTheFront(t *testing.T) {
-	h := newHub(t, t.TempDir(), time.Minute)
-	open := openSession(t, h, filepath.Join(t.TempDir(), "a.html"))
-	h.QueuePrompt(open.Key, forum.PromptInput{Prompt: "one"})
-	h.Send(open.Key, false)
-	got, _ := h.Poll(context.Background(), open.Key, time.Second)
-	h.QueuePrompt(open.Key, forum.PromptInput{Prompt: "two"})
-	h.Send(open.Key, false)
-
-	if err := h.Restore(open.Key, got.Prompts); err != nil {
-		t.Fatalf("Restore: %v", err)
-	}
-	res, _ := h.Poll(context.Background(), open.Key, time.Second)
-	if len(res.Prompts) != 2 || res.Prompts[0].Prompt != "one" || res.Prompts[1].Prompt != "two" {
-		t.Errorf("after restore = %+v, want [one two]", res.Prompts)
 	}
 }
 

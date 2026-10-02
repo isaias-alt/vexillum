@@ -11,7 +11,7 @@
   const frame = $("artifact");
 
   let snapshot = null;
-  let workingTimer = 0; // re-renders when the "agent is working" window runs out
+  let workingTimer = 0; // re-renders when the "working" or "waiting" window runs out
   let version = 0;
   let artifactVersion = "";
   let renderedTranscriptKey = "";
@@ -183,13 +183,18 @@
 
     const presence = $("presence");
     const presenceText = $("presenceText");
-    // Not polling right now, but the agent took the user's prompts and has not
-    // polled or replied since: it is working, not absent (until the server's
-    // window runs out, then the plain "not listening" warning comes back).
+    // Not polling right now. Working: the agent took the user's prompts and has
+    // not polled or replied since. Waiting: it was there a moment ago (a poll just
+    // ended, it just replied), so the next poll is expected and nothing is wrong
+    // yet. Both are server windows that run out by themselves, after which the
+    // plain "not listening" warning comes back.
     const workingMs = snap.working_until ? Date.parse(snap.working_until) - Date.now() : 0;
     const working = !ended && !snap.listening && workingMs > 0;
+    const waitingMs = snap.listener_until ? Date.parse(snap.listener_until) - Date.now() : 0;
+    const waiting = !ended && !snap.listening && !working && waitingMs > 0;
     clearTimeout(workingTimer);
-    if (working) workingTimer = setTimeout(() => snapshot && render(snapshot), workingMs + 250);
+    const windowMs = working ? workingMs : waiting ? waitingMs : 0;
+    if (windowMs > 0) workingTimer = setTimeout(() => snapshot && render(snapshot), windowMs + 250);
     if (ended) {
       presence.dataset.state = "ended";
       presenceText.textContent = "Session ended";
@@ -199,11 +204,15 @@
     } else if (working) {
       presence.dataset.state = "working";
       presenceText.textContent = "Agent working";
+    } else if (waiting) {
+      presence.dataset.state = "waiting";
+      presenceText.textContent = "Waiting for your agent to listen";
     } else {
       presence.dataset.state = "idle";
       presenceText.textContent = "Agent not listening";
     }
-    $("listenBanner").hidden = ended || snap.listening || working;
+    $("listenBanner").hidden = ended || snap.listening || working || waiting;
+    $("waitingBanner").hidden = !waiting;
     $("workingBanner").hidden = !working;
 
     const pending = $("pendingBanner");
