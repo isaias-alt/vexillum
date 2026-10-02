@@ -1,0 +1,14 @@
+# One regex per line, matched against the full URL. Only external links need
+# an entry here: internal links are never ignored.
+
+# Our own production origin: canonical, hreflang and og:image URLs point at it
+# and a PR adds pages that are not deployed yet.
+^https://vx\.lucasco\.dev
+
+# Placeholders used in examples.
+^https?://example\.(com|org|net)
+^https?://localhost
+^https?://127\.0\.0\.1
+
+# GitHub URLs of this repo that a PR or a release has not created yet.
+^https://github\.com/isaias-alt/vexillum/(releases|pull|issues|compare)

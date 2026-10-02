@@ -1,0 +1,9 @@
+extends: existence
+message: "'%s' hedges. State what the tool does."
+ignorecase: true
+level: suggestion
+tokens:
+  - should work
+  - might be able to
+  - probably
+  - in order to

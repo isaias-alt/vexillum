@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "seo:audit": "node scripts/seo-audit.mjs",
+    "links:check": "node scripts/link-check.mjs",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

@@ -1,0 +1,9 @@
+extends: substitution
+message: "Use '%s' instead of '%s' (consistent domain vocabulary)."
+ignorecase: false
+level: warning
+swap:
+  sub-agent: subagent
+  sub agent: subagent
+  work tree: worktree
+  git-worktree: git worktree

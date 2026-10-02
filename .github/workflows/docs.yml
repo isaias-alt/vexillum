@@ -1,0 +1,168 @@
+name: Docs
+
+# Everything that can change what the docs say or how they build: the site,
+# the docgen tool and its inputs (command registry in internal/cli, the slot
+# block, the embedded skills, the README table), and this tooling itself.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "tools/docgen/**"
+      - "skills/**"
+      - "internal/cli/**"
+      - "internal/cmdname/**"
+      - "internal/commander/**"
+      - "internal/slot/**"
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "go.mod"
+      - "go.sum"
+      - ".lychee.toml"
+      - ".lycheeignore"
+      - ".vale.ini"
+      - ".vale/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "tools/docgen/**"
+      - "skills/**"
+      - "internal/cli/**"
+      - "internal/cmdname/**"
+      - "internal/commander/**"
+      - "internal/slot/**"
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "go.mod"
+      - "go.sum"
+      - ".lychee.toml"
+      - ".lycheeignore"
+      - ".vale.ini"
+      - ".vale/**"
+      - ".github/workflows/docs.yml"
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  LYCHEE_VERSION: lychee-v0.24.2
+  LYCHEE_SHA256: 1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+  VALE_VERSION: 3.24.0
+  VALE_SHA256: 867534ddb678abca7f214bc4706ead0922bd5252ffe8035fc227013f66c8b214
+
+jobs:
+  docs:
+    name: Build, audit and link check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Includes the docgen golden test: it fails when the committed
+      # reference pages or the README table drift from the command registry.
+      - name: Go tests
+        run: go test ./...
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: site/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: site
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: site
+        run: pnpm lint
+
+      - uses: actions/cache@v4
+        with:
+          path: site/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('site/pnpm-lock.yaml') }}-${{ hashFiles('site/**/*.ts', 'site/**/*.tsx', 'site/**/*.mdx') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('site/pnpm-lock.yaml') }}-
+
+      - name: Build
+        working-directory: site
+        run: pnpm build
+
+      - name: SEO audit
+        working-directory: site
+        run: pnpm seo:audit
+
+      - name: Install lychee
+        run: |
+          set -euo pipefail
+          asset=lychee-x86_64-unknown-linux-gnu.tar.gz
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$asset" \
+            "https://github.com/lycheeverse/lychee/releases/download/${LYCHEE_VERSION}/${asset}"
+          echo "${LYCHEE_SHA256}  $RUNNER_TEMP/$asset" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP"
+          mkdir -p "$HOME/.local/bin"
+          install "$RUNNER_TEMP/${asset%.tar.gz}/lychee" "$HOME/.local/bin/lychee"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Relative links between the repository's markdown files: strict.
+      # The site is skipped here, its pages are checked rendered below.
+      - name: Link check (repository markdown, offline)
+        run: lychee --config .lychee.toml --offline --exclude-path site --exclude-path .github/ISSUE_TEMPLATE '**/*.md'
+
+      # Internal links of the rendered site are strict; external links only
+      # warn (see site/scripts/link-check.mjs).
+      - name: Link check (rendered site)
+        working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm links:check
+
+  # Advisory: findings are reported in the log, never fail the workflow.
+  vale:
+    name: Prose lint (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vale
+        run: |
+          set -euo pipefail
+          asset="vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$asset" \
+            "https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/${asset}"
+          echo "${VALE_SHA256}  $RUNNER_TEMP/$asset" | sha256sum --check
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$HOME/.local/bin" vale
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # --no-exit keeps the exit code at 0 whatever Vale finds.
+      - name: Vale
+        run: vale --no-exit --output=line site/content/docs/en README.md CONTRIBUTING.md | tee "$RUNNER_TEMP/vale.txt"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Vale (advisory)"
+            echo
+            echo "Findings: $(wc -l < "$RUNNER_TEMP/vale.txt" | tr -d ' ')"
+            echo
+            echo '```'
+            head -n 100 "$RUNNER_TEMP/vale.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
