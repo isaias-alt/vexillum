@@ -20,7 +20,7 @@ or run the [curl install script](/docs/get-started/install) again; it installs t
 A new binary may ship a newer commander rules file or hook. Refresh a project with:
 
 ```bash
-vexillum upgrade
+vx upgrade
 ```
 
 `upgrade` refreshes `.claude/rules/vexillum.md` and the sentinel `Stop` hook without re-running `init` from scratch. It protects your edits: vexillum stores a content hash of the rules file whenever it writes it, and only refreshes the file if its current content still matches that hash. A file you edited, or one from before hash tracking existed, is left untouched and reported.
@@ -28,6 +28,21 @@ vexillum upgrade
 | Flag | Effect |
 | --- | --- |
 | `--force` | Overwrite `.claude/rules/vexillum.md` with the latest template regardless, discarding local edits. Use it only after confirming there is nothing worth keeping. |
-| `--global` | Refresh the global scaffold (`~/.claude/rules/vexillum.md`, written by `vexillum init --global`) instead of the project's. |
+| `--global` | Refresh the global scaffold (`~/.claude/rules/vexillum.md`, written by `vx init --global`) instead of the project's. |
 
-An older synchronous `vexillum sentinel drain` hook is upgraded in place to the async `vexillum sentinel await` hook, not duplicated.
+An older synchronous `vx sentinel drain` hook is upgraded in place to the async `vx sentinel await` hook, not duplicated.
+
+## Migrating from vexillum to vx
+
+The command used to be called `vexillum`. It is now `vx`, and the old name is gone: there is no `vexillum` alias or second executable. The product name, the repository, the Homebrew package (`brew upgrade vexillum`) and the state folders (`.vexillum/`, `~/.vexillum/`) are unchanged.
+
+1. Install the new binary (above). Remove a leftover `vexillum` executable if an older curl install left one in your `PATH`.
+2. In **each** project you initialized with the old command, run once:
+
+```bash
+vx upgrade
+```
+
+This rewrites the sentinel `Stop` hook (`vexillum sentinel await` becomes `vx sentinel await`) and refreshes the commander rules so the commander types `vx`. As above, an edited rules file is left untouched and reported; pass `--force` only if you have nothing to keep. If you used a [global install](/docs/get-started/install#install-globally), also run `vx upgrade --global`.
+
+3. Run `vx doctor`. It warns when another `vx` earlier in your `PATH` shadows this one, which would make hooks and the commander run the wrong binary.

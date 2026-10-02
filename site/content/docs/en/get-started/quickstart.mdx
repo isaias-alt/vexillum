@@ -10,32 +10,34 @@ You need vexillum, Claude Code and herdr installed - see [Install](/docs/get-sta
 From the root of a git repository:
 
 ```bash
-vexillum init
+vx init
 ```
 
 This is local to the project and idempotent. It creates:
 
 - `.vexillum/config.json`;
 - `.claude/rules/vexillum.md`, the commander rules Claude Code loads every session;
-- an async `Stop` hook in `.claude/settings.json` (`vexillum sentinel await`) that lets the sentinel wake the commander. Existing settings and hooks are merged, never overwritten.
+- an async `Stop` hook in `.claude/settings.json` (`vx sentinel await`) that lets the sentinel wake the commander. Existing settings and hooks are merged, never overwritten.
 
 It also creates `~/.vexillum/` if it is missing.
 
+To have the commander rules apply in every Claude Code session instead of one project at a time, see [Install globally](/docs/get-started/install#install-globally) (`vx init --global`, opt-in, affects all sessions).
+
 <Callout title="Commit the scaffold early">
-  `vexillum land` refuses to run while your checkout is dirty, and a fresh `init` leaves new files uncommitted. Commit `.claude/` and `.vexillum/` before you dispatch your first mission.
+  `vx land` refuses to run while your checkout is dirty, and a fresh `init` leaves new files uncommitted. Commit `.claude/` and `.vexillum/` before you dispatch your first mission.
 </Callout>
 
 ## 2. Check the environment
 
 ```bash
-vexillum doctor
+vx doctor
 ```
 
 Everything required should read `[ok]`.
 
 ## 3. Start the commander inside herdr
 
-Open a herdr pane, `cd` into the project and start Claude Code. `vexillum dispatch` needs `HERDR_WORKSPACE_ID`, which herdr sets in the panes it manages; outside one it refuses to dispatch.
+Open a herdr pane, `cd` into the project and start Claude Code. `vx dispatch` needs `HERDR_WORKSPACE_ID`, which herdr sets in the panes it manages; outside one it refuses to dispatch.
 
 ## 4. Ask for work
 
@@ -43,14 +45,14 @@ Open a herdr pane, `cd` into the project and start Claude Code. `vexillum dispat
 > dispatch a soldier to fix the flaky login test
 ```
 
-The commander runs `vexillum dispatch "fix the flaky login test" --kind mission`, which prints the task id, the camp branch (`vexillum/<task-id>`), and `status=running`. The first dispatch also starts the sentinel in the background. You can keep talking to the commander while the soldier works.
+The commander runs `vx dispatch "fix the flaky login test" --kind mission`, which prints the task id, the camp branch (`vexillum/<task-id>`), and `status=running`. The first dispatch also starts the sentinel in the background. You can keep talking to the commander while the soldier works.
 
 ## 5. Hear back
 
 When the soldier settles - done or blocked - the sentinel wakes the commander, which reports to you. To look yourself:
 
 ```bash
-vexillum status
+vx status
 ```
 
 ## 6. Land it
@@ -58,7 +60,7 @@ vexillum status
 When the mission is done, review it and tell the commander to land it. It runs:
 
 ```bash
-vexillum land <task-id>
+vx land <task-id>
 ```
 
 That fast-forwards your checkout to the mission's branch and returns the camp to the pool. If you want a reviewed pull request instead, see [Land vs ship](/docs/guides/land-vs-ship).

@@ -20,7 +20,7 @@ o volvé a correr el [script de curl](/es/docs/get-started/install); instala el 
 Un binario nuevo puede traer un archivo de reglas o un hook más nuevos. Refrescá un proyecto con:
 
 ```bash
-vexillum upgrade
+vx upgrade
 ```
 
 `upgrade` refresca `.claude/rules/vexillum.md` y el hook `Stop` del sentinel sin volver a correr `init` desde cero. Protege tus ediciones: vexillum guarda un hash del contenido del archivo de reglas cada vez que lo escribe, y solo lo refresca si su contenido actual todavía coincide con ese hash. Un archivo que editaste, o uno anterior al seguimiento por hash, se deja intacto y se reporta.
@@ -28,6 +28,21 @@ vexillum upgrade
 | Flag | Efecto |
 | --- | --- |
 | `--force` | Sobrescribe `.claude/rules/vexillum.md` con la última plantilla sin importar nada, descartando ediciones locales. Usalo solo después de confirmar que no hay nada que valga la pena conservar. |
-| `--global` | Refresca el scaffold global (`~/.claude/rules/vexillum.md`, escrito por `vexillum init --global`) en lugar del del proyecto. |
+| `--global` | Refresca el scaffold global (`~/.claude/rules/vexillum.md`, escrito por `vx init --global`) en lugar del del proyecto. |
 
-Un hook sincrónico viejo, `vexillum sentinel drain`, se actualiza en el lugar al hook asíncrono `vexillum sentinel await`, sin duplicarse.
+Un hook sincrónico viejo, `vx sentinel drain`, se actualiza en el lugar al hook asíncrono `vx sentinel await`, sin duplicarse.
+
+## Migrar de vexillum a vx
+
+El comando se llamaba `vexillum`. Ahora es `vx`, y el nombre viejo desapareció: no hay alias `vexillum` ni un segundo ejecutable. El nombre del producto, el repositorio, el paquete de Homebrew (`brew upgrade vexillum`) y las carpetas de estado (`.vexillum/`, `~/.vexillum/`) no cambian.
+
+1. Instalá el binario nuevo (arriba). Borrá un ejecutable `vexillum` sobrante si una instalación vieja con curl lo dejó en tu `PATH`.
+2. En **cada** proyecto que inicializaste con el comando viejo, corré una vez:
+
+```bash
+vx upgrade
+```
+
+Esto reescribe el hook `Stop` del sentinel (`vexillum sentinel await` pasa a `vx sentinel await`) y refresca las reglas del commander para que el commander escriba `vx`. Como se explicó arriba, un archivo de reglas editado se deja intacto y se reporta; pasá `--force` solo si no tenés nada que conservar. Si usás una [instalación global](/es/docs/get-started/install#instalación-global), corré también `vx upgrade --global`.
+
+3. Corré `vx doctor`. Avisa cuando otro `vx` más arriba en tu `PATH` tapa a este, lo que haría que los hooks y el commander corran el binario equivocado.

@@ -34,8 +34,12 @@ curl -fsSL https://vx.lucasco.dev/install | bash
 Check it worked:
 
 ```bash
-vexillum --version
+vx --version
 ```
+
+<Callout title="Coming from the `vexillum` command?">
+  The executable is now called `vx`, and it is the only one: there is no `vexillum` alias. The product is still vexillum, and the Homebrew package keeps its name (`brew install isaias-alt/tap/vexillum` installs the `vx` executable). Run `vx upgrade` once in each project you initialized before - see [Migrating from vexillum to vx](/docs/get-started/upgrading#migrating-from-vexillum-to-vx).
+</Callout>
 
 ## Install what vexillum orchestrates
 
@@ -45,15 +49,37 @@ vexillum does not install its tools; it checks for them.
 | --- | --- | --- |
 | [Claude Code](https://claude.com/claude-code) | the commander and every soldier | yes |
 | [herdr](https://herdr.dev) | the panes soldiers run in | yes |
-| `gh` (GitHub CLI) | `vexillum ship`, and landing a shipped PR | only for those |
+| `gh` (GitHub CLI) | `vx ship`, and landing a shipped PR | only for those |
 | `tmux` | optional control backend | no |
 
 Run the check any time:
 
 ```bash
-vexillum doctor
+vx doctor
 ```
 
 `doctor` is read-only. It prints `[ok]` or `[missing]` for each tool, the herdr version, `~/.vexillum/`, whether the current project is initialized and is a git repository, and which optional [Agent Skills](/docs/guides/muster-skill) are installed. It exits non-zero when a required check fails.
+
+## Install globally
+
+By default `vx init` is local: it scaffolds one project. To make the commander rules apply in every Claude Code session on the machine, opt in once:
+
+```bash
+vx init --global
+```
+
+This writes the commander rules to `~/.claude/rules/vexillum.md` (and `~/.vexillum/config.json` if missing), so Claude Code loads them everywhere, with no per-project `init` needed for the rules.
+
+<Callout type="warn" title="It affects every session">
+  The global rules apply to **all** Claude Code sessions on this machine, not only vexillum projects. Leave it out unless you want that. The sentinel `Stop` hook is still per-project and comes from `vx init` inside a project.
+</Callout>
+
+`init --global` never overwrites an existing `~/.claude/rules/vexillum.md`. To refresh it after installing a newer binary, run:
+
+```bash
+vx upgrade --global
+```
+
+Like the project version, it only rewrites the file if you have not edited it since vexillum wrote it; `--force` discards your edits.
 
 Next: the [Quickstart](/docs/get-started/quickstart).

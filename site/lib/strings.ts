@@ -79,13 +79,13 @@ const en: Dictionary = {
           "One binary, no runtime dependencies. Works the same over curl or brew.",
         output: [
           "[ok]    Checksum verified",
-          "[ok]    Installed vexillum to /usr/local/bin/vexillum",
+          "[ok]    Installed vx to /usr/local/bin/vx",
         ],
         docs: "/get-started/install",
       },
       {
         title: "Dispatch a mission",
-        command: 'vexillum dispatch "refactor the payment module" --kind mission',
+        command: 'vx dispatch "refactor the payment module" --kind mission',
         description:
           "A soldier spins up in its own camp and executes the work end to end.",
         output: [
@@ -96,7 +96,7 @@ const en: Dictionary = {
       },
       {
         title: "Dispatch a scout",
-        command: 'vexillum dispatch "trace the memory leak" --kind scout',
+        command: 'vx dispatch "trace the memory leak" --kind scout',
         description:
           "Scouts investigate and report back - they never commit or push anything.",
         output: [
@@ -107,7 +107,7 @@ const en: Dictionary = {
       },
       {
         title: "Hear from the sentinel",
-        command: "vexillum sentinel drain",
+        command: "vx sentinel drain",
         description:
           "The sentinel only wakes the commander when a soldier actually settles - done or blocked.",
         output: [
@@ -118,7 +118,7 @@ const en: Dictionary = {
       },
       {
         title: "Check the troop",
-        command: "vexillum status",
+        command: "vx status",
         description:
           "Every mission and scout in this project, most recently updated first.",
         output: [
@@ -162,7 +162,7 @@ const en: Dictionary = {
   dispatching: {
     eyebrow: "dispatching",
     title: "No new interface to learn.",
-    sub: "You already talk to your commander in Claude Code. Ask it to dispatch a soldier, and it calls vexillum for you.",
+    sub: "You already talk to your commander in Claude Code. Ask it to dispatch a soldier, and it calls vx for you.",
     promptA: "dispatch a soldier to refactor the payment module",
     promptB:
       "also have someone trace that memory leak, just investigate for now",
@@ -264,7 +264,7 @@ const es: Dictionary = {
   dispatching: {
     eyebrow: "despacho",
     title: "Ninguna interfaz nueva que aprender.",
-    sub: "Ya hablás con tu commander en Claude Code. Pedile que despache un soldier y él llama a vexillum por vos.",
+    sub: "Ya hablás con tu commander en Claude Code. Pedile que despache un soldier y él llama a vx por vos.",
     promptA: "despachá un soldier para refactorizar el módulo de pagos",
     promptB:
       "y que alguien rastree esa pérdida de memoria, solo que investigue por ahora",

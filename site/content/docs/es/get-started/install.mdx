@@ -34,8 +34,12 @@ curl -fsSL https://vx.lucasco.dev/install | bash
 Comprobá que funcionó:
 
 ```bash
-vexillum --version
+vx --version
 ```
+
+<Callout title="¿Venís del comando `vexillum`?">
+  El ejecutable ahora se llama `vx`, y es el único: no hay un alias `vexillum`. El producto sigue siendo vexillum, y el paquete de Homebrew mantiene su nombre (`brew install isaias-alt/tap/vexillum` instala el ejecutable `vx`). Corré `vx upgrade` una vez en cada proyecto que hayas inicializado antes - mirá [Migrar de vexillum a vx](/es/docs/get-started/upgrading#migrar-de-vexillum-a-vx).
+</Callout>
 
 ## Instalá lo que vexillum orquesta
 
@@ -45,15 +49,37 @@ vexillum no instala sus herramientas; las verifica.
 | --- | --- | --- |
 | [Claude Code](https://claude.com/claude-code) | el commander y cada soldier | sí |
 | [herdr](https://herdr.dev) | los panes donde corren los soldiers | sí |
-| `gh` (GitHub CLI) | `vexillum ship`, y aterrizar un PR enviado | solo para eso |
+| `gh` (GitHub CLI) | `vx ship`, y aterrizar un PR enviado | solo para eso |
 | `tmux` | backend de control opcional | no |
 
 Corré la verificación cuando quieras:
 
 ```bash
-vexillum doctor
+vx doctor
 ```
 
 `doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y cuáles [Agent Skills](/es/docs/guides/muster-skill) opcionales están instalados. Sale con código distinto de cero cuando falla un chequeo requerido.
+
+## Instalación global
+
+Por defecto `vx init` es local: prepara un solo proyecto. Para que las reglas del commander apliquen en todas las sesiones de Claude Code de la máquina, activalo una vez:
+
+```bash
+vx init --global
+```
+
+Esto escribe las reglas del commander en `~/.claude/rules/vexillum.md` (y `~/.vexillum/config.json` si falta), así Claude Code las carga en todos lados, sin necesidad de un `init` por proyecto para las reglas.
+
+<Callout type="warn" title="Afecta a todas las sesiones">
+  Las reglas globales aplican a **todas** las sesiones de Claude Code de esta máquina, no solo a los proyectos de vexillum. No lo uses salvo que quieras eso. El hook `Stop` del sentinel sigue siendo por proyecto y viene de `vx init` dentro de un proyecto.
+</Callout>
+
+`init --global` nunca pisa un `~/.claude/rules/vexillum.md` existente. Para refrescarlo después de instalar un binario más nuevo, corré:
+
+```bash
+vx upgrade --global
+```
+
+Igual que en la versión de proyecto, solo reescribe el archivo si no lo editaste desde que vexillum lo escribió; `--force` descarta tus ediciones.
 
 Siguiente: el [Quickstart](/es/docs/get-started/quickstart).

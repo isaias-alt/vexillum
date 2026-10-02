@@ -10,32 +10,34 @@ Necesitás vexillum, Claude Code y herdr instalados - ver [Instalación](/es/doc
 Desde la raíz de un repositorio git:
 
 ```bash
-vexillum init
+vx init
 ```
 
 Es local al proyecto e idempotente. Crea:
 
 - `.vexillum/config.json`;
 - `.claude/rules/vexillum.md`, las reglas del commander que Claude Code carga en cada sesión;
-- un hook `Stop` asíncrono en `.claude/settings.json` (`vexillum sentinel await`) que permite al sentinel despertar al commander. Los settings y hooks existentes se fusionan, nunca se pisan.
+- un hook `Stop` asíncrono en `.claude/settings.json` (`vx sentinel await`) que permite al sentinel despertar al commander. Los settings y hooks existentes se fusionan, nunca se pisan.
 
 También crea `~/.vexillum/` si falta.
 
+Para que las reglas del commander apliquen en todas las sesiones de Claude Code y no proyecto por proyecto, mirá [Instalación global](/es/docs/get-started/install#instalación-global) (`vx init --global`, opt-in, afecta a todas las sesiones).
+
 <Callout title="Commiteá el scaffold temprano">
-  `vexillum land` se niega a correr con el checkout sucio, y un `init` recién hecho deja archivos nuevos sin commitear. Commiteá `.claude/` y `.vexillum/` antes de despachar tu primera mission.
+  `vx land` se niega a correr con el checkout sucio, y un `init` recién hecho deja archivos nuevos sin commitear. Commiteá `.claude/` y `.vexillum/` antes de despachar tu primera mission.
 </Callout>
 
 ## 2. Verificar el entorno
 
 ```bash
-vexillum doctor
+vx doctor
 ```
 
 Todo lo requerido debería decir `[ok]`.
 
 ## 3. Iniciar el commander dentro de herdr
 
-Abrí un pane de herdr, hacé `cd` al proyecto e iniciá Claude Code. `vexillum dispatch` necesita `HERDR_WORKSPACE_ID`, que herdr define en los panes que administra; fuera de uno se niega a despachar.
+Abrí un pane de herdr, hacé `cd` al proyecto e iniciá Claude Code. `vx dispatch` necesita `HERDR_WORKSPACE_ID`, que herdr define en los panes que administra; fuera de uno se niega a despachar.
 
 ## 4. Pedir trabajo
 
@@ -43,14 +45,14 @@ Abrí un pane de herdr, hacé `cd` al proyecto e iniciá Claude Code. `vexillum 
 > dispatch a soldier to fix the flaky login test
 ```
 
-El commander corre `vexillum dispatch "fix the flaky login test" --kind mission`, que imprime el id de la tarea, la branch del camp (`vexillum/<task-id>`) y `status=running`. El primer dispatch también inicia el sentinel en segundo plano. Podés seguir hablando con el commander mientras el soldier trabaja.
+El commander corre `vx dispatch "fix the flaky login test" --kind mission`, que imprime el id de la tarea, la branch del camp (`vexillum/<task-id>`) y `status=running`. El primer dispatch también inicia el sentinel en segundo plano. Podés seguir hablando con el commander mientras el soldier trabaja.
 
 ## 5. Enterarte
 
 Cuando el soldier termina - done o blocked - el sentinel despierta al commander, que te reporta. Para mirar vos mismo:
 
 ```bash
-vexillum status
+vx status
 ```
 
 ## 6. Aterrizarla
@@ -58,7 +60,7 @@ vexillum status
 Cuando la mission está done, revisala y decile al commander que la aterrice. Corre:
 
 ```bash
-vexillum land <task-id>
+vx land <task-id>
 ```
 
 Eso hace fast-forward de tu checkout hasta la branch de la mission y devuelve el camp al pool. Si preferís un pull request revisado, ver [Land vs ship](/es/docs/guides/land-vs-ship).

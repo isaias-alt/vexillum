@@ -5,7 +5,7 @@ function Output({ children }: { children: React.ReactNode }) {
 }
 
 // A commander session in Claude Code: the general talks, the commander calls
-// `vexillum dispatch`. Outputs are the real stdout lines of the command.
+// `vx dispatch`. Outputs are the real stdout lines of the command.
 export function DispatchTranscript({
   t,
   className,
@@ -19,7 +19,7 @@ export function DispatchTranscript({
     >
       <div className="text-text">&gt; {t.promptA}</div>
       <div className="text-accent">
-        Bash(vexillum dispatch &quot;refactor the payment module&quot; --kind
+        Bash(vx dispatch &quot;refactor the payment module&quot; --kind
         mission --model sonnet)
       </div>
       {t.outputA.map((line) => (
@@ -27,7 +27,7 @@ export function DispatchTranscript({
       ))}
       <div className="mt-3 text-text">&gt; {t.promptB}</div>
       <div className="text-accent">
-        Bash(vexillum dispatch &quot;trace the memory leak&quot; --kind scout)
+        Bash(vx dispatch &quot;trace the memory leak&quot; --kind scout)
       </div>
       <Output>{t.outputB}</Output>
     </div>

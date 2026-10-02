@@ -47,4 +47,4 @@ generated Spanish index links to them under `/es/docs`.
   structure. Domain and technical terms (commander, soldier, mission, scout,
   camp, sentinel, worktree, hook, flag) stay in English in Spanish.
 - A page missing from `es/` is served from `en/` until it is translated.
-- Facts come from the code and `vexillum <command> -h`; check them before writing.
+- Facts come from the code and `vx <command> -h`; check them before writing.
