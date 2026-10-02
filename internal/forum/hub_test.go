@@ -29,10 +29,17 @@ func openSession(t *testing.T, h *forum.Hub, file string) forum.OpenResult {
 func keepBrowser(t *testing.T, h *forum.Hub, key string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	// Join the goroutine on cleanup: State can still commit to the session
+	// dir after the cancel, which would race the temp dir removal.
+	tabDone := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		<-tabDone
+	})
 	// Mirror the real browser: re-issue the long-poll with the latest
 	// version every time it returns.
 	go func() {
+		defer close(tabDone)
 		var since int64
 		for ctx.Err() == nil {
 			snap, err := h.State(ctx, key, since, time.Hour)
