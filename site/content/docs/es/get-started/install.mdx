@@ -27,9 +27,10 @@ curl -fsSL https://vx.lucasco.dev/install | bash
 `/install` redirige a `scripts/install.sh` del repositorio, así que el script que corrés es el del árbol de código. Este script:
 
 1. detecta tu sistema operativo y arquitectura;
-2. usa Homebrew si `brew` está en tu PATH (`brew install isaias-alt/tap/vexillum`);
+2. usa Homebrew si `brew` está en tu PATH (`brew install isaias-alt/tap/vexillum`, o `brew upgrade` cuando la fórmula ya está instalada, como pasa con el viejo comando `vexillum` de la v0.1.x);
 3. si no, descarga el archivo del release para tu plataforma y **verifica su checksum sha256** contra el `checksums.txt` del release, y se niega a instalar si no coincide;
-4. instala el binario en `/usr/local/bin`, o en `~/.local/bin` cuando no podés escribir en `/usr/local/bin` (avisa si ese directorio no está en tu PATH).
+4. instala el binario en `/usr/local/bin`, o en `~/.local/bin` cuando no podés escribir en `/usr/local/bin` (avisa si ese directorio no está en tu PATH);
+5. comprueba que ahora existe un `vx` que funciona (en el directorio de instalación, el prefijo de Homebrew o tu PATH) y termina con un error si no, nombrando el binario viejo `vexillum` cuando es lo único que encuentra.
 
 Comprobá que funcionó:
 

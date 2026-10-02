@@ -6,13 +6,24 @@ set -euo pipefail
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/main/scripts/install.sh | bash
+#
+# Environment:
+#   VX_INSTALL_DIR   install the direct-download binary here instead of
+#                    /usr/local/bin (or ~/.local/bin when that is not writable)
 # ============================================================================
 
 GITHUB_OWNER="isaias-alt"
 GITHUB_REPO="vexillum"
 PRODUCT_NAME="vexillum"   # brew formula and release archive name
 BINARY_NAME="vx"          # the executable that gets installed
+OLD_BINARY_NAME="vexillum"  # the executable the v0.1.x formula installed
 BREW_TAP="isaias-alt/tap"
+
+# Where the binary landed, recorded by the install paths so the final check
+# looks there and not only on PATH (a fresh install dir is often not on PATH).
+INSTALL_DIR=""
+BREW_BIN=""
+TMPDIR_INSTALL=""
 
 info()  { echo "[info]  $*"; }
 ok()    { echo "[ok]    $*"; }
@@ -41,8 +52,23 @@ detect_platform() {
 
 install_via_brew() {
     info "Homebrew found - installing via ${BREW_TAP}"
-    brew install "${BREW_TAP}/${PRODUCT_NAME}" || fatal "brew install failed"
-    ok "Installed ${PRODUCT_NAME} (${BINARY_NAME}) via Homebrew"
+    # The v0.1.x formula installed a binary named vexillum. When it is already
+    # installed, `brew install` is a no-op for it and would leave the user
+    # without vx, so move it forward with an upgrade instead.
+    if brew list --formula "$PRODUCT_NAME" >/dev/null 2>&1; then
+        info "The ${PRODUCT_NAME} formula is already installed - upgrading it"
+        brew upgrade "${BREW_TAP}/${PRODUCT_NAME}" || fatal "brew upgrade failed"
+        ok "Upgraded ${PRODUCT_NAME} via Homebrew"
+    else
+        brew install "${BREW_TAP}/${PRODUCT_NAME}" || fatal "brew install failed"
+        ok "Installed ${PRODUCT_NAME} via Homebrew"
+    fi
+
+    local prefix
+    prefix="$(brew --prefix 2>/dev/null || true)"
+    if [ -n "$prefix" ]; then
+        BREW_BIN="${prefix}/bin"
+    fi
 }
 
 get_latest_version() {
@@ -62,9 +88,10 @@ install_via_binary() {
     local archive="${PRODUCT_NAME}_${VERSION_NUMBER}_${OS}_${ARCH}.tar.gz"
     local base_url="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${LATEST_VERSION}"
 
-    local tmpdir
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "${tmpdir:-}"' EXIT
+    # Global, not local: the EXIT trap runs after this function's locals are gone.
+    TMPDIR_INSTALL="$(mktemp -d)"
+    trap 'rm -rf "${TMPDIR_INSTALL:-}"' EXIT
+    local tmpdir="$TMPDIR_INSTALL"
 
     info "Downloading ${archive}..."
     curl -fsSL -o "${tmpdir}/${archive}" "${base_url}/${archive}" \
@@ -88,8 +115,10 @@ install_via_binary() {
 
     tar -xzf "${tmpdir}/${archive}" -C "$tmpdir" "${BINARY_NAME}"
 
-    local install_dir="/usr/local/bin"
-    if [ ! -w "$install_dir" ] && [ "$(id -u)" != "0" ]; then
+    local install_dir="${VX_INSTALL_DIR:-/usr/local/bin}"
+    if [ -n "${VX_INSTALL_DIR:-}" ]; then
+        mkdir -p "$install_dir" || fatal "Cannot create ${install_dir}"
+    elif [ ! -w "$install_dir" ] && [ "$(id -u)" != "0" ]; then
         install_dir="${HOME}/.local/bin"
         mkdir -p "$install_dir"
     fi
@@ -105,11 +134,8 @@ install_via_binary() {
         fatal "Cannot write to ${install_dir}. Re-run with sudo, or install to a writable directory manually."
     fi
 
+    INSTALL_DIR="$install_dir"
     ok "Installed ${BINARY_NAME} to ${final}"
-    case ":$PATH:" in
-        *":${install_dir}:"*) ;;
-        *) warn "${install_dir} is not in your PATH - add it to your shell profile" ;;
-    esac
 }
 
 # Refuse to clobber a `vx` that is not vexillum (another tool may own that name).
@@ -130,6 +156,58 @@ check_existing_binary() {
     exit 1
 }
 
+# Print the path of the first executable called $1 in the places an install
+# can land: the direct-download dir, the brew prefix, then PATH.
+locate_binary() {
+    local name="$1" dir
+    for dir in "$INSTALL_DIR" "$BREW_BIN"; do
+        [ -n "$dir" ] || continue
+        if [ -f "${dir}/${name}" ] && [ -x "${dir}/${name}" ]; then
+            printf '%s\n' "${dir}/${name}"
+            return 0
+        fi
+    done
+    command -v "$name" 2>/dev/null
+}
+
+# After any install path, prove that a working vx exists. An install step that
+# exits 0 is not enough: a stale formula or an unexpected archive can leave the
+# machine without the command.
+verify_install() {
+    local found out old
+    found="$(locate_binary "$BINARY_NAME" || true)"
+
+    if [ -z "$found" ]; then
+        warn "The install finished but no '${BINARY_NAME}' executable was found."
+        old="$(locate_binary "$OLD_BINARY_NAME" || true)"
+        if [ -n "$old" ]; then
+            warn "Only the old '${OLD_BINARY_NAME}' binary is present: ${old}"
+            warn "That comes from the v0.1.x Homebrew formula, which installed a command named '${OLD_BINARY_NAME}'."
+            warn "Fix: brew update && brew upgrade ${BREW_TAP}/${PRODUCT_NAME} (or brew reinstall ${BREW_TAP}/${PRODUCT_NAME}), then re-run this script."
+        else
+            warn "Searched: ${INSTALL_DIR:-(direct install dir not used)}, ${BREW_BIN:-(no brew prefix)}, and your PATH."
+            warn "Try re-running this script, or install manually from https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases."
+        fi
+        exit 1
+    fi
+
+    out="$("$found" --version 2>/dev/null | head -1 || true)"
+    case "$out" in
+        vx\ *) ;;
+        *)
+            warn "Found ${found}, but '${found} --version' did not report a vx version (got: '${out}')."
+            exit 1
+            ;;
+    esac
+
+    ok "$out"
+    case ":$PATH:" in
+        *":${found%/*}:"*) ;;
+        *) warn "${found%/*} is not in your PATH - add it to your shell profile" ;;
+    esac
+    info "Run '${BINARY_NAME} init' in a project to get started, and '${BINARY_NAME} doctor' to check your setup."
+}
+
 main() {
     detect_platform
     check_existing_binary
@@ -141,11 +219,8 @@ main() {
     fi
 
     hash -r 2>/dev/null || true
-    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-        ok "$("$BINARY_NAME" --version)"
-        info "Run '${BINARY_NAME} init' in a project to get started, and '${BINARY_NAME} doctor' to check your setup."
-    fi
-    if [ -x "${HOME}/go/bin/vexillum" ] || command -v vexillum >/dev/null 2>&1; then
+    verify_install
+    if [ -x "${HOME}/go/bin/${OLD_BINARY_NAME}" ] || command -v "$OLD_BINARY_NAME" >/dev/null 2>&1; then
         info "An older 'vexillum' command is still on this machine (for example a dev build). The command is now '${BINARY_NAME}'; you can remove the old one yourself when convenient."
     fi
 }
