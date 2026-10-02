@@ -131,3 +131,20 @@ func TestEnsureSentinelHook_RefusesInvalidJSON(t *testing.T) {
 		t.Error("expected an error for invalid existing JSON")
 	}
 }
+
+func TestSentinelHookNeeded(t *testing.T) {
+	dir := t.TempDir()
+	need, err := SentinelHookNeeded(dir)
+	if err != nil || !need {
+		t.Fatalf("fresh project: need=%v err=%v", need, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude")); !os.IsNotExist(err) {
+		t.Error("SentinelHookNeeded must not write anything")
+	}
+	if _, err := EnsureSentinelHook(dir); err != nil {
+		t.Fatal(err)
+	}
+	if need, err := SentinelHookNeeded(dir); err != nil || need {
+		t.Errorf("after ensure: need=%v err=%v", need, err)
+	}
+}

@@ -32,15 +32,12 @@ type Result struct {
 }
 
 // AXI is one AXI vexillum knows about, tracked in doctor's
-// informational-only AXIs section (PRD v2, "Decisiones de integración de
-// AXIs"): doctor verifies skill presence, it never installs anything,
-// and absence is never a warning or a failure - a mission that needs it
-// installs it on demand.
+// informational-only AXIs section: doctor verifies skill presence, it never
+// installs anything, and absence is never a warning or a failure - a mission
+// that needs it installs it on demand.
 //
-// Each AXI's own README names its own recommended install command, and
-// they don't agree on shape: quota-tool's --skill value matches its repo
-// name and recommends -g (global), while the first-party skills below
-// install project-local, no -g. Verified live, not assumed from the first.
+// Each AXI's own README names its own recommended install command; both
+// below recommend -g (global).
 type AXI struct {
 	// Name is the skill's own folder name once installed (also the
 	// --skill value) - matches its SKILL.md frontmatter `name`, which
@@ -55,20 +52,12 @@ type AXI struct {
 	Global bool
 }
 
-// KnownAXIs is every AXI (and first-party skill) doctor reports on.
+// KnownAXIs is every third-party AXI doctor reports on. The first-party
+// skills (vexillum, forum, muster) ship inside the binary and are reported
+// by Skills instead, with their state against the embedded copy.
 var KnownAXIs = []AXI{
 	{Name: "quota-tool", Repo: "upstream", Global: true},
 	{Name: "chrome-devtools-tool", Repo: "upstream", Global: true},
-	// muster isn't a third-party AXI - it ships in this repo
-	// (skills/muster/SKILL.md) and reads this project's own
-	// `vx status --json`, so it's project-local, not
-	// global. Listed here anyway because the install/detection mechanism
-	// ("npx skills add", .claude/skills/<name>/SKILL.md) is identical and
-	// this is where the general already looks for on-demand skill status.
-	{Name: "muster", Repo: "isaias-alt/vexillum", Global: false},
-	// forum is first-party too (skills/forum/SKILL.md): the agent-facing
-	// guide to "vx forum", the in-binary review surface.
-	{Name: "forum", Repo: "isaias-alt/vexillum", Global: false},
 }
 
 // Binary checks whether binaryName is on PATH.

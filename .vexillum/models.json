@@ -1,0 +1,33 @@
+{
+  "profiles": {
+    "scout-facts": {
+      "model": "haiku",
+      "effort": "low",
+      "when": "Scout whose question reduces to verifiable facts from an authoritative source (a flag, a signature, a version, a changelog entry, whether an issue is fixed). Retrieval, not judgment."
+    },
+    "scout-judgment": {
+      "model": "sonnet",
+      "effort": "medium",
+      "when": "Scout that requires judgment: conflicting sources, comparing options, recommending, diagnosing unexpected behavior. You act on its report without verifying it."
+    },
+    "mission-mechanical": {
+      "model": "haiku",
+      "effort": "low",
+      "when": "Mission that is a trivial mechanical edit (rote rename, formatting sweep, targeted typo fix) checked by build or tests: every touched file gets the exact same transformation."
+    },
+    "mission-big": {
+      "model": "sonnet",
+      "effort": "high",
+      "when": "Mission that is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind."
+    },
+    "opus-on-request": {
+      "model": "opus",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Opus on this task. Never chosen on your own."
+    }
+  },
+  "default": {
+    "model": "sonnet",
+    "effort": "medium"
+  }
+}

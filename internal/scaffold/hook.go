@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
+	"github.com/isaias-alt/vexillum/internal/slot"
 )
 
 const (
@@ -69,18 +70,44 @@ const (
 // left untouched and reported as an error rather than risk corrupting it.
 func EnsureSentinelHook(projectDir string) (added bool, err error) {
 	path := filepath.Join(projectDir, ".claude", "settings.json")
+	out, changed, err := mergeSentinelHook(path)
+	if err != nil || !changed {
+		return false, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return false, err
+	}
+	// settings.json is the user's own file: write it atomically, keeping
+	// its permissions and any symlink it is behind.
+	if err := slot.WriteFile(path, string(out)); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SentinelHookNeeded reports whether EnsureSentinelHook would change
+// projectDir's .claude/settings.json, without writing anything. A malformed
+// settings file is an error, as it is for EnsureSentinelHook.
+func SentinelHookNeeded(projectDir string) (bool, error) {
+	_, changed, err := mergeSentinelHook(filepath.Join(projectDir, ".claude", "settings.json"))
+	return changed, err
+}
+
+// mergeSentinelHook computes the settings file content with the sentinel
+// hook merged in and whether that differs from what is on disk.
+func mergeSentinelHook(path string) (out []byte, changed bool, err error) {
 
 	settings := map[string]any{}
 	data, readErr := os.ReadFile(path)
 	switch {
 	case readErr == nil:
 		if jsonErr := json.Unmarshal(data, &settings); jsonErr != nil {
-			return false, fmt.Errorf("%s has invalid JSON, leaving it untouched: %w", path, jsonErr)
+			return nil, false, fmt.Errorf("%s has invalid JSON, leaving it untouched: %w", path, jsonErr)
 		}
 	case os.IsNotExist(readErr):
 		// settings stays the empty map created above.
 	default:
-		return false, readErr
+		return nil, false, readErr
 	}
 
 	hooks, _ := settings["hooks"].(map[string]any)
@@ -97,7 +124,6 @@ func EnsureSentinelHook(projectDir string) (added bool, err error) {
 	}
 
 	found := false
-	changed := false
 	for _, g := range stopGroups {
 		group, ok := g.(map[string]any)
 		if !ok {
@@ -137,20 +163,12 @@ func EnsureSentinelHook(projectDir string) (added bool, err error) {
 	}
 
 	if !changed {
-		return false, nil
+		return nil, false, nil
 	}
 
-	out, err := json.MarshalIndent(settings, "", "  ")
+	out, err = json.MarshalIndent(settings, "", "  ")
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-	out = append(out, '\n')
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
-	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
+	return append(out, '\n'), true, nil
 }

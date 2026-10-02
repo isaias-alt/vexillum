@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "asyncRewake": true,
+            "command": "vx sentinel await",
+            "timeout": 3600,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)"
+    ]
+  }
+}

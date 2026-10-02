@@ -6,7 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/install"
+	"github.com/isaias-alt/vexillum/internal/slot"
 )
 
 // fakeBinDir creates a directory containing an executable stub for each
@@ -473,69 +477,141 @@ func TestDoctor_GitHubCLIInstalled(t *testing.T) {
 	}
 }
 
-// muster installed at project level - it's a first-party skill (ships in
-// this repo, skills/muster/SKILL.md), not a third-party AXI, but is
-// detected and installed exactly the same way as one.
-func TestDoctor_MusterInstalled(t *testing.T) {
+// The first-party skills ship in the binary, so doctor reports their state
+// against the embedded copy and no longer hints at "npx skills add" for them.
+func TestDoctor_FirstPartySkills(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	writeSkillFile(t, projectDir, "muster")
+	projectDir, home := newProject(t)
 	vexillumHome := t.TempDir()
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
 	homeDir := t.TempDir()
 
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
+	run := func() string {
+		var out bytes.Buffer
+		if code := runDoctor(projectDir, vexillumHome, homeDir, &out); code != 0 {
+			t.Fatalf("exit %d\n%s", code, out.String())
+		}
+		return out.String()
+	}
+	out := run()
+	for _, want := range []string{
+		"[ok] AGENTS.md vexillum block - current (en)",
+		"[ok] CLAUDE.md imports AGENTS.md",
+		"[ok] skill vexillum - installed, current",
+		"[ok] skill forum - installed, current",
+		"[ok] skill muster - installed, current",
+		"[ok] models.json - valid, 5 profiles",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "npx skills add isaias-alt") {
+		t.Errorf("stale install hint for an embedded skill:\n%s", out)
+	}
+	if !strings.Contains(out, "npx skills add upstream") {
+		t.Errorf("third-party hints must stay:\n%s", out)
+	}
 
-	if !bytes.Contains(out.Bytes(), []byte("[installed] muster")) {
-		t.Errorf("expected muster reported installed, got:\n%s", out.String())
+	skill := filepath.Join(projectDir, ".claude", "skills", "forum", "SKILL.md")
+	writeFileT(t, skill, readFile(t, skill)+"\nmine\n")
+	if out := run(); !strings.Contains(out, "[warn] skill forum - installed, edited by hand") {
+		t.Errorf("edited skill not reported:\n%s", out)
+	}
+	os.RemoveAll(filepath.Join(projectDir, ".claude", "skills", "muster"))
+	if out := run(); !strings.Contains(out, "[missing] skill muster - missing") {
+		t.Errorf("missing skill not reported:\n%s", out)
+	}
+	// A global install satisfies it.
+	writeFileT(t, filepath.Join(homeDir, ".claude", "skills", "muster", "SKILL.md"), "x")
+	if out := run(); !strings.Contains(out, "skill muster - installed, edited by hand (global)") {
+		t.Errorf("global skill not reported:\n%s", out)
 	}
 }
 
-// muster not installed - project-local install hint, no "-g",
-// pointing at this repo instead of a third-party one.
-func TestDoctor_MusterNotInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	code := runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if code != 0 {
-		t.Fatalf("expected exit 0 (muster status never affects the exit code), got %d\noutput:\n%s", code, out.String())
+func TestDoctor_SlotStates(t *testing.T) {
+	core, _ := install.SlotTemplate(slot.LangEN)
+	current, _ := slot.Upsert(englishAgents, core, false)
+	stale, _ := slot.Upsert(englishAgents, "## Vexillum commander\n\nOld.\n", false)
+	tests := []struct {
+		name, agents, want string
+	}{
+		{"absent", englishAgents, "[missing] AGENTS.md vexillum block - absent"},
+		{"no file", "", "[missing] AGENTS.md vexillum block - absent"},
+		{"current", current, "[ok] AGENTS.md vexillum block - current (en)"},
+		{"stale", stale, "[warn] AGENTS.md vexillum block - stale"},
+		{"drifted", strings.Replace(current, "## Vexillum commander", "## Mine", 1), "[warn] AGENTS.md vexillum block - drifted"},
+		{"malformed", englishAgents + "<!-- BEGIN VEXILLUM v:1 hash:00000000 -->\n", "[warn] AGENTS.md vexillum block - malformed"},
 	}
-	want := "[not installed] muster - install with: npx skills add isaias-alt/vexillum --skill muster"
-	if !bytes.Contains(out.Bytes(), []byte(want)) {
-		t.Errorf("expected exact install hint, got:\n%s", out.String())
-	}
-	if bytes.Contains(out.Bytes(), []byte("muster -g")) {
-		t.Errorf("expected no -g flag for muster's install hint, got:\n%s", out.String())
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+			projectDir := initializedProject(t)
+			if tc.agents != "" {
+				writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), tc.agents)
+			}
+			var out bytes.Buffer
+			if code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out); code != 0 {
+				t.Fatalf("slot state must never fail doctor: exit %d\n%s", code, out.String())
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Errorf("missing %q in:\n%s", tc.want, out.String())
+			}
+		})
 	}
 }
 
-// forum is first-party like muster: detected from .claude/skills/forum and
-// hinted with a project-local install from this repo.
-func TestDoctor_ForumInstalledAndNotInstalled(t *testing.T) {
+func TestDoctor_ClaudeImportAndLegacyRules(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
+	core, _ := install.SlotTemplate(slot.LangEN)
+	current, _ := slot.Upsert(englishAgents, core, false)
+	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), current)
+	writeFileT(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"), "# old\n")
 
 	var out bytes.Buffer
-	if code := runDoctor(projectDir, vexillumHome, homeDir, &out); code != 0 {
-		t.Fatalf("expected exit 0 (forum status never affects the exit code), got %d\n%s", code, out.String())
+	runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+	for _, want := range []string{
+		"[warn] CLAUDE.md imports AGENTS.md - CLAUDE.md does not exist, so Claude Code will not see",
+		"[warn] .claude/rules/vexillum.md - from an older vexillum",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("missing %q in:\n%s", want, out.String())
+		}
 	}
-	want := "[not installed] forum - install with: npx skills add isaias-alt/vexillum --skill forum"
-	if !bytes.Contains(out.Bytes(), []byte(want)) {
-		t.Errorf("expected exact install hint, got:\n%s", out.String())
-	}
-
-	writeSkillFile(t, projectDir, "forum")
+	writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# x\n")
 	out.Reset()
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-	if !bytes.Contains(out.Bytes(), []byte("[installed] forum")) {
-		t.Errorf("expected forum reported installed, got:\n%s", out.String())
+	runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+	if !strings.Contains(out.String(), "CLAUDE.md has no @AGENTS.md line") {
+		t.Errorf("not importing not reported:\n%s", out.String())
+	}
+}
+
+func TestDoctor_ModelsInvalid(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := initializedProject(t)
+	writeFileT(t, filepath.Join(projectDir, ".vexillum", "models.json"), `{"default": {"model": "gpt"}}`)
+	var out bytes.Buffer
+	if code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out); code != 0 {
+		t.Fatalf("invalid models.json must only warn: exit %d", code)
+	}
+	if !strings.Contains(out.String(), "[warn] models.json - invalid:") || !strings.Contains(out.String(), "models.json") {
+		t.Errorf("invalid models not reported:\n%s", out.String())
+	}
+}
+
+// A project that is not initialized gets no project checks, just the one
+// "project initialized" line.
+func TestDoctor_NoProjectChecksWhenNotInitialized(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	projectDir := t.TempDir()
+	initGitRepo(t, projectDir)
+	var out bytes.Buffer
+	runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+	if strings.Contains(out.String(), "AGENTS.md vexillum block") || strings.Contains(out.String(), "skill forum") {
+		t.Errorf("unexpected project checks:\n%s", out.String())
 	}
 }
 

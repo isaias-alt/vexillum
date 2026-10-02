@@ -8,6 +8,12 @@ description: "Report on the health of the vexillum environment"
 ```text
 Report on the health of the vexillum environment. Read-only.
 
+Besides the tools vexillum drives, doctor reports, for an initialized project,
+the state of the AGENTS.md block (absent, current, stale, drifted or
+malformed), whether CLAUDE.md imports AGENTS.md, each first-party skill
+(installed and current, stale, edited by hand, or missing), a rules file left
+by an older version, and whether the model profiles in models.json are valid.
+
 Usage:
   vx doctor
 ```

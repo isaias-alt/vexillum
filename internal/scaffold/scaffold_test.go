@@ -3,11 +3,7 @@ package scaffold
 import (
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"testing"
-
-	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
 func TestEnsureDir(t *testing.T) {
@@ -74,36 +70,6 @@ func TestGlobalInitialized(t *testing.T) {
 	}
 }
 
-func TestRecordHash(t *testing.T) {
-	dir := t.TempDir()
-	if err := WriteConfig(dir); err != nil {
-		t.Fatalf("WriteConfig: %v", err)
-	}
-
-	// updated=false is a no-op - the config stays without a hash.
-	if err := RecordHash(dir, false); err != nil {
-		t.Fatalf("RecordHash(false): %v", err)
-	}
-	cfg, err := ReadConfig(dir)
-	if err != nil {
-		t.Fatalf("ReadConfig: %v", err)
-	}
-	if cfg.VexillumRuleHash != "" {
-		t.Fatal("expected no hash recorded when updated=false")
-	}
-
-	if err := RecordHash(dir, true); err != nil {
-		t.Fatalf("RecordHash(true): %v", err)
-	}
-	cfg, err = ReadConfig(dir)
-	if err != nil {
-		t.Fatalf("ReadConfig (after RecordHash): %v", err)
-	}
-	if cfg.VexillumRuleHash != hashContent(VexillumCommanderRules) {
-		t.Errorf("expected the recorded hash to match VexillumCommanderRules' own hash, got %q", cfg.VexillumRuleHash)
-	}
-}
-
 func TestWriteFileIfMissing(t *testing.T) {
 	dir := t.TempDir()
 
@@ -138,99 +104,28 @@ func TestIsGitRepo(t *testing.T) {
 	}
 }
 
-func TestUpgradeFile_CreatesWhenMissing(t *testing.T) {
+func TestSaveConfigRoundTripsSkillHashes(t *testing.T) {
 	dir := t.TempDir()
-
-	result, err := UpgradeFile(dir, "rule.md", "latest content", "", false)
+	if err := WriteConfig(dir); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadConfig(dir)
 	if err != nil {
-		t.Fatalf("UpgradeFile: %v", err)
+		t.Fatal(err)
 	}
-	if !result.Changed {
-		t.Error("expected Changed=true when the file was missing")
+	if cfg.Skills != nil {
+		t.Errorf("a fresh config has no skill hashes, got %v", cfg.Skills)
 	}
-	data, _ := os.ReadFile(filepath.Join(dir, "rule.md"))
-	if string(data) != "latest content" {
-		t.Errorf("expected the file to be created with the latest content, got %q", string(data))
+	cfg.Skills = map[string]string{"forum": "abc"}
+	cfg.VexillumRuleHash = HashContent("x")
+	if err := SaveConfig(dir, cfg); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestUpgradeFile_AlreadyUpToDate(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "rule.md"), []byte("latest content"), 0o644)
-
-	result, err := UpgradeFile(dir, "rule.md", "latest content", "", false)
+	got, err := ReadConfig(dir)
 	if err != nil {
-		t.Fatalf("UpgradeFile: %v", err)
+		t.Fatal(err)
 	}
-	if result.Changed {
-		t.Error("expected Changed=false when content already matches")
-	}
-	if result.Status != "already up to date" {
-		t.Errorf("unexpected status: %q", result.Status)
-	}
-}
-
-func TestUpgradeFile_SafeRefreshWhenHashMatches(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "rule.md"), []byte("old content"), 0o644)
-
-	result, err := UpgradeFile(dir, "rule.md", "new content", hashContent("old content"), false)
-	if err != nil {
-		t.Fatalf("UpgradeFile: %v", err)
-	}
-	if !result.Changed {
-		t.Error("expected Changed=true when the stored hash matches the file's current content")
-	}
-	data, _ := os.ReadFile(filepath.Join(dir, "rule.md"))
-	if string(data) != "new content" {
-		t.Errorf("expected the file to be refreshed, got %q", string(data))
-	}
-}
-
-func TestUpgradeFile_LeavesLocalEditsUntouchedWithoutForce(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "rule.md"), []byte("hand-edited content"), 0o644)
-
-	result, err := UpgradeFile(dir, "rule.md", "new content", hashContent("something else"), false)
-	if err != nil {
-		t.Fatalf("UpgradeFile: %v", err)
-	}
-	if result.Changed {
-		t.Error("expected Changed=false when the stored hash doesn't match and force isn't set")
-	}
-	data, _ := os.ReadFile(filepath.Join(dir, "rule.md"))
-	if string(data) != "hand-edited content" {
-		t.Error("expected the hand-edited content to be left untouched")
-	}
-}
-
-func TestUpgradeFile_ForceOverwritesLocalEdits(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "rule.md"), []byte("hand-edited content"), 0o644)
-
-	result, err := UpgradeFile(dir, "rule.md", "new content", hashContent("something else"), true)
-	if err != nil {
-		t.Fatalf("UpgradeFile: %v", err)
-	}
-	if !result.Changed {
-		t.Error("expected Changed=true with --force")
-	}
-	data, _ := os.ReadFile(filepath.Join(dir, "rule.md"))
-	if string(data) != "new content" {
-		t.Errorf("expected --force to overwrite local edits, got %q", string(data))
-	}
-}
-
-// The commander rules are embedded markdown, so they cannot read
-// cmdname.Name: this pins them to it. Every command example must use the
-// current name, and none may use the pre-rename "vexillum <command>" form
-// (the product name on its own, e.g. "vexillum's own tribunal", is fine).
-func TestCommanderRulesUseCurrentCommandName(t *testing.T) {
-	if !strings.Contains(VexillumCommanderRules, "`"+cmdname.Name+" dispatch") {
-		t.Errorf("expected the rules to invoke `%s dispatch`", cmdname.Name)
-	}
-	stale := regexp.MustCompile(`vexillum (init|upgrade|doctor|dispatch|redispatch|decide|status|land|ship|release|sentinel|forum|banner)\b`)
-	if m := stale.FindString(VexillumCommanderRules); m != "" {
-		t.Errorf("the rules still tell the commander to run %q; use %q", m, cmdname.Name)
+	if got.Skills["forum"] != "abc" || got.VexillumRuleHash != HashContent("x") || got.Version != 1 {
+		t.Errorf("round trip lost data: %+v", got)
 	}
 }

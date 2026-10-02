@@ -3,10 +3,17 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/install"
+	"github.com/isaias-alt/vexillum/internal/scaffold"
+	"github.com/isaias-alt/vexillum/internal/slot"
+	"github.com/isaias-alt/vexillum/skills"
 )
 
 func initGitRepo(t *testing.T, dir string) {
@@ -27,252 +34,653 @@ func mustStat(t *testing.T, path string) os.FileInfo {
 	return info
 }
 
-// L1-01: init in a clean project creates ~/.vexillum/, the local scaffold
-// and .claude/rules/vexillum.md, and reports what it did, exit 0. Never
-// touches AGENTS.md/CLAUDE.md - vexillum no longer writes or depends on
-// either.
-func TestInit_CleanProject(t *testing.T) {
-	projectDir := t.TempDir()
+// result is what a setup run printed and returned.
+type result struct {
+	code        int
+	out, errOut string
+}
+
+// setupTestEnv builds an environment reading stdin, as a terminal when
+// interactive is true.
+func setupTestEnv(opts setupOptions, stdin string, interactive bool) (*setupEnv, *bytes.Buffer, *bytes.Buffer) {
+	var out, errOut bytes.Buffer
+	return newSetupEnv(opts, strings.NewReader(stdin), interactive, &out, &errOut), &out, &errOut
+}
+
+func boolp(b bool) *bool { return &b }
+
+// initYes runs init with --yes: the non-interactive "accept everything" path.
+func initYes(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
+	env := newSetupEnv(setupOptions{Yes: true}, strings.NewReader(""), false, stdout, stderr)
+	return runInit(env, projectDir, vexillumHome)
+}
+
+func doInit(projectDir, vexillumHome string, opts setupOptions, stdin string, interactive bool) result {
+	env, out, errOut := setupTestEnv(opts, stdin, interactive)
+	code := runInit(env, projectDir, vexillumHome)
+	return result{code, out.String(), errOut.String()}
+}
+
+func doUpgrade(projectDir, vexillumHome string, opts setupOptions, stdin string, interactive bool) result {
+	env, out, errOut := setupTestEnv(opts, stdin, interactive)
+	code := runUpgrade(env, projectDir, vexillumHome)
+	return result{code, out.String(), errOut.String()}
+}
+
+func newProject(t *testing.T) (projectDir, vexillumHome string) {
+	t.Helper()
+	projectDir = t.TempDir()
 	initGitRepo(t, projectDir)
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	return projectDir, filepath.Join(t.TempDir(), ".vexillum")
+}
 
-	var stdout, stderr bytes.Buffer
-	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
-
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
 	}
-	mustStat(t, vexillumHome)
+	return string(data)
+}
+
+func writeFileT(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func notExist(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Errorf("expected %s not to exist (err: %v)", path, err)
+	}
+}
+
+const spanishAgents = "# Guia del proyecto\n\nEsta es la guia para los agentes que trabajan en este repositorio y que debe seguir cuando se hace un cambio en el codigo.\n"
+const englishAgents = "# Project guide\n\nThis is the guide for the agents that work in this repository and that they should follow when they make a change to the code.\n"
+
+// The whole flow with --yes and no terminal: AGENTS.md block, CLAUDE.md
+// import, skills, models.json, config, gitignore and hook, and no rules file.
+func TestInit_YesWritesEverything(t *testing.T) {
+	projectDir, home := newProject(t)
+	r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+	}
+	mustStat(t, home)
 	mustStat(t, filepath.Join(projectDir, ".vexillum", "config.json"))
-	mustStat(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
+	mustStat(t, filepath.Join(projectDir, ".vexillum", "models.json"))
+	mustStat(t, filepath.Join(projectDir, ".vexillum", ".gitignore"))
+	notExist(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
 
-	rule, err := os.ReadFile(filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
+	core, _ := install.SlotTemplate(slot.LangEN)
+	if ins := slot.Inspect(readFile(t, filepath.Join(projectDir, "AGENTS.md")), core); ins.State != slot.StateCurrent {
+		t.Errorf("AGENTS.md block state = %v, want current", ins.State)
+	}
+	if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "@AGENTS.md\n" {
+		t.Errorf("CLAUDE.md = %q", got)
+	}
+	cfg, err := scaffold.ReadConfig(filepath.Join(projectDir, ".vexillum"))
 	if err != nil {
-		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
+		t.Fatal(err)
 	}
-	if string(rule) != productVexillumRule {
-		t.Error("expected .claude/rules/vexillum.md to match the product template")
+	for _, name := range skills.Names() {
+		want, _ := skills.Hash(name)
+		if cfg.Skills[name] != want {
+			t.Errorf("config hash for skill %s = %q, want %q", name, cfg.Skills[name], want)
+		}
+		mustStat(t, filepath.Join(projectDir, ".claude", "skills", name, "SKILL.md"))
 	}
-
-	if _, err := os.Stat(filepath.Join(projectDir, "AGENTS.md")); !os.IsNotExist(err) {
-		t.Error("expected init to never write AGENTS.md")
+	if !strings.Contains(readFile(t, filepath.Join(projectDir, ".claude", "settings.json")), sentinelHookCommand) {
+		t.Error("sentinel hook missing")
 	}
-	if _, err := os.Stat(filepath.Join(projectDir, "CLAUDE.md")); !os.IsNotExist(err) {
-		t.Error("expected init to never write CLAUDE.md")
-	}
-
-	if out := stdout.String(); out == "" {
-		t.Error("expected confirmation output, got none")
-	}
-}
-
-// A project already initialized (has .vexillum/config.json) but missing
-// .claude/rules/vexillum.md - e.g. deleted by hand, or initialized by an
-// older vexillum before this file existed - gets it healed back without
-// touching config.json's other fields.
-func TestInit_HealsMissingRuleFile(t *testing.T) {
-	projectDir := t.TempDir()
-	initGitRepo(t, projectDir)
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-
-	var buf bytes.Buffer
-	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
-		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
-	}
-
-	rulePath := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
-	if err := os.Remove(rulePath); err != nil {
-		t.Fatalf("removing .claude/rules/vexillum.md to simulate a healed gap: %v", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
-	}
-
-	rule := mustStat(t, rulePath)
-	if rule.Size() == 0 {
-		t.Error("expected the healed rule file to have content")
+	if !strings.Contains(r.out, "will change these files") {
+		t.Errorf("expected the notice, got: %s", r.out)
 	}
 }
 
-// L1-02: running init a second time does not duplicate or corrupt anything,
-// informs the user it was already initialized, exit 0.
+// Running init twice changes nothing and says so.
 func TestInit_Idempotent(t *testing.T) {
-	projectDir := t.TempDir()
-	initGitRepo(t, projectDir)
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-
-	var buf bytes.Buffer
-	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
-		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
+	projectDir, home := newProject(t)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatalf("first init: %s%s", r.out, r.errOut)
 	}
-
-	rulePath := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
-	ruleBefore, err := os.ReadFile(rulePath)
+	before, err := snapshotTree(t, projectDir)
 	if err != nil {
-		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
+		t.Fatal(err)
 	}
-	configBefore, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
-	if err != nil {
-		t.Fatalf("reading config.json: %v", err)
+	r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+	if r.code != 0 || !strings.Contains(r.out, "Nothing to change") {
+		t.Fatalf("second init: exit %d, out: %s%s", r.code, r.out, r.errOut)
 	}
-
-	var stdout, stderr bytes.Buffer
-	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0 on second run, got %d (stderr: %s)", code, stderr.String())
+	if strings.Contains(r.out, "will change") {
+		t.Errorf("second init printed a notice: %s", r.out)
 	}
-	if stdout.String() == "" {
-		t.Error("expected output informing the project was already initialized")
+	after, _ := snapshotTree(t, projectDir)
+	if before != after {
+		t.Error("second init changed the project")
 	}
-
-	ruleAfter, err := os.ReadFile(rulePath)
-	if err != nil {
-		t.Fatalf("reading .claude/rules/vexillum.md after second run: %v", err)
-	}
-	if !bytes.Equal(ruleBefore, ruleAfter) {
-		t.Error(".claude/rules/vexillum.md changed on second init run")
-	}
-
-	configAfter, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
-	if err != nil {
-		t.Fatalf("reading config.json after second run: %v", err)
-	}
-	if !bytes.Equal(configBefore, configAfter) {
-		t.Error("config.json changed on second init run")
+	// Even without --yes and without a terminal: nothing to do is not an error.
+	if r := doInit(projectDir, home, setupOptions{}, "", false); r.code != 0 {
+		t.Errorf("idempotent rerun without --yes: exit %d: %s%s", r.code, r.out, r.errOut)
 	}
 }
 
-// L1-03: a hand-edited .claude/rules/vexillum.md is never silently
-// overwritten by a later init run.
-func TestInit_DoesNotOverwriteEditedRuleFile(t *testing.T) {
-	projectDir := t.TempDir()
-	initGitRepo(t, projectDir)
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-
-	var buf bytes.Buffer
-	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
-		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
+// Non-TTY: without --yes nothing is written, the notice is printed, and the
+// exit code is non-zero with an actionable message.
+func TestInit_NonTTYWithoutYes(t *testing.T) {
+	projectDir, home := newProject(t)
+	r := doInit(projectDir, home, setupOptions{}, "", false)
+	if r.code == 0 {
+		t.Fatal("expected a non-zero exit")
 	}
-
-	rulePath := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
-	customContent := []byte("# My custom commander instructions\n")
-	if err := os.WriteFile(rulePath, customContent, 0o644); err != nil {
-		t.Fatalf("writing custom rule file: %v", err)
+	if !strings.Contains(r.out, "AGENTS.md") || !strings.Contains(r.errOut, "--yes") {
+		t.Errorf("notice or hint missing:\nout: %s\nerr: %s", r.out, r.errOut)
 	}
+	notExist(t, filepath.Join(projectDir, ".vexillum"))
+	notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	notExist(t, home)
 
-	var stdout, stderr bytes.Buffer
-	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	// --skills / --no-skills alone do not make it act either.
+	if r := doInit(projectDir, home, setupOptions{Skills: boolp(false)}, "", false); r.code == 0 {
+		t.Error("--no-skills without --yes must still refuse")
 	}
+	notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+}
 
-	got, err := os.ReadFile(rulePath)
-	if err != nil {
-		t.Fatalf("reading .claude/rules/vexillum.md: %v", err)
-	}
-	if !bytes.Equal(got, customContent) {
-		t.Errorf(".claude/rules/vexillum.md was overwritten: got %q, want %q", got, customContent)
+func TestInit_SkillsFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		flag *bool
+		want bool
+	}{{"skills", boolp(true), true}, {"no-skills", boolp(false), false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir, home := newProject(t)
+			r := doInit(projectDir, home, setupOptions{Yes: true, Skills: tc.flag}, "", false)
+			if r.code != 0 {
+				t.Fatalf("%s%s", r.out, r.errOut)
+			}
+			_, err := os.Stat(filepath.Join(projectDir, ".claude", "skills", "vexillum", "SKILL.md"))
+			if (err == nil) != tc.want {
+				t.Errorf("skills installed = %v, want %v", err == nil, tc.want)
+			}
+			// Declining twice is idempotent too.
+			if again := doInit(projectDir, home, setupOptions{Yes: true, Skills: tc.flag}, "", false); !strings.Contains(again.out, "Nothing to change") {
+				t.Errorf("second run: %s", again.out)
+			}
+		})
 	}
 }
 
-// L1-04: if ~/.vexillum/ is missing but the local scaffold is present,
-// init recreates ~/.vexillum/ without touching the local scaffold.
-func TestInit_RecreatesMissingVexillumHome(t *testing.T) {
-	projectDir := t.TempDir()
-	initGitRepo(t, projectDir)
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+// Interactive consent: the notice, then Continue? [Y/n].
+func TestInit_Consent(t *testing.T) {
+	t.Run("no stops before writing anything", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		r := doInit(projectDir, home, setupOptions{}, "n\n", true)
+		if r.code != 0 || !strings.Contains(r.out, "Nothing was changed.") {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, ".vexillum"))
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+		notExist(t, filepath.Join(projectDir, "CLAUDE.md"))
+		notExist(t, home)
+	})
+	t.Run("empty answers take the defaults (yes)", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		// Continue? / language / skills, all default.
+		r := doInit(projectDir, home, setupOptions{}, "\n\n\n", true)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		for _, want := range []string{"Continue? [Y/n]", "Install the vexillum, forum and muster skills? [Y/n]", "Use en for the vexillum block? [Y/n]"} {
+			if !strings.Contains(r.out, want) {
+				t.Errorf("missing prompt %q in:\n%s", want, r.out)
+			}
+		}
+		mustStat(t, filepath.Join(projectDir, ".claude", "skills", "forum", "SKILL.md"))
+	})
+	t.Run("declining the skills", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		r := doInit(projectDir, home, setupOptions{}, "y\ny\nn\n", true)
+		if r.code != 0 {
+			t.Fatalf("%s%s", r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, ".claude", "skills"))
+		mustStat(t, filepath.Join(projectDir, "AGENTS.md"))
+	})
+	t.Run("closed input is an error, not a silent yes", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		r := doInit(projectDir, home, setupOptions{}, "", true)
+		if r.code == 0 {
+			t.Fatalf("expected failure, got: %s", r.out)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	})
+}
 
-	var buf bytes.Buffer
-	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
-		t.Fatalf("first init failed: exit %d: %s", code, buf.String())
+// Language: detection is shown and can be confirmed or overridden; --lang
+// skips the question; no text defaults to English.
+func TestInit_Language(t *testing.T) {
+	tests := []struct {
+		name     string
+		agents   string
+		opts     setupOptions
+		stdin    string
+		wantLang slot.Lang
+		wantOut  string
+	}{
+		{"spanish detected and confirmed", spanishAgents, setupOptions{Skills: boolp(false)}, "y\ny\n", slot.LangES, "Detected language: es"},
+		{"detected, overridden to en", spanishAgents, setupOptions{Skills: boolp(false)}, "y\nn\nen\n", slot.LangEN, "Language (en/es): "},
+		{"no text defaults to en and can be overridden", "", setupOptions{Skills: boolp(false)}, "y\nn\nes\n", slot.LangES, "No language detected in AGENTS.md (it does not exist yet), defaulting to en"},
+		{"bad override is asked again", englishAgents, setupOptions{Skills: boolp(false)}, "y\nn\nfr\nes\n", slot.LangES, "Please type en or es."},
+		{"--lang skips the question", spanishAgents, setupOptions{Skills: boolp(false), Lang: slot.LangEN}, "y\n", slot.LangEN, ""},
 	}
-
-	configBefore, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
-	if err != nil {
-		t.Fatalf("reading config.json: %v", err)
-	}
-
-	if err := os.RemoveAll(vexillumHome); err != nil {
-		t.Fatalf("removing vexillum home: %v", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
-	}
-	mustStat(t, vexillumHome)
-
-	configAfter, err := os.ReadFile(filepath.Join(projectDir, ".vexillum", "config.json"))
-	if err != nil {
-		t.Fatalf("reading config.json after recreation: %v", err)
-	}
-	if !bytes.Equal(configBefore, configAfter) {
-		t.Error("local config.json changed when ~/.vexillum/ was recreated")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir, home := newProject(t)
+			if tc.agents != "" {
+				writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), tc.agents)
+			}
+			r := doInit(projectDir, home, tc.opts, tc.stdin, true)
+			if r.code != 0 {
+				t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+			}
+			if !strings.Contains(r.out, tc.wantOut) {
+				t.Errorf("output lacks %q:\n%s", tc.wantOut, r.out)
+			}
+			want, _ := install.SlotTemplate(tc.wantLang)
+			if ins := slot.Inspect(readFile(t, filepath.Join(projectDir, "AGENTS.md")), want); ins.State != slot.StateCurrent {
+				t.Errorf("block is %v, want current in %s", ins.State, tc.wantLang)
+			}
+			if tc.opts.Lang != "" && strings.Contains(r.out, "for the vexillum block?") {
+				t.Errorf("--lang must skip the language question:\n%s", r.out)
+			}
+		})
 	}
 }
 
-// L1-05: init outside a git repo fails with a clear message and a non-zero
-// exit code, leaving no state behind.
+// An existing AGENTS.md keeps every byte of the user's text; the block is
+// appended. A block already there (same language) is not duplicated.
+func TestInit_ExistingAgents(t *testing.T) {
+	t.Run("without a block", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
+		if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+			t.Fatal(r.out, r.errOut)
+		}
+		got := readFile(t, filepath.Join(projectDir, "AGENTS.md"))
+		if !strings.HasPrefix(got, englishAgents) {
+			t.Errorf("user text was changed:\n%s", got)
+		}
+		if strings.Count(got, "BEGIN VEXILLUM") != 1 {
+			t.Error("expected exactly one block")
+		}
+	})
+	t.Run("with a current block", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		core, _ := install.SlotTemplate(slot.LangEN)
+		content, _ := slot.Upsert(englishAgents, core, false)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), content)
+		if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+			t.Fatal(r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "AGENTS.md")); got != content {
+			t.Error("a current block must leave AGENTS.md byte for byte as it was")
+		}
+	})
+	t.Run("with an edited block: reported, untouched", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		core, _ := install.SlotTemplate(slot.LangEN)
+		content, _ := slot.Upsert(englishAgents, core, false)
+		content = strings.Replace(content, "## Vexillum commander", "## My commander", 1)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), content)
+		r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+		if r.code != 0 || !strings.Contains(r.out, "edited by hand") {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "AGENTS.md")); got != content {
+			t.Error("init must not touch an edited block")
+		}
+	})
+	t.Run("with a malformed block: reported, untouched", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		content := englishAgents + "\n<!-- BEGIN VEXILLUM v:1 hash:00000000 -->\nhalf a block\n"
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), content)
+		r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+		if r.code != 0 || !strings.Contains(r.out, "malformed") {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "AGENTS.md")); got != content {
+			t.Error("init must not touch a malformed block")
+		}
+	})
+	t.Run("a rerun keeps the block's language", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
+		if r := doInit(projectDir, home, setupOptions{Yes: true, Lang: slot.LangES}, "", false); r.code != 0 {
+			t.Fatal(r.out, r.errOut)
+		}
+		r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+		if !strings.Contains(r.out, "Nothing to change") {
+			t.Errorf("rerun without --lang flipped the language: %s", r.out)
+		}
+	})
+}
+
+// CLAUDE.md: missing is created; importing is left alone; an existing one
+// without the import is edited only after a question.
+func TestInit_ClaudeMD(t *testing.T) {
+	noSkills := setupOptions{Skills: boolp(false)}
+	yesNoSkills := setupOptions{Yes: true, Skills: boolp(false)}
+	t.Run("missing", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		doInit(projectDir, home, yesNoSkills, "", false)
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "@AGENTS.md\n" {
+			t.Errorf("CLAUDE.md = %q", got)
+		}
+	})
+	t.Run("already importing", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		const own = "# Mine\n\n@AGENTS.md\n"
+		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), own)
+		doInit(projectDir, home, yesNoSkills, "", false)
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != own {
+			t.Errorf("CLAUDE.md changed: %q", got)
+		}
+	})
+	t.Run("not importing, accepted", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# Mine\n")
+		// Continue? / language / CLAUDE.md edit
+		r := doInit(projectDir, home, noSkills, "y\ny\ny\n", true)
+		if r.code != 0 {
+			t.Fatal(r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "# Mine\n@AGENTS.md\n" {
+			t.Errorf("CLAUDE.md = %q", got)
+		}
+	})
+	t.Run("not importing, declined: warns", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# Mine\n")
+		r := doInit(projectDir, home, noSkills, "y\ny\nn\n", true)
+		if r.code != 0 {
+			t.Fatal(r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "# Mine\n" {
+			t.Errorf("CLAUDE.md edited despite the refusal: %q", got)
+		}
+		if !strings.Contains(r.errOut, "will not see the vexillum block") {
+			t.Errorf("no warning: %s", r.errOut)
+		}
+		mustStat(t, filepath.Join(projectDir, "AGENTS.md"))
+	})
+	t.Run("a symlink to AGENTS.md counts as importing", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
+		if err := os.Symlink("AGENTS.md", filepath.Join(projectDir, "CLAUDE.md")); err != nil {
+			t.Fatal(err)
+		}
+		doInit(projectDir, home, yesNoSkills, "", false)
+		if info, _ := os.Lstat(filepath.Join(projectDir, "CLAUDE.md")); info.Mode()&os.ModeSymlink == 0 {
+			t.Error("the CLAUDE.md symlink was replaced")
+		}
+		if !strings.Contains(readFile(t, filepath.Join(projectDir, "CLAUDE.md")), "BEGIN VEXILLUM") {
+			t.Error("the block was not written through the symlink")
+		}
+	})
+}
+
+// models.json is created once and never overwritten.
+func TestInit_ModelsNeverOverwritten(t *testing.T) {
+	projectDir, home := newProject(t)
+	custom := `{"default": {"effort": "high"}}`
+	writeFileT(t, filepath.Join(projectDir, ".vexillum", "models.json"), custom)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	if got := readFile(t, filepath.Join(projectDir, ".vexillum", "models.json")); got != custom {
+		t.Errorf("models.json overwritten: %q", got)
+	}
+}
+
+// Skills that are edited are never touched by init; stale ones are reported.
+func TestInit_SkillsLeftAlone(t *testing.T) {
+	projectDir, home := newProject(t)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	skill := filepath.Join(projectDir, ".claude", "skills", "forum", "SKILL.md")
+	edited := readFile(t, skill) + "\nmy note\n"
+	writeFileT(t, skill, edited)
+	r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+	if r.code != 0 || !strings.Contains(r.out, "Skill forum: edited by hand") {
+		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+	}
+	if readFile(t, skill) != edited {
+		t.Error("init overwrote an edited skill")
+	}
+}
+
+// A symlinked skill directory (this repository dogfoods skills/) is never
+// written through.
+func TestInit_SymlinkedSkillIsLeftAlone(t *testing.T) {
+	projectDir, home := newProject(t)
+	src := filepath.Join(t.TempDir(), "my-forum")
+	writeFileT(t, filepath.Join(src, "SKILL.md"), "---\nname: forum\n---\ncustom\n")
+	if err := os.MkdirAll(filepath.Join(projectDir, ".claude", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(src, filepath.Join(projectDir, ".claude", "skills", "forum")); err != nil {
+		t.Fatal(err)
+	}
+	r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+	if r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	if got := readFile(t, filepath.Join(src, "SKILL.md")); !strings.Contains(got, "custom") {
+		t.Error("init wrote through a symlinked skill")
+	}
+	mustStat(t, filepath.Join(projectDir, ".claude", "skills", "vexillum", "SKILL.md"))
+}
+
+func TestInit_OldRulesFileHint(t *testing.T) {
+	projectDir, home := newProject(t)
+	writeFileT(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"), "# old\n")
+	r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+	if !strings.Contains(r.out, "vx upgrade") || readFile(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md")) != "# old\n" {
+		t.Errorf("init must leave the old rules file and point at upgrade: %s", r.out)
+	}
+}
+
+func TestInit_FlagParsing(t *testing.T) {
+	for _, tc := range []struct {
+		args    []string
+		wantErr string
+	}{
+		{[]string{"--skills", "--no-skills"}, "contradict"},
+		{[]string{"--lang", "fr"}, "unsupported language"},
+		{[]string{"--lang"}, "needs a value"},
+		{[]string{"--force"}, "unknown init flag"},
+		{[]string{"--bogus"}, "unknown init flag"},
+	} {
+		_, _, err := parseSetupArgs(setupInit, tc.args)
+		if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+			t.Errorf("%v: err = %v, want %q", tc.args, err, tc.wantErr)
+		}
+	}
+	opts, _, err := parseSetupArgs(setupInit, []string{"--yes", "--lang=es", "--no-skills", "--global"})
+	if err != nil || !opts.Yes || opts.Lang != slot.LangES || opts.Skills == nil || *opts.Skills || !opts.Global {
+		t.Errorf("opts = %+v, err = %v", opts, err)
+	}
+	if opts, _, err := parseSetupArgs(setupUpgrade, []string{"--force"}); err != nil || !opts.Force {
+		t.Errorf("upgrade --force: %+v %v", opts, err)
+	}
+}
+
 func TestInit_OutsideGitRepo(t *testing.T) {
 	projectDir := t.TempDir()
 	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-
-	var stdout, stderr bytes.Buffer
-	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
-
-	if code == 0 {
-		t.Fatal("expected non-zero exit code outside a git repository")
+	r := doInit(projectDir, vexillumHome, setupOptions{Yes: true}, "", false)
+	if r.code == 0 || r.errOut == "" {
+		t.Fatal("expected a failure with a message outside a git repository")
 	}
-	if stderr.String() == "" {
-		t.Error("expected an error message on stderr")
-	}
-	if _, err := os.Stat(vexillumHome); !os.IsNotExist(err) {
-		t.Error("expected ~/.vexillum/ not to be created outside a git repository")
-	}
-	if _, err := os.Stat(filepath.Join(projectDir, ".vexillum")); !os.IsNotExist(err) {
-		t.Error("expected no local scaffold outside a git repository")
-	}
+	notExist(t, vexillumHome)
+	notExist(t, filepath.Join(projectDir, ".vexillum"))
 }
 
-// L1-06: if ~/.vexillum/ cannot be created due to permissions, init fails
-// with a clear message naming the problem and the path, non-zero exit,
-// no partial state.
 func TestInit_VexillumHomeNotWritable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root, permission checks don't apply")
 	}
-
-	projectDir := t.TempDir()
-	initGitRepo(t, projectDir)
-
+	projectDir, _ := newProject(t)
 	readOnlyParent := t.TempDir()
 	if err := os.Chmod(readOnlyParent, 0o500); err != nil {
-		t.Fatalf("chmod read-only parent: %v", err)
+		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(readOnlyParent, 0o700) })
-
 	vexillumHome := filepath.Join(readOnlyParent, ".vexillum")
 
-	var stdout, stderr bytes.Buffer
-	code := runInit(projectDir, vexillumHome, &stdout, &stderr)
+	r := doInit(projectDir, vexillumHome, setupOptions{Yes: true}, "", false)
+	if r.code == 0 || !strings.Contains(r.errOut, vexillumHome) {
+		t.Fatalf("exit %d, stderr: %s", r.code, r.errOut)
+	}
+	notExist(t, filepath.Join(projectDir, ".vexillum"))
+}
 
-	if code == 0 {
-		t.Fatal("expected non-zero exit code when ~/.vexillum/ can't be created")
+func TestInit_RecreatesMissingVexillumHome(t *testing.T) {
+	projectDir, home := newProject(t)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
 	}
-	errMsg := stderr.String()
-	if errMsg == "" {
-		t.Error("expected an error message on stderr")
+	before := readFile(t, filepath.Join(projectDir, ".vexillum", "config.json"))
+	if err := os.RemoveAll(home); err != nil {
+		t.Fatal(err)
 	}
-	if !bytes.Contains([]byte(errMsg), []byte(vexillumHome)) {
-		t.Errorf("expected error message to name the path %s, got: %s", vexillumHome, errMsg)
+	// Nothing in the project needs writing, so the home is not required to
+	// exist for an idempotent rerun; a change forces it to be recreated.
+	if err := os.Remove(filepath.Join(projectDir, ".vexillum", "models.json")); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(projectDir, ".vexillum")); !os.IsNotExist(err) {
-		t.Error("expected no local scaffold left behind when ~/.vexillum/ creation fails")
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
 	}
+	mustStat(t, home)
+	if readFile(t, filepath.Join(projectDir, ".vexillum", "config.json")) != before {
+		t.Error("config.json changed")
+	}
+}
+
+func TestInit_RefusesInsideVexillumHome(t *testing.T) {
+	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+	campPath := filepath.Join(vexillumHome, "myproject-abc12345", "1", "myproject")
+	if err := os.MkdirAll(campPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r := doInit(campPath, vexillumHome, setupOptions{Yes: true}, "", false)
+	if r.code == 0 || r.errOut == "" {
+		t.Fatal("expected a refusal inside a camp")
+	}
+	notExist(t, filepath.Join(campPath, ".vexillum"))
+}
+
+func TestInit_IgnoresForumArtifacts(t *testing.T) {
+	projectDir, home := newProject(t)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	ignorePath := filepath.Join(projectDir, ".vexillum", ".gitignore")
+	if got := readFile(t, ignorePath); got != "forum/\n" {
+		t.Errorf(".vexillum/.gitignore = %q", got)
+	}
+	if out, err := exec.Command("git", "-C", projectDir, "check-ignore", ".vexillum/forum/plan.html").CombinedOutput(); err != nil {
+		t.Errorf("forum artifact not ignored: %v %s", err, out)
+	}
+	if err := exec.Command("git", "-C", projectDir, "check-ignore", "-q", ".vexillum/config.json").Run(); err == nil {
+		t.Error(".vexillum/config.json must not be ignored")
+	}
+	writeFileT(t, ignorePath, "custom\n")
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out)
+	}
+	if readFile(t, ignorePath) != "custom\n" {
+		t.Error("edited .vexillum/.gitignore overwritten")
+	}
+	os.Remove(ignorePath)
+	doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+	mustStat(t, ignorePath)
+}
+
+// Global: the same core body goes to ~/.claude/rules/vexillum.md, the skills
+// to ~/.claude/skills/, after the same consent flow.
+func TestInitGlobal(t *testing.T) {
+	t.Run("yes", func(t *testing.T) {
+		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+		home := t.TempDir()
+		env, out, errOut := setupTestEnv(setupOptions{Yes: true}, "", false)
+		if code := runInitGlobal(env, vexillumHome, home); code != 0 {
+			t.Fatalf("%s%s", out, errOut)
+		}
+		core, _ := install.SlotTemplate(slot.LangEN)
+		if got := readFile(t, filepath.Join(home, ".claude", "rules", "vexillum.md")); got != core {
+			t.Error("global rules file is not the core body")
+		}
+		for _, n := range skills.Names() {
+			mustStat(t, filepath.Join(home, ".claude", "skills", n, "SKILL.md"))
+		}
+		cfg, _ := scaffold.ReadConfig(vexillumHome)
+		if cfg.VexillumRuleHash != scaffold.HashContent(core) || cfg.Skills["vexillum"] == "" {
+			t.Errorf("config = %+v", cfg)
+		}
+		notExist(t, filepath.Join(home, ".vexillum"))
+		notExist(t, filepath.Join(home, "AGENTS.md"))
+
+		env, out, errOut = setupTestEnv(setupOptions{Yes: true}, "", false)
+		if code := runInitGlobal(env, vexillumHome, home); code != 0 || !strings.Contains(out.String(), "Nothing to change") {
+			t.Errorf("rerun: %s%s", out, errOut)
+		}
+	})
+	t.Run("non tty without yes refuses", func(t *testing.T) {
+		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+		home := t.TempDir()
+		env, _, errOut := setupTestEnv(setupOptions{}, "", false)
+		if code := runInitGlobal(env, vexillumHome, home); code == 0 || !strings.Contains(errOut.String(), "--yes") {
+			t.Errorf("code %d, %s", code, errOut)
+		}
+		notExist(t, filepath.Join(home, ".claude"))
+	})
+	t.Run("interactive spanish, skills declined", func(t *testing.T) {
+		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+		home := t.TempDir()
+		env, out, errOut := setupTestEnv(setupOptions{}, "y\nn\nes\nn\n", true)
+		if code := runInitGlobal(env, vexillumHome, home); code != 0 {
+			t.Fatalf("%s%s", out, errOut)
+		}
+		core, _ := install.SlotTemplate(slot.LangES)
+		if readFile(t, filepath.Join(home, ".claude", "rules", "vexillum.md")) != core {
+			t.Error("expected the Spanish core")
+		}
+		notExist(t, filepath.Join(home, ".claude", "skills"))
+	})
+	t.Run("edited rules file is left alone", func(t *testing.T) {
+		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
+		home := t.TempDir()
+		env, _, _ := setupTestEnv(setupOptions{Yes: true}, "", false)
+		runInitGlobal(env, vexillumHome, home)
+		path := filepath.Join(home, ".claude", "rules", "vexillum.md")
+		writeFileT(t, path, "# mine\n")
+		env, out, _ := setupTestEnv(setupOptions{Yes: true}, "", false)
+		if code := runInitGlobal(env, vexillumHome, home); code != 0 {
+			t.Fatal(out)
+		}
+		if readFile(t, path) != "# mine\n" {
+			t.Error("edited global rules file overwritten")
+		}
+	})
 }
 
 // vx init adds the sentinel Stop hook to a fresh .claude/settings.json.
@@ -282,7 +690,7 @@ func TestInit_AddsSentinelStopHook(t *testing.T) {
 	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
 
 	var stdout, stderr bytes.Buffer
-	if code := runInit(projectDir, vexillumHome, &stdout, &stderr); code != 0 {
+	if code := initYes(projectDir, vexillumHome, &stdout, &stderr); code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
 
@@ -312,7 +720,7 @@ func TestInit_SentinelStopHookIsAsync(t *testing.T) {
 	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
 
 	var stdout, stderr bytes.Buffer
-	if code := runInit(projectDir, vexillumHome, &stdout, &stderr); code != 0 {
+	if code := initYes(projectDir, vexillumHome, &stdout, &stderr); code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
 	}
 
@@ -496,181 +904,5 @@ func TestEnsureSentinelHook_RefusesMalformedSettings(t *testing.T) {
 	}
 	if !bytes.Equal(data, malformed) {
 		t.Errorf("expected the malformed file to be left untouched, got: %s", data)
-	}
-}
-
-// vx init refuses to run from inside a vexillum-managed camp - see
-// TestRefuseInsideVexillumHome for the underlying bug this guards
-// against.
-func TestInit_RefusesInsideVexillumHome(t *testing.T) {
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-	campPath := filepath.Join(vexillumHome, "myproject-abc12345", "1", "myproject")
-	if err := os.MkdirAll(campPath, 0o755); err != nil {
-		t.Fatalf("mkdir camp path: %v", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := runInit(campPath, vexillumHome, &stdout, &stderr)
-	if code == 0 {
-		t.Fatal("expected non-zero exit code when run from inside a camp")
-	}
-	if stderr.String() == "" {
-		t.Error("expected an error message on stderr")
-	}
-	if _, err := os.Stat(filepath.Join(campPath, ".vexillum")); !os.IsNotExist(err) {
-		t.Error("expected no scaffold to be written inside the camp")
-	}
-}
-
-// vx init --global scaffolds ~/.claude/rules/vexillum.md once for
-// the whole machine, tracked in vexillumHome/config.json - not tied to any
-// project, and not required to be a git repo.
-func TestInitGlobal_CleanMachine(t *testing.T) {
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-	home := t.TempDir()
-
-	var stdout, stderr bytes.Buffer
-	code := runInitGlobal(vexillumHome, home, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
-	}
-
-	mustStat(t, vexillumHome)
-	mustStat(t, filepath.Join(vexillumHome, "config.json"))
-	rule, err := os.ReadFile(filepath.Join(home, ".claude", "rules", "vexillum.md"))
-	if err != nil {
-		t.Fatalf("reading ~/.claude/rules/vexillum.md: %v", err)
-	}
-	if string(rule) != productVexillumRule {
-		t.Error("expected the global rule file to match the product template")
-	}
-}
-
-// A second global init run is a no-op: nothing changes once the scaffold
-// is already current.
-func TestInitGlobal_Idempotent(t *testing.T) {
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-	home := t.TempDir()
-
-	var buf bytes.Buffer
-	if code := runInitGlobal(vexillumHome, home, &buf, &buf); code != 0 {
-		t.Fatalf("first global init failed: exit %d: %s", code, buf.String())
-	}
-
-	rulePath := filepath.Join(home, ".claude", "rules", "vexillum.md")
-	ruleBefore, err := os.ReadFile(rulePath)
-	if err != nil {
-		t.Fatalf("reading rule file: %v", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := runInitGlobal(vexillumHome, home, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0 on second run, got %d (stderr: %s)", code, stderr.String())
-	}
-	if stdout.String() == "" {
-		t.Error("expected output informing the machine was already initialized")
-	}
-
-	ruleAfter, err := os.ReadFile(rulePath)
-	if err != nil {
-		t.Fatalf("reading rule file after second run: %v", err)
-	}
-	if !bytes.Equal(ruleBefore, ruleAfter) {
-		t.Error("global rule file changed on second init run")
-	}
-}
-
-// A hand-edited global rule file is never silently overwritten, same
-// guarantee as the local scaffold.
-func TestInitGlobal_DoesNotOverwriteEditedRuleFile(t *testing.T) {
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-	home := t.TempDir()
-
-	var buf bytes.Buffer
-	if code := runInitGlobal(vexillumHome, home, &buf, &buf); code != 0 {
-		t.Fatalf("first global init failed: exit %d: %s", code, buf.String())
-	}
-
-	rulePath := filepath.Join(home, ".claude", "rules", "vexillum.md")
-	customContent := []byte("# My custom global commander instructions\n")
-	if err := os.WriteFile(rulePath, customContent, 0o644); err != nil {
-		t.Fatalf("writing custom global rule file: %v", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := runInitGlobal(vexillumHome, home, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
-	}
-
-	got, err := os.ReadFile(rulePath)
-	if err != nil {
-		t.Fatalf("reading global rule file: %v", err)
-	}
-	if !bytes.Equal(got, customContent) {
-		t.Errorf("global rule file was overwritten: got %q, want %q", got, customContent)
-	}
-}
-
-// vx init --global never writes a project-shaped .vexillum/ scaffold
-// under home - it's a different artifact at a different path, not a
-// project init in disguise.
-func TestInitGlobal_DoesNotWriteProjectScaffold(t *testing.T) {
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-	home := t.TempDir()
-
-	var stdout, stderr bytes.Buffer
-	if code := runInitGlobal(vexillumHome, home, &stdout, &stderr); code != 0 {
-		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
-	}
-
-	if _, err := os.Stat(filepath.Join(home, ".vexillum")); !os.IsNotExist(err) {
-		t.Error("expected global init not to write a project-shaped .vexillum/ under home")
-	}
-}
-
-func TestInit_IgnoresForumArtifacts(t *testing.T) {
-	projectDir := t.TempDir()
-	initGitRepo(t, projectDir)
-	vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-
-	var buf bytes.Buffer
-	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
-		t.Fatalf("init exit = %d, output: %s", code, buf.String())
-	}
-	ignorePath := filepath.Join(projectDir, ".vexillum", ".gitignore")
-	got, err := os.ReadFile(ignorePath)
-	if err != nil {
-		t.Fatalf("expected .vexillum/.gitignore: %v", err)
-	}
-	if string(got) != "forum/\n" {
-		t.Errorf(".vexillum/.gitignore = %q", got)
-	}
-	// config.json stays committed; only forum artifacts are ignored.
-	if out, err := exec.Command("git", "-C", projectDir, "check-ignore", ".vexillum/forum/plan.html").CombinedOutput(); err != nil {
-		t.Errorf("forum artifact not ignored: %v %s", err, out)
-	}
-	if err := exec.Command("git", "-C", projectDir, "check-ignore", "-q", ".vexillum/config.json").Run(); err == nil {
-		t.Error(".vexillum/config.json must not be ignored")
-	}
-
-	// A user-edited .gitignore is never overwritten, and re-running init
-	// heals a project initialized before this file existed.
-	if err := os.WriteFile(ignorePath, []byte("custom\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
-		t.Fatalf("second init exit = %d", code)
-	}
-	if got, _ := os.ReadFile(ignorePath); string(got) != "custom\n" {
-		t.Errorf("edited .vexillum/.gitignore overwritten: %q", got)
-	}
-	os.Remove(ignorePath)
-	if code := runInit(projectDir, vexillumHome, &buf, &buf); code != 0 {
-		t.Fatalf("healing init exit = %d", code)
-	}
-	if _, err := os.Stat(ignorePath); err != nil {
-		t.Errorf("init did not restore .vexillum/.gitignore: %v", err)
 	}
 }

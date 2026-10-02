@@ -9,9 +9,16 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/doctorcheck"
+	"github.com/isaias-alt/vexillum/internal/scaffold"
 )
 
 const doctorUsage = `Report on the health of the vexillum environment. Read-only.
+
+Besides the tools vexillum drives, doctor reports, for an initialized project,
+the state of the AGENTS.md block (absent, current, stale, drifted or
+malformed), whether CLAUDE.md imports AGENTS.md, each first-party skill
+(installed and current, stale, edited by hand, or missing), a rules file left
+by an older version, and whether the model profiles in models.json are valid.
 
 Usage:
   ` + cmdname.Name + ` doctor
@@ -51,6 +58,9 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.ProjectInitialized(projectDir),
 		doctorcheck.GitRepo(projectDir),
 	}
+	if scaffold.ProjectInitialized(projectDir) {
+		checks = append(checks, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
+	}
 
 	ready := true
 	var optionalMissing []string
@@ -88,7 +98,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	}
 
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "AXIs and first-party skills (on-demand, installed as Agent Skills - not required):")
+	fmt.Fprintln(out, "AXIs (on-demand, installed as Agent Skills - not required):")
 	for _, a := range doctorcheck.KnownAXIs {
 		fmt.Fprintln(out, doctorcheck.AXIStatusLine(a, projectDir, homeDir))
 	}
