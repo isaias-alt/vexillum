@@ -130,3 +130,16 @@ pass, invariant-at-every-sibling-site fixer rules) from
 (`internal/pipeline/steps/review.go`, `internal/types/findings.go`), MIT
 licensed, Copyright (c) 2026 the upstream author. No code is vendored or linked; the
 full MIT license text above applies to the adapted portions.
+
+## Inspired by `internal/slot/` (AGENTS.md marker block repair)
+
+`internal/slot/slot.go` (`Repair`) is inspired by the markdown-section
+injection and orphan-marker stripping (`InjectMarkdownSection`,
+`stripOrphanMarkers`) of
+[gentle-ai](https://github.com/Gentleman-Programming/gentle-ai), MIT
+licensed. No code is vendored or linked; the approach (recover from orphan
+markers and duplicate blocks by dropping the stray ones) is reimplemented in
+Go with different semantics: it only runs after explicit confirmation, keeps
+the first well-formed pair, and never touches text outside the markers. The
+8-hex-char content hash in the BEGIN marker follows the convention used by
+Beads.
