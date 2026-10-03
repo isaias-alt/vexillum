@@ -315,3 +315,175 @@ func writeRawTask(t *testing.T, vexillumHome, id string, data []byte) {
 		t.Fatalf("writing raw task file: %v", err)
 	}
 }
+
+// rawTaskFile reads a task's file as a generic JSON object.
+func rawTaskFile(t *testing.T, home, id string) map[string]json.RawMessage {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(home, "tasks", id+".json"))
+	if err != nil {
+		t.Fatalf("reading task file: %v", err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("task file is not a JSON object: %v", err)
+	}
+	return doc
+}
+
+// addRawField injects a top-level key into a task's file, the way a newer
+// build whose Task has more fields would have written it.
+func addRawField(t *testing.T, home, id, key, rawValue string) {
+	t.Helper()
+	doc := rawTaskFile(t, home, id)
+	doc[key] = json.RawMessage(rawValue)
+	data, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("encoding task file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "tasks", id+".json"), data, 0o644); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+}
+
+// A task file carrying a key this build's Task does not declare keeps it
+// through a normal load, change, save cycle - the incident where an old
+// sentinel rewrote every task and erased camp_base and amendments.
+func TestSave_PreservesUnknownFields(t *testing.T) {
+	home := t.TempDir()
+	task, err := New(KindMission, "ship it")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := Save(home, task); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	addRawField(t, home, task.ID, "from_the_future", `{"nested":[1,2,{"a":"b"}],"flag":true}`)
+	addRawField(t, home, task.ID, "another_one", `"plain string"`)
+
+	loaded, err := Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	loaded.Status = StatusRunning
+	loaded.CampBase = "main"
+	loaded.AddAmendment(AmendmentSourcePrompt, "also do X", time.Now())
+	if err := Save(home, loaded); err != nil {
+		t.Fatalf("Save after update: %v", err)
+	}
+
+	doc := rawTaskFile(t, home, task.ID)
+	var future struct {
+		Nested []json.RawMessage `json:"nested"`
+		Flag   bool              `json:"flag"`
+	}
+	if err := json.Unmarshal(doc["from_the_future"], &future); err != nil {
+		t.Fatalf("unknown field did not survive intact: %v (doc: %v)", err, doc)
+	}
+	if len(future.Nested) != 3 || !future.Flag {
+		t.Errorf("unknown field changed: %s", doc["from_the_future"])
+	}
+	if string(doc["another_one"]) != `"plain string"` {
+		t.Errorf("another_one = %s, want the original string", doc["another_one"])
+	}
+
+	// The known-field updates still landed.
+	got, err := Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load after update: %v", err)
+	}
+	if got.Status != StatusRunning || got.CampBase != "main" || len(got.Amendments) != 1 {
+		t.Errorf("known-field update lost: status=%s camp_base=%q amendments=%d", got.Status, got.CampBase, len(got.Amendments))
+	}
+}
+
+// Preserving unknown keys never keeps a key the task owns: a field the new
+// state leaves empty is dropped, not resurrected from the old file.
+func TestSave_StillClearsOwnedFields(t *testing.T) {
+	home := t.TempDir()
+	task, err := New(KindMission, "ship it")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	task.CampBase = "main"
+	task.Decision = &Decision{Question: "which?", AskedAt: time.Now().UTC()}
+	if err := Save(home, task); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	addRawField(t, home, task.ID, "extra", `1`)
+
+	task.CampBase = ""
+	task.Decision = nil
+	if err := Save(home, task); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	doc := rawTaskFile(t, home, task.ID)
+	for _, key := range []string{"camp_base", "decision"} {
+		if _, ok := doc[key]; ok {
+			t.Errorf("%s was kept after being cleared: %s", key, doc[key])
+		}
+	}
+	if string(doc["extra"]) != "1" {
+		t.Errorf("extra = %s, want 1", doc["extra"])
+	}
+}
+
+// Every top-level key Task declares is recognized as owned, so none of them is
+// ever carried over from an old file as if it were unknown.
+func TestOwnedKeys_CoversEveryTaskField(t *testing.T) {
+	task, err := New(KindMission, "p")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// Populate every field so omitempty drops none of them.
+	one := 1
+	now := time.Now().UTC()
+	task.CampSlot, task.CampPath, task.CampBranch, task.CampBase = 1, "p", "b", "main"
+	task.ExitCode, task.Output = &one, "o"
+	task.HerdrWorkspaceID, task.HerdrTabID, task.HerdrPaneID, task.HerdrAgentName = "w", "t", "p", "a"
+	task.AgentNotFoundSince, task.IdleUnconfirmedSince = now, now
+	task.Redispatches, task.Model, task.Effort = 1, "m", "e"
+	task.Decision = &Decision{Question: "q"}
+	task.Amendments = []Amendment{{Text: "t"}}
+	task.LastPushedSHA = "abc"
+
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	for key := range doc {
+		if !ownedKeys[key] {
+			t.Errorf("key %q is marshaled by Task but not in ownedKeys", key)
+		}
+	}
+	if len(doc) != len(ownedKeys) {
+		t.Errorf("populated task marshals %d keys, ownedKeys has %d", len(doc), len(ownedKeys))
+	}
+}
+
+// An existing file that is not a JSON object has nothing to preserve and is
+// replaced, as before.
+func TestSave_ReplacesUnparsableExistingFile(t *testing.T) {
+	home := t.TempDir()
+	task, err := New(KindScout, "look around")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	dir := filepath.Join(home, "tasks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, task.ID+".json"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(home, task); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if _, err := Load(home, task.ID); err != nil {
+		t.Errorf("Load after replacing a corrupt file: %v", err)
+	}
+}

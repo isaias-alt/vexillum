@@ -8,14 +8,17 @@
 package state
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
@@ -292,15 +295,95 @@ func taskPath(projectRoot, id string) string {
 // Save persists t to <project root>/tasks/<id>.json atomically: it writes
 // to a temp file in the same directory and renames it into place, so a
 // reader never observes a partially written file.
+//
+// Save only owns the fields Task declares. If the file already holds other
+// top-level keys (written by a newer vexillum build whose Task has fields
+// this one does not know), they are read back as raw JSON and written out
+// unchanged, so a process running an older build can update a task without
+// erasing what a newer one recorded. Keys Task does own are always replaced
+// by t, including dropping the ones t leaves empty. Only top-level keys are
+// preserved: unknown fields nested inside a known one (a Decision, an
+// Amendment) are not.
 func Save(projectRoot string, t Task) error {
 	dir := tasksDir(projectRoot)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating tasks directory: %w", err)
 	}
-	if err := atomicfile.WriteJSON(taskPath(projectRoot, t.ID), t); err != nil {
+	path := taskPath(projectRoot, t.ID)
+	if err := atomicfile.WriteJSON(path, taskDocument{Task: t, extra: unknownFields(path)}); err != nil {
 		return fmt.Errorf("saving task %s: %w", t.ID, err)
 	}
 	return nil
+}
+
+// ownedKeys is every top-level JSON key Task declares.
+var ownedKeys = func() map[string]bool {
+	keys := map[string]bool{}
+	typ := reflect.TypeOf(Task{})
+	for i := 0; i < typ.NumField(); i++ {
+		name, _, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
+		if name != "" && name != "-" {
+			keys[name] = true
+		}
+	}
+	return keys
+}()
+
+// unknownFields returns the top-level keys of the task file at path that Task
+// does not own, as raw JSON. A missing, unreadable or unparsable file has
+// nothing worth preserving (the next write replaces it whole) and yields nil.
+func unknownFields(path string) map[string]json.RawMessage {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil
+	}
+	for k := range doc {
+		if ownedKeys[k] {
+			delete(doc, k)
+		}
+	}
+	return doc
+}
+
+// taskDocument marshals a Task followed by the unknown keys it was read
+// alongside, keeping the known fields in struct order.
+type taskDocument struct {
+	Task
+	extra map[string]json.RawMessage
+}
+
+func (d taskDocument) MarshalJSON() ([]byte, error) {
+	known, err := json.Marshal(d.Task)
+	if err != nil {
+		return nil, err
+	}
+	if len(d.extra) == 0 {
+		return known, nil
+	}
+	keys := make([]string, 0, len(d.extra))
+	for k := range d.extra {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// known is a non-empty object (schema_version is never omitted): reopen
+	// it before its closing brace.
+	out := bytes.TrimSuffix(known, []byte("}"))
+	for _, k := range keys {
+		name, err := json.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ',')
+		out = append(out, name...)
+		out = append(out, ':')
+		out = append(out, d.extra[k]...)
+	}
+	return append(out, '}'), nil
 }
 
 // Load reads and decodes the task with the given id. A corrupt or
