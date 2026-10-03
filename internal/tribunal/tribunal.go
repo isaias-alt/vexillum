@@ -145,9 +145,12 @@ func (r Result) Passed() bool {
 	return true
 }
 
-// FailedStep returns the first failed step, or nil if Passed().
+// FailedStep returns the step that stopped the run, or nil if Passed(). A
+// round stops at its first failure, so that is the only failed step, except
+// when the fix step failed after a blocked review: then it is the fix, the
+// last failure, not the review that asked for it.
 func (r Result) FailedStep() *StepResult {
-	for i := range r.Steps {
+	for i := len(r.Steps) - 1; i >= 0; i-- {
 		if !r.Steps[i].Passed {
 			return &r.Steps[i]
 		}

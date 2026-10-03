@@ -188,6 +188,9 @@ func TestRun_FixerThatChangesNothingFails(t *testing.T) {
 	if last.Step != StepFix || last.Passed {
 		t.Errorf("expected the last step to be a failed fix, got %+v", last)
 	}
+	if failed := result.FailedStep(); failed == nil || failed.Step != StepFix {
+		t.Errorf("expected the fix to be the step that stopped the run, got %+v", failed)
+	}
 	if stub.calls() != 2 {
 		t.Errorf("expected no re-review after a no-op fixer, got %d calls", stub.calls())
 	}

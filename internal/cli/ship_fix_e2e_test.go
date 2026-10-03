@@ -467,6 +467,9 @@ func TestShipFixLoop_FixerThatChangesNothingStops(t *testing.T) {
 	if !strings.Contains(stdout+stderr, "the fixer made no changes") {
 		t.Errorf("expected the fixer's no-op to be reported\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}
+	if !strings.Contains(stderr, "failed at fix") {
+		t.Errorf("expected the refusal to name the fix step, got:\n%s", stderr)
+	}
 }
 
 // After a fix round and no title from the reviewer, the pull request title
