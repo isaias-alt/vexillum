@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
@@ -100,6 +101,13 @@ func newFixLoopEnv(t *testing.T) *fixLoopEnv {
 esac`)
 	if err := os.WriteFile(filepath.Join(tools, "claude"), []byte(fmt.Sprintf(claudeRoleScript, data)), 0o755); err != nil {
 		t.Fatalf("writing claude stub: %v", err)
+	}
+	realSleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Fatalf("sleep not found on PATH: %v", err)
+	}
+	if err := os.Symlink(realSleep, filepath.Join(tools, "sleep")); err != nil {
+		t.Fatalf("linking real sleep: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(tools, "npm"), []byte(fakeNpm), 0o755); err != nil {
 		t.Fatalf("writing npm stub: %v", err)
@@ -516,5 +524,26 @@ func TestShipFixLoop_PRTitleIsNeverTheFixersCommit(t *testing.T) {
 	}
 	if strings.Contains(string(args), "address tribunal review findings") {
 		t.Errorf("expected the PR text to leave out the fixer's commit, got:\n%s", args)
+	}
+}
+
+// A fixer that times out may have edited files already. Nothing is committed
+// or pushed, and the refusal says the partial edits are still in the camp.
+func TestShipFixLoop_FixerTimeoutLeavesAMessageAboutItsPartialEdits(t *testing.T) {
+	e := newFixLoopEnv(t)
+	e.reviewOut(0, []string{reviewFinding("error", "auto-fix")})
+	e.fixHook(1, "echo partial > partial.txt\nexec sleep 30")
+
+	code, stdout, stderr := e.ship(tribunal.Options{Fix: true, Timeout: 4 * time.Second})
+
+	e.assertRefused(code)
+	if want := []string{"review", "fix"}; !equalStrings(e.callRoles(), want) {
+		t.Errorf("expected claude calls %v, got %v", want, e.callRoles())
+	}
+	if !strings.Contains(stderr, "failed at fix") || !strings.Contains(stdout+stderr, "timed out") {
+		t.Errorf("expected the refusal to blame the fixer's timeout\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "uncommitted") {
+		t.Errorf("expected the refusal to say the fixer's partial edits are left uncommitted in the camp, got:\n%s", stderr)
 	}
 }

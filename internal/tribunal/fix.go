@@ -44,7 +44,11 @@ func runFix(campPath string, findings []Finding, opts Options, round int) (StepR
 	prompt := buildFixPrompt(findings, opts.intent(), opts.Branch)
 	if _, err := runClaude(campPath, state.Task{Prompt: prompt, Model: fixModel, Effort: fixEffort}, opts.timeout()); err != nil {
 		if errors.Is(err, errTimedOut) {
-			return StepResult{Step: StepFix, Passed: false, Detail: fmt.Sprintf("the fixer %v", err)}, nil
+			detail := fmt.Sprintf("the fixer %v", err)
+			if status, err := gitOutput(campPath, "status", "--porcelain"); err == nil && status != "" {
+				detail += "; its partial edits are left uncommitted in the camp (git status), review or discard them before shipping again"
+			}
+			return StepResult{Step: StepFix, Passed: false, Detail: detail}, nil
 		}
 		return StepResult{}, fmt.Errorf("running the fixer: %w", err)
 	}
