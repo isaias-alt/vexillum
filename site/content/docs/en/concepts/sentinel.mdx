@@ -11,13 +11,24 @@ One sentinel runs per machine. Every 5 seconds it polls the live herdr status of
 
 It also watches settled soldiers whose camp is still in place: if one is working again (it was prompted after it finished), the sentinel puts its task back to `running` without a wake, so its next finish is a transition like any other. See [Following up on a finished soldier](#following-up-on-a-finished-soldier).
 
-`vx dispatch` starts a sentinel automatically if none is running. If that fails it warns on stderr, and you can run `vx sentinel` yourself in the background. A second one refuses to start and names the pid of the first. Its pid and log live in `~/.vexillum/sentinel.pid` and `~/.vexillum/sentinel.log`.
+`vx dispatch` starts a sentinel automatically if none is running. If that fails it warns on stderr, and you can run `vx sentinel` yourself in the background. A second one refuses to start and names the pid of the first: the claim is a lock the kernel drops when the process dies, so a crash never leaves a stale one behind and two sentinels cannot run at once. Its pid, the build it runs from and its log live in `~/.vexillum/sentinel.pid`, `~/.vexillum/sentinel.json` and `~/.vexillum/sentinel.log`.
 
 A wake is delivered at most once and only while it is still news. When it is read, the sentinel drops it if the task's status has changed since (you answered, re-prompted or shipped it), its camp was released, or its mission was landed, so a backlog that built up while nobody was listening never replays as a burst of old notices. Run `vx status` for the full picture after a long absence.
 
 The same hook also carries **forum wakes**: when a user sends feedback from a [forum](/docs/guides/forum-and-banner) review panel, the forum listener (not a soldier) stores it in the project's inbox and records a wake under `wakes/forum/`, one per session. `vx sentinel await` and `drain` report it as `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` It is delivered once and dropped if its messages were already confirmed; the inbox, not the wake, is the source of truth.
 
 A soldier is only recorded as `blocked` on a `needs-decision:` line it wrote in its final turn, after the end of the dispatched prompt, with real text. The template line in the prompt, or any angle-bracket placeholder, never counts, and neither does a question you already answered or dismissed.
+
+## Staying current
+
+A sentinel is a long-lived process, so it can outlive the binary it started from. An old one would keep rewriting task state with old logic, which is how fields written by a newer build used to get erased. Two things prevent that:
+
+- **Tasks keep what they do not understand.** Saving a task changes only the fields the running build owns and writes every other top-level field back exactly as it found it, so an older process cannot erase what a newer one recorded.
+- **The sentinel retires when its binary changes.** It records the build it started from (version and executable file) in `~/.vexillum/sentinel.json` and checks it after every pass. Once that file has been replaced on disk (a rebuild, `brew upgrade`) it finishes the pass it is in, releases its lock and exits. It compares the file, not just the version, because every plain `go build` reports `dev`.
+
+The next `vx dispatch`, `vx prompt` or Stop hook `await` then starts a fresh sentinel from the new binary, and the replacement waits briefly for the old one to let go instead of giving up. An `await` checks on every poll, so a commander session that is only waiting gets a new sentinel within seconds.
+
+`vx doctor` warns when more than one sentinel process is alive, when the live sentinel is a different version than the binary running doctor, when its executable has changed since it started, or when it predates this tracking. Each warning names the pid to stop with `kill`, and the next dispatch starts a current one. Doctor never stops a process itself.
 
 ## How the commander is woken
 

@@ -56,6 +56,15 @@ both "drain" and "await" report as "forum session <file>: N new messages
 once-only delivery; a forum wake whose messages were already confirmed is
 dropped.
 
+One sentinel runs per machine, enforced by a lock the kernel drops when the
+process dies, so a crash never leaves a stale claim. The sentinel records the
+build it started from (version and executable file) in
+~/.vexillum/sentinel.json and checks it after every pass: when that file has
+been replaced on disk (a rebuild, an upgrade) it finishes the pass, releases
+its lock and exits, so an old sentinel never keeps rewriting state with old
+logic. "` + cmdname.Name + ` dispatch", "` + cmdname.Name + ` prompt" and every "await" start a fresh one from the
+new binary; "` + cmdname.Name + ` doctor" warns about a sentinel that is stale or duplicated.
+
 Each "await" records itself under ~/.vexillum/sentinel-awaiters/ and never
 outlives the hook that launched it: it exits as soon as its parent process
 is gone, and a newer "await" from the same session and project replaces the

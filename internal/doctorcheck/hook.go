@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/buildinfo"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
@@ -103,14 +105,75 @@ func HookResolves(command, homeDir string) Result {
 	return Result{Name: hookResolves, OK: true, Detail: "found with a minimal environment"}
 }
 
+// liveSentinelPIDs lists every "vx sentinel" process of the user. A variable
+// so tests can stand in for ps (see SetLiveSentinelPIDs).
+var liveSentinelPIDs = sentinel.LivePIDs
+
+// SetLiveSentinelPIDs swaps the process listing SentinelRunning counts
+// sentinels with and returns a function that restores it. For tests, which
+// must not depend on the sentinels running on the machine they run on.
+func SetLiveSentinelPIDs(f func() ([]int, error)) (restore func()) {
+	old := liveSentinelPIDs
+	liveSentinelPIDs = f
+	return func() { liveSentinelPIDs = old }
+}
+
 // SentinelRunning reports whether the polling sentinel is alive, and how
-// many Stop hook awaits are waiting on it. Never a failure: the sentinel
-// starts by itself with the next dispatch, so not running is normal while
-// nothing is dispatched.
+// many Stop hook awaits are waiting on it. Not running is never a failure: the
+// sentinel starts by itself with the next dispatch, so not running is normal
+// while nothing is dispatched.
+//
+// It warns, never fails, about the two ways a sentinel goes wrong over time:
+// more than one sentinel process alive at once (they race over the same tasks),
+// and a live sentinel that is not the installed binary - a different version,
+// or the same version string ("dev") whose executable was replaced on disk
+// since it started. Either way it names the pid to stop; the next dispatch,
+// prompt or Stop hook await then starts a current one.
 func SentinelRunning(vexillumHome string) Result {
 	waiting := sentinel.LiveAwaiters(vexillumHome)
-	if sentinel.IsRunning(vexillumHome) {
+	running := sentinel.IsRunning(vexillumHome)
+
+	var problems []string
+	if pids, err := liveSentinelPIDs(); err == nil && len(pids) > 1 {
+		problems = append(problems, fmt.Sprintf("%d sentinel processes are alive (pids %s) and compete for the same tasks - stop them with 'kill <pid>' and let a single fresh one start", len(pids), joinInts(pids)))
+	}
+	if running {
+		problems = append(problems, staleSentinelProblem(vexillumHome)...)
+	}
+	if len(problems) > 0 {
+		return Result{Name: sentinelName, Warn: true, Detail: strings.Join(problems, "; ") + fmt.Sprintf(" (the next '%s dispatch' starts a current one)", cmdname.Name)}
+	}
+
+	if running {
 		return Result{Name: sentinelName, OK: true, Detail: fmt.Sprintf("running, %d Stop hook await(s) waiting", waiting)}
 	}
 	return Result{Name: sentinelName, OK: true, Detail: fmt.Sprintf("not running (the next '%s dispatch' starts it), %d Stop hook await(s) waiting", cmdname.Name, waiting)}
+}
+
+// staleSentinelProblem describes how the live sentinel differs from the
+// installed binary, as zero or one problem.
+func staleSentinelProblem(vexillumHome string) []string {
+	info, ok := sentinel.LiveInfo(vexillumHome)
+	if !ok {
+		pid, known := sentinel.HolderPID(vexillumHome)
+		if !known {
+			return nil
+		}
+		return []string{fmt.Sprintf("the running sentinel (pid %d) predates build tracking, so it may run old code - stop it with 'kill %d'", pid, pid)}
+	}
+	switch {
+	case info.Build.Version != buildinfo.Version:
+		return []string{fmt.Sprintf("the running sentinel (pid %d) is version %s but this binary is %s - stop it with 'kill %d'", info.PID, info.Build.Version, buildinfo.Version, info.PID)}
+	case info.Build.Stale() != "":
+		return []string{fmt.Sprintf("the running sentinel (pid %d) started from a binary that has since changed (%s) - it retires on its own within seconds, or stop it with 'kill %d'", info.PID, info.Build.Stale(), info.PID)}
+	}
+	return nil
+}
+
+func joinInts(ns []int) string {
+	parts := make([]string, len(ns))
+	for i, n := range ns {
+		parts[i] = strconv.Itoa(n)
+	}
+	return strings.Join(parts, ", ")
 }

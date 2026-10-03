@@ -11,13 +11,24 @@ Corre un sentinel por máquina. Cada 5 segundos consulta el estado en vivo de he
 
 También vigila a los soldiers ya terminados cuyo camp sigue en su lugar: si uno vuelve a trabajar (le mandaron un prompt después de terminar), el sentinel devuelve su tarea a `running` sin un wake, así que su próximo fin es una transición como cualquier otra. Ver [Dar seguimiento a un soldier terminado](#dar-seguimiento-a-un-soldier-terminado).
 
-`vx dispatch` inicia un sentinel automáticamente si no hay uno corriendo. Si eso falla avisa por stderr, y podés correr `vx sentinel` vos mismo en segundo plano. Un segundo sentinel se niega a arrancar y nombra el pid del primero. Su pid y su log están en `~/.vexillum/sentinel.pid` y `~/.vexillum/sentinel.log`.
+`vx dispatch` inicia un sentinel automáticamente si no hay uno corriendo. Si eso falla avisa por stderr, y podés correr `vx sentinel` vos mismo en segundo plano. Un segundo sentinel se niega a arrancar y nombra el pid del primero: el reclamo es un lock que el kernel suelta cuando el proceso muere, así que un crash nunca deja uno viejo colgado y dos sentinels no pueden correr a la vez. Su pid, el build desde el que corre y su log están en `~/.vexillum/sentinel.pid`, `~/.vexillum/sentinel.json` y `~/.vexillum/sentinel.log`.
 
 Un wake se entrega como mucho una vez y solo mientras siga siendo noticia. Al leerlo, el sentinel lo descarta si el status de la tarea cambió desde entonces (la respondiste, le mandaste otro prompt o la hiciste ship), si su camp fue liberado o si su mission ya aterrizó, así que una acumulación de wakes mientras nadie escuchaba nunca se reproduce como una ráfaga de avisos viejos. Corré `vx status` para ver el panorama completo después de una ausencia larga.
 
 El mismo hook también lleva **forum wakes**: cuando un usuario manda feedback desde un panel de revisión de [forum](/es/docs/guides/forum-and-banner), el listener de forum (no un soldier) lo guarda en el inbox del proyecto y registra un wake bajo `wakes/forum/`, uno por sesión. `vx sentinel await` y `drain` lo informan como `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` Se entrega una vez y se descarta si sus mensajes ya fueron confirmados; la fuente de verdad es el inbox, no el wake.
 
 Un soldier solo queda registrado como `blocked` por una línea `needs-decision:` que escribió en su último turno, después del final del prompt despachado, con texto real. La línea de plantilla del prompt, o cualquier placeholder entre ángulos, nunca cuenta, ni tampoco una pregunta que ya respondiste o descartaste.
+
+## Mantenerse al día
+
+Un sentinel es un proceso de larga vida, así que puede sobrevivir al binario con el que arrancó. Uno viejo seguiría reescribiendo el estado de las tareas con lógica vieja, que es como antes se borraban campos escritos por un build más nuevo. Dos cosas lo evitan:
+
+- **Las tareas conservan lo que no entienden.** Guardar una tarea cambia solo los campos que el build en ejecución conoce y vuelve a escribir tal cual cualquier otro campo de primer nivel, así que un proceso viejo no puede borrar lo que registró uno más nuevo.
+- **El sentinel se retira cuando cambia su binario.** Registra el build desde el que arrancó (versión y archivo ejecutable) en `~/.vexillum/sentinel.json` y lo revisa después de cada pasada. Cuando ese archivo fue reemplazado en disco (un rebuild, `brew upgrade`) termina la pasada en curso, suelta su lock y sale. Compara el archivo y no solo la versión, porque todo `go build` común reporta `dev`.
+
+El siguiente `vx dispatch`, `vx prompt` o `await` del hook Stop arranca entonces un sentinel nuevo desde el binario nuevo, y el reemplazo espera un momento a que el viejo suelte el lock en vez de rendirse. Un `await` lo verifica en cada consulta, así que una sesión de commander que solo está esperando recibe un sentinel nuevo en segundos.
+
+`vx doctor` avisa cuando hay más de un proceso sentinel vivo, cuando el sentinel vivo es de otra versión que el binario que corre doctor, cuando su ejecutable cambió desde que arrancó, o cuando es anterior a este seguimiento. Cada aviso nombra el pid que hay que detener con `kill`, y el siguiente dispatch arranca uno al día. Doctor nunca detiene un proceso por su cuenta.
 
 ## Cómo se despierta al commander
 

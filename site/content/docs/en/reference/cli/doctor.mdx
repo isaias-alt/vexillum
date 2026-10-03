@@ -21,6 +21,14 @@ PATH=/usr/bin:/bin, the way a hook shell that never read your profile has it),
 and whether a sentinel is running. A hook that cannot find vx is a warning
 that names the fix; it never fails doctor.
 
+The sentinel line warns, and never fails, when more than one sentinel process is
+alive (they would race over the same tasks), when the live sentinel is a
+different version than this binary, or when the binary it started from has been
+replaced on disk since (a rebuild reports the same version, "dev"). A sentinel
+that predates version tracking is reported the same way. Each warning names the
+pid to stop; the next vx dispatch, prompt or Stop hook await then starts a
+current one.
+
 Usage:
   vx doctor
 ```

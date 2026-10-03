@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/isaias-alt/vexillum/internal/doctorcheck"
 	"github.com/isaias-alt/vexillum/internal/install"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/slot"
@@ -732,5 +733,28 @@ func TestDoctor_StopHookMissingWarnsToUpgrade(t *testing.T) {
 
 	if !bytes.Contains(out.Bytes(), []byte("[warn] sentinel Stop hook - not registered")) {
 		t.Errorf("expected a missing-hook warning, got: %s", out.String())
+	}
+}
+
+// Two sentinels alive at once are reported as a warning with the pids to stop,
+// and never fail doctor.
+func TestDoctor_WarnsWhenMoreThanOneSentinelIsAlive(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Cleanup(doctorcheck.SetLiveSentinelPIDs(func() ([]int, error) { return []int{31337, 31338}, nil }))
+	projectDir := initializedProject(t)
+	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0: a sentinel warning must not fail doctor", code)
+	}
+	for _, want := range []string{"[warn] sentinel - 2 sentinel processes are alive (pids 31337, 31338)", "warnings:"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("expected %q in output, got: %s", want, out.String())
+		}
 	}
 }
