@@ -132,6 +132,10 @@ For a shipped task, and only then, `vx release` also asks `gh` whether the pull 
 
 A merged pull request counts as landed once its merge commit is reachable from your local base branch, and GitHub's word is trusted over the content check. That matters because the content check can refuse forever after a remote merge when later commits on the base touched the same lines. If the merge commit is not on the local base yet, release tells you to `git pull`. A camp that holds commits the merged pull request never carried is still refused.
 
+### Branch cleanup after a release
+
+After a successful release, `vx release` also prunes. It deletes the task's local branch `vexillum/<task-id>` with `git branch -d` semantics, never `-D`, when the branch is an ancestor of the base branch. A shipped task whose pull request `gh` reports as merged, with the merge commit on your local base, also counts, even though a squash or rebase merge is not an ancestor. It never deletes a branch checked out in another worktree. When none of that holds, the branch is kept and one line says why and what you can do, for example `git branch -D` once you are sure. It also runs `git worktree prune` on the project repo so stale camp registrations do not pile up, and prints what it pruned in one short line. `--discard` follows the same rules, so an unlanded branch survives it.
+
 ### Releasing anyway with `--discard`
 
 ```bash

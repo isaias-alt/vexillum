@@ -150,6 +150,13 @@ the PR's merge commit is on the local base branch. If it is not yet, the refusal
 says to `git pull`. A camp holding commits the merged PR never carried is still
 refused. A task that is not shipped never triggers a network call.
 
+After a successful release it also deletes the task's local branch
+`vexillum/<task-id>` with `git branch -d` semantics (never `-D`) when the branch
+is an ancestor of the base, or when the PR is `MERGED` on a pulled base. A branch
+checked out in another worktree is never deleted. Otherwise it keeps the branch
+and prints one line saying why and what the general can do. It also runs
+`git worktree prune` and prints what it pruned.
+
 ## When release still refuses: `--discard`
 
 If the check cannot pass and the general confirmed that the camp's work is

@@ -132,6 +132,10 @@ Para una tarea shipped, y solo para esa, `vx release` también le pregunta a `gh
 
 Un pull request mergeado cuenta como aterrizado una vez que su commit de merge es alcanzable desde tu branch base local, y se confía en la palabra de GitHub antes que en el chequeo de contenido. Importa porque el chequeo de contenido puede negarse para siempre después de un merge remoto cuando commits posteriores en la base tocaron las mismas líneas. Si el commit de merge todavía no está en la base local, release te dice que hagas `git pull`. Un camp con commits que el pull request mergeado nunca llevó se sigue rechazando.
 
+### Limpieza de la branch después de un release
+
+Tras un release exitoso, `vx release` también poda. Borra la branch local de la tarea `vexillum/<task-id>` con la semántica de `git branch -d`, nunca `-D`, cuando la branch es ancestro de la branch base. También cuenta una tarea shipped cuyo pull request `gh` reporta como mergeado, con el commit de merge en tu base local, aunque un merge squash o rebase no sea ancestro. Nunca borra una branch que está checked out en otro worktree. Cuando nada de eso se cumple, la branch se conserva y una línea dice por qué y qué podés hacer, por ejemplo `git branch -D` cuando estés seguro. Además corre `git worktree prune` en el repo del proyecto para que no se acumulen registros de camps viejos, e imprime lo podado en una línea corta. `--discard` sigue las mismas reglas, así que una branch sin aterrizar sobrevive.
+
 ### Hacer release igual con `--discard`
 
 ```bash

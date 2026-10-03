@@ -132,6 +132,14 @@ merge commit is on the local base counts as landed even when the content check
 would refuse, for example because later commits touched the same lines. Until the
 base has been pulled it keeps refusing and tells you to pull.
 
+After a successful release it also prunes: it deletes the task's local branch
+`vexillum/<task-id>` with `git branch -d` semantics (never `-D`) when the branch
+is an ancestor of the base, or when the task is shipped and `gh` reports its PR
+merged on a pulled base. A branch checked out in another worktree is never
+deleted. Otherwise it keeps the branch and prints one line saying why; relay it
+to the general instead of forcing the delete. It also runs `git worktree prune`
+and prints what it pruned.
+
 ### Never `--discard` without the general's approval
 
 `vx release <task-id> --discard` releases the camp even when the landed check
