@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -394,6 +395,7 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 		fmt.Fprintf(stderr, cmdname.Name+": reading the branch's commits and diff: %v\n", err)
 		return 1
 	}
+	facts.Subjects = slices.DeleteFunc(facts.Subjects, tribunal.IsFixCommit)
 	title, body, dropped, err := shipPRText(sanitizer, task, ship, facts, result, notes, stderr)
 	if err != nil {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)

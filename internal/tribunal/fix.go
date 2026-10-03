@@ -59,11 +59,25 @@ func runFix(campPath string, findings []Finding, opts Options, round int) (StepR
 	if _, err := gitOutput(campPath, "add", "-A"); err != nil {
 		return StepResult{}, fmt.Errorf("staging the fixer's changes: %w", err)
 	}
-	msg := fmt.Sprintf("fix: address tribunal review findings (round %d)", round)
+	msg := fixCommitMessage(round)
 	if _, err := gitOutput(campPath, "commit", "-q", "-m", msg); err != nil {
 		return StepResult{}, fmt.Errorf("committing the fixer's changes: %w", err)
 	}
 	return StepResult{Step: StepFix, Passed: true, Detail: fmt.Sprintf("fixed %d finding(s), committed as %q", len(findings), msg)}, nil
+}
+
+// fixCommitPrefix starts the subject of every commit runFix makes.
+const fixCommitPrefix = "fix: address tribunal review findings (round "
+
+func fixCommitMessage(round int) string {
+	return fmt.Sprintf("%s%d)", fixCommitPrefix, round)
+}
+
+// IsFixCommit reports whether subject is the subject of a commit the fix loop
+// made. Those commits are vexillum's own bookkeeping: they say nothing about
+// what the change does, so they never name a pull request.
+func IsFixCommit(subject string) bool {
+	return strings.HasPrefix(subject, fixCommitPrefix)
 }
 
 // buildFixPrompt is the fixer's entire prompt: the findings to address, the

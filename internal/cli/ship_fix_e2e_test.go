@@ -468,3 +468,35 @@ func TestShipFixLoop_FixerThatChangesNothingStops(t *testing.T) {
 		t.Errorf("expected the fixer's no-op to be reported\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}
 }
+
+// After a fix round and no title from the reviewer, the pull request title
+// comes from the mission's own commit, never from the fixer's.
+func TestShipFixLoop_PRTitleIsNeverTheFixersCommit(t *testing.T) {
+	e := newFixLoopEnv(t)
+	e.reviewOut(1, []string{reviewFinding("error", "auto-fix")})
+	e.fixHook(1, "echo fixed > fixed.txt")
+	e.reviewOut(2, nil, "fixed.txt")
+
+	code, stdout, stderr := e.ship(tribunal.Options{Fix: true})
+
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	args, err := os.ReadFile(e.ghArgs)
+	if err != nil {
+		t.Fatalf("expected gh pr create to run: %v", err)
+	}
+	lines := strings.Split(string(args), "\n")
+	title := ""
+	for i, l := range lines {
+		if l == "--title" && i+1 < len(lines) {
+			title = lines[i+1]
+		}
+	}
+	if title != "change" {
+		t.Errorf("expected the title to come from the mission's commit, got %q", title)
+	}
+	if strings.Contains(string(args), "address tribunal review findings") {
+		t.Errorf("expected the PR text to leave out the fixer's commit, got:\n%s", args)
+	}
+}
