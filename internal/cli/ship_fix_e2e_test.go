@@ -281,6 +281,9 @@ func TestShipFixLoop_FixedInOneRoundThenApproved(t *testing.T) {
 	if !strings.Contains(stdout, "round 1: [ok] lint") || !strings.Contains(stdout, "round 2: [ok] docs") {
 		t.Errorf("expected both rounds' steps in the output, got:\n%s", stdout)
 	}
+	if !strings.Contains(stdout, "round 1 review findings (handed to the fixer):") || !strings.Contains(stdout, "SOMETHING_WRONG") {
+		t.Errorf("expected the findings the fixer was given to be printed, got:\n%s", stdout)
+	}
 	if !strings.Contains(stderr, "fix round 1/2: fixing 1 finding(s)") {
 		t.Errorf("expected the fix round to be announced, got:\n%s", stderr)
 	}

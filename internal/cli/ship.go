@@ -358,6 +358,13 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 	}
 	for i, round := range result.Earlier {
 		printSteps(stdout, fmt.Sprintf("round %d: ", i+1), round.Steps)
+		for _, sr := range round.Steps {
+			if sr.Step == tribunal.StepReview && sr.Report != nil {
+				if blocking := sr.Report.Blocking(); len(blocking) > 0 {
+					fmt.Fprintf(stdout, "round %d review findings (handed to the fixer):\n%s\n", i+1, tribunal.FormatFindings(blocking))
+				}
+			}
+		}
 	}
 	prefix := ""
 	if len(result.Earlier) > 0 {
