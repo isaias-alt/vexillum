@@ -376,6 +376,9 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 				fmt.Fprintln(stderr, sr.Detail)
 			}
 		}
+		if hint := fixLoopHint(result, ship.Tribunal.Fix, taskID, c.Branch, task.CampBase); hint != "" {
+			fmt.Fprintln(stderr, hint)
+		}
 		return 1
 	}
 
@@ -446,6 +449,35 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 
 	fmt.Fprintf(stdout, "%s passed, pushed %s, pull request: %s\n", tribunal.Name, c.Branch, prURL)
 	return 0
+}
+
+// fixLoopHint explains a refusal the fix loop makes ambiguous: findings the
+// fixer was never given, and fixer commits that stay on the branch. It is
+// empty when the fix loop played no part.
+func fixLoopHint(result tribunal.Result, fix bool, taskID, branch, base string) string {
+	failed := result.FailedStep()
+	if failed == nil {
+		return ""
+	}
+	var lines []string
+	if failed.Step == tribunal.StepReview && failed.Report != nil {
+		askUser := 0
+		for _, f := range failed.Report.Blocking() {
+			if f.Action != tribunal.ActionAutoFix {
+				askUser++
+			}
+		}
+		if askUser > 0 && fix {
+			lines = append(lines, fmt.Sprintf("%d blocking finding(s) need a human decision and are never handed to the fixer: decide, tell the soldier with '%s prompt %s <text>' (or change the code by hand), then ship again.", askUser, cmdname.Name, taskID))
+		}
+	}
+	if rounds := len(result.Earlier); rounds > 0 {
+		if failed.Step != tribunal.StepReview && failed.Step != tribunal.StepFix {
+			lines = append(lines, fmt.Sprintf("The %s failure followed fix round %d.", failed.Step, rounds))
+		}
+		lines = append(lines, fmt.Sprintf("The fixer's commit(s) from %d fix round(s) stay on %s (git log %s..HEAD): inspect or drop them before shipping again.", rounds, branch, base))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // existingPullRequest returns the open pull request of branch, or nil when

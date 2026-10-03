@@ -366,6 +366,9 @@ func TestShipFixLoop_PersistingFindingsBlockAtTheRoundLimit(t *testing.T) {
 	if !strings.Contains(stderr, "failed at review") {
 		t.Errorf("expected the refusal to name the review, got:\n%s", stderr)
 	}
+	if !strings.Contains(stderr, "2 fix round(s) stay on "+e.task.CampBranch) {
+		t.Errorf("expected the refusal to say the fixer's commits stay on the branch, got:\n%s", stderr)
+	}
 }
 
 // Without --max-rounds the loop is bounded by the default, never unbounded.
@@ -405,6 +408,9 @@ func TestShipFixLoop_FixThatBreaksTestsBlocks(t *testing.T) {
 	if !strings.Contains(stderr, "failed at tests") {
 		t.Errorf("expected the refusal to name the tests step, got:\n%s", stderr)
 	}
+	if !strings.Contains(stderr, "followed fix round 1") || !strings.Contains(stderr, "stay on "+e.task.CampBranch) {
+		t.Errorf("expected the refusal to say the failure followed fix round 1 and that its commit stays, got:\n%s", stderr)
+	}
 }
 
 // An ask-user finding needs a human: the loop never starts, even when the
@@ -428,6 +434,9 @@ func TestShipFixLoop_AskUserStopsTheLoop(t *testing.T) {
 			if !strings.Contains(stdout+stderr, "SOMETHING_WRONG") || !strings.Contains(stdout+stderr, "ask-user") {
 				t.Errorf("expected the ask-user finding to be printed\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
 			}
+			if !strings.Contains(stderr, "need a human decision") || !strings.Contains(stderr, "prompt "+e.task.ID) {
+				t.Errorf("expected the refusal to say a human decision is needed and how to give it, got:\n%s", stderr)
+			}
 			if _, err := os.Stat(filepath.Join(e.task.CampPath, "fixed.txt")); err == nil {
 				t.Error("expected no fixer to have touched the camp")
 			}
@@ -444,11 +453,14 @@ func TestShipFixLoop_AskUserAfterAFixStopsTheLoop(t *testing.T) {
 	e.reviewOut(2, []string{reviewFinding("warning", "ask-user")}, "fix1.txt")
 	e.fixHook(2, "echo two > fix2.txt")
 
-	code, _, _ := e.ship(tribunal.Options{Fix: true})
+	code, _, stderr := e.ship(tribunal.Options{Fix: true})
 
 	e.assertRefused(code)
 	if want := []string{"review", "fix", "review"}; !equalStrings(e.callRoles(), want) {
 		t.Errorf("expected claude calls %v, got %v", want, e.callRoles())
+	}
+	if !strings.Contains(stderr, "need a human decision") {
+		t.Errorf("expected the refusal to say a human decision is needed, got:\n%s", stderr)
 	}
 }
 
