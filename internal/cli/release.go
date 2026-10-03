@@ -46,7 +46,14 @@ base or is abandoned - never on your own judgment. The discarded commits
 stay reachable from the camp's branch until the slot is reused.
 
 On success, returns the worktree to the pool for reuse and closes the
-herdr pane.
+herdr pane, then prunes: it deletes the task's local branch
+vexillum/<task-id> with git branch -d semantics (never -D) when the branch
+is an ancestor of the base branch, or when the task is shipped, gh reports
+its pull request as merged and the base was pulled. Otherwise, or when the
+branch is checked out in another worktree, the branch is kept and one line
+says why and what to do. It also runs git worktree prune on the project
+repo, and prints what was pruned in one short line. --discard deletes a
+branch only under those same rules, so an unlanded branch survives it.
 `
 
 // Release runs the "vx release" command.
@@ -163,7 +170,33 @@ func runRelease(projectDir, vexillumHome, homeDir, taskID string, opts releaseOp
 		return 1
 	}
 	fmt.Fprintln(stdout, "released: camp returned to the pool, herdr pane closed.")
+	// Pruning is housekeeping after a release that already happened, so a
+	// failure here is reported but never turns the release into a failure.
+	pruned, err := camp.Prune(c, campOpts)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": released, but pruning failed: %v\n", err)
+		return 0
+	}
+	printPruned(stdout, pruned)
 	return 0
+}
+
+// printPruned says in one short line what was pruned, and why a branch was
+// kept when it was.
+func printPruned(w io.Writer, p camp.PruneReport) {
+	var done []string
+	if p.DeletedBranch != "" {
+		done = append(done, "deleted branch "+p.DeletedBranch)
+	}
+	if p.PrunedWorktrees > 0 {
+		done = append(done, fmt.Sprintf("pruned %d stale worktree registration(s)", p.PrunedWorktrees))
+	}
+	if len(done) > 0 {
+		fmt.Fprintln(w, "pruned: "+strings.Join(done, ", ")+".")
+	}
+	if p.Kept != "" {
+		fmt.Fprintln(w, p.Kept+".")
+	}
 }
 
 // mergedPullRequest asks GitHub whether the pull request of a shipped task's

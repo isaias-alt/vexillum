@@ -285,3 +285,72 @@ func TestRunRelease_UncommittedChangesRefuseWithoutDiscard(t *testing.T) {
 		t.Error("a refused release must keep the camp leased")
 	}
 }
+
+func projectHasBranch(t *testing.T, m remotelyMergedMission) bool {
+	t.Helper()
+	return releaseGitT(t, m.project, "branch", "--list", m.task.CampBranch) != ""
+}
+
+// A merged pull request is not an ancestor of the base, so git branch -d
+// would refuse; the merge GitHub confirmed is what lets the branch go.
+func TestRunRelease_MergedPullRequestDeletesTheBranch(t *testing.T) {
+	m := newRemotelyMergedMission(t, state.StatusShipped)
+	ghForRelease(t, true, mergedPRView(m, m.mergeCommit))
+
+	code, out := releaseOf(t, m, releaseOptions{})
+
+	if code != 0 || !strings.Contains(out, "pruned: deleted branch "+m.task.CampBranch) {
+		t.Fatalf("expected the branch pruned, got %d: %s", code, out)
+	}
+	if projectHasBranch(t, m) {
+		t.Error("expected the branch deleted")
+	}
+}
+
+// Without gh, the content check lets the release through but proves nothing
+// about the branch, so it stays and the output says what to do.
+func TestRunRelease_ContentOnlyLandingKeepsTheBranch(t *testing.T) {
+	m := newRemotelyMergedMission(t, state.StatusDone)
+	// Make the content check pass: the base must hold the camp's content
+	// at its tip.
+	if err := os.WriteFile(filepath.Join(m.project, "change.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	releaseGitT(t, m.project, "commit", "-q", "-am", "back to the mission content")
+
+	code, out := releaseOf(t, m, releaseOptions{})
+
+	if code != 0 {
+		t.Fatalf("expected the release to pass, got %d: %s", code, out)
+	}
+	if !projectHasBranch(t, m) || !strings.Contains(out, "kept branch "+m.task.CampBranch) || !strings.Contains(out, "git branch -D "+m.task.CampBranch) {
+		t.Errorf("expected the branch kept with a hint, got: %s", out)
+	}
+}
+
+// --discard never deletes an unlanded branch: its commits stay reachable.
+func TestRunRelease_DiscardKeepsAnUnlandedBranch(t *testing.T) {
+	m := newRemotelyMergedMission(t, state.StatusShipped)
+	ghForRelease(t, true, openPRView)
+
+	code, out := releaseOf(t, m, releaseOptions{Discard: true})
+
+	if code != 0 || !projectHasBranch(t, m) || strings.Contains(out, "deleted branch") {
+		t.Fatalf("expected the unlanded branch kept, got %d: %s", code, out)
+	}
+}
+
+// A fast-forward landed branch is an ancestor: plain branch -d semantics.
+func TestRunRelease_LandedBranchIsDeleted(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	releaseGitT(t, project, "merge", "--ff-only", task.CampBranch)
+	m := remotelyMergedMission{project: project, home: home, task: task}
+
+	code, out := releaseOf(t, m, releaseOptions{})
+
+	if code != 0 || projectHasBranch(t, m) || !strings.Contains(out, "pruned: deleted branch "+task.CampBranch) {
+		t.Fatalf("expected the landed branch deleted, got %d: %s", code, out)
+	}
+}
