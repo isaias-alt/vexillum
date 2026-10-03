@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/buildinfo"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
@@ -72,6 +73,10 @@ const (
 	// Code re-fires the hook on every turn end regardless, so a shorter
 	// self-imposed deadline costs nothing.
 	sentinelAwaitMaxWait = 55 * time.Minute
+	// sentinelRetireWait is how long a replacement sentinel waits for the one
+	// it replaces to retire: a bit over its poll interval plus the pass it is
+	// finishing.
+	sentinelRetireWait = 3 * sentinelPollInterval
 )
 
 // sentinelMode classifies args into which action "vx sentinel" should
@@ -117,19 +122,33 @@ func Sentinel(args []string) int {
 		return 1
 	}
 
-	release, err := sentinel.AcquireLock(vexillumHome)
+	build, err := sentinel.CurrentBuild(buildinfo.Version)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
+		return 1
+	}
+
+	// A replacement started because the running sentinel's binary was swapped
+	// waits for that one to retire instead of giving up on the lock.
+	release, err := sentinel.AcquireLockRetiring(vexillumHome, sentinelRetireWait)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 	defer release()
 
+	if err := sentinel.PublishInfo(vexillumHome, build); err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
+		return 1
+	}
+
 	if n := sentinel.ReapAwaiters(vexillumHome); n > 0 {
 		fmt.Fprintf(os.Stdout, "sentinel: stopped %d orphaned await process(es)\n", n)
 	}
 
-	fmt.Fprintf(os.Stdout, "sentinel: polling %s every %s (ctrl-c to stop)\n", vexillumHome, sentinelPollInterval)
-	sentinel.Run(vexillumHome, herdr.CLI{}, sentinelPollInterval, os.Stdout)
+	fmt.Fprintf(os.Stdout, "sentinel: polling %s every %s as %s %s (ctrl-c to stop)\n", vexillumHome, sentinelPollInterval, cmdname.Name, build.Version)
+	reason := sentinel.Run(vexillumHome, herdr.CLI{}, sentinelPollInterval, os.Stdout, build.Stale)
+	fmt.Fprintf(os.Stdout, "sentinel: retiring, %s - the next %s dispatch, prompt or Stop hook await starts a fresh one\n", reason, cmdname.Name)
 	return 0
 }
 
@@ -227,8 +246,16 @@ func runSentinelAwaitRegistered(vexillumHome, projectRoot string) int {
 	signal.Notify(interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
 	defer signal.Stop(interrupt)
 
+	// The await is the one process that is always around while a commander
+	// session is: it makes sure a sentinel is watching, at start and on every
+	// poll, so one that retired after its binary was replaced is replaced in
+	// turn. Its output is dropped: anything on stderr here would be read as a
+	// wake by the hook.
 	return runSentinelAwait(projectRoot, sentinelAwaitMaxWait, sentinelAwaitPollInterval, os.Stderr,
-		func() bool { return !sentinel.OwnerGone(ownerPID) }, interrupt)
+		func() bool {
+			ensureSentinelRunning(vexillumHome, io.Discard)
+			return !sentinel.OwnerGone(ownerPID)
+		}, interrupt)
 }
 
 // resolveDrainTarget finds the project "drain"/"await" should act on,

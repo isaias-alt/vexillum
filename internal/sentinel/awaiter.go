@@ -90,7 +90,20 @@ func parsePSLine(line string) (ppid int, command string, err error) {
 // followed by exactly those two arguments. The main polling sentinel ("vx
 // sentinel") and anything else never match.
 func isAwaitCommand(command string) bool {
-	exe, ok := strings.CutSuffix(strings.TrimSpace(command), " sentinel await")
+	return isVXCommand(command, " sentinel await")
+}
+
+// isSentinelCommand reports whether command is the polling sentinel itself:
+// the executable followed by exactly "sentinel" (not its await or drain
+// subcommands).
+func isSentinelCommand(command string) bool {
+	return isVXCommand(command, " sentinel")
+}
+
+// isVXCommand reports whether command is this program (under its current or
+// legacy name, any path) followed by exactly the given arguments suffix.
+func isVXCommand(command, suffix string) bool {
+	exe, ok := strings.CutSuffix(strings.TrimSpace(command), suffix)
 	if !ok {
 		return false
 	}

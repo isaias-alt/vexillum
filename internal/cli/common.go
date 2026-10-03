@@ -66,7 +66,10 @@ func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
 }
 
 // ensureSentinelRunning best-effort auto-starts "vx sentinel"
-// detached in the background if one isn't already watching vexillumHome.
+// detached in the background if one isn't already watching vexillumHome, or
+// if the one that is runs from a binary that has since been replaced on disk
+// (it retires on its own; the new one waits for it - see
+// sentinel.AcquireLockRetiring).
 // Dispatch (and redispatch) return after only a short quick-settle probe
 // (see soldier.RunInHerdr) - for anything but a trivial prompt, the
 // sentinel is what eventually records the soldier's real outcome, so a
@@ -75,7 +78,7 @@ func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
 // itself: the soldier is already started regardless: 'vx sentinel'
 // remains available to start by hand if this doesn't work.
 func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
-	if sentinel.IsRunning(vexillumHome) {
+	if sentinel.IsRunning(vexillumHome) && !sentinel.HolderStale(vexillumHome) {
 		return
 	}
 

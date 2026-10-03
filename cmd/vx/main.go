@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/isaias-alt/vexillum/internal/buildinfo"
 	"github.com/isaias-alt/vexillum/internal/cli"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
@@ -17,6 +18,7 @@ func main() {
 }
 
 func run(args []string) int {
+	buildinfo.Version = version
 	if len(args) == 0 {
 		fmt.Print(cli.GeneralUsage())
 		return 0

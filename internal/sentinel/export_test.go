@@ -16,3 +16,19 @@ var (
 	IsAwaitCommand = isAwaitCommand
 	ParsePSLine    = parsePSLine
 )
+
+// SetExecutablePath swaps what CurrentBuild treats as the running executable
+// for the duration of a test and returns a function that restores it.
+func SetExecutablePath(f func() (string, error)) (restore func()) {
+	old := executablePath
+	executablePath = f
+	return func() { executablePath = old }
+}
+
+// SetListProcesses swaps the process lister LivePIDs reads for the duration of
+// a test and returns a function that restores it.
+func SetListProcesses(f func() (string, error)) (restore func()) {
+	old := listProcesses
+	listProcesses = f
+	return func() { listProcesses = old }
+}
