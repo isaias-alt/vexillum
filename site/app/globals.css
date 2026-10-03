@@ -646,11 +646,98 @@ pre .line {
   color: var(--fr-accent);
 }
 
-/* The search input keeps a neutral focus indicator: the global accent outline
-   is for everything else, but the field that opens focused is not a call to
-   action. A 2px outline in the secondary text color, 3:1 on the popover. */
-[role="dialog"] input[role="combobox"]:focus-visible {
-  outline: 2px solid var(--fr-text-secondary);
-  outline-offset: 4px;
+/* ---------------------------------------------------------------------------
+   Search dialog: one quiet surface. The panel and the field are almost the same
+   tone and both have a thin border and a small radius, so the field reads as
+   an inset of the panel, not a box in a box. The field has no focus ring: on
+   focus its border only gets one step stronger. The icon is neutral gray.
+   ------------------------------------------------------------------------ */
+.search-panel {
+  padding: 8px;
+  background: var(--fr-surface);
+  border: 1px solid var(--fr-border);
+  border-radius: var(--fr-radius-md);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.28);
+}
+/* Fumadocs separates the panel's children with hairlines; there are none here. */
+.search-panel > * {
+  border-width: 0;
+}
+.search-field {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--fr-surface-sunken) 40%, var(--fr-surface));
+  border: 1px solid var(--fr-border);
   border-radius: var(--fr-radius-sm);
+  transition: border-color 120ms;
+}
+/* Focus: the border goes to the muted gray, >= 3:1 against both the panel and
+   the field fill in light and dark (3.1:1 and 3.3:1 at the lowest). No ring,
+   no glow, nothing blue. */
+.search-field:focus-within {
+  border-color: var(--fr-text-muted);
+}
+.search-field svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--fr-text-muted);
+}
+.search-field input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  /* 16px on phones: smaller makes iOS zoom the page on focus. */
+  font-size: 16px;
+  color: var(--fr-text);
+}
+@media (min-width: 768px) {
+  .search-field input {
+    font-size: 14px;
+  }
+}
+/* Close button: touch screens only (no Esc key, and the overlay is a small
+   target); desktop, even in a narrow window, closes with Esc or a click
+   outside. */
+.search-close {
+  display: none;
+  height: 28px;
+  width: 28px;
+  flex-shrink: 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  margin-inline-end: -6px;
+  border-radius: var(--fr-radius-sm);
+  background: transparent;
+  color: var(--fr-text-muted);
+}
+.search-close:hover {
+  background: var(--fr-accent-soft);
+}
+@media (hover: none), (pointer: coarse) {
+  .search-close {
+    display: inline-flex;
+  }
+}
+.search-field input,
+.search-field input:focus,
+.search-field input:focus-visible {
+  outline: none;
+}
+/* Dim but legible: 60% of the way from the muted to the secondary text token
+   is >= 4.5:1 against the field in both themes (4.57:1 light, 4.98:1 dark). */
+.search-field input::placeholder {
+  color: color-mix(in srgb, var(--fr-text-secondary) 60%, var(--fr-text-muted));
+  opacity: 1;
+}
+/* Forced colors drop border colors, so the focused field needs a real outline. */
+@media (forced-colors: active) {
+  .search-field:focus-within {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
 }

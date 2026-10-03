@@ -8,13 +8,26 @@ import { GITHUB_URL } from "@/lib/site";
 export const translations = i18n
   .translations()
   .extend(uiTranslations())
+  // Strings of the search dialog's index loading state (components/SearchDialog.tsx).
+  // The English text is the key itself.
+  .extend({
+    keys: [
+      "Search...(search dialog)",
+      "Loading the search index(search dialog)",
+      "Could not load the search index. Close and reopen the search to try again.(search dialog)",
+    ],
+  })
   .add({
     en: { displayName: "English" },
     es: {
       displayName: "Español",
       "Search(search trigger)": "Buscar",
       "Search(search dialog)": "Buscar",
+      "Search...(search dialog)": "Buscar...",
       "No results found(search dialog)": "Sin resultados",
+      "Loading the search index(search dialog)": "Cargando el índice de búsqueda",
+      "Could not load the search index. Close and reopen the search to try again.(search dialog)":
+        "No se pudo cargar el índice de búsqueda. Cerrá y volvé a abrir la búsqueda para reintentar.",
       "On this page(table of contents)": "En esta página",
       "No Headings(table of contents)": "Sin encabezados",
       "Next Page(pagination)": "Siguiente",
