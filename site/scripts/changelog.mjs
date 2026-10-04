@@ -4,7 +4,7 @@
 // conventional commits (see the changelog block in ../.goreleaser.yaml), so
 // nothing about the changelog is ever edited by hand.
 //
-// Only stable releases are shown (no rc or canary pre-releases), capped to the
+// Only stable releases from MIN_VERSION on are shown (no rc or canary pre-releases), capped to the
 // latest MAX_RELEASES, and only the Features, Bug fixes and Documentation
 // groups of each release (no commit hashes, no catch-all group).
 //
@@ -27,6 +27,9 @@ const RELEASES_URL = `https://github.com/${REPO}/releases`;
 const API_URL = `https://api.github.com/repos/${REPO}/releases?per_page=50`;
 const FETCH_TIMEOUT_MS = 8000;
 export const MAX_RELEASES = 10;
+// Releases older than this version are never shown: the changelog starts at the
+// first official release, so the early tags (v0.1.x) stay out of the page.
+export const MIN_VERSION = [0, 2, 0];
 const GROUPS = ["Features", "Bug fixes", "Documentation"];
 
 const NOTICE =
@@ -97,6 +100,17 @@ export function normalizeBody(body) {
   );
 }
 
+/** True when the tag (vX.Y.Z...) is at least MIN_VERSION. */
+export function atLeastMinVersion(tag) {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(tag);
+  if (!m) return false;
+  for (let i = 0; i < 3; i++) {
+    const n = Number(m[i + 1]);
+    if (n !== MIN_VERSION[i]) return n > MIN_VERSION[i];
+  }
+  return true;
+}
+
 const dateOf = (iso) => (typeof iso === "string" ? iso.slice(0, 10) : "");
 
 function releaseSection(release, t) {
@@ -139,7 +153,7 @@ export async function fetchReleases(fetchFn = fetch, env = process.env) {
   const data = await res.json();
   if (!Array.isArray(data)) throw new Error("unexpected GitHub API response");
   return data
-    .filter((r) => r && !r.draft && !r.prerelease && typeof r.tag_name === "string" && !/-(rc|canary)/i.test(r.tag_name))
+    .filter((r) => r && !r.draft && !r.prerelease && typeof r.tag_name === "string" && !/-(rc|canary)/i.test(r.tag_name) && atLeastMinVersion(r.tag_name))
     .sort((a, b) => dateOf(b.published_at).localeCompare(dateOf(a.published_at)))
     .slice(0, MAX_RELEASES);
 }

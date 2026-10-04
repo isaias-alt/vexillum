@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { escapeMDX, generate, normalizeBody, renderPage } from "./changelog.mjs";
+import { atLeastMinVersion, escapeMDX, generate, normalizeBody, renderPage } from "./changelog.mjs";
 
 const quiet = { log() {}, warn() {} };
 
@@ -67,12 +67,12 @@ test("generate keeps an earlier page when GitHub is unreachable", async () => {
 
 test("generate renders non-draft releases newest first", async () => {
   const dir = mkdtempSync(join(tmpdir(), "changelog-"));
-  const older = { ...release, tag_name: "v0.1.0", published_at: "2026-09-01T00:00:00Z", body: "" };
+  const older = { ...release, tag_name: "v0.2.1", published_at: "2026-10-01T00:00:00Z", body: "" };
   const draft = { ...release, tag_name: "v9.9.9", draft: true };
   const ok = async () => ({ ok: true, json: async () => [older, draft, release] });
   await generate(dir, ok, quiet);
   const page = readFileSync(join(dir, "en", "changelog.mdx"), "utf8");
-  assert.ok(page.indexOf("v0.2.0") < page.indexOf("v0.1.0"));
+  assert.ok(page.indexOf("v0.2.0") < page.indexOf("v0.2.1]"));
   assert.ok(!page.includes("v9.9.9"));
 });
 
@@ -100,4 +100,14 @@ test("generate shows the no-release line when GitHub returns nothing", async () 
   assert.ok(readFileSync(join(dir, "en", "changelog.mdx"), "utf8").includes("No release has been published yet."));
   await generate(dir, async () => ({ ok: false, status: 403 }), quiet);
   assert.ok(readFileSync(join(dir, "es", "changelog.mdx"), "utf8").includes("Todavía no se publicó"));
+});
+
+test("releases below the minimum version are treated as no releases", async () => {
+  assert.ok(!atLeastMinVersion("v0.1.1") && !atLeastMinVersion("v0.1.9") && !atLeastMinVersion("nightly"));
+  assert.ok(atLeastMinVersion("v0.2.0") && atLeastMinVersion("v0.10.0") && atLeastMinVersion("v1.0.0"));
+  const dir = mkdtempSync(join(tmpdir(), "changelog-"));
+  const early = ["v0.1.0", "v0.1.1"].map((tag_name) => ({ ...release, tag_name }));
+  await generate(dir, async () => ({ ok: true, json: async () => early }), quiet);
+  const page = readFileSync(join(dir, "en", "changelog.mdx"), "utf8");
+  assert.ok(page.includes("No release has been published yet.") && !page.includes("v0.1"));
 });
