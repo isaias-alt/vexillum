@@ -12,7 +12,7 @@ A finished mission leaves its camp in one of two ways. Both are explicit, and ne
 | Needs | a clean checkout | `gh` installed |
 | Leaves the machine | no | yes, it pushes to `origin` |
 
-By default the commander asks before landing. Once you tell it to land without asking, it can skip that step for the project.
+By default the commander asks before landing. With [yolo mode](/docs/guides/yolo-mode) on for the project, it lands a finished, verified mission without asking. Yolo never covers `vx ship`.
 
 <Callout title="A shipped soldier waits on purpose">
   After a successful `vx ship` the soldier's pane and camp stay open until you merge the pull request. That is by design, not a stuck soldier. See [Why a shipped soldier stays open](#why-a-shipped-soldier-stays-open) below.

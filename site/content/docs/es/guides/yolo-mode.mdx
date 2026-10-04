@@ -1,0 +1,49 @@
+---
+title: Yolo mode
+description: Dejá que el commander aterrice enseguida una mission terminada y verificada, en vez de preguntarte antes.
+---
+
+Por defecto el commander pregunta antes de aterrizar una mission terminada: te cuenta qué hizo el soldier y espera tu sí. Yolo mode es un ajuste por proyecto que quita esa única pregunta. Con yolo activado, el commander aterriza una mission terminada y verificada con `vx land` y libera su camp en el mismo turno, sin preguntar.
+
+## Activarlo
+
+```bash
+vx yolo on
+```
+
+```bash
+vx yolo off
+vx yolo status
+```
+
+`status` imprime `on` u `off` y sale con 0. Un proyecto arranca con yolo desactivado, y sin argumento `vx yolo` imprime el estado igual que `status`. `on` necesita un proyecto preparado con `vx init`. `vx doctor` informa `yolo mode - on` o `yolo mode - off` para el proyecto. Ver [`vx yolo`](/es/docs/reference/cli/yolo).
+
+El ajuste se guarda en `.vexillum/yolo.json`, junto a `models.json`, y se commitea con el proyecto igual que ese archivo. `vx land` rechaza un checkout sucio, así que commiteá el archivo apenas lo cambies. Si activás yolo y el primer land es rechazado, un `.vexillum/yolo.json` sin commitear puede ser la causa. Ver [Archivos](/es/docs/reference/files).
+
+## Qué hace
+
+Cuando una mission termina en done, el commander mira `vx yolo status` y, si imprime `on`:
+
+1. lee qué hizo la mission y comprueba que coincide con lo que pediste;
+2. corre `vx land <task-id>`;
+3. confirma que la rama base realmente avanzó;
+4. libera el camp y te avisa que la mission aterrizó.
+
+Igual recibís el reporte de lo que se hizo. Solo perdés la pregunta antes del merge.
+
+## Qué nunca hace
+
+Yolo saltea la aprobación del land y nada más.
+
+- Nunca aterriza un scout. Un scout no tiene nada que aterrizar.
+- Nunca corre `vx ship`. Abrir un pull request real sigue siendo decisión tuya. Ver [Land vs ship](/es/docs/guides/land-vs-ship).
+- Nunca hace push de nada.
+- Nunca rodea un land rechazado o divergente. Si `vx land` rechaza, porque el checkout está sucio o la rama divergió de la base, el commander te avisa en vez de reintentar, rebasar o commitear por su cuenta.
+- Nunca descarta trabajo. `vx release --discard` sigue necesitando tu sí explícito.
+- Nunca aterriza una mission que terminó blocked, failed o interrupted.
+
+<Callout type="warn" title="Aterrizar es el control de seguridad">
+  Los soldiers corren con acceso completo a tu máquina, y aterrizar es el punto donde su trabajo llega a tu historial real. Con yolo activado, revisás después en vez de antes. Activalo en proyectos donde ese intercambio es aceptable, y usá `vx yolo off` cuando no lo sea.
+</Callout>
+
+El comportamiento vive en la skill `vexillum` que lee el commander, no en el bloque de `AGENTS.md`. Ver [Skills](/es/docs/concepts/skills).

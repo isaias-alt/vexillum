@@ -1,0 +1,49 @@
+---
+title: Yolo mode
+description: Let the commander land a finished, verified mission right away instead of asking you first.
+---
+
+By default the commander asks before it lands a finished mission: it tells you what the soldier did and waits for your yes. Yolo mode is a per-project setting that removes that one question. With yolo on, the commander lands a finished, verified mission with `vx land` and releases its camp in the same turn, without asking.
+
+## Turn it on
+
+```bash
+vx yolo on
+```
+
+```bash
+vx yolo off
+vx yolo status
+```
+
+`status` prints `on` or `off` and exits 0. A project starts with yolo off, and with no argument `vx yolo` prints the state like `status` does. `on` needs a project prepared with `vx init`. `vx doctor` reports `yolo mode - on` or `yolo mode - off` for the project. See [`vx yolo`](/docs/reference/cli/yolo).
+
+The setting is stored in `.vexillum/yolo.json`, next to `models.json`, and it is committed with the project like that file. `vx land` refuses a dirty checkout, so commit the file right after you change it. If you turn yolo on and the first land is refused, an uncommitted `.vexillum/yolo.json` may be the reason. See [Files](/docs/reference/files).
+
+## What it does
+
+When a mission finishes done, the commander checks `vx yolo status` and, if it prints `on`, it:
+
+1. reads what the mission did and checks that it matches what you asked for;
+2. runs `vx land <task-id>`;
+3. confirms the base branch actually moved;
+4. releases the camp and tells you the mission landed.
+
+You still get the report of what was done. You only lose the question before the merge.
+
+## What it never does
+
+Yolo skips the land approval and nothing else.
+
+- It never lands a scout. A scout has nothing to land.
+- It never runs `vx ship`. Opening a real pull request stays your decision. See [Land vs ship](/docs/guides/land-vs-ship).
+- It never pushes anything.
+- It never works around a refused or diverged land. If `vx land` refuses, because the checkout is dirty or the branch has diverged from the base, the commander tells you instead of retrying, rebasing or committing on its own.
+- It never discards work. `vx release --discard` still needs your explicit yes.
+- It never lands a mission that finished blocked, failed or interrupted.
+
+<Callout type="warn" title="Landing is the safety control">
+  Soldiers run with full access to your machine, and landing is the point where their work reaches your real history. With yolo on, you review after the fact instead of before. Turn it on for projects where that trade is acceptable, and use `vx yolo off` when it is not.
+</Callout>
+
+The behavior lives in the `vexillum` skill the commander reads, not in the `AGENTS.md` block. See [Skills](/docs/concepts/skills).

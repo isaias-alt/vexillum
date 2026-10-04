@@ -13,6 +13,7 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | `.claude/settings.json` | `init`, `upgrade` | suma el hook `Stop` asíncrono que corre `vx sentinel await` mediante un wrapper de una línea que no depende del PATH (ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path)); el contenido existente se fusiona, nunca se pisa. Un JSON inválido se deja intacto y se reporta |
 | `.vexillum/config.json` | `init`, `upgrade` | marca el proyecto como inicializado; guarda un hash de contenido por skill instalada para que `upgrade` sepa si la editaste |
 | `.vexillum/models.json` | `init` (una vez) | los perfiles de modelo y effort; **tuyo para editar**, nunca se pisa. Ver [`models.json`](/es/docs/reference/models-json) |
+| `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | si [yolo mode](/es/docs/guides/yolo-mode) está activado en el proyecto; si no existe, está desactivado. Se commitea con el proyecto, igual que `models.json` |
 | `.vexillum/.gitignore` | `init` | ignora `.vexillum/forum/`, los artefactos temporales del forum |
 | `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | tu bloque editado, guardado antes de reemplazarlo |
 | `.vexillum/AGENTS.md.backup` | `upgrade` | el `AGENTS.md` entero, guardado antes de reparar un bloque malformado |
