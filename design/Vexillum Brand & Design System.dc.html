@@ -307,7 +307,7 @@ class Component extends DCLogic {
   state = { theme: 'dark', installTab: 'curl', activeStepIdx: 1, paused: false };
 
   stepDefs = [
-    { title: 'Install vexillum', command: 'curl -fsSL https://vexillum.lucasco.dev/install | bash',
+    { title: 'Install vexillum', command: 'curl -fsSL https://vx.lucasco.dev/install | bash',
       description: 'One binary, no runtime dependencies. Works the same over curl or brew.',
       output: [
         { text: 'downloading vexillum v0.4.0\u2026', muted: true },
@@ -411,7 +411,7 @@ class Component extends DCLogic {
       toggleTheme: () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
       curlTabStyle: installTab === 'curl' ? active : idle,
       brewTabStyle: installTab === 'brew' ? active : idle,
-      installCommand: installTab === 'curl' ? 'curl -fsSL https://vexillum.lucasco.dev/install | bash' : 'brew install isaias-alt/tap/vexillum',
+      installCommand: installTab === 'curl' ? 'curl -fsSL https://vx.lucasco.dev/install | bash' : 'brew install isaias-alt/tap/vexillum',
       setInstallTab_curl: () => this.setState({ installTab: 'curl' }),
       setInstallTab_brew: () => this.setState({ installTab: 'brew' }),
       steps,

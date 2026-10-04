@@ -78,7 +78,7 @@ const en: Dictionary = {
     steps: [
       {
         title: "Install vexillum",
-        command: "curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash",
+        command: "curl -fsSL https://vx.lucasco.dev/install | bash",
         description:
           "One binary, no runtime dependencies. Works the same over brew or curl.",
         output: [

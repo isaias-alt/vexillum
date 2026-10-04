@@ -24,7 +24,7 @@ const (
 	// in scripts/install.sh.
 	productName = "vexillum"
 	// InstallCommand reinstalls vx from scratch.
-	InstallCommand = "curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash"
+	InstallCommand = "curl -fsSL https://vx.lucasco.dev/install | bash"
 	// CanaryInstallCommand installs the latest canary build.
 	CanaryInstallCommand = InstallCommand + " -s -- --channel canary"
 	// devVersion is what a build outside the release pipeline reports.

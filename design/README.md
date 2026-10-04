@@ -130,6 +130,4 @@ time: no request to Google Fonts at runtime.
 
 ### Domain
 
-The `.dc.html` exports still show `vexillum.lucasco.dev` in the install command.
-They are kept untouched as the design system's export; the real site is served
-from `https://vx.lucasco.dev` (see `site/lib/site.ts`).
+The `.dc.html` exports use `vx.lucasco.dev` in the install command, the same domain the real site is served from (see `site/lib/site.ts`).
