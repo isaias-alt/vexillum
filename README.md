@@ -19,7 +19,7 @@ brew install isaias-alt/tap/vexillum
 macOS / Linux, via curl:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
 ```
 
 Both install a prebuilt binary for your platform (amd64/arm64). The curl
