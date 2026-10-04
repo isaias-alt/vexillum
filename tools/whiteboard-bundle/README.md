@@ -25,12 +25,12 @@ other vendor update.
 
 ## What's vendored, and from where
 
-`src/whiteboard-core.js`, `src/whiteboard-frame.js`, and
-`src/whiteboard-frame.css` are adapted from `upstream` at
-**v0.1.80** (`src/whiteboard-core.js`, `src/whiteboard-frame.js`,
-`src/whiteboard-frame.css` in that repo), MIT licensed. See
+`src/whiteboard-core.js` and `src/whiteboard-frame.js` are adapted from
+`upstream` at **v0.1.80** (the files of the same names in that
+repo), MIT licensed. `src/whiteboard-frame.css` and `build.js` are vexillum's
+own work. See
 `THIRD-PARTY-NOTICES.md` at the vexillum repo root for full attribution, and
-each file's header comment for what changed. Treat these as vexillum's own
+each adapted file's header comment for what changed. Treat these as vexillum's own
 code, not an opaque vendor blob: forum-tool ships a high release cadence and
 keeps patching real bugs in this exact conversion path
 (`mermaid-to-excalidraw#110` and friends) - diff against a newer forum-tool

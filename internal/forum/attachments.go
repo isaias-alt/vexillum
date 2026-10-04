@@ -3,6 +3,7 @@ package forum
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,26 +13,23 @@ import (
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 )
 
-// Images the reviewer pastes or drops into the conversation are stored under
-// the session's own state directory (<home>/forums/<key>/attachments/) and
-// handed to the agent as local file paths. Everything is bounded and nothing
-// about the on-disk name comes from the client: the id is server-generated,
-// the extension is derived from the image's own bytes (never from a filename
-// or Content-Type the client claims), and only a fixed set of raster formats
-// is accepted - notably not SVG, which can carry script.
+// Image attachments: pictures the reviewer pastes, drops or picks in the
+// conversation panel. Each one is written under the owning session's state
+// directory and later handed to the agent as an absolute local path.
 //
-// The size, count and total-disk limits are fixed constants below.
+// The reviewer's browser is not trusted with any part of the stored name. The
+// id is minted here, the extension comes from sniffing the bytes (a filename or
+// Content-Type from the client is never consulted), and only four raster
+// formats are accepted. SVG is deliberately absent: it can carry script.
 const (
-	maxAttachmentBytes      = 10 << 20  // per image
-	maxAttachmentsPerPrompt = 4         // images on one prompt
-	maxStagedAttachments    = 16        // uploaded, not yet part of a prompt
-	maxAttachmentDiskBytes  = 256 << 20 // per session
-	// stagedTTL is how long an attachment that no prompt or transcript
-	// message references survives before a sweep removes it.
-	stagedTTL = time.Hour
+	maxAttachmentBytes     = 10 << 20  // largest single image
+	maxImagesPerPrompt     = 4         // images one prompt may carry
+	maxPendingImages       = 16        // uploaded but not yet on any prompt
+	maxSessionImageBytes   = 256 << 20 // everything stored for one session
+	orphanImageGracePeriod = time.Hour // an unreferenced image survives this long
 )
 
-// Attachment errors the HTTP layer maps to statuses.
+// Errors the HTTP layer translates into status codes.
 var (
 	ErrUnsupportedImage   = errors.New("unsupported image: send a PNG, JPEG, GIF or WebP")
 	ErrAttachmentsFull    = errors.New("this session's attachment storage is full")
@@ -41,9 +39,9 @@ var (
 	ErrTooManyAttachments = errors.New("too many images on one message")
 )
 
-// Attachment describes one stored image. Path is the agent-facing local
-// file path; it is filled in only on the copy delivered by a poll, never
-// persisted.
+// Attachment is the record of one stored image. Path is the agent-facing file
+// location; it is only filled in on the copy a poll delivers and is never
+// written to disk with the session.
 type Attachment struct {
 	ID    string `json:"id"`
 	Mime  string `json:"mime"`
@@ -51,146 +49,165 @@ type Attachment struct {
 	Path  string `json:"path,omitempty"`
 }
 
-var attachmentIDPattern = regexp.MustCompile(`^at_[0-9a-f]{16}$`)
+var attachmentIDShape = regexp.MustCompile(`^at_[0-9a-f]{16}$`)
 
-// ValidAttachmentID reports whether id has the shape newID("at_") produces.
-func ValidAttachmentID(id string) bool { return attachmentIDPattern.MatchString(id) }
+// ValidAttachmentID reports whether id looks like something newID("at_") made.
+func ValidAttachmentID(id string) bool { return attachmentIDShape.MatchString(id) }
 
-// imageTypes maps the accepted formats to the extension they are stored under.
-var imageTypes = []struct{ mime, ext string }{
-	{"image/png", ".png"},
-	{"image/jpeg", ".jpg"},
-	{"image/gif", ".gif"},
-	{"image/webp", ".webp"},
+// imageFormat ties a MIME type to the extension it is stored under and to the
+// test that recognises its leading bytes.
+type imageFormat struct {
+	mime  string
+	ext   string
+	match func(head []byte) bool
 }
 
-// sniffImage detects the format from the leading bytes alone. It returns
-// ("", "") for anything that is not one of the accepted raster formats.
-func sniffImage(data []byte) (mime, ext string) {
-	switch {
-	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
-		return "image/png", ".png"
-	case bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF}):
-		return "image/jpeg", ".jpg"
-	case bytes.HasPrefix(data, []byte("GIF87a")), bytes.HasPrefix(data, []byte("GIF89a")):
-		return "image/gif", ".gif"
-	case len(data) >= 12 && bytes.Equal(data[:4], []byte("RIFF")) && bytes.Equal(data[8:12], []byte("WEBP")):
-		return "image/webp", ".webp"
+func hasPrefix(prefix ...byte) func([]byte) bool {
+	return func(head []byte) bool { return bytes.HasPrefix(head, prefix) }
+}
+
+var imageFormats = []imageFormat{
+	{"image/png", ".png", hasPrefix(0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n')},
+	{"image/jpeg", ".jpg", hasPrefix(0xff, 0xd8, 0xff)},
+	{"image/gif", ".gif", func(head []byte) bool {
+		return bytes.HasPrefix(head, []byte("GIF87a")) || bytes.HasPrefix(head, []byte("GIF89a"))
+	}},
+	{"image/webp", ".webp", func(head []byte) bool {
+		return len(head) >= 12 && string(head[:4]) == "RIFF" && string(head[8:12]) == "WEBP"
+	}},
+}
+
+// detectImage identifies data by content alone.
+func detectImage(data []byte) (imageFormat, bool) {
+	for _, f := range imageFormats {
+		if f.match(data) {
+			return f, true
+		}
 	}
-	return "", ""
+	return imageFormat{}, false
+}
+
+// storedImage is a located attachment file.
+type storedImage struct {
+	path string
+	mime string
+	size int64
 }
 
 func attachmentsDir(home, key string) string {
 	return filepath.Join(sessionDir(home, key), "attachments")
 }
 
-// findAttachment resolves id to its file, trying each accepted extension.
-func findAttachment(home, key, id string) (path, mime string, size int64, err error) {
+// locateAttachment finds the file behind id for a session, whichever of the
+// accepted extensions it was stored with. Malformed keys and ids never touch
+// the filesystem.
+func locateAttachment(home, key, id string) (storedImage, error) {
 	if !ValidSessionKey(key) || !ValidAttachmentID(id) {
-		return "", "", 0, ErrNoAttachment
+		return storedImage{}, ErrNoAttachment
 	}
-	for _, t := range imageTypes {
-		p := filepath.Join(attachmentsDir(home, key), id+t.ext)
-		if info, serr := os.Stat(p); serr == nil && info.Mode().IsRegular() {
-			return p, t.mime, info.Size(), nil
+	for _, f := range imageFormats {
+		path := filepath.Join(attachmentsDir(home, key), id+f.ext)
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+			return storedImage{path: path, mime: f.mime, size: info.Size()}, nil
 		}
 	}
-	return "", "", 0, ErrNoAttachment
+	return storedImage{}, ErrNoAttachment
 }
 
-// referencedAttachments is every attachment id a queued prompt, an
-// undelivered prompt or a transcript message still points at.
-func (l *liveSession) referencedAttachments() map[string]bool {
-	refs := map[string]bool{}
-	add := func(list []Attachment) {
+// claimedAttachments is the set of ids some message still points at: a queued
+// prompt, one waiting to be delivered (outbox or in flight), or a transcript
+// entry.
+func (l *liveSession) claimedAttachments() map[string]bool {
+	claimed := map[string]bool{}
+	claim := func(list []Attachment) {
 		for _, a := range list {
-			refs[a.ID] = true
+			claimed[a.ID] = true
 		}
 	}
 	for _, p := range l.rec.Queued {
-		add(p.Attachments)
+		claim(p.Attachments)
 	}
 	for _, p := range l.rec.Outbox {
-		add(p.Attachments)
+		claim(p.Attachments)
 	}
 	for _, p := range l.rec.Inflight {
-		add(p.Attachments)
+		claim(p.Attachments)
 	}
 	for _, m := range l.transcript {
-		add(m.Attachments)
+		claim(m.Attachments)
 	}
-	return refs
+	return claimed
 }
 
-// attachmentFiles lists the stored attachments of l as id -> file info.
-func (h *Hub) attachmentFiles(l *liveSession) map[string]os.FileInfo {
-	out := map[string]os.FileInfo{}
+// storedAttachmentInfo maps id to file info for everything on disk for l.
+func (h *Hub) storedAttachmentInfo(l *liveSession) map[string]os.FileInfo {
+	found := map[string]os.FileInfo{}
 	entries, err := os.ReadDir(attachmentsDir(h.home, l.rec.Key))
 	if err != nil {
-		return out
+		return found
 	}
 	for _, e := range entries {
 		id := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
-		if !ValidAttachmentID(id) || e.IsDir() {
+		if e.IsDir() || !ValidAttachmentID(id) {
 			continue
 		}
 		if info, err := e.Info(); err == nil && info.Mode().IsRegular() {
-			out[id] = info
+			found[id] = info
 		}
 	}
-	return out
+	return found
 }
 
-// sweepAttachments removes stored images that nothing references and that
-// are older than stagedTTL. Anything a queued prompt, an undelivered prompt
-// or the transcript still points at is kept. Callers hold h.mu.
+// sweepAttachments deletes images no message claims once they are older than
+// the grace period. Callers hold h.mu.
 func (h *Hub) sweepAttachments(l *liveSession) {
-	refs := l.referencedAttachments()
+	claimed := l.claimedAttachments()
 	now := h.opts.Now()
-	for id, info := range h.attachmentFiles(l) {
-		if refs[id] || now.Sub(info.ModTime()) < stagedTTL {
-			continue
+	for id, info := range h.storedAttachmentInfo(l) {
+		if !claimed[id] && now.Sub(info.ModTime()) >= orphanImageGracePeriod {
+			h.deleteAttachmentFile(l.rec.Key, id)
 		}
-		h.removeAttachmentFile(l.rec.Key, id)
 	}
 }
 
-// dropAttachments deletes ids right away unless something still references
-// them (the user removed a queued prompt, or discarded a staged image).
-// Callers hold h.mu and have already updated the state.
+// dropAttachments deletes the given images immediately, sparing any that a
+// message still claims (the user removed a queued prompt or discarded a staged
+// image). Callers hold h.mu and have already updated the session state.
 func (h *Hub) dropAttachments(l *liveSession, ids []string) {
 	if len(ids) == 0 {
 		return
 	}
-	refs := l.referencedAttachments()
+	claimed := l.claimedAttachments()
 	for _, id := range ids {
-		if !refs[id] {
-			h.removeAttachmentFile(l.rec.Key, id)
+		if !claimed[id] {
+			h.deleteAttachmentFile(l.rec.Key, id)
 		}
 	}
 }
 
-func (h *Hub) removeAttachmentFile(key, id string) {
-	if p, _, _, err := findAttachment(h.home, key, id); err == nil {
-		if rerr := os.Remove(p); rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
-			h.logf("forum: removing attachment %s: %v", id, rerr)
-		}
+func (h *Hub) deleteAttachmentFile(key, id string) {
+	img, err := locateAttachment(h.home, key, id)
+	if err != nil {
+		return
+	}
+	if err := os.Remove(img.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		h.logf("forum: removing attachment %s: %v", id, err)
 	}
 }
 
 func attachmentIDs(list []Attachment) []string {
-	ids := make([]string, 0, len(list))
-	for _, a := range list {
-		ids = append(ids, a.ID)
+	ids := make([]string, len(list))
+	for i, a := range list {
+		ids[i] = a.ID
 	}
 	return ids
 }
 
-// AddAttachment validates data as an image by its content and stores it as a
-// staged attachment of key's session, ready to be attached to a prompt.
+// AddAttachment checks that data really is an accepted image and stores it as
+// a pending attachment of the session, ready to be put on a prompt.
 func (h *Hub) AddAttachment(key string, data []byte) (Attachment, error) {
-	mime, ext := sniffImage(data)
-	if mime == "" {
+	format, ok := detectImage(data)
+	if !ok {
 		return Attachment{}, ErrUnsupportedImage
 	}
 	if len(data) > maxAttachmentBytes {
@@ -211,43 +228,57 @@ func (h *Hub) AddAttachment(key string, data []byte) (Attachment, error) {
 		return Attachment{}, err
 	}
 	h.sweepAttachments(l)
-	refs := l.referencedAttachments()
-	var total int64
-	staged := 0
-	for fid, info := range h.attachmentFiles(l) {
-		total += info.Size()
-		if !refs[fid] {
-			staged++
+
+	claimed := l.claimedAttachments()
+	var used int64
+	pending := 0
+	for storedID, info := range h.storedAttachmentInfo(l) {
+		used += info.Size()
+		if !claimed[storedID] {
+			pending++
 		}
 	}
-	if staged >= maxStagedAttachments {
+	if pending >= maxPendingImages {
 		return Attachment{}, ErrTooManyStaged
 	}
-	if total+int64(len(data)) > maxAttachmentDiskBytes {
+	if used+int64(len(data)) > maxSessionImageBytes {
 		return Attachment{}, ErrAttachmentsFull
 	}
-	if err := os.MkdirAll(attachmentsDir(h.home, key), 0o755); err != nil {
-		return Attachment{}, err
+
+	dir := attachmentsDir(h.home, key)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return Attachment{}, fmt.Errorf("creating attachments dir: %w", err)
 	}
-	if err := atomicfile.Write(filepath.Join(attachmentsDir(h.home, key), id+ext), data); err != nil {
-		return Attachment{}, err
+	if err := atomicfile.Write(filepath.Join(dir, id+format.ext), data); err != nil {
+		return Attachment{}, fmt.Errorf("storing attachment: %w", err)
 	}
 	h.notify()
-	return Attachment{ID: id, Mime: mime, Bytes: int64(len(data))}, nil
+	return Attachment{ID: id, Mime: format.mime, Bytes: int64(len(data))}, nil
 }
 
-// AttachmentFile returns the stored file for one of key's attachments.
+// AttachmentFile returns where one of the session's attachments lives and
+// what type it is.
 func (h *Hub) AttachmentFile(key, id string) (path, mime string, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if _, err := h.get(key); err != nil {
 		return "", "", err
 	}
-	p, m, _, err := findAttachment(h.home, key, id)
-	return p, m, err
+	img, err := locateAttachment(h.home, key, id)
+	return img.path, img.mime, err
 }
 
-// RemoveAttachment discards a staged attachment the user took back before
+// AttachmentPath is the absolute local path the agent reads an attachment
+// from, or "" when it no longer exists.
+func (h *Hub) AttachmentPath(key, id string) string {
+	img, err := locateAttachment(h.home, key, id)
+	if err != nil {
+		return ""
+	}
+	return img.path
+}
+
+// RemoveAttachment discards a pending attachment the user took back before
 // sending. One that already belongs to a prompt or message is refused.
 func (h *Hub) RemoveAttachment(key, id string) error {
 	h.mu.Lock()
@@ -256,56 +287,47 @@ func (h *Hub) RemoveAttachment(key, id string) error {
 	if err != nil {
 		return err
 	}
-	if _, _, _, err := findAttachment(h.home, key, id); err != nil {
+	if _, err := locateAttachment(h.home, key, id); err != nil {
 		return err
 	}
-	if l.referencedAttachments()[id] {
+	if l.claimedAttachments()[id] {
 		return ErrAttachmentInUse
 	}
-	h.removeAttachmentFile(key, id)
+	h.deleteAttachmentFile(key, id)
 	return nil
 }
 
-// resolveAttachments turns the ids a prompt names into stored attachments,
-// refusing unknown ids, repeats, ones already used by another message, and
-// more than maxAttachmentsPerPrompt. Callers hold h.mu.
+// resolveAttachments turns the ids a prompt names into stored attachments. It
+// refuses unknown ids, ids another message already owns and prompts with more
+// than maxImagesPerPrompt images; repeated ids are collapsed. A prompt that
+// replaces an earlier one (same queue key) may keep that one's images, so
+// those are passed as replacing. Callers hold h.mu.
 func (h *Hub) resolveAttachments(l *liveSession, ids []string, replacing []Attachment) ([]Attachment, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	if len(ids) > maxAttachmentsPerPrompt {
+	if len(ids) > maxImagesPerPrompt {
 		return nil, ErrTooManyAttachments
 	}
-	refs := l.referencedAttachments()
-	// A prompt that replaces another (same queue key) may keep its images.
+	claimed := l.claimedAttachments()
 	for _, a := range replacing {
-		delete(refs, a.ID)
+		delete(claimed, a.ID)
 	}
-	seen := map[string]bool{}
-	out := make([]Attachment, 0, len(ids))
+	resolved := make([]Attachment, 0, len(ids))
+	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
 		if seen[id] {
 			continue
 		}
 		seen[id] = true
-		_, mime, size, err := findAttachment(h.home, l.rec.Key, id)
+		img, err := locateAttachment(h.home, l.rec.Key, id)
 		if err != nil {
 			return nil, err
 		}
-		if refs[id] {
+		if claimed[id] {
 			return nil, ErrAttachmentInUse
 		}
-		out = append(out, Attachment{ID: id, Mime: mime, Bytes: size})
+		resolved = append(resolved, Attachment{ID: id, Mime: img.mime, Bytes: img.size})
 	}
-	return out, nil
-}
-
-// AttachmentPath is the absolute local path of one of key's attachments, for
-// the agent. It returns "" if the attachment no longer exists.
-func (h *Hub) AttachmentPath(key, id string) string {
-	p, _, _, err := findAttachment(h.home, key, id)
-	if err != nil {
-		return ""
-	}
-	return p
+	return resolved, nil
 }
