@@ -1,0 +1,58 @@
+---
+title: Contributing
+description: How to report a bug, propose a feature or send a pull request, and the rule that core changes update the docs.
+---
+
+Contributions are welcome: bug reports, feature ideas, documentation fixes and code. The project lives at [github.com/isaias-alt/vexillum](https://github.com/isaias-alt/vexillum).
+
+## Report a bug
+
+Open an issue and pick the bug report template. A good report lets someone else reproduce the problem without asking you anything. Include:
+
+- What happened, and what you expected instead.
+- The exact steps to reproduce it, ideally from a clean project.
+- The output of `vx --version` and `vx doctor`, and your operating system and architecture.
+- Any relevant output, logs or screenshots.
+
+Search the open issues first. If the problem is already reported, add what you know there instead of opening a duplicate.
+
+## Propose a feature
+
+Open an issue and pick the feature request template before writing code. Describe the problem you are trying to solve, not only the fix: what were you doing when you hit the gap? Then say what you propose and which alternatives you considered. Agreeing on the shape of a change in an issue is cheaper than reworking a finished pull request.
+
+## Send a pull request
+
+1. Fork the repository and create a branch from `canary`, the default branch. Keep each branch small and focused on one thing.
+2. Make the change and add or update tests for it. Tests use the Go standard library `testing` package.
+3. Title the pull request, and write your commit messages, as conventional commits with a `feat:`, `fix:` or `docs:` prefix. The release notes are built from them, and `chore:` and `test:` commits are left out of the notes.
+4. Run the checks before you push:
+
+```sh
+go build ./...
+go vet ./...
+go test ./... -race
+```
+
+If you changed the docs site, also run these from the `site` directory, one after another and never at the same time:
+
+```sh
+pnpm lint
+pnpm build
+pnpm seo:audit
+```
+
+The repository's `CONTRIBUTING.md` lists the full set of checks, including the link checks CI runs.
+
+## Update the documentation
+
+A pull request that changes commands, behavior, configuration or skills must also update the documentation, in both English and Spanish, on the same pages and in the same menu position. The CLI reference pages are generated from the binary: regenerate them instead of editing them by hand, and commit the result. `CONTRIBUTING.md` has the exact command. A pull request that changes the core without touching the docs is not complete.
+
+## Scope
+
+vexillum supports Claude Code only, for now. Support for another agent is not a pull request to open cold: discuss it in an issue first, so the direction is agreed before anyone writes code.
+
+## What to expect from review
+
+Pull requests are reviewed for correctness, tests, the documentation rule above and fit with the project's direction. Expect questions and requests for changes; they are about the change, not about you. Small, focused pull requests are reviewed faster. Once the checks pass and the review is addressed, a maintainer merges it.
+
+See [Land vs ship](/docs/guides/land-vs-ship) for how vexillum itself turns a mission into a pull request.

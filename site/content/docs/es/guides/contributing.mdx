@@ -1,0 +1,58 @@
+---
+title: Contribuir
+description: Cómo reportar un bug, proponer una feature o enviar un pull request, y la regla de que los cambios al núcleo actualizan la documentación.
+---
+
+Las contribuciones son bienvenidas: reportes de bugs, ideas de features, correcciones de documentación y código. El proyecto vive en [github.com/isaias-alt/vexillum](https://github.com/isaias-alt/vexillum).
+
+## Reportar un bug
+
+Abrí un issue y elegí la plantilla de bug report. Un buen reporte permite que otra persona reproduzca el problema sin preguntarte nada. Incluí:
+
+- Qué pasó, y qué esperabas que pasara.
+- Los pasos exactos para reproducirlo, idealmente desde un proyecto limpio.
+- La salida de `vx --version` y de `vx doctor`, y tu sistema operativo y arquitectura.
+- Cualquier salida, log o captura relevante.
+
+Buscá primero entre los issues abiertos. Si el problema ya está reportado, sumá lo que sepas ahí en vez de abrir un duplicado.
+
+## Proponer una feature
+
+Abrí un issue y elegí la plantilla de feature request antes de escribir código. Describí el problema que querés resolver, no solo la solución: ¿qué estabas haciendo cuando encontraste la falta? Después contá qué proponés y qué alternativas consideraste. Acordar la forma de un cambio en un issue sale más barato que rehacer un pull request terminado.
+
+## Enviar un pull request
+
+1. Hacé un fork del repositorio y creá una rama desde `canary`, la rama por defecto. Mantené cada rama chica y enfocada en una sola cosa.
+2. Hacé el cambio y agregá o actualizá tests. Los tests usan el paquete `testing` de la librería estándar de Go.
+3. Poné el título del pull request, y escribí los mensajes de commit, como conventional commits con prefijo `feat:`, `fix:` o `docs:`. Las notas de release se arman a partir de ellos, y los commits `chore:` y `test:` quedan fuera.
+4. Corré los chequeos antes de pushear:
+
+```sh
+go build ./...
+go vet ./...
+go test ./... -race
+```
+
+Si cambiaste el sitio de documentación, corré también esto desde el directorio `site`, uno tras otro y nunca al mismo tiempo:
+
+```sh
+pnpm lint
+pnpm build
+pnpm seo:audit
+```
+
+El `CONTRIBUTING.md` del repositorio lista el conjunto completo de chequeos, incluidos los de links que corre CI.
+
+## Actualizar la documentación
+
+Un pull request que cambia comandos, comportamiento, configuración o skills también debe actualizar la documentación, en inglés y en español, en las mismas páginas y en la misma posición del menú. Las páginas de la referencia del CLI se generan desde el binario: regeneralas en vez de editarlas a mano y commiteá el resultado. `CONTRIBUTING.md` tiene el comando exacto. Un pull request que cambia el núcleo sin tocar la documentación no está completo.
+
+## Alcance
+
+Por ahora, vexillum soporta solo Claude Code. El soporte para otro agente no es un pull request para abrir en frío: discutilo primero en un issue, así la dirección queda acordada antes de escribir código.
+
+## Qué esperar de la revisión
+
+Los pull requests se revisan por corrección, tests, la regla de documentación de arriba y encaje con la dirección del proyecto. Esperá preguntas y pedidos de cambios; son sobre el cambio, no sobre vos. Los pull requests chicos y enfocados se revisan más rápido. Cuando los chequeos pasan y la revisión está atendida, un maintainer lo mergea.
+
+Ver [Land vs ship](/es/docs/guides/land-vs-ship) para saber cómo vexillum convierte una mission en un pull request.

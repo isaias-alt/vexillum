@@ -1,18 +1,37 @@
 # Contributing to vexillum
 
-vexillum is a Go CLI, built in incremental layers (see `AGENTS.md`). This
-document is for anyone sending a PR or filing an issue against the binary
-itself - if you're looking for how the product AGENTS.md that vexillum
-scaffolds into *your* project behaves, that's a different document (the one
-`vx init` writes into your own repo).
+Contributions are welcome: bug reports, feature ideas, documentation fixes and
+code. The full guide is the Contributing page of the docs site (source in
+`site/content/docs/en/guides/contributing.mdx`). This file states the same
+rules in short.
 
-## Before you start
+## Issues
 
-For anything beyond a small fix, open an issue first. A few things are
-settled architecture decisions (language, packaging model, single harness in
-v1, herdr as the primary session backend, no second commander) and won't be
-relitigated in a PR - if you're not sure whether something falls into that
-bucket, ask in the issue before writing code.
+- **Bug**: use the bug report template. Include what happened, what you
+  expected, steps to reproduce, and the output of `vx --version` and `vx doctor`.
+- **Feature**: use the feature request template and describe the problem
+  first, then your proposal and the alternatives you considered.
+
+## Pull requests
+
+- Branch from `canary`, the default branch. Keep each branch small and focused.
+- Add or update tests.
+- Title the PR and write commits as conventional commits (`feat:`, `fix:` or
+  `docs:`). `chore:` and `test:` are left out of the release notes.
+- Run the checks below before pushing.
+
+## Documentation rule
+
+A PR that changes commands, behavior, configuration or skills must also update
+the docs in both languages (`site/content/docs/en` and `site/content/docs/es`,
+same pages, same menu position) and regenerate the reference with
+`go run ./tools/docgen`. Never edit generated pages by hand.
+
+## Scope
+
+vexillum supports Claude Code only, for now. Support for another agent is
+discussed first in an issue, not proposed as a PR. A few architecture decisions
+are settled (see `AGENTS.md`) and are not reopened in a PR.
 
 ## Getting set up
 
@@ -75,9 +94,3 @@ requests is in `.github/docs-ci-notes.md`.
 - Code, comments, and CLI-facing messages are in English.
 - State written to disk is atomic (write to a temp file, then rename).
 - Tests use the standard library `testing` package only.
-
-## Scope
-
-Keep PRs focused on one thing. If your change touches a settled architecture
-decision from `AGENTS.md`, expect it to need a discussion in an issue before
-a PR is the right next step.
