@@ -20,12 +20,15 @@ test("escapeMDX escapes braces and angle brackets outside code", () => {
   assert.equal(escapeMDX("```\n{x}\n```\n{y}"), "```\n{x}\n```\n\\{y\\}");
 });
 
-test("normalizeBody drops the goreleaser title and links commit hashes", () => {
-  const out = normalizeBody(release.body);
-  assert.ok(!out.includes("## Changelog"));
+test("normalizeBody keeps only the grouped sections without hashes", () => {
+  const out = normalizeBody(
+    "## Changelog\n### Features\n* 37e003d feat(forum): accept {braces} and <tags> in `<code>`\n### Others\n* abc1234 wip\n### Bug fixes\n* d61739f1a49dc26675d687b0fd4d6a4d7c14c8c1 fix: a bug\n\n**Full changelog**: https://x\n",
+  );
   assert.ok(out.startsWith("### Features"));
-  assert.ok(out.includes("[37e003d](https://github.com/isaias-alt/vexillum/commit/37e003d)"));
+  assert.ok(!out.includes("37e003d") && !out.includes("wip") && !out.includes("Full changelog"));
   assert.ok(out.includes("\\{braces\\} and \\<tags> in `<code>`"));
+  assert.ok(out.indexOf("### Features") < out.indexOf("### Bug fixes"));
+  assert.equal(normalizeBody("### Others\n* abc1234 x"), "");
 });
 
 test("renderPage marks the page as generated and lists releases", () => {
@@ -36,10 +39,11 @@ test("renderPage marks the page as generated and lists releases", () => {
   assert.ok(renderPage("es", [release]).includes("Publicado 2026-10-02"));
 });
 
-test("renderPage has a graceful page for no releases and for unavailable", () => {
-  assert.ok(renderPage("en", []).includes("no releases yet"));
-  assert.ok(renderPage("es", []).includes("Todavía no hay releases"));
-  assert.ok(renderPage("en", [], "unavailable").includes("could not be loaded"));
+test("renderPage says that nothing was published when there are no releases", () => {
+  const en = renderPage("en", []);
+  assert.ok(en.includes("No release has been published yet."));
+  assert.ok(!en.includes("##"));
+  assert.ok(renderPage("es", []).includes("Todavía no se publicó ningún release."));
 });
 
 test("generate writes both locales and never throws on a failing fetch", async () => {
@@ -48,8 +52,8 @@ test("generate writes both locales and never throws on a failing fetch", async (
     throw new Error("offline");
   };
   await generate(dir, failing, quiet);
-  assert.ok(readFileSync(join(dir, "en", "changelog.mdx"), "utf8").includes("could not be loaded"));
-  assert.ok(readFileSync(join(dir, "es", "changelog.mdx"), "utf8").includes("No se pudieron"));
+  assert.ok(readFileSync(join(dir, "en", "changelog.mdx"), "utf8").includes("No release has been published yet."));
+  assert.ok(readFileSync(join(dir, "es", "changelog.mdx"), "utf8").includes("Todavía no se publicó"));
 });
 
 test("generate keeps an earlier page when GitHub is unreachable", async () => {
@@ -58,7 +62,7 @@ test("generate keeps an earlier page when GitHub is unreachable", async () => {
   writeFileSync(join(dir, "en", "changelog.mdx"), "earlier");
   await generate(dir, async () => ({ ok: false, status: 503 }), quiet);
   assert.equal(readFileSync(join(dir, "en", "changelog.mdx"), "utf8"), "earlier");
-  assert.ok(readFileSync(join(dir, "es", "changelog.mdx"), "utf8").includes("No se pudieron"));
+  assert.ok(readFileSync(join(dir, "es", "changelog.mdx"), "utf8").includes("Todavía no se publicó"));
 });
 
 test("generate renders non-draft releases newest first", async () => {
@@ -72,10 +76,28 @@ test("generate renders non-draft releases newest first", async () => {
   assert.ok(!page.includes("v9.9.9"));
 });
 
-test("normalizeBody shortens a full commit hash but links the full one", () => {
-  const sha = "d61739f1a49dc26675d687b0fd4d6a4d7c14c8c1";
-  assert.equal(
-    normalizeBody(`* ${sha} Add MIT license`),
-    `* [d61739f](https://github.com/isaias-alt/vexillum/commit/${sha}) Add MIT license`,
-  );
+test("generate excludes pre-releases and caps to the latest 10", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "changelog-"));
+  const stable = Array.from({ length: 12 }, (_, i) => ({
+    ...release,
+    tag_name: `v1.0.${i}`,
+    published_at: `2026-10-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+  }));
+  const pre = [
+    { ...release, tag_name: "v2.0.0-rc.1", prerelease: true },
+    { ...release, tag_name: "v2.0.0-canary.3" },
+  ];
+  await generate(dir, async () => ({ ok: true, json: async () => [...pre, ...stable] }), quiet);
+  const page = readFileSync(join(dir, "en", "changelog.mdx"), "utf8");
+  assert.ok(!page.includes("v2.0.0"));
+  assert.equal(page.match(/^## \[/gm).length, 10);
+  assert.ok(page.includes("v1.0.11") && !page.includes("v1.0.1]"));
+});
+
+test("generate shows the no-release line when GitHub returns nothing", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "changelog-"));
+  await generate(dir, async () => ({ ok: true, json: async () => [] }), quiet);
+  assert.ok(readFileSync(join(dir, "en", "changelog.mdx"), "utf8").includes("No release has been published yet."));
+  await generate(dir, async () => ({ ok: false, status: 403 }), quiet);
+  assert.ok(readFileSync(join(dir, "es", "changelog.mdx"), "utf8").includes("Todavía no se publicó"));
 });
