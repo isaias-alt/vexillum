@@ -56,7 +56,7 @@ Run the check any time:
 vx doctor
 ```
 
-`doctor` is read-only. It prints `[ok]` or `[missing]` for each tool, the herdr version, `~/.vexillum/`, whether the current project is initialized and is a git repository, and, for an initialized project, the state of the [AGENTS.md block](/docs/concepts/agents-md-slot), whether `CLAUDE.md` imports `AGENTS.md`, each [skill](/docs/concepts/skills), whether [`models.json`](/docs/reference/models-json) is valid, and the sentinel `Stop` hook: whether it is registered, whether it [finds vx from a bare environment](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path) and whether a sentinel is running:
+`doctor` is read-only. It prints `[ok]` or `[missing]` for each tool, the herdr version, `~/.vexillum/`, whether the current project is initialized and is a git repository, and, for an initialized project, the state of the [vexillum block](/docs/concepts/agents-md-slot) in `AGENTS.md` or `CLAUDE.md`, whether `CLAUDE.md` imports `AGENTS.md` (when the block is in `AGENTS.md`), each [skill](/docs/concepts/skills), whether [`models.json`](/docs/reference/models-json) is valid, and the sentinel `Stop` hook: whether it is registered, whether it [finds vx from a bare environment](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path) and whether a sentinel is running:
 
 ```text
 [ok] AGENTS.md vexillum block - current (en)

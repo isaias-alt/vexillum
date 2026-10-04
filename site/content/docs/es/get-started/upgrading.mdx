@@ -25,7 +25,7 @@ vx upgrade
 
 `upgrade` funciona como [`init`](/es/docs/get-started/quickstart): lista los archivos tuyos que va a cambiar y pregunta antes (`Continue? [Y/n]`). Después:
 
-- Escribe o actualiza el bloque de vexillum en `AGENTS.md` y se asegura de que `CLAUDE.md` lo importe. Un bloque que editaste **no** se pisa: `upgrade` imprime el diff entre el tuyo y la plantilla actual. Un bloque malformado no se toca hasta que confirmes las reparaciones que lista, y el archivo se guarda antes en `.vexillum/AGENTS.md.backup`. Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot);
+- Escribe o actualiza el bloque de vexillum en el archivo que lo tiene (`AGENTS.md`, o `CLAUDE.md` cuando el bloque vive ahí) y, cuando el bloque está en `AGENTS.md`, se asegura de que `CLAUDE.md` lo importe. Un bloque que editaste **no** se pisa: `upgrade` imprime el diff entre el tuyo y la plantilla actual. Un bloque malformado no se toca hasta que confirmes las reparaciones que lista, y el archivo se guarda antes en `.vexillum/AGENTS.md.backup` (o `.vexillum/CLAUDE.md.backup`). Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot);
 - Refresca las skills instaladas que no cambiaron desde que vexillum las escribió (se guarda un hash de contenido por skill en `.vexillum/config.json`) y reporta las que editaste. Ver [Skills](/es/docs/concepts/skills);
 - Mantiene al día el hook `Stop` del sentinel, para que encuentre `vx` aunque no esté en el `PATH` del shell del hook (el comando también prueba `~/.local/bin`, Homebrew y `/usr/local/bin`). Tus propios hooks `Stop` se conservan. Ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path);
 - Crea `.vexillum/models.json` si falta. Uno existente nunca se pisa: es tuyo. Ver [`models.json`](/es/docs/reference/models-json).
@@ -35,7 +35,7 @@ Sin terminal `upgrade` no pregunta nada y no cambia nada salvo que pases `--yes`
 | Flag | Efecto |
 | --- | --- |
 | `--yes`, `-y` | Acepta todas las preguntas, incluso las reparaciones de un bloque malformado (el archivo se respalda antes). |
-| `--force` | Sobrescribe lo que editaste: el bloque de AGENTS.md, una skill editada. Antes se guarda un backup: `.vexillum/agents-md-slot.backup.md` para el bloque, `.vexillum/backups/skills/<name>/` para una skill. |
-| `--lang en\|es` | Idioma del bloque de AGENTS.md, en lugar de conservar el idioma actual del bloque o detectarlo. |
+| `--force` | Sobrescribe lo que editaste: el bloque de vexillum o una skill editada. Antes se guarda un backup: `.vexillum/agents-md-slot.backup.md` para el bloque, `.vexillum/backups/skills/<name>/` para una skill. |
+| `--lang en\|es` | Idioma del bloque, en lugar de conservar el idioma actual del bloque o detectarlo. |
 | `--skills` | Instala también las skills que faltan. |
 | `--no-skills` | Deja las skills como están: sin instalar ni refrescar. |

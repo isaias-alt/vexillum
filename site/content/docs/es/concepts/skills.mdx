@@ -25,9 +25,9 @@ El texto completo de cada archivo está en [Contenido de las skills](/es/docs/re
 
 ## Dónde se instalan
 
-Las skills están embebidas en el binario `vx`, así que instalarlas no necesita Node, ni `npx`, ni red. `vx init` las escribe en `.claude/skills/<name>/` dentro de tu proyecto.
+Las skills están embebidas en el binario `vx`, así que instalarlas no necesita Node, ni `npx`, ni red. `vx init` las escribe en `.claude/skills/<name>/` de tu proyecto.
 
-`init` **pregunta antes de instalarlas**: después del aviso de consentimiento imprime `These skills teach the commander how to use vexillum well.` y pregunta `Install the vexillum, forum and muster skills? [Y/n]`. Las ejecuciones no interactivas deciden con `--skills` o `--no-skills`, y `--yes` acepta. Si decís que no, te quedás con el slot de AGENTS.md, el hook del sentinel y tu config. Las skills que ya están instaladas nunca se reinstalan.
+`init` **pregunta antes de instalarlas**: después del aviso de consentimiento imprime `These skills teach the commander how to use vexillum well.` y pregunta `Install the vexillum, forum and muster skills? [Y/n]`. Las ejecuciones no interactivas deciden con `--skills` o `--no-skills`, y `--yes` acepta. Si decís que no, te quedás con el bloque de vexillum, el hook del sentinel y tu config. Las skills que ya están instaladas nunca se reinstalan.
 
 <Callout title="Sin las skills el commander solo tiene el núcleo">
   El slot por sí solo le indica al commander que cargue la skill `vexillum`. Si no la instalaste, el commander no tiene un manual que cargar. Instalalas después con `vx upgrade --skills`.

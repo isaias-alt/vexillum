@@ -1,23 +1,39 @@
 ---
 title: The AGENTS.md slot
-description: The block vexillum keeps inside your own AGENTS.md, what each part of its markers means, and how it is protected from overwriting your edits.
+description: The block vexillum keeps inside your own AGENTS.md or CLAUDE.md, what each part of its markers means, and how it is protected from overwriting your edits.
 ---
 
-<Callout type="warn" title="vx init modifies your AGENTS.md (and CLAUDE.md)">
-  `vx init` writes a block into **your own** `AGENTS.md`, and makes sure your `CLAUDE.md` imports it. Both files are yours, so `init` first lists the files it is about to touch and **asks for your consent** before writing anything. Answer no and nothing is changed. See [`vx init`](/docs/reference/cli/init) and [Quickstart](/docs/get-started/quickstart).
+<Callout type="warn" title="vx init modifies your AGENTS.md or CLAUDE.md">
+  `vx init` writes a block into **your own** `AGENTS.md` (or into your `CLAUDE.md` when the project has no `AGENTS.md`, see [Where the block goes](#where-the-block-goes)), and makes sure Claude Code can see it. These files are yours, so `init` first lists the files it is about to touch and **asks for your consent** before writing anything. Answer no and nothing is changed. See [`vx init`](/docs/reference/cli/init) and [Quickstart](/docs/get-started/quickstart).
 </Callout>
 
 ## What the slot is
 
-The slot is a block that vexillum owns inside a file you own: your project's `AGENTS.md`. It carries the **always-on core** of the commander's rules, the few things that must be in context on every turn. Everything operational (how to dispatch, pick a model, land, ship, release, react to the sentinel) lives in [skills](/docs/concepts/skills) that Claude Code loads only when the moment calls for them.
+The slot is a block that vexillum owns inside a file you own: your project's `AGENTS.md`, or its `CLAUDE.md` when there is no `AGENTS.md`. It carries the **always-on core** of the commander's rules, the few things that must be in context on every turn. Everything operational (how to dispatch, pick a model, land, ship, release, react to the sentinel) lives in [skills](/docs/concepts/skills) that Claude Code loads only when the moment calls for them.
 
 Why a slot, and not a rules file of its own:
 
 - **One short block.** The core is small and the detail is on demand.
-- **It lives in the file the ecosystem already reads.** `AGENTS.md` is where your project's agent instructions go. vexillum adds to it instead of creating a parallel convention.
+- **It lives in a file the ecosystem already reads.** `AGENTS.md` and `CLAUDE.md` are where your project's agent instructions go. vexillum adds to one of them instead of creating a parallel convention.
 - **It is safe to share the file.** Everything outside the markers is yours and is never reordered or rewritten.
 
 The block is rendered by the binary, in English or Spanish. You can see the exact text on [AGENTS.md block](/docs/reference/slot-block), generated from the binary so it cannot drift.
+
+## Where the block goes
+
+The block lives in one file per project, chosen like this:
+
+1. If `AGENTS.md` exists, the block goes there (`CLAUDE.md` then imports `AGENTS.md`, see [Why CLAUDE.md must import AGENTS.md](#why-claudemd-must-import-agentsmd)).
+2. If `AGENTS.md` does not exist, `vx init` proposes putting the block in `CLAUDE.md` instead of creating an `AGENTS.md`. The default answer is yes, and `CLAUDE.md` is created if it does not exist. With `--yes` (or without a terminal) the default is taken.
+3. Answer no and `init` creates `AGENTS.md` with the block, and `CLAUDE.md` imports it.
+
+```text
+This project has no AGENTS.md. Put the vexillum block in CLAUDE.md instead of creating an AGENTS.md? [Y/n]
+```
+
+When the project already has a `CLAUDE.md`, the question reads `Add the vexillum block to your CLAUDE.md instead of creating an AGENTS.md?` and your text in the file is kept: the block is appended after it. In the `CLAUDE.md` case no import line is needed, because Claude Code reads the file itself.
+
+Once a block exists, it stays where it is. `init`, `upgrade` and `doctor` find it in either file and keep it fresh there, even if an `AGENTS.md` shows up later. If both files carry a block, the one in `AGENTS.md` is the one that counts.
 
 ## The marker format
 
@@ -56,11 +72,11 @@ Each marker is alone on its line. Claude Code strips block-level HTML comments f
 
 ## The states
 
-`vx doctor` reports the slot's state (`AGENTS.md vexillum block`), and `init` and `upgrade` act on it.
+`vx doctor` reports the slot's state (`AGENTS.md vexillum block` or `CLAUDE.md vexillum block`, whichever file holds it), and `init` and `upgrade` act on it.
 
 | State | What it means for you |
 | --- | --- |
-| absent | There are no vexillum markers in `AGENTS.md`. `init` appends the block after a blank line (or creates the file with only the block). |
+| absent | There are no vexillum markers in the file. `init` appends the block after a blank line (or creates the file with only the block). |
 | current | The block matches what this binary would write, marker included. Nothing to do. `doctor` prints `current (en)` or `current (es)`. |
 | stale | You did not touch the block, but it differs from this binary's version (a newer binary, or another language). `upgrade` refreshes it. |
 | drifted | You edited **inside** the block: the body no longer matches its hash. vexillum will not overwrite it silently. |
@@ -79,13 +95,13 @@ If you want different always-on rules, put your own text *outside* the markers: 
 
 ## Malformed markers and repair
 
-A malformed block is never fixed behind your back. `vx upgrade` lists the repairs and asks `Apply these repairs? [Y/n]` (`--yes` accepts). Before it writes, the whole file as it was is saved to `.vexillum/AGENTS.md.backup`. The repair is deliberately narrow:
+A malformed block is never fixed behind your back. `vx upgrade` lists the repairs and asks `Apply these repairs? [Y/n]` (`--yes` accepts). Before it writes, the whole file as it was is saved to `.vexillum/AGENTS.md.backup` (`.vexillum/CLAUDE.md.backup` when the block is in `CLAUDE.md`). The repair is deliberately narrow:
 
 - it keeps the **first** well-formed BEGIN/END pair;
 - it deletes every other duplicate pair, contents included;
 - it deletes an orphan BEGIN or END **marker line only**, never the text around it.
 
-If you decline, `AGENTS.md` is left as it is. After a repair the block can still be drifted: Repair never judges the body, so a block you edited keeps your text until you run `upgrade --force`. `init` never repairs; it reports the problem and points you to `upgrade`.
+If you decline, the file is left as it is. After a repair the block can still be drifted: Repair never judges the body, so a block you edited keeps your text until you run `upgrade --force`. `init` never repairs; it reports the problem and points you to `upgrade`.
 
 ## Removing the block
 
@@ -99,12 +115,12 @@ When `init` or `upgrade` is about to write the block, the language is settled in
 
 1. `--lang en` or `--lang es`, if you pass it;
 2. The language of a block that is already in the file, so a rerun does not flip it because your surrounding text reads differently;
-3. The language **detected** in your own `AGENTS.md`;
+3. The language **detected** in your own text in the file that holds the block;
 4. English.
 
-Detection is simple, deterministic and offline: it counts frequent function words of each language, ignoring code, URLs and the vexillum block itself. It needs at least 8 hits and a 70% share to decide; otherwise, and when there is no `AGENTS.md`, it defaults to English.
+Detection is simple, deterministic and offline: it counts frequent function words of each language, ignoring code, URLs and the vexillum block itself. It needs at least 8 hits and a 70% share to decide; otherwise, and when the file has no text of yours, it defaults to English.
 
-When the language was detected or defaulted (not given by `--lang`, and not read from an existing block), you see it before anything is written, for example `Detected language: es (from AGENTS.md).` followed by `Use es for the vexillum block? [Y/n]`. Answer no and you are asked `Language (en/es):`. With `--yes`, or without a terminal, it is only announced.
+When the language was detected or defaulted (not given by `--lang`, and not read from an existing block), you see it before anything is written, for example `Detected language: es (from AGENTS.md).` (or `CLAUDE.md`) followed by `Use es for the vexillum block? [Y/n]`. Answer no and you are asked `Language (en/es):`. With `--yes`, or without a terminal, it is only announced.
 
 The hash is per language, so switching language is an ordinary update of the block. `vx doctor` reports the language of the block it found.
 
@@ -115,6 +131,8 @@ Claude Code reads `CLAUDE.md`, not `AGENTS.md`. For the slot to reach the comman
 ```markdown
 @AGENTS.md
 ```
+
+This applies when the block is in `AGENTS.md`. When the block is in `CLAUDE.md` itself there is nothing to import, and `doctor` does not report the import.
 
 `init` checks this. If `CLAUDE.md` does not exist it is created with that line, as part of the consent notice. If it exists without the import, it is a file of yours with content in it, so `init` asks a second, separate question before appending the line:
 

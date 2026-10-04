@@ -56,7 +56,7 @@ Corré la verificación cuando quieras:
 vx doctor
 ```
 
-`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y, para un proyecto inicializado, el estado del [bloque de AGENTS.md](/es/docs/concepts/agents-md-slot), si `CLAUDE.md` importa `AGENTS.md`, cada [skill](/es/docs/concepts/skills), si [`models.json`](/es/docs/reference/models-json) es válido, y el hook `Stop` del sentinel: si está registrado, si [encuentra vx desde un entorno mínimo](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path) y si hay un sentinel corriendo:
+`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr, `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y, para un proyecto inicializado, el estado del [bloque de vexillum](/es/docs/concepts/agents-md-slot) en `AGENTS.md` o `CLAUDE.md`, si `CLAUDE.md` importa `AGENTS.md` (cuando el bloque está en `AGENTS.md`), cada [skill](/es/docs/concepts/skills), si [`models.json`](/es/docs/reference/models-json) es válido, y el hook `Stop` del sentinel: si está registrado, si [encuentra vx desde un entorno mínimo](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path) y si hay un sentinel corriendo:
 
 ```text
 [ok] AGENTS.md vexillum block - current (en)

@@ -15,7 +15,7 @@ Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)
 ## What vexillum is, and is not
 
 - **A single Go binary.** It does deterministic plumbing: it creates worktrees, starts sessions, tracks state on disk, and refuses unsafe operations. It installs by Homebrew or a curl script, with no runtime dependencies.
-- **Not the brain.** The commander's judgment (when to dispatch, which model to pick, when to ask you) lives in markdown: a short core in a block of your own `AGENTS.md`, plus [skills](/docs/concepts/skills) the commander loads when it needs them. `vx init` writes them into your project, after asking. You can read and edit them. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
+- **Not the brain.** The commander's judgment (when to dispatch, which model to pick, when to ask you) lives in markdown: a short core in a block of your own `AGENTS.md` (or `CLAUDE.md`), plus [skills](/docs/concepts/skills) the commander loads when it needs them. `vx init` writes them into your project, after asking. You can read and edit them. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
 - **Claude Code only, for now.** The soldier harness is Claude Code. Other harnesses are not supported yet. Contributions are welcome: see [Contributing](/docs/guides/contributing).
 - **herdr for panes.** Soldiers run in [herdr](https://herdr.dev) panes. `vx doctor` checks for it but never installs it.
 

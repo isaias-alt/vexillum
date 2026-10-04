@@ -8,7 +8,7 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | Ruta | Escrito por | Propósito |
 | --- | --- | --- |
 | `AGENTS.md` | `init`, `upgrade` | recibe el bloque de vexillum (entre los marcadores); tu propio texto nunca se toca. Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot) |
-| `CLAUDE.md` | `init`, `upgrade` | se crea con, o recibe, la línea `@AGENTS.md` para que Claude Code vea el bloque |
+| `CLAUDE.md` | `init`, `upgrade` | tiene el bloque de vexillum en lugar de `AGENTS.md` cuando el proyecto no tiene `AGENTS.md`; si no, se crea con, o recibe, la línea `@AGENTS.md` para que Claude Code vea el bloque |
 | `.claude/skills/<name>/` | `init`, `upgrade` | las [skills](/es/docs/concepts/skills) `vexillum`, `forum` y `muster`, si las aceptaste |
 | `.claude/settings.json` | `init`, `upgrade` | suma el hook `Stop` asíncrono que corre `vx sentinel await` mediante un wrapper de una línea que no depende del PATH (ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path)); el contenido existente se fusiona, nunca se pisa. Un JSON inválido se deja intacto y se reporta |
 | `.vexillum/config.json` | `init`, `upgrade` | marca el proyecto como inicializado; guarda un hash de contenido por skill instalada para que `upgrade` sepa si la editaste |
@@ -16,7 +16,7 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | si [yolo mode](/es/docs/guides/yolo-mode) está activado en el proyecto; si no existe, está desactivado. Se commitea con el proyecto, igual que `models.json` |
 | `.vexillum/.gitignore` | `init` | ignora `.vexillum/forum/`, los artefactos temporales del forum |
 | `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | tu bloque editado, guardado antes de reemplazarlo |
-| `.vexillum/AGENTS.md.backup` | `upgrade` | el `AGENTS.md` entero, guardado antes de reparar un bloque malformado |
+| `.vexillum/AGENTS.md.backup`, `.vexillum/CLAUDE.md.backup` | `upgrade` | el archivo entero que tiene el bloque, guardado antes de reparar un bloque malformado |
 | `.vexillum/backups/skills/<name>/` | `upgrade --force` | una skill editada, guardada antes de sobrescribirla |
 
 `AGENTS.md` y `CLAUDE.md` son tuyos: `init` los lista en un aviso y pregunta antes de cambiarlos. Estos archivos los trackea git, así que commitealos.

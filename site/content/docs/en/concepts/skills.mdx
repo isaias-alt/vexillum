@@ -27,7 +27,7 @@ The full text of every file is on [Skills content](/docs/reference/skills), gene
 
 The skills are embedded in the `vx` binary, so installing them needs no Node, no `npx` and no network. `vx init` writes them to `.claude/skills/<name>/` in your project.
 
-`init` **asks before installing them**: after the consent notice it prints `These skills teach the commander how to use vexillum well.` and asks `Install the vexillum, forum and muster skills? [Y/n]`. Non-interactive runs decide with `--skills` or `--no-skills`, and `--yes` accepts. Declining leaves you with the AGENTS.md slot, the sentinel hook and your config only. Skills that are already installed are never reinstalled.
+`init` **asks before installing them**: after the consent notice it prints `These skills teach the commander how to use vexillum well.` and asks `Install the vexillum, forum and muster skills? [Y/n]`. Non-interactive runs decide with `--skills` or `--no-skills`, and `--yes` accepts. Declining leaves you with the vexillum block, the sentinel hook and your config only. Skills that are already installed are never reinstalled.
 
 <Callout title="Without the skills the commander has only the core">
   The slot alone tells the commander to load the `vexillum` skill. If you declined to install it, the commander has no manual to load. Install the skills later with `vx upgrade --skills`.

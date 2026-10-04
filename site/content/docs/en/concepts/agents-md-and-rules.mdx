@@ -1,11 +1,11 @@
 ---
 title: AGENTS.md and rules
-description: The commander's behavior is markdown in your project, not code in the binary, a short always-on core in your AGENTS.md, and the operations in skills.
+description: The commander's behavior is markdown in your project, not code in the binary, a short always-on core in AGENTS.md or CLAUDE.md, and skills.
 ---
 
-## Your AGENTS.md
+## Your AGENTS.md or CLAUDE.md
 
-`vx init` writes the commander core into your project's `AGENTS.md`, inside a block it manages (the [slot](/docs/concepts/agents-md-slot)). The file is yours; only what sits between the markers is vexillum's.
+`vx init` writes the commander core into your project's `AGENTS.md`, or into its `CLAUDE.md` when the project has no `AGENTS.md`, inside a block it manages (the [slot](/docs/concepts/agents-md-slot)). The file is yours; only what sits between the markers is vexillum's.
 
 This is the product's central design decision: the commander's intelligence is markdown, the binary is plumbing.
 
@@ -13,7 +13,7 @@ This is the product's central design decision: the commander's intelligence is m
 
 | Where | Always loaded | Subject |
 | --- | --- | --- |
-| AGENTS.md slot | yes | Role check, vocabulary, authority, tone, and one hard instruction: load the `vexillum` skill before any operational step. |
+| Slot (in `AGENTS.md` or `CLAUDE.md`) | yes | Role check, vocabulary, authority, tone, and one hard instruction: load the `vexillum` skill before any operational step. |
 | `vexillum` skill | on demand | Dispatching a soldier (always `vx dispatch`, never the commander's own subagent tool), choosing a model and effort, landing, shipping, releasing, and the sentinel. |
 | [`models.json`](/docs/reference/models-json) | read by `vx models` | The values for each model and effort profile. |
 

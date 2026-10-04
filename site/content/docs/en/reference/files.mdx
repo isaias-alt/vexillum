@@ -8,7 +8,7 @@ description: Every file vexillum reads or writes, and where.
 | Path | Written by | Purpose |
 | --- | --- | --- |
 | `AGENTS.md` | `init`, `upgrade` | gains the vexillum block (between the markers); your own text is never touched. See [The AGENTS.md slot](/docs/concepts/agents-md-slot) |
-| `CLAUDE.md` | `init`, `upgrade` | created with, or given, the line `@AGENTS.md` so Claude Code sees the block |
+| `CLAUDE.md` | `init`, `upgrade` | holds the vexillum block instead of `AGENTS.md` when the project has no `AGENTS.md`; otherwise it is created with, or given, the line `@AGENTS.md` so Claude Code sees the block |
 | `.claude/skills/<name>/` | `init`, `upgrade` | the `vexillum`, `forum` and `muster` [skills](/docs/concepts/skills), if you accepted them |
 | `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook that runs `vx sentinel await` through a PATH-independent one-line wrapper (see [Sentinel](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path)), and existing content is merged, never overwritten. Invalid JSON is left untouched and reported |
 | `.vexillum/config.json` | `init`, `upgrade` | marks the project initialized; stores a content hash per installed skill so `upgrade` can tell whether you edited it |
@@ -16,7 +16,7 @@ description: Every file vexillum reads or writes, and where.
 | `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | whether [yolo mode](/docs/guides/yolo-mode) is on for the project; absent means off. Committed with the project, like `models.json` |
 | `.vexillum/.gitignore` | `init` | ignores `.vexillum/forum/`, the forum's scratch artifacts |
 | `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | your edited block, saved before it is replaced |
-| `.vexillum/AGENTS.md.backup` | `upgrade` | the whole `AGENTS.md`, saved before a malformed block is repaired |
+| `.vexillum/AGENTS.md.backup`, `.vexillum/CLAUDE.md.backup` | `upgrade` | the whole file that holds the block, saved before a malformed block is repaired |
 | `.vexillum/backups/skills/<name>/` | `upgrade --force` | an edited skill, saved before it is overwritten |
 
 `AGENTS.md` and `CLAUDE.md` are yours: `init` lists them in a notice and asks before changing them. These files are git-tracked, so commit them.

@@ -15,23 +15,29 @@ vx init
 
 `init` changes files of yours, so it tells you which ones and asks first. Step by step:
 
-1. **The notice.** It lists the files of yours it is about to change, then vexillum's own files:
+1. **Where the block goes.** If the project has no `AGENTS.md`, `init` proposes putting the vexillum block in `CLAUDE.md` instead of creating an `AGENTS.md`:
+
+   ```text
+   This project has no AGENTS.md. Put the vexillum block in CLAUDE.md instead of creating an AGENTS.md? [Y/n]
+   ```
+
+   The default is yes (`CLAUDE.md` is created if it does not exist). Answer `n` to create an `AGENTS.md` instead. When the project already has an `AGENTS.md`, the question is not asked and the block goes there. See [The AGENTS.md slot](/docs/concepts/agents-md-slot#where-the-block-goes).
+2. **The notice.** It lists the files of yours it is about to change, then vexillum's own files:
 
    ```text
    vx init will change these files of yours in /path/to/project:
-     AGENTS.md                  add the vexillum block
-     CLAUDE.md                  create it with the @AGENTS.md import, so Claude Code sees the block
+     CLAUDE.md                  create it with the vexillum block
      .claude/settings.json      add the sentinel Stop hook
    It also writes vexillum's own files: .vexillum/config.json; .vexillum/.gitignore; .vexillum/models.json; .claude/skills/ (vexillum, forum and muster, you are asked first).
    Continue? [Y/n]
    ```
 
    Answer `n` and nothing is changed.
-2. **The [AGENTS.md slot](/docs/concepts/agents-md-slot).** The commander core is written between markers in your `AGENTS.md` (created if missing), in the language it detects there. You confirm or override the language.
-3. **The CLAUDE.md import.** `CLAUDE.md` gets the line `@AGENTS.md` so Claude Code sees the block. An existing `CLAUDE.md` is edited only after a second question.
-4. **The [skills](/docs/concepts/skills).** `Install the vexillum, forum and muster skills? [Y/n]`. Yes writes them to `.claude/skills/`.
-5. **[`models.json`](/docs/reference/models-json).** `.vexillum/models.json` is written with the default model and effort profiles. An existing one is never overwritten.
-6. **The sentinel hook.** An async `Stop` hook in `.claude/settings.json` (a one-line command that runs `vx sentinel await` and finds `vx` without relying on your `PATH`) lets the sentinel wake the commander. Existing settings and hooks are merged, never overwritten.
+3. **The [AGENTS.md slot](/docs/concepts/agents-md-slot).** The commander core is written between markers in the file you chose (`CLAUDE.md` by default, or `AGENTS.md`), in the language it detects there. You confirm or override the language.
+4. **The CLAUDE.md import.** Only when the block is in `AGENTS.md`: `CLAUDE.md` gets the line `@AGENTS.md` so Claude Code sees the block. An existing `CLAUDE.md` is edited only after a second question.
+5. **The [skills](/docs/concepts/skills).** `Install the vexillum, forum and muster skills? [Y/n]`. Yes writes them to `.claude/skills/`.
+6. **[`models.json`](/docs/reference/models-json).** `.vexillum/models.json` is written with the default model and effort profiles. An existing one is never overwritten.
+7. **The sentinel hook.** An async `Stop` hook in `.claude/settings.json` (a one-line command that runs `vx sentinel await` and finds `vx` without relying on your `PATH`) lets the sentinel wake the commander. Existing settings and hooks are merged, never overwritten.
 
 It also creates `~/.vexillum/` if it is missing, and running `init` again changes nothing that is already in place.
 
@@ -39,13 +45,15 @@ Without a terminal (scripts, CI) `init` asks nothing and changes nothing unless 
 
 | Flag | Effect |
 | --- | --- |
-| `--yes`, `-y` | Accept every question, including editing an existing `CLAUDE.md` and installing the skills. |
+| `--yes`, `-y` | Accept every question, including putting the block in `CLAUDE.md` when there is no `AGENTS.md`, editing an existing `CLAUDE.md` and installing the skills. |
 | `--skills` | Install the skills without asking. |
 | `--no-skills` | Do not install the skills, without asking. |
-| `--lang en\|es` | Language of the AGENTS.md block, instead of detecting it. |
+| `--lang en\|es` | Language of the block, instead of detecting it. |
+
+vexillum installs per project only: run `init` in each project you want to orchestrate.
 
 <Callout title="Commit the scaffold early">
-  `vx land` refuses to run while your checkout is dirty, and a fresh `init` leaves new files uncommitted. Commit `AGENTS.md`, `CLAUDE.md`, `.claude/` and `.vexillum/` before you dispatch your first mission.
+  `vx land` refuses to run while your checkout is dirty, and a fresh `init` leaves new files uncommitted. Commit `AGENTS.md` (if you have one), `CLAUDE.md`, `.claude/` and `.vexillum/` before you dispatch your first mission.
 </Callout>
 
 ## 2. Check the environment
