@@ -24,4 +24,4 @@ jobs:
         with:
           tag: ${{ github.ref_name }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          homebrew-tap-token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          homebrew-tap-token: ${{ !contains(github.ref_name, '-') && secrets.HOMEBREW_TAP_TOKEN || '' }}

@@ -20,6 +20,18 @@ runs:
       with:
         go-version-file: go.mod
 
+    # goreleaser's own previous-tag lookup counts canary and rc tags, so the
+    # notes (and the "Full changelog" link) would only span the commits since
+    # the last canary. Pin the previous tag to the last reachable stable one.
+    - name: Previous stable tag
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude '*-*' "${TAG}^" 2>/dev/null || true)"
+        echo "previous stable tag: ${prev:-none}"
+        echo "GORELEASER_PREVIOUS_TAG=${prev}" >> "$GITHUB_ENV"
+
     - uses: goreleaser/goreleaser-action@v6
       with:
         distribution: goreleaser

@@ -224,6 +224,40 @@ func TestStableRefRules(t *testing.T) {
 	r.wantFail("does not belong to release/v0.2", "stable", "--ref", "release/v0.2", "--version", "0.3.0")
 }
 
+func TestStableVersionMustBeGreaterThanLatestStable(t *testing.T) {
+	t.Parallel()
+	r := newGitRepo(t)
+	r.tag("v0.1.1", "v0.2.0-rc.1", "v0.3.0-canary.20261001.gabcdef0")
+
+	// A typo below the latest stable is refused, rc or not; the pre-release
+	// tags do not count as the latest stable.
+	r.wantFail("not greater than the latest stable v0.1.1", "stable", "--ref", "canary", "--version", "0.0.5")
+	r.wantFail("not greater than the latest stable v0.1.1", "stable", "--ref", "canary", "--version", "0.0.5", "--rc")
+	r.wantFail("not greater than the latest stable v0.1.1", "stable", "--version", "0.1.0")
+	r.wantTag("v0.1.2", "stable", "--ref", "canary", "--version", "0.1.2")
+	r.wantTag("v0.2.0-rc.2", "stable", "--ref", "canary", "--version", "0.2.0", "--rc")
+	r.wantTag("v1.0.0", "stable", "--ref", "canary", "--version", "1.0.0")
+
+	// Numeric, not lexical, comparison.
+	r.tag("v0.1.10")
+	r.wantFail("not greater than the latest stable v0.1.10", "stable", "--version", "0.1.9")
+	r.wantTag("v0.1.11", "stable", "--version", "0.1.11")
+}
+
+func TestStableBackportsStayAboveTheirOwnLine(t *testing.T) {
+	t.Parallel()
+	r := newGitRepo(t)
+	r.tag("v0.1.0", "v0.1.1", "v0.2.0", "v0.2.3")
+
+	// A backport on an older line may be lower than the newest stable overall.
+	r.wantTag("v0.1.2", "stable", "--ref", "release/v0.1", "--version", "0.1.2")
+	r.wantTag("v0.1.2", "stable", "--ref", "release/v0.1")
+	// But not lower than the latest stable of that line.
+	r.wantFail("not greater than the latest stable v0.2.3", "stable", "--ref", "release/v0.2", "--version", "0.2.2")
+	r.tag("v0.1.2", "v0.1.4")
+	r.wantFail("not greater than the latest stable v0.1.4", "stable", "--ref", "release/v0.1", "--version", "0.1.3", "--rc")
+}
+
 func TestStableRejectsInvalidBump(t *testing.T) {
 	t.Parallel()
 	r := newGitRepo(t)

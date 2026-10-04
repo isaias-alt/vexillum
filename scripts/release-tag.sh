@@ -23,6 +23,8 @@ set -euo pipefail
 #       REF must be canary or release/vX.Y. On release/vX.Y the version stays
 #       inside that minor line: a patch bump is the next patch of the line
 #       (X.Y.0 when the line has no stable yet) and minor or major are refused.
+#       The version must be greater than the latest stable tag (of the line,
+#       on a release branch), so a typo cannot cut a stable below the current.
 # ============================================================================
 
 STABLE_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
@@ -34,6 +36,16 @@ fatal() { echo "release-tag: $*" >&2; exit 1; }
 stable_tags() {
     git tag --list 'v*' | { grep -E "$STABLE_RE" || true; } | { grep -E "$1" || true; } \
         | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | sed 's/^/v/'
+}
+
+# Succeeds when version $1 (X.Y.Z) is greater than version $2 (X.Y.Z).
+version_gt() {
+    local a_major a_minor a_patch b_major b_minor b_patch
+    IFS=. read -r a_major a_minor a_patch <<<"$1"
+    IFS=. read -r b_major b_minor b_patch <<<"$2"
+    [ "$a_major" -ne "$b_major" ] && { [ "$a_major" -gt "$b_major" ]; return; }
+    [ "$a_minor" -ne "$b_minor" ] && { [ "$a_minor" -gt "$b_minor" ]; return; }
+    [ "$a_patch" -gt "$b_patch" ]
 }
 
 tag_exists() { git rev-parse -q --verify "refs/tags/$1" >/dev/null; }
@@ -137,6 +149,17 @@ stable() {
     fi
 
     tag_exists "v${base}" && fatal "tag v${base} already exists"
+
+    # Backports on an older line are fine, but never below the latest stable
+    # of the line being released (the whole repo outside a release branch).
+    if [ -n "$line" ]; then
+        latest="$(stable_tags "^v${line//./\\.}\\." | tail -n 1)"
+    else
+        latest="$(stable_tags . | tail -n 1)"
+    fi
+    if [ -n "$latest" ] && ! version_gt "$base" "${latest#v}"; then
+        fatal "version v${base} is not greater than the latest stable ${latest}"
+    fi
 
     if [ "$rc" = true ]; then
         max=0
