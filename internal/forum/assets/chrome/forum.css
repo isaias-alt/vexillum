@@ -53,7 +53,7 @@ button, textarea { font: inherit; color: inherit; }
   background: var(--fr-surface-sunken);
   border-bottom: 1px solid var(--fr-border);
 }
-.topbar-title { display: flex; align-items: baseline; gap: var(--fr-space-3); min-width: 0; }
+.topbar-title { flex: 1 1 0; display: flex; align-items: baseline; gap: var(--fr-space-3); min-width: 0; }
 .topbar-actions { display: flex; align-items: center; gap: var(--fr-space-3); flex: none; }
 /* Switch: a labelled on/off control (role="switch", state in aria-checked) */
 .switch {
@@ -73,7 +73,7 @@ button, textarea { font: inherit; color: inherit; }
 .switch-state { min-width: 2.2em; font-weight: 600; color: var(--fr-text-secondary); }
 .switch[aria-checked="true"] .switch-state { color: var(--fr-accent); }
 .switch[aria-checked="false"] .icon-sun, .switch[aria-checked="true"] .icon-moon { display: none; }
-.brand { font-weight: 600; letter-spacing: 0.02em; color: var(--fr-accent); }
+.brand { flex: none; font-weight: 600; letter-spacing: 0.02em; color: var(--fr-accent); }
 .file { color: var(--fr-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .badge {
@@ -117,7 +117,7 @@ button, textarea { font: inherit; color: inherit; }
   border-left: 1px solid var(--fr-border);
 }
 .panel-head {
-  flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--fr-space-3);
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--fr-space-1) var(--fr-space-3);
   padding: var(--fr-space-3) var(--fr-space-4);
   border-bottom: 1px solid var(--fr-border);
 }
@@ -374,10 +374,38 @@ button, textarea { font: inherit; color: inherit; }
 .working-slow { color: var(--fr-text-secondary); }
 .fr-dialog .notice { margin-bottom: var(--fr-space-3); }
 
-/* Narrow screens: the panel stacks under the artifact */
+/* Narrow screens. The top bar degrades in steps so nothing ever overlaps or
+   clips: first the On/Off words go (the track already shows the state), then
+   the switches become icon-only (the label stays for screen readers and the
+   title is the tooltip; the on state is shown by the accent), then below
+   480px the controls move to their own row under the brand and file name. */
+@media (max-width: 1040px) {
+  .switch-state { display: none; }
+}
+
 @media (max-width: 900px) {
-  .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
+  /* The rows keep a floor so the composer is never cut off on a short screen;
+     below it the layout scrolls instead of clipping the send actions. */
+  .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(220px, 3fr) minmax(340px, 2fr); overflow-y: auto; }
   .panel { border-left: 0; border-top: 1px solid var(--fr-border); }
+
+  .topbar-actions { gap: var(--fr-space-2); }
+  .switch { position: relative; justify-content: center; width: 30px; height: 30px; padding: 0; }
+  .switch-label {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .switch-track { display: none; }
+  .switch[aria-checked="true"] { border-color: var(--fr-accent); background: var(--fr-accent-soft); color: var(--fr-accent); }
+  /* The layout issue count rides on the icon instead of widening the button. */
+  .tray-count { position: absolute; top: -7px; right: -7px; }
+}
+
+@media (max-width: 480px) {
+  :root { --fr-topbar-height: 71px; }
+  .topbar { height: auto; min-height: var(--fr-topbar-height); flex-wrap: wrap; align-content: center; gap: var(--fr-space-1) var(--fr-space-3); padding-block: var(--fr-space-2); }
+  .topbar-title { flex-basis: 100%; }
+  .topbar-actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: space-between; gap: var(--fr-space-1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

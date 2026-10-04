@@ -192,3 +192,44 @@ func TestChromeRoundChip_IsAToolbarControlWithTheSwitchBox(t *testing.T) {
 		}
 	}
 }
+
+// The top bar degrades down to 320px instead of overflowing: the brand never
+// shrinks under the file name, the switches go icon-only (the label stays for
+// screen readers, never display:none) and the controls get their own row on
+// the narrowest screens.
+func TestChromeTopbar_DegradesAtNarrowWidths(t *testing.T) {
+	cssData, err := os.ReadFile("assets/chrome/forum.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssData)
+	media := func(query string) string {
+		i := strings.Index(css, "@media ("+query+") {")
+		if i < 0 {
+			t.Fatalf("no @media (%s) block", query)
+		}
+		rest := css[i:]
+		if next := strings.Index(rest[1:], "\n@media"); next >= 0 {
+			rest = rest[:next+1]
+		}
+		return rest
+	}
+	if !strings.Contains(css, ".brand { flex: none;") {
+		t.Error("the brand can shrink under the file name")
+	}
+	icons := media("max-width: 900px")
+	for _, want := range []string{".switch-track { display: none; }", ".switch-label {", "clip: rect(0 0 0 0)"} {
+		if !strings.Contains(icons, want) {
+			t.Errorf("the icon-only tier lost %q", want)
+		}
+	}
+	if strings.Contains(icons, ".switch-label { display: none") {
+		t.Error("the switch label is display:none, so the icon-only switches lose their name")
+	}
+	rows := media("max-width: 480px")
+	for _, want := range []string{"flex-wrap: wrap", "--fr-topbar-height", ".topbar-title { flex-basis: 100%; }"} {
+		if !strings.Contains(rows, want) {
+			t.Errorf("the two-row tier lost %q", want)
+		}
+	}
+}
