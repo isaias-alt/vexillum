@@ -28,7 +28,9 @@ concurrency:
 
 jobs:
   canary:
-    if: github.repository == 'isaias-alt/vexillum'
+    # The nightly run is opt-in: set the repository variable CANARY_NIGHTLY to
+    # true once canary builds should be published. A manual run always works.
+    if: github.repository == 'isaias-alt/vexillum' && (github.event_name != 'schedule' || vars.CANARY_NIGHTLY == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
