@@ -15,14 +15,14 @@ Avanza con fast-forward el propio checkout de este proyecto hasta la rama de la
 mission. Se rechaza (sin tocar nada) a menos que este checkout esté limpio y el
 merge sea un fast-forward limpio: nunca fuerza ni hace rebase de nada.
 
-Una vez que ese merge fast-forward tiene éxito, land libera automáticamente el
-camp de la mission de vuelta al pool y cierra también su pane de herdr: la
-misma lógica de liberación que usa 'vx release', que solo limpia un camp que ya
+Una vez que ese merge fast-forward tiene éxito, land hace strike automáticamente del
+camp de la mission (lo devuelve al pool) y cierra también su pane de herdr: la
+misma lógica de strike que usa 'vx strike', que solo limpia un camp que ya
 está limpio y aterrizado, así que esto no relaja esa salvaguarda. Un merge que
 se rechaza (checkout sucio, o rama divergida) nunca toca el camp. En el raro
-caso de que el merge tenga éxito pero esa liberación automática falle después,
+caso de que el merge tenga éxito pero ese strike automático falle después,
 land informa ambos resultados con claridad (el merge NO se deshace) y deja el
-camp para que 'vx release <task-id>' lo reintente a mano.
+camp para que 'vx strike <task-id>' lo reintente a mano.
 
 Para una tarea que ya se hizo ship por el pipeline de tribunal propio de
 vexillum ('vx ship'), en cambio hace merge del pull request real en GitHub: el
@@ -30,7 +30,7 @@ PR, no la rama propia del camp, es la fuente de verdad una vez que el general
 (o CI, o un revisor) pudo haber empujado más commits directamente a él en
 GitHub. Requiere "gh". Se rechaza a menos que el pull request esté abierto, no
 sea un draft, sea mergeable y todos los checks estén en verde; el merge queda
-atado al head exacto que se acaba de verificar. Este camino nunca libera
+atado al head exacto que se acaba de verificar. Este camino nunca hace strike
 automáticamente: la rama sigue en curso hasta que el general haga merge del PR
 real.
 ```

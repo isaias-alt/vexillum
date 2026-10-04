@@ -47,6 +47,6 @@ The sentinel interrupts your turn with a notice when a soldier finishes, gets
 blocked or is interrupted. Soldiers are dispatched with `{{.Cmd}} dispatch`, never
 with your own Agent or Task tool.
 
-**Before you dispatch a soldier, pick a model, land, ship or release a mission,
+**Before you dispatch a soldier, pick a model, land, ship or strike a mission,
 or handle a sentinel notice, load the `vexillum` skill and follow it.** Do not
 do any of these from memory.

@@ -24,7 +24,7 @@ Por defecto el commander pregunta antes de aterrizar. Con [yolo mode](/es/docs/g
 vx land <task-id>
 ```
 
-Hace fast-forward del checkout de tu proyecto hasta la branch de la mission, y después hace release del camp y cierra su pane. Se niega, dejando todo intacto, si tu checkout está sucio o la branch divergió de la base. Nunca fuerza ni hace rebase.
+Hace fast-forward del checkout de tu proyecto hasta la branch de la mission, y después hace strike del camp y cierra su pane. Se niega, dejando todo intacto, si tu checkout está sucio o la branch divergió de la base. Nunca fuerza ni hace rebase.
 
 ## Ship
 
@@ -101,11 +101,11 @@ vx ship <task-id> --title "feat: titulo conciso" --body-file description.md
 vx land <task-id>
 ```
 
-Para una tarea enviada, `land` mergea el **pull request real**. Requiere `gh` y se niega salvo que el PR esté abierto, no sea draft, sea mergeable y todos los checks estén en verde; el merge queda atado al head exacto que acaba de verificar. No hace release del camp: la branch sigue en vuelo hasta que el PR realmente se mergee.
+Para una tarea enviada, `land` mergea el **pull request real**. Requiere `gh` y se niega salvo que el PR esté abierto, no sea draft, sea mergeable y todos los checks estén en verde; el merge queda atado al head exacto que acaba de verificar. No hace strike del camp: la branch sigue en vuelo hasta que el PR realmente se mergee.
 
 ## Por qué un soldier shipped sigue abierto
 
-Después de un `vx ship` exitoso el status de la mission es `shipped`: la branch está pusheada y hay un pull request real abierto, pero el trabajo **no está aterrizado localmente**, así que `vx ship` no hace release del camp. El pane del soldier y su camp (worktree) quedan abiertos a propósito hasta que el pull request se mergee. No está trabado ni varado: aparece como `shipped` en `vx status`, y en **Shipped** del tablero de [muster](/es/docs/guides/muster-skill).
+Después de un `vx ship` exitoso el status de la mission es `shipped`: la branch está pusheada y hay un pull request real abierto, pero el trabajo **no está aterrizado localmente**, así que `vx ship` no hace strike del camp. El pane del soldier y su camp (worktree) quedan abiertos a propósito hasta que el pull request se mergee. No está trabado ni varado: aparece como `shipped` en `vx status`, y en **Shipped** del tablero de [muster](/es/docs/guides/muster-skill).
 
 El motivo es práctico. Si el CI, un reviewer o vos piden cambios en el pull request, el mismo soldier todavía tiene todo el contexto y la branch montada. `vx prompt` acepta una tarea `shipped` como cualquier otra terminada:
 
@@ -121,27 +121,27 @@ Mergeá el pull request, sea en GitHub o con `vx land <task-id>`. Después, desd
 
 ```bash
 git pull
-vx release <task-id>
+vx strike <task-id>
 ```
 
-`vx release` nunca hace fetch. Compara el camp solo contra tu branch base **local**: el worktree no debe tener cambios sin commitear y los commits del camp ya deben estar en esa branch. Justo después de un merge en GitHub, y antes del pull, tu base local todavía no los tiene, así que `vx release` se niega y deja el camp y el pane intactos. El rechazo dice qué hacer: mergear el pull request, correr `git pull` en la branch base y reintentar. Después de `git pull` funciona, también con un merge squash o rebase: además del chequeo de ancestro simple, acepta un camp cuyo contenido la base ya tiene bajo otros SHAs de commit. Entonces devuelve el camp al pool y cierra el pane.
+`vx strike` nunca hace fetch. Compara el camp solo contra tu branch base **local**: el worktree no debe tener cambios sin commitear y los commits del camp ya deben estar en esa branch. Justo después de un merge en GitHub, y antes del pull, tu base local todavía no los tiene, así que `vx strike` se niega y deja el camp y el pane intactos. El rechazo dice qué hacer: mergear el pull request, correr `git pull` en la branch base y reintentar. Después de `git pull` funciona, también con un merge squash o rebase: además del chequeo de ancestro simple, acepta un camp cuyo contenido la base ya tiene bajo otros SHAs de commit. Entonces devuelve el camp al pool y cierra el pane.
 
 ### Cuando GitHub dice que mergeó
 
-Para una tarea shipped, y solo para esa, `vx release` también le pregunta a `gh` si el pull request de la branch del camp está `MERGED`. Es de mejor esfuerzo y nunca obligatorio: necesita `gh` instalado y con sesión iniciada, y sin eso release se apoya solo en los chequeos locales. Una tarea que no está shipped no hace ninguna llamada de red.
+Para una tarea shipped, y solo para esa, `vx strike` también le pregunta a `gh` si el pull request de la branch del camp está `MERGED`. Es de mejor esfuerzo y nunca obligatorio: necesita `gh` instalado y con sesión iniciada, y sin eso strike se apoya solo en los chequeos locales. Una tarea que no está shipped no hace ninguna llamada de red.
 
-Un pull request mergeado cuenta como aterrizado una vez que su commit de merge es alcanzable desde tu branch base local, y se confía en la palabra de GitHub antes que en el chequeo de contenido. Importa porque el chequeo de contenido puede negarse para siempre después de un merge remoto cuando commits posteriores en la base tocaron las mismas líneas. Si el commit de merge todavía no está en la base local, release te dice que hagas `git pull`. Un camp con commits que el pull request mergeado nunca llevó se sigue rechazando.
+Un pull request mergeado cuenta como aterrizado una vez que su commit de merge es alcanzable desde tu branch base local, y se confía en la palabra de GitHub antes que en el chequeo de contenido. Importa porque el chequeo de contenido puede negarse para siempre después de un merge remoto cuando commits posteriores en la base tocaron las mismas líneas. Si el commit de merge todavía no está en la base local, strike te dice que hagas `git pull`. Un camp con commits que el pull request mergeado nunca llevó se sigue rechazando.
 
-### Limpieza de la branch después de un release
+### Limpieza de la branch después de un strike
 
-Tras un release exitoso, `vx release` también poda. Borra la branch local de la tarea `vexillum/<task-id>` con la semántica de `git branch -d`, nunca `-D`, cuando la branch es ancestro de la branch base. También cuenta una tarea shipped cuyo pull request `gh` reporta como mergeado, con el commit de merge en tu base local, aunque un merge squash o rebase no sea ancestro. Nunca borra una branch que está checked out en otro worktree. Cuando nada de eso se cumple, la branch se conserva y una línea dice por qué y qué podés hacer, por ejemplo `git branch -D` cuando estés seguro. Además corre `git worktree prune` en el repo del proyecto para que no se acumulen registros de camps viejos, e imprime lo podado en una línea corta. `--discard` sigue las mismas reglas, así que una branch sin aterrizar sobrevive.
+Tras un strike exitoso, `vx strike` también poda. Borra la branch local de la tarea `vexillum/<task-id>` con la semántica de `git branch -d`, nunca `-D`, cuando la branch es ancestro de la branch base. También cuenta una tarea shipped cuyo pull request `gh` reporta como mergeado, con el commit de merge en tu base local, aunque un merge squash o rebase no sea ancestro. Nunca borra una branch que está checked out en otro worktree. Cuando nada de eso se cumple, la branch se conserva y una línea dice por qué y qué podés hacer, por ejemplo `git branch -D` cuando estés seguro. Además corre `git worktree prune` en el repo del proyecto para que no se acumulen registros de camps viejos, e imprime lo podado en una línea corta. `--discard` sigue las mismas reglas, así que una branch sin aterrizar sobrevive.
 
-### Hacer release igual con `--discard`
+### Hacer strike igual con `--discard`
 
 ```bash
-vx release <task-id> --discard
+vx strike <task-id> --discard
 ```
 
-`--discard` hace release del camp aunque ese chequeo falle o el worktree tenga cambios sin commitear, y tira ese trabajo. Imprime exactamente qué descartó: cada commit sin aterrizar (hash y asunto) y cada cambio sin commitear, y resetea el worktree para que el slot pueda reutilizarse. Los commits siguen alcanzables desde la branch del camp hasta que el slot se reutilice.
+`--discard` hace strike del camp aunque ese chequeo falle o el worktree tenga cambios sin commitear, y tira ese trabajo. Imprime exactamente qué descartó: cada commit sin aterrizar (hash y asunto) y cada cambio sin commitear, y resetea el worktree para que el slot pueda reutilizarse. Los commits siguen alcanzables desde la branch del camp hasta que el slot se reutilice.
 
 Es para un solo caso: el trabajo del camp ya está en la base, o está abandonado, y el general lo confirmó. El commander nunca lo usa sin la aprobación del general. Un rechazo que dice que mergees el pull request y hagas pull se responde mergeando y haciendo pull, no con `--discard`.

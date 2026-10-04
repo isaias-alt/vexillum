@@ -42,7 +42,7 @@ var commands = []Command{
 	{"status", "Report the troop: every mission and scout in the current project", statusUsage},
 	{"land", "Land a finished mission's work into this project's base branch", landUsage},
 	{"ship", "Ship a finished mission through vexillum's own tribunal pipeline, opening a real pull request", shipUsage},
-	{"release", "Release a soldier's camp back to the pool once its work has landed", releaseUsage},
+	{"strike", "Strike a soldier's camp (dismantle it and return it to the pool) once its work has landed", strikeUsage},
 	{"sentinel", "Watch dispatched soldiers and record status changes", sentinelUsage},
 	{"forum", "Open a local HTML artifact for visual review and collect the user's feedback", forumUsage},
 	{"banner", "Publish an HTML artifact to a public URL, or update one already published", bannerUsage},

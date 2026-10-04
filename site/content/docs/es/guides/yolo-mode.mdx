@@ -3,7 +3,7 @@ title: Yolo mode
 description: Dejá que el commander aterrice enseguida una mission terminada y verificada, en vez de preguntarte antes.
 ---
 
-Por defecto el commander pregunta antes de aterrizar una mission terminada: te cuenta qué hizo el soldier y espera tu sí. Yolo mode es un ajuste por proyecto que quita esa única pregunta. Con yolo activado, el commander aterriza una mission terminada y verificada con `vx land` y libera su camp en el mismo turno, sin preguntar.
+Por defecto el commander pregunta antes de aterrizar una mission terminada: te cuenta qué hizo el soldier y espera tu sí. Yolo mode es un ajuste por proyecto que quita esa única pregunta. Con yolo activado, el commander aterriza una mission terminada y verificada con `vx land` y hace strike de su camp en el mismo turno, sin preguntar.
 
 ## Activarlo
 
@@ -27,7 +27,7 @@ Cuando una mission termina en done, el commander mira `vx yolo status` y, si imp
 1. lee qué hizo la mission y comprueba que coincide con lo que pediste;
 2. corre `vx land <task-id>`;
 3. confirma que la rama base realmente avanzó;
-4. libera el camp y te avisa que la mission aterrizó.
+4. hace strike del camp y te avisa que la mission aterrizó.
 
 Igual recibís el reporte de lo que se hizo. Solo perdés la pregunta antes del merge.
 
@@ -39,7 +39,7 @@ Yolo saltea la aprobación del land y nada más.
 - Nunca corre `vx ship`. Abrir un pull request real sigue siendo decisión tuya. Ver [Land vs ship](/es/docs/guides/land-vs-ship).
 - Nunca hace push de nada.
 - Nunca rodea un land rechazado o divergente. Si `vx land` rechaza, porque el checkout está sucio o la rama divergió de la base, el commander te avisa en vez de reintentar, rebasar o commitear por su cuenta.
-- Nunca descarta trabajo. `vx release --discard` sigue necesitando tu sí explícito.
+- Nunca descarta trabajo. `vx strike --discard` sigue necesitando tu sí explícito.
 - Nunca aterriza una mission que terminó blocked, failed o interrupted.
 
 <Callout type="warn" title="Aterrizar es el control de seguridad">

@@ -76,7 +76,7 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 	}
 
 	if task.Status != state.StatusInterrupted {
-		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not interrupted - only an interrupted task can be re-dispatched (a done mission is landed with '"+cmdname.Name+" land' and released; a running one is left alone)\n", taskID, task.Status)
+		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not interrupted - only an interrupted task can be re-dispatched (a done mission is landed with '"+cmdname.Name+" land' and struck; a running one is left alone)\n", taskID, task.Status)
 		return 1
 	}
 
@@ -99,7 +99,7 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 	// very likely come out identical to the dead soldier's. Any report
 	// the dead soldier left behind at that exact path must be cleared
 	// before relaunching - otherwise it could be mistaken for the new
-	// attempt's own report (e.g. by 'vx release' gating on mere
+	// attempt's own report (e.g. by 'vx strike' gating on mere
 	// existence) even if the new soldier never gets around to writing
 	// one itself.
 	if task.HerdrAgentName != "" {

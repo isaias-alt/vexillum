@@ -215,7 +215,7 @@ func TestVexillumSkillContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(skill)
-	for _, want := range []string{"`vx models`", "--profile", "vx dispatch", "vx land", "vx ship", "vx release", "sentinel"} {
+	for _, want := range []string{"`vx models`", "--profile", "vx dispatch", "vx land", "vx ship", "vx strike", "sentinel"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("SKILL.md does not mention %q", want)
 		}

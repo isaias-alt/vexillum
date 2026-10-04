@@ -71,10 +71,10 @@ func TestAcquire_CreatesIsolatedWorktree(t *testing.T) {
 	}
 }
 
-// L3-07: releasing a clean, landed camp returns its slot to the pool, and
+// L3-07: striking a clean, landed camp returns its slot to the pool, and
 // a later Acquire reuses that same slot/worktree instead of creating a
 // new one.
-func TestAcquireRelease_ReusesSlot(t *testing.T) {
+func TestAcquireStrike_ReusesSlot(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 
@@ -89,8 +89,8 @@ func TestAcquireRelease_ReusesSlot(t *testing.T) {
 	commitAll(t, c1.Path, "task 1 change")
 	runGitT(t, project, "merge", "--ff-only", c1.Branch)
 
-	if err := Release(c1, "task-1"); err != nil {
-		t.Fatalf("Release: %v", err)
+	if err := Strike(c1, "task-1"); err != nil {
+		t.Fatalf("Strike: %v", err)
 	}
 
 	c2, err := Acquire(project, home, "task-2")
@@ -105,8 +105,8 @@ func TestAcquireRelease_ReusesSlot(t *testing.T) {
 	}
 }
 
-// L3-05: Release refuses to return a camp with uncommitted changes.
-func TestRelease_RefusesDirtyCamp(t *testing.T) {
+// L3-05: Strike refuses to return a camp with uncommitted changes.
+func TestStrike_RefusesDirtyCamp(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 
@@ -118,14 +118,14 @@ func TestRelease_RefusesDirtyCamp(t *testing.T) {
 		t.Fatalf("writing file: %v", err)
 	}
 
-	if err := Release(c, "task-1"); err == nil {
-		t.Fatal("expected Release to refuse a dirty camp")
+	if err := Strike(c, "task-1"); err == nil {
+		t.Fatal("expected Strike to refuse a dirty camp")
 	}
 }
 
-// L3-06: Release refuses a camp whose branch has commits not yet landed
+// L3-06: Strike refuses a camp whose branch has commits not yet landed
 // on the base branch.
-func TestRelease_RefusesUnlandedCamp(t *testing.T) {
+func TestStrike_RefusesUnlandedCamp(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 
@@ -138,17 +138,17 @@ func TestRelease_RefusesUnlandedCamp(t *testing.T) {
 	}
 	commitAll(t, c.Path, "unlanded change")
 
-	if err := Release(c, "task-1"); err == nil {
-		t.Fatal("expected Release to refuse an unlanded camp")
+	if err := Strike(c, "task-1"); err == nil {
+		t.Fatal("expected Strike to refuse an unlanded camp")
 	}
 }
 
 // A squash (or rebase) merge on GitHub never makes the camp branch a git
 // ancestor of the base branch - the merge commit's parent is the
-// pre-merge base, not the camp's tip. Release must still recognize the
+// pre-merge base, not the camp's tip. Strike must still recognize the
 // work as landed once the project's own checkout has the same content,
 // via the content-in-base fallback.
-func TestRelease_AcceptsSquashMergedContent(t *testing.T) {
+func TestStrike_AcceptsSquashMergedContent(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 
@@ -169,15 +169,15 @@ func TestRelease_AcceptsSquashMergedContent(t *testing.T) {
 	}
 	commitAll(t, project, "squash-merge camp change")
 
-	if err := Release(c, "task-1"); err != nil {
-		t.Fatalf("expected Release to accept squash-merged content, got: %v", err)
+	if err := Strike(c, "task-1"); err != nil {
+		t.Fatalf("expected Strike to accept squash-merged content, got: %v", err)
 	}
 }
 
 // A camp whose branch genuinely diverged - neither an ancestor of base
 // nor matching its content - is still refused. The content fallback must
 // not paper over real unlanded work.
-func TestRelease_RefusesGenuinelyDivergedCamp(t *testing.T) {
+func TestStrike_RefusesGenuinelyDivergedCamp(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 
@@ -197,13 +197,13 @@ func TestRelease_RefusesGenuinelyDivergedCamp(t *testing.T) {
 	}
 	commitAll(t, project, "unrelated base change")
 
-	if err := Release(c, "task-1"); err == nil {
-		t.Fatal("expected Release to refuse a camp whose content never landed")
+	if err := Strike(c, "task-1"); err == nil {
+		t.Fatal("expected Strike to refuse a camp whose content never landed")
 	}
 }
 
-// L3-09: Release refuses when the caller isn't the slot's recorded owner.
-func TestRelease_RefusesWrongOwner(t *testing.T) {
+// L3-09: Strike refuses when the caller isn't the slot's recorded owner.
+func TestStrike_RefusesWrongOwner(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 
@@ -212,8 +212,8 @@ func TestRelease_RefusesWrongOwner(t *testing.T) {
 		t.Fatalf("Acquire: %v", err)
 	}
 
-	if err := Release(c, "someone-else"); err == nil {
-		t.Fatal("expected Release to refuse a non-owning caller")
+	if err := Strike(c, "someone-else"); err == nil {
+		t.Fatal("expected Strike to refuse a non-owning caller")
 	}
 }
 
@@ -415,12 +415,12 @@ func TestAcquire_ConcurrentCallsNeverCollideOnASlot(t *testing.T) {
 	}
 }
 
-// Release has the same unprotected read-modify-write shape as Acquire -
-// N soldiers finishing around the same time means N concurrent Release
+// Strike has the same unprotected read-modify-write shape as Acquire -
+// N soldiers finishing around the same time means N concurrent Strike
 // calls against the same pool.json. Confirms they don't lose each
 // other's updates (every slot ends up correctly unleased, not just
 // whichever write happened to land last).
-func TestRelease_ConcurrentCallsDoNotLoseUpdates(t *testing.T) {
+func TestStrike_ConcurrentCallsDoNotLoseUpdates(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 
@@ -440,14 +440,14 @@ func TestRelease_ConcurrentCallsDoNotLoseUpdates(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			errs[i] = Release(camps[i], fmt.Sprintf("task-%d", i))
+			errs[i] = Strike(camps[i], fmt.Sprintf("task-%d", i))
 		}(i)
 	}
 	wg.Wait()
 
 	for i, err := range errs {
 		if err != nil {
-			t.Errorf("Release %d: %v", i, err)
+			t.Errorf("Strike %d: %v", i, err)
 		}
 	}
 
@@ -460,7 +460,7 @@ func TestRelease_ConcurrentCallsDoNotLoseUpdates(t *testing.T) {
 	}
 	for _, s := range pool.Slots {
 		if s.LeasedBy != "" {
-			t.Errorf("slot %d still shows leased by %q after every task released", s.Number, s.LeasedBy)
+			t.Errorf("slot %d still shows leased by %q after every task struck", s.Number, s.LeasedBy)
 		}
 	}
 }
@@ -510,7 +510,7 @@ func TestDiscard_ClearsDirtyUnlandedCamp(t *testing.T) {
 }
 
 // A2-02: Discard refuses a slot leased by another task, exactly like
-// Release does.
+// Strike does.
 func TestDiscard_RefusesWrongOwner(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
@@ -565,16 +565,16 @@ func divergedAfterRemoteMerge(t *testing.T) (c Camp, mergeCommit, head string) {
 	return c, mergeCommit, head
 }
 
-func TestRelease_ContentCheckRefusesWhenLaterCommitsTouchedTheSameLines(t *testing.T) {
+func TestStrike_ContentCheckRefusesWhenLaterCommitsTouchedTheSameLines(t *testing.T) {
 	c, _, _ := divergedAfterRemoteMerge(t)
-	if err := Release(c, "task-1"); err == nil {
+	if err := Strike(c, "task-1"); err == nil {
 		t.Fatal("expected the content check to refuse, which is the problem a merged PR report solves")
 	}
 }
 
-func TestReleaseWith_ShippedRefusalSaysToMergeAndPull(t *testing.T) {
+func TestStrikeWith_ShippedRefusalSaysToMergeAndPull(t *testing.T) {
 	c, _, _ := divergedAfterRemoteMerge(t)
-	_, err := ReleaseWith(c, "task-1", ReleaseOptions{Shipped: true})
+	_, err := StrikeWith(c, "task-1", StrikeOptions{Shipped: true})
 	if err == nil {
 		t.Fatal("expected a refusal")
 	}
@@ -585,18 +585,18 @@ func TestReleaseWith_ShippedRefusalSaysToMergeAndPull(t *testing.T) {
 	}
 }
 
-func TestReleaseWith_MergedPullRequestBeatsTheContentCheck(t *testing.T) {
+func TestStrikeWith_MergedPullRequestBeatsTheContentCheck(t *testing.T) {
 	c, mergeCommit, head := divergedAfterRemoteMerge(t)
-	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: mergeCommit, HeadCommit: head}}); err != nil {
-		t.Fatalf("expected a merged PR whose merge commit is on the base to release, got: %v", err)
+	if _, err := StrikeWith(c, "task-1", StrikeOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: mergeCommit, HeadCommit: head}}); err != nil {
+		t.Fatalf("expected a merged PR whose merge commit is on the base to strike, got: %v", err)
 	}
 }
 
-func TestReleaseWith_MergedPullRequestNotPulledYetSaysToPull(t *testing.T) {
+func TestStrikeWith_MergedPullRequestNotPulledYetSaysToPull(t *testing.T) {
 	c, _, head := divergedAfterRemoteMerge(t)
 	// A merge commit this repository has never seen, as before a git pull.
 	unseen := "0123456789abcdef0123456789abcdef01234567"
-	_, err := ReleaseWith(c, "task-1", ReleaseOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: unseen, HeadCommit: head}})
+	_, err := StrikeWith(c, "task-1", StrikeOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: unseen, HeadCommit: head}})
 	if err == nil {
 		t.Fatal("expected a refusal")
 	}
@@ -609,37 +609,37 @@ func TestReleaseWith_MergedPullRequestNotPulledYetSaysToPull(t *testing.T) {
 
 // A commit that exists locally but is not on the base (not pulled, or on
 // another branch) does not prove the work landed.
-func TestReleaseWith_MergeCommitOffTheBaseIsNotProof(t *testing.T) {
+func TestStrikeWith_MergeCommitOffTheBaseIsNotProof(t *testing.T) {
 	c, _, head := divergedAfterRemoteMerge(t)
 	other := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "HEAD"))
-	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{PRMerged: &PRMerge{MergeCommit: other, HeadCommit: head}}); err == nil {
+	if _, err := StrikeWith(c, "task-1", StrikeOptions{PRMerged: &PRMerge{MergeCommit: other, HeadCommit: head}}); err == nil {
 		t.Fatal("expected the camp's own unmerged commit not to count as the merge commit")
 	}
 }
 
-func TestReleaseWith_MergedPullRequestMissingMergeCommitIsRefused(t *testing.T) {
+func TestStrikeWith_MergedPullRequestMissingMergeCommitIsRefused(t *testing.T) {
 	c, _, head := divergedAfterRemoteMerge(t)
-	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{PRMerged: &PRMerge{HeadCommit: head}}); err == nil {
+	if _, err := StrikeWith(c, "task-1", StrikeOptions{PRMerged: &PRMerge{HeadCommit: head}}); err == nil {
 		t.Fatal("expected a refusal without a merge commit to verify")
 	}
 }
 
 // Commits the camp made after the pull request's head are real unlanded work,
 // merged PR or not.
-func TestReleaseWith_MergedPullRequestDoesNotCoverLaterCampCommits(t *testing.T) {
+func TestStrikeWith_MergedPullRequestDoesNotCoverLaterCampCommits(t *testing.T) {
 	c, mergeCommit, head := divergedAfterRemoteMerge(t)
 	if err := os.WriteFile(filepath.Join(c.Path, "extra.txt"), []byte("never pushed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	commitAll(t, c.Path, "work after the PR head")
 
-	_, err := ReleaseWith(c, "task-1", ReleaseOptions{PRMerged: &PRMerge{MergeCommit: mergeCommit, HeadCommit: head}})
+	_, err := StrikeWith(c, "task-1", StrikeOptions{PRMerged: &PRMerge{MergeCommit: mergeCommit, HeadCommit: head}})
 	if err == nil || !strings.Contains(err.Error(), "not in it") {
 		t.Fatalf("expected a refusal naming the commits the PR never carried, got: %v", err)
 	}
 }
 
-func TestReleaseWith_DiscardReportsUnlandedCommitsAndCleansTheSlot(t *testing.T) {
+func TestStrikeWith_DiscardReportsUnlandedCommitsAndCleansTheSlot(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 	c, err := Acquire(project, home, "task-1")
@@ -659,12 +659,12 @@ func TestReleaseWith_DiscardReportsUnlandedCommitsAndCleansTheSlot(t *testing.T)
 		t.Fatal(err)
 	}
 
-	if err := Release(c, "task-1"); err == nil {
-		t.Fatal("control: a plain release must refuse")
+	if err := Strike(c, "task-1"); err == nil {
+		t.Fatal("control: a plain strike must refuse")
 	}
-	report, err := ReleaseWith(c, "task-1", ReleaseOptions{Discard: true})
+	report, err := StrikeWith(c, "task-1", StrikeOptions{Discard: true})
 	if err != nil {
-		t.Fatalf("expected --discard to release, got: %v", err)
+		t.Fatalf("expected --discard to strike, got: %v", err)
 	}
 	if len(report.DiscardedCommits) != 2 || report.DiscardedCommits[0] != short+" second unlanded" || !strings.HasSuffix(report.DiscardedCommits[1], " first unlanded") {
 		t.Errorf("expected both commits with hashes and subjects, newest first, got %q", report.DiscardedCommits)
@@ -683,7 +683,7 @@ func TestReleaseWith_DiscardReportsUnlandedCommitsAndCleansTheSlot(t *testing.T)
 	}
 }
 
-func TestReleaseWith_DiscardIsNeededForUncommittedChangesOnALandedCamp(t *testing.T) {
+func TestStrikeWith_DiscardIsNeededForUncommittedChangesOnALandedCamp(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 	c, err := Acquire(project, home, "task-1")
@@ -693,10 +693,10 @@ func TestReleaseWith_DiscardIsNeededForUncommittedChangesOnALandedCamp(t *testin
 	if err := os.WriteFile(filepath.Join(c.Path, "scratch.txt"), []byte("wip\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReleaseWith(c, "task-1", ReleaseOptions{}); err == nil {
+	if _, err := StrikeWith(c, "task-1", StrikeOptions{}); err == nil {
 		t.Fatal("expected uncommitted changes to refuse without --discard")
 	}
-	report, err := ReleaseWith(c, "task-1", ReleaseOptions{Discard: true})
+	report, err := StrikeWith(c, "task-1", StrikeOptions{Discard: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -705,28 +705,28 @@ func TestReleaseWith_DiscardIsNeededForUncommittedChangesOnALandedCamp(t *testin
 	}
 }
 
-func TestReleaseWith_DiscardOnALandedCleanCampDiscardsNothing(t *testing.T) {
+func TestStrikeWith_DiscardOnALandedCleanCampDiscardsNothing(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 	c, err := Acquire(project, home, "task-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := ReleaseWith(c, "task-1", ReleaseOptions{Discard: true})
+	report, err := StrikeWith(c, "task-1", StrikeOptions{Discard: true})
 	if err != nil || len(report.DiscardedCommits) != 0 || len(report.DiscardedChanges) != 0 {
-		t.Errorf("expected a plain release with an empty report, got %+v err=%v", report, err)
+		t.Errorf("expected a plain strike with an empty report, got %+v err=%v", report, err)
 	}
 }
 
-// --discard never lets one task release another task's camp.
-func TestReleaseWith_DiscardStillRefusesTheWrongOwner(t *testing.T) {
+// --discard never lets one task strike another task's camp.
+func TestStrikeWith_DiscardStillRefusesTheWrongOwner(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()
 	c, err := Acquire(project, home, "task-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReleaseWith(c, "task-2", ReleaseOptions{Discard: true}); err == nil {
+	if _, err := StrikeWith(c, "task-2", StrikeOptions{Discard: true}); err == nil {
 		t.Fatal("expected a refusal for the wrong owner")
 	}
 }

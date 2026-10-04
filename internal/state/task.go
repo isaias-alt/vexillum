@@ -71,7 +71,7 @@ const (
 	// tribunal pipeline (vx ship, internal/tribunal) and opened
 	// as a real pull request. From here the PR is the source of truth,
 	// not this camp: land merges the real PR instead of fast-forwarding a
-	// local branch, and release can no longer rely on a plain ancestor
+	// local branch, and strike can no longer rely on a plain ancestor
 	// check once GitHub squashes or rebases the merge.
 	StatusShipped Status = "shipped"
 	// StatusUnconfirmed marks a Running task whose herdr agent went idle

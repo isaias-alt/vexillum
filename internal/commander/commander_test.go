@@ -31,7 +31,7 @@ func TestCoreContract(t *testing.T) {
 			if !strings.Contains(body, "skill") || !strings.Contains(body, skillName) {
 				t.Errorf("no instruction to load the %s skill", skillName)
 			}
-			for _, moment := range []string{"dispatch", "land", "ship", "release", "sentinel"} {
+			for _, moment := range []string{"dispatch", "land", "ship", "strike", "sentinel"} {
 				if !strings.Contains(body, moment) {
 					t.Errorf("core never mentions %q as a trigger for the skill", moment)
 				}

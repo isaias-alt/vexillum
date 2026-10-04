@@ -21,16 +21,16 @@ Start with `vx doctor`: it names what is missing.
 | `.claude/settings.json has invalid JSON, leaving it untouched` | Fix the JSON, then run `vx init` again to add the hook. |
 | `no tasks yet in this project.` after moving the project | The state key follows the path; see [State](/docs/concepts/state). |
 
-## Landing and releasing
+## Landing and striking
 
 | Situation | What to do |
 | --- | --- |
 | `land refused` | Your checkout is dirty, or the branch diverged from the base. Commit or stash, or ask the soldier to rebase. See [Parallel missions](/docs/guides/parallel-missions). A dirty checkout is often just `init`'s uncommitted scaffold. |
-| `landed, but automatic release failed` | The merge is not undone. Run `vx release <task-id>` by hand. |
-| `release refused` | The camp has uncommitted changes or unlanded commits. Land the work first. For a shipped mission the refusal says to merge the pull request and run `git pull` on the base branch, then retry. With `gh` logged in, a merged PR whose merge commit is on the local base counts as landed. See [How it ends](/docs/guides/land-vs-ship#how-it-ends). |
-| `release refused: ... merge commit is not on <base> yet` | The PR merged on GitHub but your local base does not have it. Run `git pull` on the base branch, then `vx release` again. |
-| The general confirmed the camp's work is already on the base or abandoned, and release still refuses | `vx release <task-id> --discard` releases anyway and prints each commit and change it threw away. Only with the general's approval. |
-| `release refused: scout task ... has no report` | The report is the scout's work product. Have it write the report, or pass `--force`. |
+| `landed, but automatic strike failed` | The merge is not undone. Run `vx strike <task-id>` by hand. |
+| `strike refused` | The camp has uncommitted changes or unlanded commits. Land the work first. For a shipped mission the refusal says to merge the pull request and run `git pull` on the base branch, then retry. With `gh` logged in, a merged PR whose merge commit is on the local base counts as landed. See [How it ends](/docs/guides/land-vs-ship#how-it-ends). |
+| `strike refused: ... merge commit is not on <base> yet` | The PR merged on GitHub but your local base does not have it. Run `git pull` on the base branch, then `vx strike` again. |
+| The general confirmed the camp's work is already on the base or abandoned, and strike still refuses | `vx strike <task-id> --discard` strikes anyway and prints each commit and change it threw away. Only with the general's approval. |
+| `strike refused: scout task ... has no report` | The report is the scout's work product. Have it write the report, or pass `--force`. |
 | `'gh' is not installed` | `ship`, and landing a shipped PR, need the GitHub CLI. |
 | `vexillum failed at <step>, refusing to push` | A tribunal step failed; nothing was pushed. Fix it in the camp and ship again. |
 | `review blocked: N blocking finding(s)` | The adversarial review found an error or warning (info never blocks). Read the findings in the output; fix them in the camp, or retry with `ship --fix` for the `auto-fix` ones. |

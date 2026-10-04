@@ -30,7 +30,7 @@ func repromptFixture(t *testing.T, status state.Status, leased bool) (project, h
 		t.Fatalf("state.Save: %v", err)
 	}
 	if !leased {
-		// newSettledMissionTask leases a camp; a released one has no slot.
+		// newSettledMissionTask leases a camp; a struck one has no slot.
 		if err := os.Remove(filepath.Join(projectRoot, "camps", "pool.json")); err != nil {
 			t.Fatal(err)
 		}
@@ -223,7 +223,7 @@ func TestReprompt_RefusesStatusesThatCannotBePrompted(t *testing.T) {
 	}
 }
 
-func TestReprompt_RefusesAReleasedCamp(t *testing.T) {
+func TestReprompt_RefusesAStruckCamp(t *testing.T) {
 	project, home, projectRoot, task := repromptFixture(t, state.StatusDone, false)
 
 	client := &fakeHerdr{}
@@ -231,8 +231,8 @@ func TestReprompt_RefusesAReleasedCamp(t *testing.T) {
 	if code := runReprompt(project, home, task.ID, "x", client, &out, &errOut); code == 0 {
 		t.Fatal("expected a non-zero exit")
 	}
-	if !strings.Contains(errOut.String(), "released") {
-		t.Errorf("expected the refusal to say the camp was released, got: %s", errOut.String())
+	if !strings.Contains(errOut.String(), "struck") {
+		t.Errorf("expected the refusal to say the camp was struck, got: %s", errOut.String())
 	}
 	if len(client.promptCalls) != 0 {
 		t.Errorf("nothing must be delivered, got %v", client.promptCalls)

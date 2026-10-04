@@ -1,6 +1,6 @@
 ---
 name: vexillum
-description: The commander's operating manual for vexillum. Load it before you dispatch a soldier (mission or scout), pick a model and effort, land or ship a finished mission, release a camp, handle a sentinel notice (a soldier finished, got blocked or was interrupted), or send a finished soldier a follow-up prompt. Covers vx dispatch, vx models, vx land, vx ship, vx release, vx redispatch and vx prompt.
+description: The commander's operating manual for vexillum. Load it before you dispatch a soldier (mission or scout), pick a model and effort, land or ship a finished mission, strike a camp, handle a sentinel notice (a soldier finished, got blocked or was interrupted), or send a finished soldier a follow-up prompt. Covers vx dispatch, vx models, vx land, vx ship, vx strike, vx redispatch and vx prompt.
 license: MIT
 ---
 
@@ -9,7 +9,7 @@ license: MIT
 You are the commander and the general is the human you report to (the always-on
 rules in the vexillum block of AGENTS.md or CLAUDE.md define the role and the
 vocabulary). This skill is the
-"how": dispatching, choosing a model, landing, shipping, releasing, and the
+"how": dispatching, choosing a model, landing, shipping, striking, and the
 sentinel. It applies only to the commander. If you are running inside a camp
 because a commander dispatched you, you are a soldier: ignore this skill, follow
 your dispatch prompt, and never run `vx dispatch` yourself.
@@ -108,34 +108,36 @@ The table lives in `.vexillum/models.json` (per project) over an optional
 binary. The general edits values there; you do not. Profile names, `when` text
 and the schema are in that file, not here.
 
-## Releasing a camp
+## Striking a camp
 
-A camp's worktree and pane are never cleaned up automatically. Once a mission is
-landed (or a scout's findings are reported), release its camp in the same turn,
-without asking the general first. Unlike landing, this is not a judgment call:
+To strike a camp is to dismantle it: its worktree goes back to the pool and its
+pane closes. A camp is never struck automatically, except by `vx land` for a
+local fast-forward. Once a mission is landed (or a scout's findings are
+reported), strike its camp in the same turn, without asking the general first.
+Unlike landing, this is not a judgment call:
 
 ```
-vx release <task-id>
+vx strike <task-id>
 ```
 
 It refuses (leaving the camp and pane untouched) if the worktree still has
 uncommitted changes or unlanded commits, so it is safe by construction. Do not
 call it until the soldier's work is actually landed (or, for a scout, reported).
 It is not a "give up on this soldier" command. A mission shipped through
-`vx ship` is not released until the general merges the real PR: its branch is
+`vx ship` is not struck until the general merges the real PR: its branch is
 still in flight until then.
 
-Once the PR is merged, release the shipped mission the same way. Merge the PR
+Once the PR is merged, strike the shipped mission the same way. Merge the PR
 first, then run `git pull` in the project's own checkout on the base branch, then
-`vx release <task-id>`. If you release before the pull, the refusal says so: merge
+`vx strike <task-id>`. If you strike before the pull, the refusal says so: merge
 the pull request, run `git pull` on the base branch, then retry. For a shipped
-task, and only then, `vx release` also asks `gh` whether the PR merged (best
+task, and only then, `vx strike` also asks `gh` whether the PR merged (best
 effort, never required: it needs `gh` installed and logged in). A merged PR whose
 merge commit is on the local base counts as landed even when the content check
 would refuse, for example because later commits touched the same lines. Until the
 base has been pulled it keeps refusing and tells you to pull.
 
-After a successful release it also prunes: it deletes the task's local branch
+After a successful strike it also prunes: it deletes the task's local branch
 `vexillum/<task-id>` with `git branch -d` semantics (never `-D`) when the branch
 is an ancestor of the base, or when the task is shipped and `gh` reports its PR
 merged on a pulled base. A branch checked out in another worktree is never
@@ -145,12 +147,12 @@ and prints what it pruned.
 
 ### Never `--discard` without the general's approval
 
-`vx release <task-id> --discard` releases the camp even when the landed check
+`vx strike <task-id> --discard` strikes the camp even when the landed check
 fails, or when the worktree has uncommitted changes, and throws that work away.
 It prints exactly what it discarded: each unlanded commit (hash and subject) and
 each uncommitted change. It exists for one case: the general told you the camp's
 work is already on the base, or is abandoned. Never use it on your own judgment,
-to get past a refusal, or because a release looks stuck. Ask the general first,
+to get past a refusal, or because a strike looks stuck. Ask the general first,
 name what would be discarded (`git log <base>..<branch>` in the camp), and run it
 only after an explicit yes. If the refusal is "merge the pull request and pull",
 do that instead.

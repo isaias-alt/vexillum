@@ -1274,7 +1274,7 @@ func TestTick_NeedsDecisionLineForcesBlockedInsteadOfDone(t *testing.T) {
 // leaseCamp writes the pool file a real camp.Acquire would leave under
 // projectRoot, with one slot leased to taskID - the signal the sentinel
 // uses to tell a finished soldier whose pane is still open from one whose
-// camp was released.
+// camp was struck.
 func leaseCamp(t *testing.T, projectRoot, taskID string) {
 	t.Helper()
 	dir := filepath.Join(projectRoot, "camps")
@@ -1314,9 +1314,9 @@ func leaseCamp(t *testing.T, projectRoot, taskID string) {
 	}
 }
 
-// releaseCamp drops every lease under projectRoot, as releasing each
+// strikeCamp drops every lease under projectRoot, as striking each
 // task's camp would.
-func releaseCamp(t *testing.T, projectRoot string) {
+func strikeCamp(t *testing.T, projectRoot string) {
 	t.Helper()
 	pool := filepath.Join(projectRoot, "camps", "pool.json")
 	if err := os.WriteFile(pool, []byte(`{"schema_version":0,"slots":[]}`), 0o644); err != nil {
@@ -1465,13 +1465,13 @@ func TestTick_DoesNotReopenWhenNotWorking(t *testing.T) {
 	}
 }
 
-// A released camp has no lease and no pane: it is never probed, so a long
+// A struck camp has no lease and no pane: it is never probed, so a long
 // history of finished tasks costs no herdr calls.
-func TestTick_DoesNotProbeReleasedTasks(t *testing.T) {
+func TestTick_DoesNotProbeStruckTasks(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 	task := savedTask(t, proj, state.StatusDone)
-	releaseCamp(t, proj)
+	strikeCamp(t, proj)
 
 	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}}
 	if _, err := sentinel.Tick(home, client); err != nil {
@@ -1562,21 +1562,21 @@ func wakeFileExists(proj, taskID string) bool {
 	return err == nil
 }
 
-// A wake for a task whose camp was released since is not news: the soldier
+// A wake for a task whose camp was struck since is not news: the soldier
 // and its pane are gone. It is consumed, not returned and not kept.
-func TestDrain_DropsAWakeForAReleasedTask(t *testing.T) {
+func TestDrain_DropsAWakeForAStruckTask(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 	task := settleOneDone(t, home, proj, "vx-do-the-thing")
 
-	releaseCamp(t, proj)
+	strikeCamp(t, proj)
 
 	wakes, err := sentinel.Drain(proj)
 	if err != nil {
 		t.Fatalf("Drain: %v", err)
 	}
 	if len(wakes) != 0 {
-		t.Errorf("expected the released task's wake dropped, got %+v", wakes)
+		t.Errorf("expected the struck task's wake dropped, got %+v", wakes)
 	}
 	if wakeFileExists(proj, task.ID) {
 		t.Error("expected the stale wake file consumed")
@@ -1641,7 +1641,7 @@ func TestDrain_DropsAWakeForAMissingTask(t *testing.T) {
 }
 
 // The reported incident: a backlog of old wakes (tasks since landed and
-// released) built up while nobody was draining, and replayed all at once.
+// struck) built up while nobody was draining, and replayed all at once.
 // Only the one task still waiting on the commander is delivered.
 func TestDrain_ReplaysNoStaleBacklog(t *testing.T) {
 	home := t.TempDir()
@@ -1653,7 +1653,7 @@ func TestDrain_ReplaysNoStaleBacklog(t *testing.T) {
 	}
 	live := settleOneDone(t, home, proj, "vx-current")
 
-	// Everything but the current soldier was landed and released.
+	// Everything but the current soldier was landed and struck.
 	pool := filepath.Join(proj, "camps", "pool.json")
 	if err := os.WriteFile(pool, []byte(`{"schema_version":0,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"`+live.ID+`"}]}`), 0o644); err != nil {
 		t.Fatal(err)

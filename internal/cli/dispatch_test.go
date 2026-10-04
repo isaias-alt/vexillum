@@ -311,7 +311,7 @@ func TestRunDispatch_FinalSaveFails_DoesNotOverwriteRealOutcome(t *testing.T) {
 // given back to the pool: a dispatch that hits this failure must not
 // leave the pool's first slot permanently unavailable to the very next
 // dispatch.
-func TestRunDispatch_PersistingAcquiredCampFails_SlotIsReleased(t *testing.T) {
+func TestRunDispatch_PersistingAcquiredCampFails_SlotIsStruck(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root, permission checks don't apply")
 	}
@@ -353,7 +353,7 @@ func TestRunDispatch_PersistingAcquiredCampFails_SlotIsReleased(t *testing.T) {
 		t.Fatalf("expected no task file to exist (the save that would have written it failed), got %d", len(tasks))
 	}
 
-	// If slot 1 leaked (left leased with no task to ever release it), this
+	// If slot 1 leaked (left leased with no task to ever strike it), this
 	// second, otherwise-ordinary dispatch would be forced onto a fresh
 	// slot 2 instead of reusing it.
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done", readOutput: "did the thing"}
@@ -362,13 +362,13 @@ func TestRunDispatch_PersistingAcquiredCampFails_SlotIsReleased(t *testing.T) {
 		t.Fatalf("expected the follow-up dispatch to succeed, got exit %d: %s", code, out.String())
 	}
 	if !strings.Contains(out.String(), "camp_slot=1 ") {
-		t.Errorf("expected the follow-up dispatch to reuse released slot 1, got: %s", out.String())
+		t.Errorf("expected the follow-up dispatch to reuse struck slot 1, got: %s", out.String())
 	}
 }
 
 // Regression test for the camp-slot leak: if CreateTab fails after
 // camp.Acquire already durably leased a pool slot to the task, the task
-// must still be loadable (with that camp slot recorded) and releasable -
+// must still be loadable (with that camp slot recorded) and strikable -
 // not permanently stranded with a leased slot no task file references.
 func TestRunDispatch_CreateTabFails_TaskIsRecoverable(t *testing.T) {
 	project := initDispatchTestProject(t)
@@ -405,12 +405,12 @@ func TestRunDispatch_CreateTabFails_TaskIsRecoverable(t *testing.T) {
 	}
 
 	// The pool slot camp.Acquire leased to this task must now be
-	// releasable - previously this was permanently stuck, since both
-	// release and redispatch require state.Load to succeed first, and no
+	// strikable - previously this was permanently stuck, since both
+	// strike and redispatch require state.Load to succeed first, and no
 	// task file existed for it at all.
 	out.Reset()
-	if code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
-		t.Fatalf("expected the stranded task's camp to be releasable, got exit %d: %s", code, out.String())
+	if code := runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
+		t.Fatalf("expected the stranded task's camp to be strikable, got exit %d: %s", code, out.String())
 	}
 }
 
@@ -456,12 +456,12 @@ func landTestMission(t *testing.T, project, home string) (state.Task, camp.Camp)
 }
 
 // A successful land fast-forwards the base branch AND automatically
-// releases the mission's camp - the operator no longer chains a manual
-// 'vx release' afterward. Verified two ways: the herdr pane got
-// closed (soldier.ReleaseInHerdr's own side effect), and the pool slot
-// is no longer leased so a second 'vx release' on the same task has
+// strikes the mission's camp - the operator no longer chains a manual
+// 'vx strike' afterward. Verified two ways: the herdr pane got
+// closed (soldier.StrikeInHerdr's own side effect), and the pool slot
+// is no longer leased so a second 'vx strike' on the same task has
 // nothing left to do.
-func TestRunLand_AutoReleasesCamp(t *testing.T) {
+func TestRunLand_AutoStrikesCamp(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
 	task, _ := landTestMission(t, project, home)
@@ -471,19 +471,19 @@ func TestRunLand_AutoReleasesCamp(t *testing.T) {
 	if code := runLand(project, home, task.ID, client, &out, &out); code != 0 {
 		t.Fatalf("runLand: expected exit 0, got %d: %s", code, out.String())
 	}
-	if !strings.Contains(out.String(), "landed:") || !strings.Contains(out.String(), "released:") {
-		t.Errorf("expected output to report both landing and releasing, got: %s", out.String())
+	if !strings.Contains(out.String(), "landed:") || !strings.Contains(out.String(), "struck:") {
+		t.Errorf("expected output to report both landing and striking, got: %s", out.String())
 	}
 	if !client.tabClosed {
-		t.Error("expected land to close the soldier's herdr pane via the release path")
+		t.Error("expected land to close the soldier's herdr pane via the strike path")
 	}
 
-	// The camp is already released - a second, independent release call
+	// The camp is already struck - a second, independent strike call
 	// for the same task must find nothing left to do.
 	out.Reset()
-	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out)
 	if code == 0 {
-		t.Fatalf("expected a follow-up 'vx release' to fail, camp was already released; got exit 0: %s", out.String())
+		t.Fatalf("expected a follow-up 'vx strike' to fail, camp was already struck; got exit 0: %s", out.String())
 	}
 	if !strings.Contains(out.String(), "not leased") {
 		t.Errorf("expected the refusal to say the slot is no longer leased, got: %s", out.String())
@@ -491,8 +491,8 @@ func TestRunLand_AutoReleasesCamp(t *testing.T) {
 }
 
 // A land that's refused (dirty checkout, or a diverged branch) never
-// touches the camp: no automatic release runs, the pane is never closed,
-// and the camp remains leased and landable/releasable once the underlying
+// touches the camp: no automatic strike runs, the pane is never closed,
+// and the camp remains leased and landable/strikable once the underlying
 // problem is fixed.
 func TestRunLand_RefusalLeavesCampUntouched(t *testing.T) {
 	project := initDispatchTestProject(t)
@@ -511,30 +511,30 @@ func TestRunLand_RefusalLeavesCampUntouched(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("expected a non-zero exit for a refused land, got 0: %s", out.String())
 	}
-	if strings.Contains(out.String(), "released:") {
-		t.Errorf("a refused land must never report a release, got: %s", out.String())
+	if strings.Contains(out.String(), "struck:") {
+		t.Errorf("a refused land must never report a strike, got: %s", out.String())
 	}
 	if client.tabClosed {
 		t.Error("a refused land must never close the soldier's herdr pane")
 	}
 
-	// The camp is still leased and untouched: releasing it directly still
+	// The camp is still leased and untouched: striking it directly still
 	// refuses too, since the mission's commit never actually landed.
 	out.Reset()
-	code = runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code = runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out)
 	if code == 0 {
-		t.Fatalf("expected release to still refuse an un-landed camp, got exit 0: %s", out.String())
+		t.Fatalf("expected strike to still refuse an un-landed camp, got exit 0: %s", out.String())
 	}
 }
 
 // The rare case: the fast-forward merge itself succeeds, but the
-// automatic release that follows fails (here, because the soldier left
+// automatic strike that follows fails (here, because the soldier left
 // uncommitted junk in its own camp worktree - camp.Land only checks the
 // PROJECT checkout is clean, not the camp's). land must report both
 // outcomes plainly - the merge is not undone, and the failure is not
-// swallowed - and leave the camp for a manual 'vx release' to
+// swallowed - and leave the camp for a manual 'vx strike' to
 // retry.
-func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
+func TestRunLand_MergeSucceedsButAutoStrikeFails(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
 	task, c := landTestMission(t, project, home)
@@ -547,36 +547,36 @@ func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
 	var out bytes.Buffer
 	code := runLand(project, home, task.ID, client, &out, &out)
 	if code == 0 {
-		t.Fatalf("expected a non-zero exit when the automatic release fails, got 0: %s", out.String())
+		t.Fatalf("expected a non-zero exit when the automatic strike fails, got 0: %s", out.String())
 	}
 	if !strings.Contains(out.String(), "landed:") {
 		t.Errorf("expected the merge success to still be reported, got: %s", out.String())
 	}
-	if !strings.Contains(out.String(), "automatic release failed") {
-		t.Errorf("expected the release failure to be reported plainly, got: %s", out.String())
+	if !strings.Contains(out.String(), "automatic strike failed") {
+		t.Errorf("expected the strike failure to be reported plainly, got: %s", out.String())
 	}
-	if !strings.Contains(out.String(), "vx release "+task.ID) {
-		t.Errorf("expected land to point the operator at a manual 'vx release %s', got: %s", task.ID, out.String())
+	if !strings.Contains(out.String(), "vx strike "+task.ID) {
+		t.Errorf("expected land to point the operator at a manual 'vx strike %s', got: %s", task.ID, out.String())
 	}
 	if client.tabClosed {
-		t.Error("a failed release must never close the herdr pane")
+		t.Error("a failed strike must never close the herdr pane")
 	}
 
-	// Verify the merge genuinely landed despite the release failure.
+	// Verify the merge genuinely landed despite the strike failure.
 	head := runGitOutput(t, project, "rev-parse", "HEAD")
 	campHead := runGitOutput(t, c.Path, "rev-parse", "HEAD")
 	if head != campHead {
-		t.Errorf("expected the project checkout to have fast-forwarded to the camp's HEAD despite the release failure, got project=%s camp=%s", head, campHead)
+		t.Errorf("expected the project checkout to have fast-forwarded to the camp's HEAD despite the strike failure, got project=%s camp=%s", head, campHead)
 	}
 
-	// Clean up the leftover file and confirm a manual release now
+	// Clean up the leftover file and confirm a manual strike now
 	// succeeds, proving the camp was left in a recoverable state.
 	if err := os.Remove(filepath.Join(c.Path, "leftover.txt")); err != nil {
 		t.Fatalf("removing leftover file: %v", err)
 	}
 	out.Reset()
-	if code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
-		t.Fatalf("expected the manual follow-up release to succeed once the camp is clean, got %d: %s", code, out.String())
+	if code := runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
+		t.Fatalf("expected the manual follow-up strike to succeed once the camp is clean, got %d: %s", code, out.String())
 	}
 }
 
@@ -606,9 +606,9 @@ func TestRunLand_RejectsInvalidTaskID(t *testing.T) {
 	}
 }
 
-func TestRunRelease_RejectsInvalidTaskID(t *testing.T) {
+func TestRunStrike_RejectsInvalidTaskID(t *testing.T) {
 	var out bytes.Buffer
-	code := runRelease("/does/not/matter", "/does/not/matter", "../../etc/passwd", releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runStrike("/does/not/matter", "/does/not/matter", "../../etc/passwd", strikeOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an invalid task id")
@@ -618,10 +618,10 @@ func TestRunRelease_RejectsInvalidTaskID(t *testing.T) {
 	}
 }
 
-// newReleaseTestScoutTask creates a fresh camp (clean, trivially "landed"
+// newStrikeTestScoutTask creates a fresh camp (clean, trivially "landed"
 // since it carries no commits of its own yet) for a scout task and
-// persists it - the shape a scout ready to release has, minus its report.
-func newReleaseTestScoutTask(t *testing.T, project, home string) (state.Task, string) {
+// persists it - the shape a scout ready to strike has, minus its report.
+func newStrikeTestScoutTask(t *testing.T, project, home string) (state.Task, string) {
 	t.Helper()
 	task, err := state.New(state.KindScout, "look into it")
 	if err != nil {
@@ -648,13 +648,13 @@ func newReleaseTestScoutTask(t *testing.T, project, home string) (state.Task, st
 
 // The report gate (docs/ decisions, point 5): a scout with no report file
 // is refused.
-func TestRunRelease_RefusesScoutWithoutReport(t *testing.T) {
+func TestRunStrike_RefusesScoutWithoutReport(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	task, projectRoot := newReleaseTestScoutTask(t, project, home)
+	task, projectRoot := newStrikeTestScoutTask(t, project, home)
 
 	var out bytes.Buffer
-	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected a non-zero exit for a scout with no report")
@@ -665,11 +665,11 @@ func TestRunRelease_RefusesScoutWithoutReport(t *testing.T) {
 	}
 }
 
-// A scout whose report exists releases normally, no --force needed.
-func TestRunRelease_ScoutWithReportSucceeds(t *testing.T) {
+// A scout whose report exists strikes normally, no --force needed.
+func TestRunStrike_ScoutWithReportSucceeds(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	task, projectRoot := newReleaseTestScoutTask(t, project, home)
+	task, projectRoot := newStrikeTestScoutTask(t, project, home)
 
 	if err := os.MkdirAll(report.Dir(projectRoot), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -679,7 +679,7 @@ func TestRunRelease_ScoutWithReportSucceeds(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 for a scout with a report, got %d: %s", code, out.String())
@@ -688,13 +688,13 @@ func TestRunRelease_ScoutWithReportSucceeds(t *testing.T) {
 
 // --force skips the report check for a scout with no report - the
 // explicit, logged escape hatch, never a silent default.
-func TestRunRelease_ForceSkipsReportGate(t *testing.T) {
+func TestRunStrike_ForceSkipsReportGate(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	task, _ := newReleaseTestScoutTask(t, project, home)
+	task, _ := newStrikeTestScoutTask(t, project, home)
 
 	var out bytes.Buffer
-	code := runRelease(project, home, task.ID, releaseOptions{Force: true}, &fakeHerdr{}, &out, &out)
+	code := runStrike(project, home, task.ID, strikeOptions{Force: true}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 with --force despite the missing report, got %d: %s", code, out.String())
@@ -704,7 +704,7 @@ func TestRunRelease_ForceSkipsReportGate(t *testing.T) {
 // A mission is never gated on a report, even with --force absent -
 // missions don't have one, optional or otherwise (a report is exclusive to
 // scouts).
-func TestRunRelease_MissionNeverRequiresReport(t *testing.T) {
+func TestRunStrike_MissionNeverRequiresReport(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
 
@@ -730,35 +730,35 @@ func TestRunRelease_MissionNeverRequiresReport(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 for a mission with no report, got %d: %s", code, out.String())
 	}
 }
 
-// vx release <task-id> --force parses regardless of flag/arg order.
-func TestParseReleaseArgs(t *testing.T) {
+// vx strike <task-id> --force parses regardless of flag/arg order.
+func TestParseStrikeArgs(t *testing.T) {
 	cases := []struct {
 		name       string
 		args       []string
 		wantTaskID string
-		want       releaseOptions
+		want       strikeOptions
 		wantErr    bool
 	}{
-		{"task id only", []string{"abc123"}, "abc123", releaseOptions{}, false},
-		{"force after id", []string{"abc123", "--force"}, "abc123", releaseOptions{Force: true}, false},
-		{"force before id", []string{"--force", "abc123"}, "abc123", releaseOptions{Force: true}, false},
-		{"discard", []string{"abc123", "--discard"}, "abc123", releaseOptions{Discard: true}, false},
-		{"force and discard", []string{"--discard", "abc123", "--force"}, "abc123", releaseOptions{Force: true, Discard: true}, false},
-		{"missing task id", []string{"--force"}, "", releaseOptions{}, true},
-		{"no args", []string{}, "", releaseOptions{}, true},
-		{"two positional args", []string{"abc123", "def456"}, "", releaseOptions{}, true},
-		{"unknown flag", []string{"abc123", "--nope"}, "", releaseOptions{}, true},
+		{"task id only", []string{"abc123"}, "abc123", strikeOptions{}, false},
+		{"force after id", []string{"abc123", "--force"}, "abc123", strikeOptions{Force: true}, false},
+		{"force before id", []string{"--force", "abc123"}, "abc123", strikeOptions{Force: true}, false},
+		{"discard", []string{"abc123", "--discard"}, "abc123", strikeOptions{Discard: true}, false},
+		{"force and discard", []string{"--discard", "abc123", "--force"}, "abc123", strikeOptions{Force: true, Discard: true}, false},
+		{"missing task id", []string{"--force"}, "", strikeOptions{}, true},
+		{"no args", []string{}, "", strikeOptions{}, true},
+		{"two positional args", []string{"abc123", "def456"}, "", strikeOptions{}, true},
+		{"unknown flag", []string{"abc123", "--nope"}, "", strikeOptions{}, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			taskID, opts, err := parseReleaseArgs(c.args)
+			taskID, opts, err := parseStrikeArgs(c.args)
 			if c.wantErr {
 				if err == nil {
 					t.Fatal("expected an error")

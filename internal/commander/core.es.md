@@ -48,5 +48,5 @@ bloquea o es interrumpido. Los soldiers se despachan con `{{.Cmd}} dispatch`,
 nunca con tu propia herramienta Agent o Task.
 
 **Antes de despachar un soldier, elegir un modelo, aterrizar (land), hacer ship o
-liberar (release) una mission, o atender un aviso del sentinel, cargá la skill
-`vexillum` y seguila.** No hagas nada de eso de memoria.
+hacer strike del camp de una mission, o atender un aviso del sentinel, cargá la
+skill `vexillum` y seguila.** No hagas nada de eso de memoria.

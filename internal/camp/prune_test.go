@@ -17,60 +17,60 @@ func TestPrune(t *testing.T) {
 		name string
 		// setup prepares the camp (already acquired, with one commit) and
 		// returns the options Prune runs with.
-		setup       func(t *testing.T, project string, c Camp) ReleaseOptions
+		setup       func(t *testing.T, project string, c Camp) StrikeOptions
 		wantDeleted bool
 		wantKept    string // substring of PruneReport.Kept, empty for none
 	}{
 		{
 			name: "landed branch is deleted",
-			setup: func(t *testing.T, project string, c Camp) ReleaseOptions {
+			setup: func(t *testing.T, project string, c Camp) StrikeOptions {
 				runGitT(t, project, "merge", "--ff-only", c.Branch)
-				return ReleaseOptions{}
+				return StrikeOptions{}
 			},
 			wantDeleted: true,
 		},
 		{
 			name: "unmerged branch is kept",
-			setup: func(t *testing.T, project string, c Camp) ReleaseOptions {
-				return ReleaseOptions{}
+			setup: func(t *testing.T, project string, c Camp) StrikeOptions {
+				return StrikeOptions{}
 			},
 			wantKept: "not merged into main",
 		},
 		{
 			name: "branch checked out in another worktree is kept",
-			setup: func(t *testing.T, project string, c Camp) ReleaseOptions {
+			setup: func(t *testing.T, project string, c Camp) StrikeOptions {
 				runGitT(t, project, "merge", "--ff-only", c.Branch)
 				other := filepath.Join(t.TempDir(), "other")
 				runGitT(t, project, "worktree", "add", "--force", other, c.Branch)
-				return ReleaseOptions{}
+				return StrikeOptions{}
 			},
 			wantKept: "checked out in",
 		},
 		{
 			name: "merged pull request on a pulled base deletes a non-ancestor branch",
-			setup: func(t *testing.T, project string, c Camp) ReleaseOptions {
+			setup: func(t *testing.T, project string, c Camp) StrikeOptions {
 				head := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "HEAD"))
 				// Squash-merge: same content, different commit.
 				runGitT(t, project, "merge", "--squash", c.Branch)
 				runGitT(t, project, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "squash")
 				merge := strings.TrimSpace(runGitT(t, project, "rev-parse", "HEAD"))
-				return ReleaseOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: merge, HeadCommit: head}}
+				return StrikeOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: merge, HeadCommit: head}}
 			},
 			wantDeleted: true,
 		},
 		{
 			name: "merged pull request is ignored when the task is not shipped",
-			setup: func(t *testing.T, project string, c Camp) ReleaseOptions {
+			setup: func(t *testing.T, project string, c Camp) StrikeOptions {
 				head := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "HEAD"))
-				return ReleaseOptions{PRMerged: &PRMerge{MergeCommit: head, HeadCommit: head}}
+				return StrikeOptions{PRMerged: &PRMerge{MergeCommit: head, HeadCommit: head}}
 			},
 			wantKept: "not merged into main",
 		},
 		{
 			name: "merged pull request whose merge commit is not on the base is kept",
-			setup: func(t *testing.T, project string, c Camp) ReleaseOptions {
+			setup: func(t *testing.T, project string, c Camp) StrikeOptions {
 				head := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "HEAD"))
-				return ReleaseOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: head, HeadCommit: head}}
+				return StrikeOptions{Shipped: true, PRMerged: &PRMerge{MergeCommit: head, HeadCommit: head}}
 			},
 			wantKept: "not merged into main",
 		},
@@ -90,7 +90,7 @@ func TestPrune(t *testing.T) {
 			commitAll(t, c.Path, "work")
 			opts := tt.setup(t, project, c)
 
-			// Mark the slot idle the way a release does, without its landed
+			// Mark the slot idle the way a strike does, without its landed
 			// check: Prune carries its own safety.
 			unlock, err := lockPool(c.PoolRoot)
 			if err != nil {
@@ -144,7 +144,7 @@ func TestPrune_LeavesABranchAloneOnceTheSlotIsReused(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The slot is still leased: another task owns it now as far as Prune can tell.
-	report, err := Prune(c, ReleaseOptions{})
+	report, err := Prune(c, StrikeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestPrune_RemovesStaleWorktreeRegistrations(t *testing.T) {
 	if err := os.RemoveAll(stale); err != nil {
 		t.Fatal(err)
 	}
-	report, err := Prune(c, ReleaseOptions{})
+	report, err := Prune(c, StrikeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

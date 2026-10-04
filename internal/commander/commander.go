@@ -3,7 +3,7 @@
 // carries what must be in context on every turn (role check, vocabulary,
 // authority, tone) plus one hard instruction to load the "vexillum" skill
 // before any operational step. The operational detail (dispatching, models,
-// landing, shipping, releasing, the sentinel) lives in that skill, see
+// landing, shipping, striking, the sentinel) lives in that skill, see
 // skills/vexillum.
 //
 // The core ships in English and Spanish. The domain vocabulary (commander,

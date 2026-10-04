@@ -75,7 +75,7 @@ func newSettledMissionTask(t *testing.T, projectRoot string) state.Task {
 
 // leaseCamp writes the pool file a real camp.Acquire leaves under
 // projectRoot with taskID holding a slot: the sentinel only delivers a
-// wake for a task whose camp has not been released.
+// wake for a task whose camp has not been struck.
 func leaseCamp(t *testing.T, projectRoot, taskID string) {
 	t.Helper()
 	dir := filepath.Join(projectRoot, "camps")
@@ -355,7 +355,7 @@ func TestResolveDrainTarget_RealProject(t *testing.T) {
 
 // C1-11: resolveDrainTarget works from a subdirectory of the project too,
 // not just its root - "git rev-parse --show-toplevel" walks up to find
-// it, unlike the plain os.Getwd() dispatch/land/release/redispatch/ship
+// it, unlike the plain os.Getwd() dispatch/land/strike/redispatch/ship
 // use (which require running from the project root itself).
 func TestResolveDrainTarget_FromSubdirectory(t *testing.T) {
 	vexillumHome := t.TempDir()

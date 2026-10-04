@@ -504,7 +504,7 @@ func existingPullRequest(projectDir, branch string, shipped bool) (*ghpr.PullReq
 	case "OPEN":
 		return &pr, nil
 	case ghpr.StateMerged:
-		return nil, fmt.Errorf("the pull request %s is already merged, so new commits on %s would never reach it - run git pull on the base branch, release the camp and dispatch a new mission for the follow-up", pr.URL, branch)
+		return nil, fmt.Errorf("the pull request %s is already merged, so new commits on %s would never reach it - run git pull on the base branch, strike the camp and dispatch a new mission for the follow-up", pr.URL, branch)
 	default:
 		return nil, fmt.Errorf("the pull request %s is %s, not open - reopen it on GitHub first, or the follow-up work has nowhere to go", pr.URL, strings.ToLower(pr.State))
 	}

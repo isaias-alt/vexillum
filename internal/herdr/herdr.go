@@ -78,7 +78,7 @@ type Client interface {
 
 	// TabClose closes the tab (and its pane). Only call this once the
 	// work it held is safely landed elsewhere - see
-	// internal/soldier.ReleaseInHerdr.
+	// internal/soldier.StrikeInHerdr.
 	TabClose(tabID string) error
 }
 

@@ -16,10 +16,10 @@ import (
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
-const releaseUsage = `Release a soldier's camp back to the pool once its work has landed.
+const strikeUsage = `Strike a soldier's camp (dismantle it and return it to the pool) once its work has landed.
 
 Usage:
-  ` + cmdname.Name + ` release <task-id> [--force] [--discard]
+  ` + cmdname.Name + ` strike <task-id> [--force] [--discard]
 
 Refuses unless the camp is clean and (for a mission) landed. For a scout,
 also refuses unless its final report exists at
@@ -28,17 +28,17 @@ the scout's work product, the same way a mission's is its landed commit.
 --force skips the report check (never the clean/landed camp check) - an
 explicit, logged escape hatch, never silent.
 
-A shipped mission lands when its pull request is merged, so release checks
+A shipped mission lands when its pull request is merged, so strike checks
 that. When the camp's commits are not on the base branch yet, the refusal
 says to merge the pull request and run git pull on the base branch in the
-project checkout, then retry. If gh is installed and logged in, release also
+project checkout, then retry. If gh is installed and logged in, strike also
 asks GitHub whether the pull request merged (only for a shipped task, and
 never required): a merged pull request counts as landed once its merge
 commit is on the local base branch, even when later commits on the base
 touch the same lines and the content check would refuse forever. Until the
 base has been pulled, the refusal says so.
 
---discard releases the camp even when that check fails, or when the camp has
+--discard strikes the camp even when that check fails, or when the camp has
 uncommitted changes. It prints exactly what it threw away: the unlanded
 commits (hash and subject) and the uncommitted changes, which are reset. Use
 it only when the general has confirmed that the camp's work is already on the
@@ -56,18 +56,18 @@ repo, and prints what was pruned in one short line. --discard deletes a
 branch only under those same rules, so an unlanded branch survives it.
 `
 
-// Release runs the "vx release" command.
-func Release(args []string) int {
+// Strike runs the "vx strike" command.
+func Strike(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(releaseUsage)
+		fmt.Print(strikeUsage)
 		return 0
 	}
 	if len(args) == 0 {
-		fmt.Print(releaseUsage)
+		fmt.Print(strikeUsage)
 		return 1
 	}
 
-	taskID, opts, err := parseReleaseArgs(args)
+	taskID, opts, err := parseStrikeArgs(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
@@ -79,19 +79,19 @@ func Release(args []string) int {
 		return 1
 	}
 
-	return runRelease(projectDir, vexillumHome, taskID, opts, herdr.CLI{}, os.Stdout, os.Stderr)
+	return runStrike(projectDir, vexillumHome, taskID, opts, herdr.CLI{}, os.Stdout, os.Stderr)
 }
 
-// releaseOptions are release's flags.
-type releaseOptions struct {
+// strikeOptions are strike's flags.
+type strikeOptions struct {
 	// Force skips a scout's report check.
 	Force bool
-	// Discard releases a camp that is dirty or not landed, reporting what
+	// Discard strikes a camp that is dirty or not landed, reporting what
 	// it threw away.
 	Discard bool
 }
 
-func parseReleaseArgs(args []string) (taskID string, opts releaseOptions, err error) {
+func parseStrikeArgs(args []string) (taskID string, opts strikeOptions, err error) {
 	for _, a := range args {
 		switch a {
 		case "--force":
@@ -102,20 +102,20 @@ func parseReleaseArgs(args []string) (taskID string, opts releaseOptions, err er
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return "", releaseOptions{}, fmt.Errorf("unknown flag %q for release", a)
+			return "", strikeOptions{}, fmt.Errorf("unknown flag %q for strike", a)
 		}
 		if taskID != "" {
-			return "", releaseOptions{}, fmt.Errorf("unexpected extra argument %q", a)
+			return "", strikeOptions{}, fmt.Errorf("unexpected extra argument %q", a)
 		}
 		taskID = a
 	}
 	if taskID == "" {
-		return "", releaseOptions{}, fmt.Errorf("missing task id")
+		return "", strikeOptions{}, fmt.Errorf("missing task id")
 	}
 	return taskID, opts, nil
 }
 
-func runRelease(projectDir, vexillumHome, taskID string, opts releaseOptions, client herdr.Client, stdout, stderr io.Writer) int {
+func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, client herdr.Client, stdout, stderr io.Writer) int {
 	if err := state.ValidateID(taskID); err != nil {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
@@ -134,14 +134,14 @@ func runRelease(projectDir, vexillumHome, taskID string, opts releaseOptions, cl
 	}
 
 	// A scout's report is its work product, the same way a mission's
-	// landed commit is (checked by camp.Release itself, via
-	// soldier.ReleaseInHerdr below) - a mission never has one to check
+	// landed commit is (checked by camp.Strike itself, via
+	// soldier.StrikeInHerdr below) - a mission never has one to check
 	// (internal/report's package doc), so this only ever applies to a
 	// scout. --force is the explicit, logged escape hatch, for use after
 	// explicit discard approval.
 	if task.Kind == state.KindScout && !opts.Force && !report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
-		fmt.Fprintf(stderr, cmdname.Name+": release refused: scout task %s has no report at %s\n", taskID, report.Path(projectRoot, task.HerdrAgentName, task.ID))
-		fmt.Fprintln(stderr, cmdname.Name+": the report is the work product - have the soldier write it, or pass --force to release anyway")
+		fmt.Fprintf(stderr, cmdname.Name+": strike refused: scout task %s has no report at %s\n", taskID, report.Path(projectRoot, task.HerdrAgentName, task.ID))
+		fmt.Fprintln(stderr, cmdname.Name+": the report is the work product - have the soldier write it, or pass --force to strike anyway")
 		return 1
 	}
 
@@ -151,23 +151,23 @@ func runRelease(projectDir, vexillumHome, taskID string, opts releaseOptions, cl
 		return 1
 	}
 
-	campOpts := camp.ReleaseOptions{
+	campOpts := camp.StrikeOptions{
 		Shipped:  task.Status == state.StatusShipped,
 		PRMerged: mergedPullRequest(projectDir, task, c.Branch),
 		Discard:  opts.Discard,
 	}
-	report, err := soldier.ReleaseInHerdrWith(task, c, client, campOpts)
+	report, err := soldier.StrikeInHerdrWith(task, c, client, campOpts)
 	printDiscarded(stdout, c.Branch, report)
 	if err != nil {
-		fmt.Fprintf(stderr, cmdname.Name+": release refused: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": strike refused: %v\n", err)
 		return 1
 	}
-	fmt.Fprintln(stdout, "released: camp returned to the pool, herdr pane closed.")
-	// Pruning is housekeeping after a release that already happened, so a
-	// failure here is reported but never turns the release into a failure.
+	fmt.Fprintln(stdout, "struck: camp returned to the pool, herdr pane closed.")
+	// Pruning is housekeeping after a strike that already happened, so a
+	// failure here is reported but never turns the strike into a failure.
 	pruned, err := camp.Prune(c, campOpts)
 	if err != nil {
-		fmt.Fprintf(stderr, cmdname.Name+": released, but pruning failed: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": struck, but pruning failed: %v\n", err)
 		return 0
 	}
 	printPruned(stdout, pruned)
@@ -193,7 +193,7 @@ func printPruned(w io.Writer, p camp.PruneReport) {
 }
 
 // mergedPullRequest asks GitHub whether the pull request of a shipped task's
-// branch merged, returning what camp.ReleaseWith needs to trust that. It is
+// branch merged, returning what camp.StrikeWith needs to trust that. It is
 // best effort and never required: nil when the task is not shipped (no
 // network call at all), gh is missing or logged out, the lookup fails, or
 // the pull request is not merged.
@@ -212,9 +212,9 @@ func mergedPullRequest(projectDir string, task state.Task, branch string) *camp.
 	return merged
 }
 
-// printDiscarded says what a --discard release threw away, so the general
+// printDiscarded says what a --discard strike threw away, so the general
 // can see exactly what is gone.
-func printDiscarded(w io.Writer, branch string, report camp.ReleaseReport) {
+func printDiscarded(w io.Writer, branch string, report camp.StrikeReport) {
 	if len(report.DiscardedCommits) > 0 {
 		fmt.Fprintf(w, "discarded %d unlanded commit(s) of %s:\n", len(report.DiscardedCommits), branch)
 		for _, line := range report.DiscardedCommits {

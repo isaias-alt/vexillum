@@ -17,7 +17,7 @@ type PruneReport struct {
 	PrunedWorktrees int
 }
 
-// Prune runs after a successful release. It deletes the task's local branch
+// Prune runs after a successful strike. It deletes the task's local branch
 // when that is safe, and runs git worktree prune for the project so stale
 // camp registrations do not accumulate.
 //
@@ -28,7 +28,7 @@ type PruneReport struct {
 // update-ref against the exact tip instead, never with branch -D. A branch
 // checked out in any other worktree is never deleted. Whatever else fails to
 // hold, the branch is kept and PruneReport.Kept says why.
-func Prune(c Camp, opts ReleaseOptions) (PruneReport, error) {
+func Prune(c Camp, opts StrikeOptions) (PruneReport, error) {
 	var report PruneReport
 
 	unlock, err := lockPool(c.PoolRoot)
@@ -64,7 +64,7 @@ func Prune(c Camp, opts ReleaseOptions) (PruneReport, error) {
 	return report, nil
 }
 
-func pruneBranch(c Camp, opts ReleaseOptions, report *PruneReport) error {
+func pruneBranch(c Camp, opts StrikeOptions, report *PruneReport) error {
 	ref := "refs/heads/" + c.Branch
 	tip, err := runGit(c.ProjectDir, "rev-parse", "--verify", "--quiet", ref)
 	if err != nil {
@@ -102,7 +102,7 @@ func pruneBranch(c Camp, opts ReleaseOptions, report *PruneReport) error {
 		return nil
 	}
 
-	// The released camp still sits on its branch; a detached HEAD at the same
+	// The struck camp still sits on its branch; a detached HEAD at the same
 	// commit leaves its files untouched and lets the branch go.
 	if onBranch, err := currentBranch(c.Path); err == nil && onBranch == c.Branch {
 		if _, err := runGit(c.Path, "checkout", "--detach"); err != nil {

@@ -471,24 +471,24 @@ const (
 	agentNameMaxLen = 32
 )
 
-// ReleaseInHerdr releases c back to the camp pool (camp.Release - never a
-// dirty or unlanded camp, never the wrong owner) and, only once that
+// StrikeInHerdr strikes c, returning it to the camp pool (camp.Strike -
+// never a dirty or unlanded camp, never the wrong owner) and, only once that
 // succeeds, closes the soldier's herdr tab. That happens at the same
 // moment as the worktree return, not when the soldier's turn merely
 // finishes: matches upstream-tool's own teardown
 // ("committed work must be landed before the worktree is returned...
 // cleanup closes only the exact recorded task pane", docs/herdr-backend.md).
-// If camp.Release refuses, the pane is left open - there's still
+// If camp.Strike refuses, the pane is left open - there's still
 // something worth looking at.
-func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
-	_, err := ReleaseInHerdrWith(task, c, client, camp.ReleaseOptions{})
+func StrikeInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
+	_, err := StrikeInHerdrWith(task, c, client, camp.StrikeOptions{})
 	return err
 }
 
-// ReleaseInHerdrWith is ReleaseInHerdr with camp.ReleaseOptions, returning
-// what a Discard release threw away.
-func ReleaseInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, opts camp.ReleaseOptions) (camp.ReleaseReport, error) {
-	report, err := camp.ReleaseWith(c, task.ID, opts)
+// StrikeInHerdrWith is StrikeInHerdr with camp.StrikeOptions, returning
+// what a Discard strike threw away.
+func StrikeInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, opts camp.StrikeOptions) (camp.StrikeReport, error) {
+	report, err := camp.StrikeWith(c, task.ID, opts)
 	if err != nil {
 		return report, err
 	}
@@ -501,7 +501,7 @@ func ReleaseInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, opts 
 	return report, nil
 }
 
-// DiscardInHerdr is ReleaseInHerdr's destructive counterpart (PRD v2,
+// DiscardInHerdr is StrikeInHerdr's destructive counterpart (PRD v2,
 // A.2): it throws away c (camp.Discard - a dead soldier's dirty,
 // possibly unlanded worktree) instead of insisting it's clean and
 // landed, then closes whatever herdr tab the task still had recorded.
@@ -526,15 +526,15 @@ func DiscardInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
 }
 
 // scoutReportInstructions tells a scout soldier where to write its final
-// report - the deliverable 'vx release' gates on for a scout (see
-// internal/report, internal/cli.runRelease). reportPath is already
+// report - the deliverable 'vx strike' gates on for a scout (see
+// internal/report, internal/cli.runStrike). reportPath is already
 // resolved from the soldier's own (possibly disambiguated) agent name, so
 // the soldier never has to compute or guess it.
 func scoutReportInstructions(reportPath string) string {
 	return "\n\n---\n\nBefore you finish, write your final report as a single Markdown file at:\n\n  " +
 		reportPath +
 		"\n\nCreate any missing parent directories yourself. This report is your deliverable: " +
-		"'" + cmdname.Name + " release' will refuse to release your camp without it."
+		"'" + cmdname.Name + " strike' will refuse to strike your camp without it."
 }
 
 // pauseInstructions tells a soldier (mission or scout) how to declare

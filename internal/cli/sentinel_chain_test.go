@@ -122,9 +122,9 @@ func TestNotificationChain_SettleAwaitRepromptSettle(t *testing.T) {
 	}
 }
 
-// A wake sitting undelivered while the commander releases the task is not
+// A wake sitting undelivered while the commander strikes the task is not
 // replayed by the next await.
-func TestNotificationChain_ReleasedTaskIsNotReplayed(t *testing.T) {
+func TestNotificationChain_StruckTaskIsNotReplayed(t *testing.T) {
 	home := t.TempDir()
 	projectRoot, err := vxproject.Root(home, t.TempDir())
 	if err != nil {
@@ -137,11 +137,11 @@ func TestNotificationChain_ReleasedTaskIsNotReplayed(t *testing.T) {
 		t.Fatalf("Tick: woke=%d err=%v", woke, err)
 	}
 
-	// The camp is released before anyone listens.
+	// The camp is struck before anyone listens.
 	if err := os.Remove(filepath.Join(projectRoot, "camps", "pool.json")); err != nil {
 		t.Fatal(err)
 	}
 	if code, out := await(projectRoot, 30*time.Millisecond); code != 0 {
-		t.Fatalf("expected no replay for a released task, got %d: %s", code, out)
+		t.Fatalf("expected no replay for a struck task, got %d: %s", code, out)
 	}
 }

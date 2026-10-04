@@ -2,7 +2,7 @@
 
 A scout has nothing to land: it should never have committed anything. If a
 scout's camp somehow has commits, do not land it silently; tell the general and
-ask what they want done. Once you have reported a scout's findings, just release
+ask what they want done. Once you have reported a scout's findings, just strike
 its camp (see SKILL.md), no landing step.
 
 A mission's work lands with a fast-forward merge into this project's base
@@ -19,7 +19,7 @@ vx land <task-id>
 ```
 
 Verify the base branch actually moved (`git log`) before reporting the mission as
-landed, then release its camp in the same turn.
+landed, then strike its camp in the same turn.
 
 It refuses and leaves everything untouched if this project's own checkout is
 dirty, or if the mission's branch has diverged from the base (not a clean
@@ -64,11 +64,11 @@ general may have changed it.
 When it is `on` and a mission finished done and you have verified it (you read
 what it did, and the work matches the request), do not ask: run `vx land
 <task-id>`, verify the base branch actually moved (`git log`), report the
-mission as landed and release its camp in the same turn. The approval question
+mission as landed and strike its camp in the same turn. The approval question
 is the only thing yolo skips; every other rule here still holds:
 
 - Verify the base moved before reporting it landed, as always.
-- Never use `vx release --discard`. Yolo does not approve discarding anything.
+- Never use `vx strike --discard`. Yolo does not approve discarding anything.
 - Never land a scout. A scout has nothing to land, with or without yolo.
 - Yolo never covers `vx ship`. Opening a real pull request stays an explicit
   decision of the general, so ask before shipping even when yolo is on.

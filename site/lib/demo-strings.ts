@@ -53,7 +53,7 @@ const STATUS_SCOUT = `${B}  scout   done        vexillum/${B} trace the memory l
 
 const LAND_CMD = `Bash(vx land ${A})`;
 const LAND_OUT = `landed: fast-forwarded ~/project to vexillum/${A}`;
-const LAND_RELEASED = "released: camp returned to the pool, herdr pane closed.";
+const LAND_STRUCK = "struck: camp returned to the pool, herdr pane closed.";
 
 const SHIP_CMD = `Bash(vx ship ${C})`;
 const SHIP_STEPS = ["[ok] lint", "[ok] tests", "[ok] review", "[ok] docs"];
@@ -152,7 +152,7 @@ const en: DemoCopy = {
         },
         { t: 2000, kind: "tool", text: LAND_CMD },
         { t: 2700, kind: "out", text: LAND_OUT },
-        { t: 2900, kind: "out", text: LAND_RELEASED },
+        { t: 2900, kind: "out", text: LAND_STRUCK },
         {
           t: 3900,
           kind: "reply",
@@ -305,7 +305,7 @@ const es: DemoCopy = {
         },
         { t: 2000, kind: "tool", text: LAND_CMD },
         { t: 2700, kind: "out", text: LAND_OUT },
-        { t: 2900, kind: "out", text: LAND_RELEASED },
+        { t: 2900, kind: "out", text: LAND_STRUCK },
         {
           t: 3900,
           kind: "reply",

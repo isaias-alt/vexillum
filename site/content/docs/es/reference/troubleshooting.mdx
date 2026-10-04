@@ -21,16 +21,16 @@ Empezá con `vx doctor`: te dice qué falta. Los mensajes de error de vexillum e
 | `.claude/settings.json has invalid JSON, leaving it untouched` | Arreglá el JSON y volvé a correr `vx init` para agregar el hook. |
 | `no tasks yet in this project.` después de mover el proyecto | La clave de estado sigue a la ruta; ver [Estado](/es/docs/concepts/state). |
 
-## Landing y release
+## Landing y strike
 
 | Situación | Qué hacer |
 | --- | --- |
 | `land refused` | Tu checkout está sucio, o la branch divergió de la base. Commiteá o hacé stash, o pedile al soldier que haga rebase. Ver [Missions en paralelo](/es/docs/guides/parallel-missions). Un checkout sucio suele ser solo el scaffold de `init` sin commitear. |
-| `landed, but automatic release failed` | El merge no se deshace. Corré `vx release <task-id>` a mano. |
-| `release refused` | El camp tiene cambios sin commitear o commits sin aterrizar. Aterrizá el trabajo primero. Para una mission enviada con ship, el rechazo dice que mergees el pull request y corras `git pull` en la branch base, y reintentes. Con `gh` con sesión iniciada, un PR mergeado cuyo commit de merge está en la base local cuenta como aterrizado. Ver [Cómo termina](/es/docs/guides/land-vs-ship#cómo-termina). |
-| `release refused: ... merge commit is not on <base> yet` | El PR mergeó en GitHub pero tu base local todavía no lo tiene. Corré `git pull` en la branch base y después `vx release` de nuevo. |
-| El general confirmó que el trabajo del camp ya está en la base o abandonado, y release igual se niega | `vx release <task-id> --discard` hace release igual e imprime cada commit y cambio que descartó. Solo con la aprobación del general. |
-| `release refused: scout task ... has no report` | El reporte es el producto del scout. Hacé que lo escriba, o pasá `--force`. |
+| `landed, but automatic strike failed` | El merge no se deshace. Corré `vx strike <task-id>` a mano. |
+| `strike refused` | El camp tiene cambios sin commitear o commits sin aterrizar. Aterrizá el trabajo primero. Para una mission enviada con ship, el rechazo dice que mergees el pull request y corras `git pull` en la branch base, y reintentes. Con `gh` con sesión iniciada, un PR mergeado cuyo commit de merge está en la base local cuenta como aterrizado. Ver [Cómo termina](/es/docs/guides/land-vs-ship#cómo-termina). |
+| `strike refused: ... merge commit is not on <base> yet` | El PR mergeó en GitHub pero tu base local todavía no lo tiene. Corré `git pull` en la branch base y después `vx strike` de nuevo. |
+| El general confirmó que el trabajo del camp ya está en la base o abandonado, y strike igual se niega | `vx strike <task-id> --discard` hace strike igual e imprime cada commit y cambio que descartó. Solo con la aprobación del general. |
+| `strike refused: scout task ... has no report` | El reporte es el producto del scout. Hacé que lo escriba, o pasá `--force`. |
 | `'gh' is not installed` | `ship`, y aterrizar un PR enviado, necesitan el GitHub CLI. |
 | `vexillum failed at <step>, refusing to push` | Falló un paso del tribunal; no se hizo push de nada. Arreglalo en el camp y volvé a hacer ship. |
 | `review blocked: N blocking finding(s)` | La revisión adversarial encontró un error o warning (info nunca bloquea). Leé los hallazgos en la salida; arreglalos en el camp, o reintentá con `ship --fix` para los `auto-fix`. |

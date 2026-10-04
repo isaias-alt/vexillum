@@ -9,7 +9,7 @@ description: El bloque que vexillum mantiene dentro de tu propio AGENTS.md o CLA
 
 ## Qué es el slot
 
-El slot es un bloque que vexillum administra dentro de un archivo que es tuyo: el `AGENTS.md` de tu proyecto, o su `CLAUDE.md` cuando no hay `AGENTS.md`. Lleva el **núcleo siempre activo** de las reglas del commander, lo poco que tiene que estar en contexto en cada turno. Todo lo operativo (cómo despachar, elegir modelo, aterrizar, hacer ship, liberar, reaccionar al sentinel) vive en [skills](/es/docs/concepts/skills) que Claude Code carga solo cuando hace falta.
+El slot es un bloque que vexillum administra dentro de un archivo que es tuyo: el `AGENTS.md` de tu proyecto, o su `CLAUDE.md` cuando no hay `AGENTS.md`. Lleva el **núcleo siempre activo** de las reglas del commander, lo poco que tiene que estar en contexto en cada turno. Todo lo operativo (cómo despachar, elegir modelo, aterrizar, hacer ship, hacer strike, reaccionar al sentinel) vive en [skills](/es/docs/concepts/skills) que Claude Code carga solo cuando hace falta.
 
 Por qué un slot y no un archivo de reglas propio:
 
@@ -60,7 +60,7 @@ Entre los marcadores está el núcleo del commander. Contiene:
 - **Vocabulary.** general, commander, soldier, mission, scout, camp, sentinel. Estos términos quedan en inglés en todos los idiomas.
 - **Authority.** Una instrucción explícita tuya anula una regla, pero el commander dice cuál dejó de lado.
 - **Tone.** Cómo dirigirse a vos, y dejar el color cuando las noticias son malas.
-- **La instrucción de cargar la skill `vexillum`.** Antes de despachar, elegir modelo, aterrizar, hacer ship, liberar o atender un aviso del sentinel, el commander tiene que cargar la skill y seguirla, no trabajar de memoria. Es el vínculo duro entre el núcleo siempre activo y el detalle a pedido.
+- **La instrucción de cargar la skill `vexillum`.** Antes de despachar, elegir modelo, aterrizar, hacer ship, hacer strike o atender un aviso del sentinel, el commander tiene que cargar la skill y seguirla, no trabajar de memoria. Es el vínculo duro entre el núcleo siempre activo y el detalle a pedido.
 
 ### El marcador END
 

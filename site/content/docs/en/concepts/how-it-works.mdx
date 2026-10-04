@@ -1,6 +1,6 @@
 ---
 title: How vexillum works
-description: The roles, and the life of a task from dispatch to release.
+description: The roles, and the life of a task from dispatch to strike.
 ---
 
 ## The roles
@@ -24,7 +24,7 @@ description: The roles, and the life of a task from dispatch to release.
 5. **The sentinel watches.** It polls the soldier's live status and records the outcome on disk. See [Sentinel](/docs/concepts/sentinel).
 6. **The commander is woken.** A `Stop` hook surfaces the change, so the commander reports to you even if its turn had already ended.
 7. **You decide.** For a mission, you [land it or ship it](/docs/guides/land-vs-ship). For a scout, the commander relays the report.
-8. **The camp is released** back to the pool, once there is nothing left to lose.
+8. **The camp is struck**, returning to the pool, once there is nothing left to lose.
 
 <Callout type="warn" title="What isolation does and does not give you">
   A camp isolates the soldier's *commits and working tree* from yours. It does not sandbox the process: a soldier has full host access under your OS user. The real safety control is approval before landing.

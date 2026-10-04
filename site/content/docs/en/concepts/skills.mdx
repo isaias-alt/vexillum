@@ -5,7 +5,7 @@ description: The three Claude Code skills vexillum ships, what each one is for, 
 
 ## What a skill is
 
-A skill is a directory with a `SKILL.md` (and optional supporting files) that Claude Code loads **on demand**: it reads each skill's short description at the start, and loads the full text only when the task matches. That is why vexillum moves the operational detail out of the always-on [AGENTS.md slot](/docs/concepts/agents-md-slot) and into skills: the commander pays for the detail only when it dispatches, lands, ships or releases.
+A skill is a directory with a `SKILL.md` (and optional supporting files) that Claude Code loads **on demand**: it reads each skill's short description at the start, and loads the full text only when the task matches. That is why vexillum moves the operational detail out of the always-on [AGENTS.md slot](/docs/concepts/agents-md-slot) and into skills: the commander pays for the detail only when it dispatches, lands, ships or strikes.
 
 The slot ends with one hard instruction to load the `vexillum` skill before any of those steps, so the on-demand detail is not left to chance.
 
@@ -13,7 +13,7 @@ The slot ends with one hard instruction to load the `vexillum` skill before any 
 
 | Skill | What it is for |
 | --- | --- |
-| `vexillum` | The commander's operating manual: dispatching a soldier, choosing a model and effort from [`models.json`](/docs/reference/models-json), landing, shipping, releasing a camp and handling the sentinel. Besides `SKILL.md` it has `landing.md`, `shipping.md` and `sentinel.md`, read at the matching moment. |
+| `vexillum` | The commander's operating manual: dispatching a soldier, choosing a model and effort from [`models.json`](/docs/reference/models-json), landing, shipping, striking a camp and handling the sentinel. Besides `SKILL.md` it has `landing.md`, `shipping.md` and `sentinel.md`, read at the matching moment. |
 | `forum` | The browser review loop behind [`vx forum`](/docs/guides/forum-and-banner): open an HTML plan, comparison, diagram, table or decision form, receive your feedback through the forum inbox and answer in the browser. It ships playbooks for each artifact kind. |
 | `muster` | A board with the decisions you must take as answerable cards, and a snapshot of the troop of missions and scouts below. See [Muster skill](/docs/guides/muster-skill). |
 

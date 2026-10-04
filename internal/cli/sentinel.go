@@ -390,7 +390,7 @@ func wakeReason(wakes []sentinel.Wake, forumWakes []sentinel.ForumWake) string {
 		}
 		sections = append(sections, "A vexillum soldier's status changed:\n"+
 			strings.Join(lines, "\n")+
-			"\nCheck on it (and report to the general, or land/release as appropriate) before ending your turn.")
+			"\nCheck on it (and report to the general, or land/strike as appropriate) before ending your turn.")
 	}
 	if len(forumWakes) > 0 {
 		var lines []string

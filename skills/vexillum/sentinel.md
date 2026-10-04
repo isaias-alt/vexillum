@@ -13,7 +13,7 @@ one ("a sentinel is already running", naming its pid). That is fine, do not star
 another.
 
 If your turn is about to end and you are told a soldier's status changed, that is
-the sentinel. Go check on it (report to the general, or land/release as
+the sentinel. Go check on it (report to the general, or land/strike as
 appropriate) before actually stopping. Verify before you report a soldier as
 finished: look at `git log` and `git status` in its camp rather than trusting the
 status word alone.
@@ -44,7 +44,7 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
 - **done**: the soldier finished. For a mission, report what it did and ask
   whether to land it, unless `vx yolo status` prints `on`: then land it without
   asking (see [landing.md](landing.md), which also says what yolo never
-  covers). For a scout, report its findings, then release the camp.
+  covers). For a scout, report its findings, then strike the camp.
 - **blocked**: the soldier asked a genuine question. It sits in the task's
   `decision` field. Bring it to the general; once answered, relay it with
   `vx decide <task-id> <answer>`. Report a blocked task plainly, no flavor.
@@ -65,7 +65,7 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
 A wake is a one-shot note that a task changed status, delivered once. Before
 one reaches you the sentinel drops it if it is no longer news: the task's
 status has since changed (you answered, re-prompted or shipped it), its camp
-was released, or its mission was landed. A burst of notices for old, finished
+was struck, or its mission was landed. A burst of notices for old, finished
 tasks after a long absence should not happen; if you want the full picture
 after being away, run `vx status` rather than relying on wakes.
 

@@ -1,6 +1,6 @@
 ---
 title: Cómo funciona vexillum
-description: Los roles, y la vida de una tarea desde el dispatch hasta el release.
+description: Los roles, y la vida de una tarea desde el dispatch hasta el strike.
 ---
 
 ## Los roles
@@ -24,7 +24,7 @@ description: Los roles, y la vida de una tarea desde el dispatch hasta el releas
 5. **El sentinel vigila.** Consulta el estado en vivo del soldier y registra el resultado en disco. Ver [Sentinel](/es/docs/concepts/sentinel).
 6. **Se despierta al commander.** Un hook `Stop` muestra el cambio, así el commander te reporta aunque su turno ya hubiera terminado.
 7. **Decidís vos.** Para una mission, [la aterrizás o la enviás](/es/docs/guides/land-vs-ship). Para un scout, el commander transmite el reporte.
-8. **Se hace release del camp** de vuelta al pool, una vez que no queda nada por perder.
+8. **Se hace strike del camp**, que vuelve al pool, una vez que no queda nada por perder.
 
 <Callout type="warn" title="Qué te da el aislamiento y qué no">
   Un camp aísla los *commits y el working tree* del soldier de los tuyos. No pone el proceso en un sandbox: un soldier tiene acceso total al host con tu usuario del sistema. El control de seguridad real es la aprobación antes de aterrizar.

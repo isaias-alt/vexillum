@@ -13,7 +13,7 @@ It also watches settled soldiers whose camp is still in place: if one is working
 
 `vx dispatch` starts a sentinel automatically if none is running. If that fails it warns on stderr, and you can run `vx sentinel` yourself in the background. A second one refuses to start and names the pid of the first: the claim is a lock the kernel drops when the process dies, so a crash never leaves a stale one behind and two sentinels cannot run at once. Its pid, the build it runs from and its log live in `~/.vexillum/sentinel.pid`, `~/.vexillum/sentinel.json` and `~/.vexillum/sentinel.log`.
 
-A wake is delivered at most once and only while it is still news. When it is read, the sentinel drops it if the task's status has changed since (you answered, re-prompted or shipped it), its camp was released, or its mission was landed, so a backlog that built up while nobody was listening never replays as a burst of old notices. Run `vx status` for the full picture after a long absence.
+A wake is delivered at most once and only while it is still news. When it is read, the sentinel drops it if the task's status has changed since (you answered, re-prompted or shipped it), its camp was struck, or its mission was landed, so a backlog that built up while nobody was listening never replays as a burst of old notices. Run `vx status` for the full picture after a long absence.
 
 The same hook also carries **forum wakes**: when a user sends feedback from a [forum](/docs/guides/forum-and-banner) review panel, the forum listener (not a soldier) stores it in the project's inbox and records a wake under `wakes/forum/`, one per session. `vx sentinel await` and `drain` report it as `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` It is delivered once and dropped if its messages were already confirmed; the inbox, not the wake, is the source of truth.
 
@@ -87,7 +87,7 @@ The sentinel reports a task *leaving* `running`, so a soldier prompted again aft
 vx prompt <task-id> "also add a changelog entry"
 ```
 
-It sets the task back to `running`, delivers the text, and makes sure a sentinel is watching, so the soldier's next finish wakes the commander again. Only a `done`, `shipped` or `unconfirmed` task whose camp has not been released can be prompted (a shipped one goes to `running`, and settles as `done`, not `shipped`, since the new commits are not on its pull request until `vx ship` runs again); a `blocked` task is answered with `vx decide`, and an `interrupted` one with `vx redispatch`.
+It sets the task back to `running`, delivers the text, and makes sure a sentinel is watching, so the soldier's next finish wakes the commander again. Only a `done`, `shipped` or `unconfirmed` task whose camp has not been struck can be prompted (a shipped one goes to `running`, and settles as `done`, not `shipped`, since the new commits are not on its pull request until `vx ship` runs again); a `blocked` task is answered with `vx decide`, and an `interrupted` one with `vx redispatch`.
 
 Prompting the pane by hand (`herdr agent prompt`) still works as a fallback: the sentinel reopens a settled task it sees working again. That detection is poll-based, so a very short follow-up that finishes between two polls can slip past it, which is why `vx prompt` is the supported path.
 

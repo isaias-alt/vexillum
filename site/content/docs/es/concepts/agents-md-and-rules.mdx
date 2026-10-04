@@ -14,10 +14,10 @@ Esta es la decisión central del producto: la inteligencia del commander es mark
 | Dónde | Siempre cargado | Tema |
 | --- | --- | --- |
 | Slot (en `AGENTS.md` o `CLAUDE.md`) | sí | Role check, vocabulary, authority, tone, y una instrucción dura: cargar la skill `vexillum` antes de cualquier paso operativo. |
-| Skill `vexillum` | a pedido | Despachar un soldier (siempre `vx dispatch`, nunca la herramienta de subagentes propia del commander), elegir modelo y effort, aterrizar, hacer ship, liberar, y el sentinel. |
+| Skill `vexillum` | a pedido | Despachar un soldier (siempre `vx dispatch`, nunca la herramienta de subagentes propia del commander), elegir modelo y effort, aterrizar, hacer ship, hacer strike, y el sentinel. |
 | [`models.json`](/es/docs/reference/models-json) | lo lee `vx models` | Los valores de cada perfil de modelo y effort. |
 
-Separarlos mantiene chico el costo siempre activo: el commander paga el detalle solo en el momento en que despacha, aterriza, hace ship o libera. El riesgo de cualquier diseño a pedido es que el modelo se olvide de cargar el detalle, y por eso el slot lleva esa instrucción como regla dura.
+Separarlos mantiene chico el costo siempre activo: el commander paga el detalle solo en el momento en que despacha, aterriza, hace ship o hace strike. El riesgo de cualquier diseño a pedido es que el modelo se olvide de cargar el detalle, y por eso el slot lleva esa instrucción como regla dura.
 
 ### Elegir modelo y effort
 

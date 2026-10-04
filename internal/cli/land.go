@@ -23,14 +23,14 @@ Fast-forwards this project's own checkout to the mission's branch.
 Refuses (leaving everything untouched) unless this checkout is clean and
 the merge is a clean fast-forward - never forces or rebases anything.
 
-Once that fast-forward merge succeeds, land automatically releases the
-mission's camp back to the pool and closes its herdr pane too - the same
-release logic '` + cmdname.Name + ` release' itself uses, which only clears a camp
+Once that fast-forward merge succeeds, land automatically strikes the
+mission's camp, returning it to the pool and closing its herdr pane too - the same
+strike logic '` + cmdname.Name + ` strike' itself uses, which only clears a camp
 that's already clean and landed, so this doesn't relax that safeguard. A
 merge that's refused (dirty checkout, or diverged branch) never touches
 the camp at all. In the rare case the merge succeeds but that automatic
-release then fails, land reports both outcomes plainly (the merge is
-NOT undone) and leaves the camp for '` + cmdname.Name + ` release <task-id>' to
+strike then fails, land reports both outcomes plainly (the merge is
+NOT undone) and leaves the camp for '` + cmdname.Name + ` strike <task-id>' to
 retry by hand.
 
 For a task already shipped through vexillum's own tribunal pipeline
@@ -39,7 +39,7 @@ the PR, not the camp's own branch, is the source of truth once the
 general (or CI, or a reviewer) may have pushed further commits directly
 to it on GitHub. Requires "gh". Refuses unless the pull request is open,
 not a draft, mergeable, and every check is green; the merge is bound to
-the exact head just verified. This path never auto-releases: the branch
+the exact head just verified. This path never auto-strikes: the branch
 is still in flight until the general merges the real PR.
 `
 
@@ -98,19 +98,19 @@ func runLand(projectDir, vexillumHome, taskID string, client herdr.Client, stdou
 	fmt.Fprintf(stdout, "landed: fast-forwarded %s to %s\n", projectDir, c.Branch)
 
 	// The fast-forward merge above is the safety gate; once it's
-	// succeeded, releasing is no longer a judgment call - reuse the exact
-	// release logic 'vx release' uses (soldier.ReleaseInHerdr, which
+	// succeeded, striking is no longer a judgment call - reuse the exact
+	// strike logic 'vx strike' uses (soldier.StrikeInHerdr, which
 	// still refuses anything but a clean, landed camp) so the operator
-	// doesn't have to chain a manual 'vx release' every time. If it
+	// doesn't have to chain a manual 'vx strike' every time. If it
 	// fails anyway (rare - the merge just made the camp clean and landed),
 	// the merge itself stands: report both outcomes plainly and leave the
-	// camp for a manual release, never swallow the error.
-	if err := soldier.ReleaseInHerdr(task, c, client); err != nil {
-		fmt.Fprintf(stderr, cmdname.Name+": landed, but automatic release failed: %v\n", err)
-		fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" release %s' by hand to clean up the camp\n", taskID)
+	// camp for a manual strike, never swallow the error.
+	if err := soldier.StrikeInHerdr(task, c, client); err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": landed, but automatic strike failed: %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' by hand to clean up the camp\n", taskID)
 		return 1
 	}
-	fmt.Fprintln(stdout, "released: camp returned to the pool, herdr pane closed.")
+	fmt.Fprintln(stdout, "struck: camp returned to the pool, herdr pane closed.")
 	return 0
 }
 
@@ -118,7 +118,7 @@ func runLand(projectDir, vexillumHome, taskID string, client herdr.Client, stdou
 // vexillum-side replacement for a fast-forward land once a mission has
 // gone through vexillum's own tribunal pipeline (see internal/ghpr for
 // the verification and merge itself). Unlike a local fast-forward, this
-// never auto-releases the camp: the branch is still in flight until the
+// never auto-strikes the camp: the branch is still in flight until the
 // general merges the real PR.
 func mergeShippedPR(projectDir string, task state.Task, stdout, stderr io.Writer) int {
 	if !ghpr.Installed() {

@@ -27,7 +27,7 @@ without any notice, because the sentinel only reports a task leaving
 "running".
 
 Only a task in status "done", "shipped" or "unconfirmed" whose camp has not
-been released can be prompted. A shipped task's soldier is still open, waiting
+been struck can be prompted. A shipped task's soldier is still open, waiting
 for its pull request to be merged: prompting it asks for follow-up work. The
 task goes to running while the soldier works and comes back as done, not
 shipped, since the new commits are not on the pull request yet; run
@@ -113,7 +113,7 @@ func runReprompt(projectDir, vexillumHome, taskID, text string, client herdr.Cli
 		return 1
 	}
 	if !leased[task.ID] {
-		fmt.Fprintf(stderr, cmdname.Name+": task %s's camp was already released, its soldier is gone - dispatch a new one instead\n", taskID)
+		fmt.Fprintf(stderr, cmdname.Name+": task %s's camp was already struck, its soldier is gone - dispatch a new one instead\n", taskID)
 		return 1
 	}
 

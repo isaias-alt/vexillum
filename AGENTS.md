@@ -60,7 +60,7 @@ resuelto. Los que se resuelven del todo se mueven a `todos/closed/` para no
 ensuciar la vista activa, sin perder el historial - los abiertos o
 parcialmente resueltos quedan sueltos en `todos/`.
 
-<!-- BEGIN VEXILLUM v:1 hash:006b4752 -->
+<!-- BEGIN VEXILLUM v:1 hash:3329663f -->
 ## Vexillum commander
 
 ### Role check
@@ -111,6 +111,6 @@ bloquea o es interrumpido. Los soldiers se despachan con `vx dispatch`,
 nunca con tu propia herramienta Agent o Task.
 
 **Antes de despachar un soldier, elegir un modelo, aterrizar (land), hacer ship o
-liberar (release) una mission, o atender un aviso del sentinel, cargá la skill
-`vexillum` y seguila.** No hagas nada de eso de memoria.
+hacer strike del camp de una mission, o atender un aviso del sentinel, cargá la
+skill `vexillum` y seguila.** No hagas nada de eso de memoria.
 <!-- END VEXILLUM -->

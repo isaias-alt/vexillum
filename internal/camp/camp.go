@@ -155,7 +155,7 @@ func Acquire(projectDir, vexillumHome, taskID string) (Camp, error) {
 // Resolve reconstructs the Camp for an already-acquired slot from the
 // pool's own bookkeeping. Useful for a caller that only kept the slot
 // number (e.g. persisted on a state.Task) and needs the rest of Camp back
-// to call Release.
+// to call Strike.
 func Resolve(projectDir, vexillumHome string, slot int) (Camp, error) {
 	absProject, err := filepath.Abs(projectDir)
 	if err != nil {
@@ -183,9 +183,9 @@ func Resolve(projectDir, vexillumHome string, slot int) (Camp, error) {
 
 // LeasedTasks returns the set of task ids that currently hold a camp lease
 // in the pool under projectRoot (see internal/project.Root) - a task whose
-// camp was released no longer does. internal/sentinel uses it to tell a
+// camp was struck no longer does. internal/sentinel uses it to tell a
 // finished soldier whose pane is still open (worth watching for a re-prompt)
-// from one long since released. It reads the pool without locking it: the
+// from one long since struck. It reads the pool without locking it: the
 // pool is only ever replaced atomically (savePool), so a read sees either
 // the old or the new version, never a partial one. A project that never
 // acquired a camp has no pool file and no leases.
@@ -249,7 +249,7 @@ func Land(c Camp) error {
 }
 
 // PRMerge is what GitHub reports about a merged pull request, handed to
-// ReleaseWith so a remote merge counts as landed work.
+// StrikeWith so a remote merge counts as landed work.
 type PRMerge struct {
 	// MergeCommit is the commit the merge created on the base branch. It
 	// must be reachable from the local base branch: until the general has
@@ -261,8 +261,8 @@ type PRMerge struct {
 	HeadCommit string
 }
 
-// ReleaseOptions tunes ReleaseWith. The zero value is Release's behavior.
-type ReleaseOptions struct {
+// StrikeOptions tunes StrikeWith. The zero value is Strike's behavior.
+type StrikeOptions struct {
 	// Shipped marks a mission whose work travels as a pull request, so the
 	// refusal for commits that are not on the base says to merge it and
 	// pull.
@@ -271,15 +271,15 @@ type ReleaseOptions struct {
 	// merged. It replaces the content check as the proof of landing, once
 	// the merge commit is verified on the local base.
 	PRMerged *PRMerge
-	// Discard releases the camp even when it is dirty or holds commits that
-	// are not on the base. ReleaseReport says exactly what was thrown away.
+	// Discard strikes the camp even when it is dirty or holds commits that
+	// are not on the base. StrikeReport says exactly what was thrown away.
 	// Only for work the general confirmed is already on the base or
 	// abandoned.
 	Discard bool
 }
 
-// ReleaseReport lists what a Discard release threw away.
-type ReleaseReport struct {
+// StrikeReport lists what a Discard strike threw away.
+type StrikeReport struct {
 	// DiscardedCommits are the unlanded commits, one "hash subject" each.
 	DiscardedCommits []string
 	// DiscardedChanges are the uncommitted changes, one "git status
@@ -287,22 +287,22 @@ type ReleaseReport struct {
 	DiscardedChanges []string
 }
 
-// Release returns c's slot to the pool for reuse, but only when it's safe:
-// taskID must be the slot's recorded owner, the worktree must have no
+// Strike strikes the camp: it returns c's slot to the pool for reuse, but
+// only when it's safe: taskID must be the slot's recorded owner, the worktree must have no
 // uncommitted changes, and its branch must already be landed (merged) on
 // the project's base branch. The worktree itself is never destroyed - a
-// released slot stays on disk, ready for the next Acquire to reset and
+// struck slot stays on disk, ready for the next Acquire to reset and
 // reuse.
-func Release(c Camp, taskID string) error {
-	_, err := ReleaseWith(c, taskID, ReleaseOptions{})
+func Strike(c Camp, taskID string) error {
+	_, err := StrikeWith(c, taskID, StrikeOptions{})
 	return err
 }
 
-// ReleaseWith is Release with options: proof of landing from a merged pull
+// StrikeWith is Strike with options: proof of landing from a merged pull
 // request, a refusal that fits a shipped mission, and the explicit Discard
 // override.
-func ReleaseWith(c Camp, taskID string, opts ReleaseOptions) (ReleaseReport, error) {
-	var report ReleaseReport
+func StrikeWith(c Camp, taskID string, opts StrikeOptions) (StrikeReport, error) {
+	var report StrikeReport
 
 	unlock, err := lockPool(c.PoolRoot)
 	if err != nil {
@@ -328,10 +328,10 @@ func ReleaseWith(c Camp, taskID string, opts ReleaseOptions) (ReleaseReport, err
 
 	slot := pool.Slots[idx]
 	if slot.LeasedBy == "" {
-		return report, fmt.Errorf("camp slot %d is not leased, nothing to release", c.Slot)
+		return report, fmt.Errorf("camp slot %d is not leased, nothing to strike", c.Slot)
 	}
 	if slot.LeasedBy != taskID {
-		return report, fmt.Errorf("camp slot %d is leased by task %s, not %s, refusing to release", c.Slot, slot.LeasedBy, taskID)
+		return report, fmt.Errorf("camp slot %d is leased by task %s, not %s, refusing to strike", c.Slot, slot.LeasedBy, taskID)
 	}
 
 	dirty, err := isDirty(c.Path)
@@ -339,7 +339,7 @@ func ReleaseWith(c Camp, taskID string, opts ReleaseOptions) (ReleaseReport, err
 		return report, fmt.Errorf("checking camp for uncommitted changes: %w", err)
 	}
 	if dirty && !opts.Discard {
-		return report, fmt.Errorf("camp %s has uncommitted changes, refusing to release", c.Path)
+		return report, fmt.Errorf("camp %s has uncommitted changes, refusing to strike", c.Path)
 	}
 
 	base, err := currentBranch(c.ProjectDir)
@@ -351,7 +351,7 @@ func ReleaseWith(c Camp, taskID string, opts ReleaseOptions) (ReleaseReport, err
 		return report, err
 	}
 	if !landed && !opts.Discard {
-		msg := fmt.Sprintf("camp %s branch %s has commits not yet landed on %s, refusing to release", c.Path, c.Branch, base)
+		msg := fmt.Sprintf("camp %s branch %s has commits not yet landed on %s, refusing to strike", c.Path, c.Branch, base)
 		if why != "" {
 			msg += ": " + why
 		} else if opts.Shipped {
@@ -373,7 +373,7 @@ func ReleaseWith(c Camp, taskID string, opts ReleaseOptions) (ReleaseReport, err
 			return report, fmt.Errorf("listing the uncommitted changes to discard: %w", err)
 		}
 		report.DiscardedChanges = nonEmptyLines(out)
-		// A dirty slot is never reused by Acquire, so a discarded release
+		// A dirty slot is never reused by Acquire, so a discarded strike
 		// must leave the worktree clean or the slot would leak for good.
 		if _, err := runGit(c.Path, "reset", "--hard"); err != nil {
 			return report, fmt.Errorf("resetting camp worktree: %w", err)
@@ -392,7 +392,7 @@ func ReleaseWith(c Camp, taskID string, opts ReleaseOptions) (ReleaseReport, err
 // supplied). A plain ancestor check proves a "vx land" fast-forward; a
 // merged pull request is proof of its own; otherwise a content check
 // covers a squash or rebase merge that was pulled locally.
-func campLanded(c Camp, base string, opts ReleaseOptions) (landed bool, why string, err error) {
+func campLanded(c Camp, base string, opts StrikeOptions) (landed bool, why string, err error) {
 	landed, err = isAncestor(c.Path, "HEAD", base)
 	if err != nil {
 		return false, "", fmt.Errorf("checking whether camp branch landed: %w", err)
@@ -460,8 +460,8 @@ func nonEmptyLines(s string) []string {
 	return lines
 }
 
-// Discard is Release's deliberately destructive counterpart (PRD v2,
-// A.2): where Release refuses anything but a clean, landed camp, Discard
+// Discard is Strike's deliberately destructive counterpart (PRD v2,
+// A.2): where Strike refuses anything but a clean, landed camp, Discard
 // throws away whatever's there - a dead soldier's half-finished working
 // tree and any commits it never landed - and returns the slot to the pool
 // clean, ready for immediate reuse (typically by a re-dispatch of the
@@ -557,7 +557,7 @@ func poolLockPath(poolRoot string) string {
 }
 
 // lockPool acquires an exclusive, blocking file lock scoped to poolRoot,
-// serializing Acquire/Release's read-modify-write over pool.json across
+// serializing Acquire/Strike's read-modify-write over pool.json across
 // every process touching this same pool - this is a short critical
 // section held per call, not a long-lived singleton (contrast
 // internal/sentinel.AcquireLock, which guards one whole process's

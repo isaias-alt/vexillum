@@ -3,7 +3,7 @@ title: Yolo mode
 description: Let the commander land a finished, verified mission right away instead of asking you first.
 ---
 
-By default the commander asks before it lands a finished mission: it tells you what the soldier did and waits for your yes. Yolo mode is a per-project setting that removes that one question. With yolo on, the commander lands a finished, verified mission with `vx land` and releases its camp in the same turn, without asking.
+By default the commander asks before it lands a finished mission: it tells you what the soldier did and waits for your yes. Yolo mode is a per-project setting that removes that one question. With yolo on, the commander lands a finished, verified mission with `vx land` and strikes its camp in the same turn, without asking.
 
 ## Turn it on
 
@@ -27,7 +27,7 @@ When a mission finishes done, the commander checks `vx yolo status` and, if it p
 1. reads what the mission did and checks that it matches what you asked for;
 2. runs `vx land <task-id>`;
 3. confirms the base branch actually moved;
-4. releases the camp and tells you the mission landed.
+4. strikes the camp and tells you the mission landed.
 
 You still get the report of what was done. You only lose the question before the merge.
 
@@ -39,7 +39,7 @@ Yolo skips the land approval and nothing else.
 - It never runs `vx ship`. Opening a real pull request stays your decision. See [Land vs ship](/docs/guides/land-vs-ship).
 - It never pushes anything.
 - It never works around a refused or diverged land. If `vx land` refuses, because the checkout is dirty or the branch has diverged from the base, the commander tells you instead of retrying, rebasing or committing on its own.
-- It never discards work. `vx release --discard` still needs your explicit yes.
+- It never discards work. `vx strike --discard` still needs your explicit yes.
 - It never lands a mission that finished blocked, failed or interrupted.
 
 <Callout type="warn" title="Landing is the safety control">

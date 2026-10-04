@@ -248,7 +248,7 @@ Uso:
   vx yolo [on|off|status]
 
 Con yolo activado, el commander aterriza una mission terminada y verificada de
-inmediato con 'vx land' y libera su camp en el mismo turno, en lugar de
+inmediato con 'vx land' y hace strike de su camp en el mismo turno, en lugar de
 preguntarle primero al general. Viene desactivado por defecto, y sin argumento
 el comando imprime el estado actual igual que 'status'.
 
@@ -344,7 +344,7 @@ terminar sin ningún aviso, porque el sentinel solo informa una tarea que sale
 de "running".
 
 Solo se puede enviar un prompt a una tarea con status "done", "shipped" o
-"unconfirmed" cuyo camp no haya sido liberado. El soldier de una tarea shipped
+"unconfirmed" a la que todavía no se le hizo strike del camp. El soldier de una tarea shipped
 sigue abierto, esperando que se haga merge de su pull request: enviarle un
 prompt pide trabajo de seguimiento. La tarea pasa a running mientras el
 soldier trabaja y vuelve como done, no shipped, ya que los commits nuevos
@@ -463,14 +463,14 @@ Avanza con fast-forward el propio checkout de este proyecto hasta la rama de la
 mission. Se rechaza (sin tocar nada) a menos que este checkout esté limpio y el
 merge sea un fast-forward limpio: nunca fuerza ni hace rebase de nada.
 
-Una vez que ese merge fast-forward tiene éxito, land libera automáticamente el
-camp de la mission de vuelta al pool y cierra también su pane de herdr: la
-misma lógica de liberación que usa 'vx release', que solo limpia un camp que ya
+Una vez que ese merge fast-forward tiene éxito, land hace strike automáticamente del
+camp de la mission (lo devuelve al pool) y cierra también su pane de herdr: la
+misma lógica de strike que usa 'vx strike', que solo limpia un camp que ya
 está limpio y aterrizado, así que esto no relaja esa salvaguarda. Un merge que
 se rechaza (checkout sucio, o rama divergida) nunca toca el camp. En el raro
-caso de que el merge tenga éxito pero esa liberación automática falle después,
+caso de que el merge tenga éxito pero ese strike automático falle después,
 land informa ambos resultados con claridad (el merge NO se deshace) y deja el
-camp para que 'vx release <task-id>' lo reintente a mano.
+camp para que 'vx strike <task-id>' lo reintente a mano.
 
 Para una tarea que ya se hizo ship por el pipeline de tribunal propio de
 vexillum ('vx ship'), en cambio hace merge del pull request real en GitHub: el
@@ -478,7 +478,7 @@ PR, no la rama propia del camp, es la fuente de verdad una vez que el general
 (o CI, o un revisor) pudo haber empujado más commits directamente a él en
 GitHub. Requiere "gh". Se rechaza a menos que el pull request esté abierto, no
 sea un draft, sea mergeable y todos los checks estén en verde; el merge queda
-atado al head exacto que se acaba de verificar. Este camino nunca libera
+atado al head exacto que se acaba de verificar. Este camino nunca hace strike
 automáticamente: la rama sigue en curso hasta que el general haga merge del PR
 real.
 `,
@@ -595,12 +595,12 @@ camp localmente.
 `,
 	},
 
-	"release": {
-		Summary: "Liberar el camp de un soldier de vuelta al pool una vez que su trabajo aterrizó",
-		Usage: `Liberar el camp de un soldier de vuelta al pool una vez que su trabajo aterrizó.
+	"strike": {
+		Summary: "Hacer strike del camp de un soldier (desmontarlo y devolverlo al pool) una vez que su trabajo aterrizó",
+		Usage: `Hacer strike del camp de un soldier (desmontarlo y devolverlo al pool) una vez que su trabajo aterrizó.
 
 Uso:
-  vx release <task-id> [--force] [--discard]
+  vx strike <task-id> [--force] [--discard]
 
 Se rechaza a menos que el camp esté limpio y (para una mission) aterrizado.
 Para un scout, además se rechaza a menos que exista su reporte final en
@@ -611,17 +611,17 @@ limpio y aterrizado): una salida de emergencia explícita y registrada, nunca
 silenciosa.
 
 Una mission shipped aterriza cuando se hace merge de su pull request, así que
-release verifica eso. Cuando los commits del camp todavía no están en la rama
+strike verifica eso. Cuando los commits del camp todavía no están en la rama
 base, el rechazo indica que hagas merge del pull request y corras git pull en
 la rama base en el checkout del proyecto, y que reintentes. Si gh está
-instalado y con sesión iniciada, release también le pregunta a GitHub si el
+instalado y con sesión iniciada, strike también le pregunta a GitHub si el
 pull request tuvo merge (solo para una tarea shipped, y nunca es obligatorio):
 un pull request con merge cuenta como aterrizado una vez que su commit de merge
 está en la rama base local, incluso cuando commits posteriores en la base tocan
 las mismas líneas y la verificación de contenido rechazaría para siempre.
 Mientras no se haya hecho pull de la base, el rechazo lo dice.
 
---discard libera el camp incluso cuando esa verificación falla, o cuando el
+--discard hace strike del camp incluso cuando esa verificación falla, o cuando el
 camp tiene cambios sin commitear. Imprime exactamente qué descartó: los
 commits sin aterrizar (hash y asunto) y los cambios sin commitear, que se
 resetean. Usalo solo cuando el general confirmó que el trabajo del camp ya

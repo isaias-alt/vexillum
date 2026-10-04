@@ -32,7 +32,7 @@ func TestPath_DistinctAgentNamesNeverCollide(t *testing.T) {
 // The real-world scenario this package guards against: a camp's live-agent
 // anti-collision check (internal/soldier.herdrAgentName/startAgent) only
 // ever looks at agents that are alive in herdr *right now*. Once an old
-// camp is released, its agent name is freed for reuse - so two entirely
+// camp is struck, its agent name is freed for reuse - so two entirely
 // unrelated scouts, dispatched far apart in time, can legitimately end up
 // with the identical HerdrAgentName (same prompt prefix producing the same
 // slug, with no live collision to disambiguate against at start time). The

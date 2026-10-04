@@ -22,7 +22,7 @@ func runGitT(t *testing.T, dir string, args ...string) string {
 	return string(out)
 }
 
-func initReleaseTestProject(t *testing.T) string {
+func initStrikeTestProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	runGitT(t, dir, "init", "-q")
@@ -35,11 +35,11 @@ func initReleaseTestProject(t *testing.T) string {
 	return dir
 }
 
-// L4-06: releasing a landed, clean camp closes the soldier's herdr tab -
+// L4-06: striking a landed, clean camp closes the soldier's herdr tab -
 // at the same moment as the worktree returns to the pool, matching
 // upstream-tool's own teardown timing.
-func TestReleaseInHerdr_ClosesTabOnceCampReleases(t *testing.T) {
-	project := initReleaseTestProject(t)
+func TestStrikeInHerdr_ClosesTabOnceCampStrikes(t *testing.T) {
+	project := initStrikeTestProject(t)
 	home := t.TempDir()
 	task := newMissionTask(t)
 
@@ -57,19 +57,19 @@ func TestReleaseInHerdr_ClosesTabOnceCampReleases(t *testing.T) {
 	task.HerdrTabID = "w1:t5"
 	client := &fakeHerdr{}
 
-	if err := soldier.ReleaseInHerdr(task, c, client); err != nil {
-		t.Fatalf("ReleaseInHerdr: %v", err)
+	if err := soldier.StrikeInHerdr(task, c, client); err != nil {
+		t.Fatalf("StrikeInHerdr: %v", err)
 	}
 	if len(client.tabCloseCalls) != 1 || client.tabCloseCalls[0] != "w1:t5" {
 		t.Errorf("expected TabClose(w1:t5) exactly once, got %v", client.tabCloseCalls)
 	}
 }
 
-// L4-07: camp.Release's own safety refusals (dirty, unlanded, wrong
+// L4-07: camp.Strike's own safety refusals (dirty, unlanded, wrong
 // owner) win - the pane is left open when the camp can't actually be
 // returned.
-func TestReleaseInHerdr_KeepsTabOpenWhenCampRefuses(t *testing.T) {
-	project := initReleaseTestProject(t)
+func TestStrikeInHerdr_KeepsTabOpenWhenCampRefuses(t *testing.T) {
+	project := initStrikeTestProject(t)
 	home := t.TempDir()
 	task := newMissionTask(t)
 
@@ -84,18 +84,18 @@ func TestReleaseInHerdr_KeepsTabOpenWhenCampRefuses(t *testing.T) {
 	task.HerdrTabID = "w1:t5"
 	client := &fakeHerdr{}
 
-	if err := soldier.ReleaseInHerdr(task, c, client); err == nil {
-		t.Fatal("expected ReleaseInHerdr to fail for a dirty camp")
+	if err := soldier.StrikeInHerdr(task, c, client); err == nil {
+		t.Fatal("expected StrikeInHerdr to fail for a dirty camp")
 	}
 	if len(client.tabCloseCalls) != 0 {
-		t.Errorf("expected the pane to stay open when release is refused, but TabClose was called: %v", client.tabCloseCalls)
+		t.Errorf("expected the pane to stay open when strike is refused, but TabClose was called: %v", client.tabCloseCalls)
 	}
 }
 
 // DiscardInHerdr throws the camp away and closes the task's recorded
 // herdr tab.
 func TestDiscardInHerdr_ClosesTab(t *testing.T) {
-	project := initReleaseTestProject(t)
+	project := initStrikeTestProject(t)
 	home := t.TempDir()
 	task := newMissionTask(t)
 

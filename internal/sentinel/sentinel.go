@@ -61,7 +61,7 @@ type Wake struct {
 	// transcript in Output. Empty for a mission (which never has a
 	// report - see internal/report's package doc) or for a scout whose
 	// write hadn't landed by this exact tick: that's not an error, just
-	// a race this field doesn't try to resolve - internal/cli.runRelease
+	// a race this field doesn't try to resolve - internal/cli.runStrike
 	// makes its own live check before ever gating on one.
 	ReportPath string `json:"report_path,omitempty"`
 }
@@ -250,7 +250,7 @@ func reopenable(s state.Status) bool {
 // whoever re-prompted the soldier already knows.
 //
 // Only a task that still holds its camp lease is probed (camp.LeasedTasks):
-// a released task's pane is closed, and probing every historical task on
+// a struck task's pane is closed, and probing every historical task on
 // every tick would cost one herdr call each, forever. A failed probe
 // (pane gone, herdr hiccup) just leaves the task as it was - never marks
 // it interrupted, which is only for tasks the sentinel was watching
@@ -532,7 +532,7 @@ func recordWake(projectRoot string, task state.Task, old, newStatus state.Status
 // saw it. By the time anyone drains, the commander may have moved on: a
 // backlog that built up while nobody was listening would otherwise replay
 // as a burst of "soldier changed" notices for tasks long since landed and
-// released. Such a wake is consumed without being returned - see
+// struck. Such a wake is consumed without being returned - see
 // wakeIsCurrent for what counts as still current.
 //
 // Each wake is claimed by renaming its file before it is read: rename is
@@ -586,7 +586,7 @@ func Drain(projectRoot string) ([]Wake, error) {
 // lazyLeases returns a function that reads the project's camp leases on
 // first use and remembers the answer, so a drain with nothing to evaluate
 // never touches the pool. A pool that cannot be read yields nil: "can't
-// tell", which wakeIsCurrent treats as not released.
+// tell", which wakeIsCurrent treats as not struck.
 func lazyLeases(projectRoot string) func() map[string]bool {
 	var leased map[string]bool
 	loaded := false
@@ -607,7 +607,7 @@ func lazyLeases(projectRoot string) func() map[string]bool {
 //   - the task is gone, or its status is no longer the one the wake
 //     announced (the commander answered, re-prompted, shipped or redispatched
 //     it since - whoever did that already knows);
-//   - the task's camp was released, so its soldier and pane are gone and
+//   - the task's camp was struck, so its soldier and pane are gone and
 //     there is nothing left to act on (a task that never had a camp is not
 //     subject to this check);
 //   - it announced a mission done and that mission's commits are no longer

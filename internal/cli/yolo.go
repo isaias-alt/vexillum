@@ -16,7 +16,7 @@ Usage:
   ` + cmdname.Name + ` yolo [on|off|status]
 
 With yolo on, the commander lands a finished, verified mission right away with
-'` + cmdname.Name + ` land' and releases its camp in the same turn, instead of asking the
+'` + cmdname.Name + ` land' and strikes its camp in the same turn, instead of asking the
 general first. It is off by default, and with no argument the command prints
 the current state like 'status' does.
 

@@ -1,4 +1,4 @@
 {
   "title": "CLI",
-  "pages": ["index", "init", "upgrade", "doctor", "dispatch", "models", "yolo", "redispatch", "decide", "prompt", "pending", "status", "land", "ship", "release", "sentinel", "forum", "banner"]
+  "pages": ["index", "init", "upgrade", "doctor", "dispatch", "models", "yolo", "redispatch", "decide", "prompt", "pending", "status", "land", "ship", "strike", "sentinel", "forum", "banner"]
 }

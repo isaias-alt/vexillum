@@ -1,7 +1,7 @@
 // Package report resolves where a scout soldier writes its final
 // deliverable: ~/.vexillum/projects/<key>/reports/<agent-name>-<task-id>.md
 // - the same namespaced-per-project root internal/project computes for
-// tasks/, wakes/ and camps/, so it survives 'vx release' the way a
+// tasks/, wakes/ and camps/, so it survives 'vx strike' the way a
 // report living inside the soldier's own camp worktree wouldn't.
 //
 // The file is named after both the task's HerdrAgentName (internal/state.
@@ -14,7 +14,7 @@
 // theory that it was already disambiguated against every other *live*
 // herdr agent before the soldier ever started (internal/soldier.
 // startAgent). That held only while the agent stayed alive: once its camp
-// was released, the name was freed for reuse by an unrelated later
+// was struck, the name was freed for reuse by an unrelated later
 // soldier, whose own report could then land on the exact path an earlier,
 // already-written report still occupied on disk (that anti-collision check
 // only ever looks at live herdr agents, never at reports/ itself). The
@@ -25,7 +25,7 @@
 // recognize which prompt it came from.
 //
 // Missions never get a report - see internal/soldier.RunInHerdr, which
-// only ever instructs a scout to write one, and internal/cli.runRelease,
+// only ever instructs a scout to write one, and internal/cli.runStrike,
 // which only ever gates on one for a scout.
 package report
 
@@ -52,7 +52,7 @@ func Path(projectRoot, agentName, taskID string) string {
 
 // Exists reports whether the report file for agentName/taskID is present.
 // Checked live at the moment it's asked, not cached - internal/cli.
-// runRelease's gate relies on this being the true, current state of the
+// runStrike's gate relies on this being the true, current state of the
 // filesystem, not a snapshot recorded by an earlier internal/sentinel tick
 // that might have run before the soldier's write actually landed.
 func Exists(projectRoot, agentName, taskID string) bool {
@@ -72,7 +72,7 @@ func Exists(projectRoot, agentName, taskID string) bool {
 // soldier's - without this, a leftover report from that dead attempt would
 // sit at the exact path the new soldier is about to be told to write to,
 // and could be mistaken for the new run's own report (e.g. by 'vexillum
-// release' gating on mere existence) even if the new soldier never got
+// strike' gating on mere existence) even if the new soldier never got
 // around to writing one itself.
 func Remove(projectRoot, agentName, taskID string) error {
 	path := Path(projectRoot, agentName, taskID)

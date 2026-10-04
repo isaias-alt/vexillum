@@ -57,8 +57,8 @@ func run(args []string) int {
 		return cli.Land(args[1:])
 	case "ship":
 		return cli.Ship(args[1:])
-	case "release":
-		return cli.Release(args[1:])
+	case "strike":
+		return cli.Strike(args[1:])
 	case "sentinel":
 		return cli.Sentinel(args[1:])
 	case "forum":

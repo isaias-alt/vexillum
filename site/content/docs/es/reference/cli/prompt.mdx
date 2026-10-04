@@ -19,7 +19,7 @@ terminar sin ningún aviso, porque el sentinel solo informa una tarea que sale
 de "running".
 
 Solo se puede enviar un prompt a una tarea con status "done", "shipped" o
-"unconfirmed" cuyo camp no haya sido liberado. El soldier de una tarea shipped
+"unconfirmed" a la que todavía no se le hizo strike del camp. El soldier de una tarea shipped
 sigue abierto, esperando que se haga merge de su pull request: enviarle un
 prompt pide trabajo de seguimiento. La tarea pasa a running mientras el
 soldier trabaja y vuelve como done, no shipped, ya que los commits nuevos

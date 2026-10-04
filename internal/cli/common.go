@@ -45,7 +45,7 @@ func resolveDirs() (projectDir, vexillumHome string, err error) {
 // second mission without cd-ing back. That created an entirely separate
 // camp pool keyed off the camp's own path hash - invisible to every
 // future command run correctly from the real project root, and a
-// correctly-run 'vx land'/'release' for that slot number would
+// correctly-run 'vx land'/'strike' for that slot number would
 // have resolved the WRONG camp in the real project's own pool.
 func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
 	absProject, err := filepath.Abs(projectDir)
@@ -124,13 +124,13 @@ func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 // then fails, RunInHerdr returns before saving anything of its own -
 // without this earlier save, that would leave a pool slot permanently
 // leased to a task ID no task file on disk ever references (unrecoverable,
-// since both 'vx release' and 'vx redispatch' require
+// since both 'vx strike' and 'vx redispatch' require
 // state.Load - and, to resolve the right camp, a populated CampSlot - to
 // succeed first). Saving the camp fields here, before RunInHerdr is even
 // called, means a CreateTab failure still leaves a loadable task that
 // already knows which slot it owns; the fallback save below then marks it
-// Failed so it can be released normally (the worktree has no commits yet,
-// so camp.Release's landed-check passes trivially). Re-dispatch
+// Failed so it can be struck normally (the worktree has no commits yet,
+// so camp.Strike's landed-check passes trivially). Re-dispatch
 // (runRedispatch) already saves task in its own reset state before
 // calling this, but with zeroed camp fields (it hasn't acquired a fresh
 // camp yet at that point) - this save is what records the new camp it
@@ -158,12 +158,12 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 		// regardless of whether this save succeeds - if it's left leased
 		// with no task file ever referencing it, that's the exact leak
 		// this function exists to prevent, just moved one step earlier.
-		// The worktree is still fresh (no commits, clean), so Release's
+		// The worktree is still fresh (no commits, clean), so Strike's
 		// landed-check passes trivially - give the slot back rather than
 		// stranding it.
 		fmt.Fprintf(stderr, cmdname.Name+": persisting acquired camp: %v\n", err)
-		if releaseErr := camp.Release(c, task.ID); releaseErr != nil {
-			fmt.Fprintf(stderr, cmdname.Name+": releasing camp slot %d after failed save: %v\n", c.Slot, releaseErr)
+		if strikeErr := camp.Strike(c, task.ID); strikeErr != nil {
+			fmt.Fprintf(stderr, cmdname.Name+": striking camp slot %d after failed save: %v\n", c.Slot, strikeErr)
 		}
 		return 1
 	}
@@ -188,7 +188,7 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 			// startAgent or the final save, sets it first) - so it never
 			// reached any of its own save points, and the only persisted
 			// state for this task is the one above. Force it to Failed and
-			// persist so this task is left in a normal, releasable state
+			// persist so this task is left in a normal, strikable state
 			// instead of stuck Pending with a camp slot nothing else can
 			// find its way back to. A later failure (after RunInHerdr's own
 			// saves already ran) is left as RunInHerdr recorded it - it

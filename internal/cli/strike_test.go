@@ -13,8 +13,8 @@ import (
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
-// releaseGitT runs git in dir and returns its trimmed output.
-func releaseGitT(t *testing.T, dir string, args ...string) string {
+// strikeGitT runs git in dir and returns its trimmed output.
+func strikeGitT(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-c", "user.name=Test", "-c", "user.email=test@example.com"}, args...)...)
 	cmd.Dir = dir
@@ -50,7 +50,7 @@ func newRemotelyMergedMission(t *testing.T, status state.Status) remotelyMergedM
 	}
 
 	m := remotelyMergedMission{project: project, home: home, task: task}
-	m.campHead = releaseGitT(t, task.CampPath, "rev-parse", "HEAD")
+	m.campHead = strikeGitT(t, task.CampPath, "rev-parse", "HEAD")
 	for _, step := range []struct{ content, msg string }{
 		{"hi\n", "squash-merge of the mission"},
 		{"later\n", "later change to the same lines"},
@@ -58,19 +58,19 @@ func newRemotelyMergedMission(t *testing.T, status state.Status) remotelyMergedM
 		if err := os.WriteFile(filepath.Join(project, "change.txt"), []byte(step.content), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		releaseGitT(t, project, "add", "-A")
-		releaseGitT(t, project, "commit", "-q", "-m", step.msg)
+		strikeGitT(t, project, "add", "-A")
+		strikeGitT(t, project, "commit", "-q", "-m", step.msg)
 		if m.mergeCommit == "" {
-			m.mergeCommit = releaseGitT(t, project, "rev-parse", "HEAD")
+			m.mergeCommit = strikeGitT(t, project, "rev-parse", "HEAD")
 		}
 	}
 	return m
 }
 
-// ghForRelease puts a stub gh and the tools it needs on PATH. Every call is
+// ghForStrike puts a stub gh and the tools it needs on PATH. Every call is
 // appended to the returned log file. auth status succeeds when loggedIn;
 // pr view answers prView.
-func ghForRelease(t *testing.T, loggedIn bool, prView string) (calls string) {
+func ghForStrike(t *testing.T, loggedIn bool, prView string) (calls string) {
 	t.Helper()
 	dir := gitOnlyPath(t)
 	calls = filepath.Join(t.TempDir(), "gh-calls")
@@ -103,10 +103,10 @@ func mergedPRView(m remotelyMergedMission, mergeCommit string) string {
 
 const openPRView = `{"number":9,"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","headRefOid":"abc","url":"https://github.com/x/y/pull/9","mergeCommit":null}`
 
-func releaseOf(t *testing.T, m remotelyMergedMission, opts releaseOptions) (code int, out string) {
+func strikeOf(t *testing.T, m remotelyMergedMission, opts strikeOptions) (code int, out string) {
 	t.Helper()
 	var buf bytes.Buffer
-	code = runRelease(m.project, m.home, m.task.ID, opts, &fakeHerdr{}, &buf, &buf)
+	code = runStrike(m.project, m.home, m.task.ID, opts, &fakeHerdr{}, &buf, &buf)
 	return code, buf.String()
 }
 
@@ -135,14 +135,14 @@ func readCalls(t *testing.T, path string) string {
 // GitHub says the PR merged and its merge commit is on the local base: the
 // content check would refuse forever (later commits touched the same lines),
 // but the merge is trusted.
-func TestRunRelease_ShippedTaskWithAMergedPullRequestReleases(t *testing.T) {
+func TestRunStrike_ShippedTaskWithAMergedPullRequestStrikes(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusShipped)
-	calls := ghForRelease(t, true, mergedPRView(m, m.mergeCommit))
+	calls := ghForStrike(t, true, mergedPRView(m, m.mergeCommit))
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
-	if code != 0 || !strings.Contains(out, "released:") {
-		t.Fatalf("expected the merged PR to release the camp, got %d: %s", code, out)
+	if code != 0 || !strings.Contains(out, "struck:") {
+		t.Fatalf("expected the merged PR to strike the camp, got %d: %s", code, out)
 	}
 	if campLeased(t, m) {
 		t.Error("expected the camp returned to the pool")
@@ -153,11 +153,11 @@ func TestRunRelease_ShippedTaskWithAMergedPullRequestReleases(t *testing.T) {
 }
 
 // Merged on GitHub, not pulled yet: the general is told to pull.
-func TestRunRelease_MergedPullRequestNotPulledYetTellsToPull(t *testing.T) {
+func TestRunStrike_MergedPullRequestNotPulledYetTellsToPull(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusShipped)
-	ghForRelease(t, true, mergedPRView(m, "0123456789abcdef0123456789abcdef01234567"))
+	ghForStrike(t, true, mergedPRView(m, "0123456789abcdef0123456789abcdef01234567"))
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
 	if code == 0 {
 		t.Fatalf("expected a refusal, got: %s", out)
@@ -168,16 +168,16 @@ func TestRunRelease_MergedPullRequestNotPulledYetTellsToPull(t *testing.T) {
 		}
 	}
 	if !campLeased(t, m) {
-		t.Error("a refused release must keep the camp leased")
+		t.Error("a refused strike must keep the camp leased")
 	}
 }
 
 // A shipped task whose PR is still open: the refusal says to merge it and pull.
-func TestRunRelease_ShippedRefusalSaysToMergeThePullRequestAndPull(t *testing.T) {
+func TestRunStrike_ShippedRefusalSaysToMergeThePullRequestAndPull(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusShipped)
-	ghForRelease(t, true, openPRView)
+	ghForStrike(t, true, openPRView)
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
 	if code == 0 {
 		t.Fatalf("expected a refusal, got: %s", out)
@@ -189,14 +189,14 @@ func TestRunRelease_ShippedRefusalSaysToMergeThePullRequestAndPull(t *testing.T)
 	}
 }
 
-// gh is best effort: logged out or missing, release falls back to the
+// gh is best effort: logged out or missing, strike falls back to the
 // local checks and still gives the merge-and-pull message.
-func TestRunRelease_GhUnavailableFallsBackToTheLocalChecks(t *testing.T) {
+func TestRunStrike_GhUnavailableFallsBackToTheLocalChecks(t *testing.T) {
 	t.Run("not logged in", func(t *testing.T) {
 		m := newRemotelyMergedMission(t, state.StatusShipped)
-		calls := ghForRelease(t, false, mergedPRView(m, m.mergeCommit))
+		calls := ghForStrike(t, false, mergedPRView(m, m.mergeCommit))
 
-		code, out := releaseOf(t, m, releaseOptions{})
+		code, out := strikeOf(t, m, strikeOptions{})
 
 		if code == 0 || !strings.Contains(out, "git pull on main") {
 			t.Fatalf("expected the local refusal with the pull hint, got %d: %s", code, out)
@@ -209,7 +209,7 @@ func TestRunRelease_GhUnavailableFallsBackToTheLocalChecks(t *testing.T) {
 		m := newRemotelyMergedMission(t, state.StatusShipped)
 		t.Setenv("PATH", gitOnlyPath(t))
 
-		code, out := releaseOf(t, m, releaseOptions{})
+		code, out := strikeOf(t, m, strikeOptions{})
 
 		if code == 0 || !strings.Contains(out, "git pull on main") {
 			t.Fatalf("expected the local refusal with the pull hint, got %d: %s", code, out)
@@ -217,9 +217,9 @@ func TestRunRelease_GhUnavailableFallsBackToTheLocalChecks(t *testing.T) {
 	})
 	t.Run("lookup fails", func(t *testing.T) {
 		m := newRemotelyMergedMission(t, state.StatusShipped)
-		ghForRelease(t, true, "not json at all")
+		ghForStrike(t, true, "not json at all")
 
-		code, out := releaseOf(t, m, releaseOptions{})
+		code, out := strikeOf(t, m, strikeOptions{})
 
 		if code == 0 || !strings.Contains(out, "git pull on main") {
 			t.Fatalf("expected the local refusal with the pull hint, got %d: %s", code, out)
@@ -228,11 +228,11 @@ func TestRunRelease_GhUnavailableFallsBackToTheLocalChecks(t *testing.T) {
 }
 
 // No network call for a task that is not shipped.
-func TestRunRelease_NonShippedTaskNeverCallsGh(t *testing.T) {
+func TestRunStrike_NonShippedTaskNeverCallsGh(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusDone)
-	calls := ghForRelease(t, true, mergedPRView(m, m.mergeCommit))
+	calls := ghForStrike(t, true, mergedPRView(m, m.mergeCommit))
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
 	if code == 0 {
 		t.Fatalf("expected the content check to refuse a done task, got: %s", out)
@@ -245,18 +245,18 @@ func TestRunRelease_NonShippedTaskNeverCallsGh(t *testing.T) {
 	}
 }
 
-func TestRunRelease_DiscardPrintsWhatItThrewAway(t *testing.T) {
+func TestRunStrike_DiscardPrintsWhatItThrewAway(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusShipped)
-	ghForRelease(t, true, openPRView)
-	subjectHash := releaseGitT(t, m.task.CampPath, "log", "-1", "--format=%h")
+	ghForStrike(t, true, openPRView)
+	subjectHash := strikeGitT(t, m.task.CampPath, "log", "-1", "--format=%h")
 	if err := os.WriteFile(filepath.Join(m.task.CampPath, "scratch.txt"), []byte("wip\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	code, out := releaseOf(t, m, releaseOptions{Discard: true})
+	code, out := strikeOf(t, m, strikeOptions{Discard: true})
 
-	if code != 0 || !strings.Contains(out, "released:") {
-		t.Fatalf("expected --discard to release, got %d: %s", code, out)
+	if code != 0 || !strings.Contains(out, "struck:") {
+		t.Fatalf("expected --discard to strike, got %d: %s", code, out)
 	}
 	for _, want := range []string{"discarded 1 unlanded commit(s)", subjectHash + " change", "discarded 1 uncommitted change(s)", "scratch.txt"} {
 		if !strings.Contains(out, want) {
@@ -269,35 +269,35 @@ func TestRunRelease_DiscardPrintsWhatItThrewAway(t *testing.T) {
 }
 
 // Without the flag, uncommitted changes still refuse.
-func TestRunRelease_UncommittedChangesRefuseWithoutDiscard(t *testing.T) {
+func TestRunStrike_UncommittedChangesRefuseWithoutDiscard(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusShipped)
-	ghForRelease(t, true, mergedPRView(m, m.mergeCommit))
+	ghForStrike(t, true, mergedPRView(m, m.mergeCommit))
 	if err := os.WriteFile(filepath.Join(m.task.CampPath, "scratch.txt"), []byte("wip\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
 	if code == 0 || !strings.Contains(out, "uncommitted changes") {
 		t.Fatalf("expected the dirty camp refused, got %d: %s", code, out)
 	}
 	if !campLeased(t, m) {
-		t.Error("a refused release must keep the camp leased")
+		t.Error("a refused strike must keep the camp leased")
 	}
 }
 
 func projectHasBranch(t *testing.T, m remotelyMergedMission) bool {
 	t.Helper()
-	return releaseGitT(t, m.project, "branch", "--list", m.task.CampBranch) != ""
+	return strikeGitT(t, m.project, "branch", "--list", m.task.CampBranch) != ""
 }
 
 // A merged pull request is not an ancestor of the base, so git branch -d
 // would refuse; the merge GitHub confirmed is what lets the branch go.
-func TestRunRelease_MergedPullRequestDeletesTheBranch(t *testing.T) {
+func TestRunStrike_MergedPullRequestDeletesTheBranch(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusShipped)
-	ghForRelease(t, true, mergedPRView(m, m.mergeCommit))
+	ghForStrike(t, true, mergedPRView(m, m.mergeCommit))
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
 	if code != 0 || !strings.Contains(out, "pruned: deleted branch "+m.task.CampBranch) {
 		t.Fatalf("expected the branch pruned, got %d: %s", code, out)
@@ -307,21 +307,21 @@ func TestRunRelease_MergedPullRequestDeletesTheBranch(t *testing.T) {
 	}
 }
 
-// Without gh, the content check lets the release through but proves nothing
+// Without gh, the content check lets the strike through but proves nothing
 // about the branch, so it stays and the output says what to do.
-func TestRunRelease_ContentOnlyLandingKeepsTheBranch(t *testing.T) {
+func TestRunStrike_ContentOnlyLandingKeepsTheBranch(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusDone)
 	// Make the content check pass: the base must hold the camp's content
 	// at its tip.
 	if err := os.WriteFile(filepath.Join(m.project, "change.txt"), []byte("hi\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	releaseGitT(t, m.project, "commit", "-q", "-am", "back to the mission content")
+	strikeGitT(t, m.project, "commit", "-q", "-am", "back to the mission content")
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
 	if code != 0 {
-		t.Fatalf("expected the release to pass, got %d: %s", code, out)
+		t.Fatalf("expected the strike to pass, got %d: %s", code, out)
 	}
 	if !projectHasBranch(t, m) || !strings.Contains(out, "kept branch "+m.task.CampBranch) || !strings.Contains(out, "git branch -D "+m.task.CampBranch) {
 		t.Errorf("expected the branch kept with a hint, got: %s", out)
@@ -329,11 +329,11 @@ func TestRunRelease_ContentOnlyLandingKeepsTheBranch(t *testing.T) {
 }
 
 // --discard never deletes an unlanded branch: its commits stay reachable.
-func TestRunRelease_DiscardKeepsAnUnlandedBranch(t *testing.T) {
+func TestRunStrike_DiscardKeepsAnUnlandedBranch(t *testing.T) {
 	m := newRemotelyMergedMission(t, state.StatusShipped)
-	ghForRelease(t, true, openPRView)
+	ghForStrike(t, true, openPRView)
 
-	code, out := releaseOf(t, m, releaseOptions{Discard: true})
+	code, out := strikeOf(t, m, strikeOptions{Discard: true})
 
 	if code != 0 || !projectHasBranch(t, m) || strings.Contains(out, "deleted branch") {
 		t.Fatalf("expected the unlanded branch kept, got %d: %s", code, out)
@@ -341,14 +341,14 @@ func TestRunRelease_DiscardKeepsAnUnlandedBranch(t *testing.T) {
 }
 
 // A fast-forward landed branch is an ancestor: plain branch -d semantics.
-func TestRunRelease_LandedBranchIsDeleted(t *testing.T) {
+func TestRunStrike_LandedBranchIsDeleted(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
 	task := doneMissionTask(t, project, home)
-	releaseGitT(t, project, "merge", "--ff-only", task.CampBranch)
+	strikeGitT(t, project, "merge", "--ff-only", task.CampBranch)
 	m := remotelyMergedMission{project: project, home: home, task: task}
 
-	code, out := releaseOf(t, m, releaseOptions{})
+	code, out := strikeOf(t, m, strikeOptions{})
 
 	if code != 0 || projectHasBranch(t, m) || !strings.Contains(out, "pruned: deleted branch "+task.CampBranch) {
 		t.Fatalf("expected the landed branch deleted, got %d: %s", code, out)

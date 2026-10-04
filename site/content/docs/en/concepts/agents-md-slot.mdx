@@ -9,7 +9,7 @@ description: The block vexillum keeps inside your own AGENTS.md or CLAUDE.md, wh
 
 ## What the slot is
 
-The slot is a block that vexillum owns inside a file you own: your project's `AGENTS.md`, or its `CLAUDE.md` when there is no `AGENTS.md`. It carries the **always-on core** of the commander's rules, the few things that must be in context on every turn. Everything operational (how to dispatch, pick a model, land, ship, release, react to the sentinel) lives in [skills](/docs/concepts/skills) that Claude Code loads only when the moment calls for them.
+The slot is a block that vexillum owns inside a file you own: your project's `AGENTS.md`, or its `CLAUDE.md` when there is no `AGENTS.md`. It carries the **always-on core** of the commander's rules, the few things that must be in context on every turn. Everything operational (how to dispatch, pick a model, land, ship, strike, react to the sentinel) lives in [skills](/docs/concepts/skills) that Claude Code loads only when the moment calls for them.
 
 Why a slot, and not a rules file of its own:
 
@@ -60,7 +60,7 @@ Between the markers is the commander core. It holds:
 - **Vocabulary.** general, commander, soldier, mission, scout, camp, sentinel. These stay in English in every language.
 - **Authority.** An explicit instruction from you overrides a rule, but the commander says which rule it set aside.
 - **Tone.** How to address you, and to drop the flavor when the news is bad.
-- **The instruction to load the `vexillum` skill.** Before dispatching, picking a model, landing, shipping, releasing or handling a sentinel notice, the commander must load the skill and follow it, not work from memory. This is the hard link between the always-on core and the on-demand detail.
+- **The instruction to load the `vexillum` skill.** Before dispatching, picking a model, landing, shipping, striking or handling a sentinel notice, the commander must load the skill and follow it, not work from memory. This is the hard link between the always-on core and the on-demand detail.
 
 ### The END marker
 

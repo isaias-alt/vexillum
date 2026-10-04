@@ -90,12 +90,12 @@ There is no separate pipeline to track afterward, since it already ran to
 completion before `vx ship` returned. The mission is now `shipped`: pushed, with
 a real PR open, but not landed locally.
 
-A shipped soldier waits on purpose. `vx ship` does not release its camp: the
+A shipped soldier waits on purpose. `vx ship` does not strike its camp: the
 soldier's pane and worktree stay open until the general merges the PR, so if CI,
 a reviewer or the general asks for changes, the same soldier still has the
 context and the branch mounted. It is not stuck or stranded. It shows as
 `shipped` in `vx status` and under Shipped on the muster board, so never
-release it, redispatch it or report it as a problem just because it is idle.
+strike it, redispatch it or report it as a problem just because it is idle.
 
 To ask it for a fix, use `vx prompt <task-id> "<text>"`: it accepts a `shipped`
 task like any finished one, delivers the text to the soldier's pane and records it
@@ -106,7 +106,7 @@ the full tribunal runs, the commits are pushed to the same branch, and because a
 PR for the branch already exists `vx ship` reuses it (it never opens a second
 one) and refreshes its title and description. If that PR is already merged or was
 closed, `vx ship` refuses before running anything: a merged one needs `git pull`,
-`vx release` and a new mission for the follow-up.
+`vx strike` and a new mission for the follow-up.
 
 If the soldier rebased or amended the branch (for example after you asked it to
 catch up with the base), the next push is non-fast-forward, and `vx ship` handles
@@ -131,10 +131,10 @@ the same turn:
 
 ```
 git pull
-vx release <task-id>
+vx strike <task-id>
 ```
 
-Run `git pull` in the project's own checkout, on the base branch. `vx release`
+Run `git pull` in the project's own checkout, on the base branch. `vx strike`
 never fetches: it compares the camp against the local base branch only, so right
 after a remote merge and before the pull it refuses, and the refusal says to
 merge the pull request and run `git pull` on the base branch, then retry. It
@@ -142,7 +142,7 @@ leaves the camp and pane untouched. After the pull it passes, even for a squash
 or rebase merge, because it also accepts a camp whose content the base already
 contains. It still refuses a camp with uncommitted changes.
 
-For a shipped task only, `vx release` also asks `gh` about the PR, best effort
+For a shipped task only, `vx strike` also asks `gh` about the PR, best effort
 (`gh` installed and logged in, otherwise it silently relies on the local checks).
 When the PR is `MERGED` it trusts that over the content check, which can refuse
 forever after a remote merge when later commits touched the same lines, provided
@@ -150,17 +150,17 @@ the PR's merge commit is on the local base branch. If it is not yet, the refusal
 says to `git pull`. A camp holding commits the merged PR never carried is still
 refused. A task that is not shipped never triggers a network call.
 
-After a successful release it also deletes the task's local branch
+After a successful strike it also deletes the task's local branch
 `vexillum/<task-id>` with `git branch -d` semantics (never `-D`) when the branch
 is an ancestor of the base, or when the PR is `MERGED` on a pulled base. A branch
 checked out in another worktree is never deleted. Otherwise it keeps the branch
 and prints one line saying why and what the general can do. It also runs
 `git worktree prune` and prints what it pruned.
 
-## When release still refuses: `--discard`
+## When strike still refuses: `--discard`
 
 If the check cannot pass and the general confirmed that the camp's work is
-already on the base or is abandoned, `vx release <task-id> --discard` releases the
+already on the base or is abandoned, `vx strike <task-id> --discard` strikes the
 camp anyway. It prints each unlanded commit (hash and subject) and each
 uncommitted change it threw away, and resets the worktree so the slot can be
 reused. **Never use `--discard` without the general's approval**: ask first, say
