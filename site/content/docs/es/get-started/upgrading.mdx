@@ -1,41 +1,83 @@
 ---
 title: Actualización
-description: Actualizá el binario y después refrescá el scaffold de cada proyecto.
+description: Un solo comando actualiza el binario vx y después refresca el scaffold de cada proyecto.
 ---
 
-Actualizar tiene dos partes independientes: el binario, y los archivos que vexillum creó en tus proyectos.
-
-## El binario
-
-Usá el mismo canal con el que instalaste:
-
-```bash
-brew upgrade vexillum
-```
-
-o volvé a correr el [script de curl](/es/docs/get-started/install); instala el último release.
-
-## El scaffold de un proyecto
-
-Un binario nuevo puede traer un núcleo del commander, skills o un hook más nuevos. Refrescá un proyecto con:
+`vx upgrade` hace dos cosas, en este orden: actualiza el binario `vx` y después refresca los archivos que vexillum creó en el proyecto actual, usando el binario nuevo para que se apliquen sus plantillas.
 
 ```bash
 vx upgrade
 ```
 
-`upgrade` funciona como [`init`](/es/docs/get-started/quickstart): lista los archivos tuyos que va a cambiar y pregunta antes (`Continue? [Y/n]`). Después:
+## El binario
+
+La forma en que se instaló `vx` decide qué hace `upgrade`. Resuelve la ruta del ejecutable en uso y elige uno de tres casos:
+
+| Instalado con | Qué hace `upgrade` |
+| --- | --- |
+| Homebrew (el binario está dentro de un `Cellar` de Homebrew) | Corre `brew upgrade vexillum`. |
+| El [script de instalación](/es/docs/get-started/install) (una descarga directa) | Descarga el archivo del release para tu sistema operativo y arquitectura desde GitHub Releases, verifica su checksum sha256 contra el `checksums.txt` del release y reemplaza el ejecutable de forma atómica: el archivo nuevo se escribe junto al viejo y después se renombra encima, conservando su modo. |
+| Cualquier otra cosa, como un build desde el código fuente o un binario renombrado | Se niega, y te dice cómo reinstalar. |
+
+`upgrade` se detiene, sin tocar el binario, cuando el checksum no coincide, cuando el release no tiene un archivo para tu plataforma o cuando el directorio donde está `vx` no tiene permiso de escritura. En este último caso te indica reinstalar en un directorio tuyo: corré el script de instalación con `VX_INSTALL_DIR` apuntando a él.
+
+Cuando `vx` ya está en el último release, deja el binario como está, y `upgrade` nunca baja de versión. Igual refresca el scaffold del proyecto.
+
+Un sentinel que ya está corriendo nota que su binario fue reemplazado y se retira, y el siguiente comando que necesite uno lo arranca desde el binario nuevo. No lo reiniciás vos. Ver [Sentinel](/es/docs/concepts/sentinel#mantenerse-al-día).
+
+## Canales
+
+`--channel` elige qué releases sigue `upgrade`. Hay dos:
+
+| Canal | Sigue |
+| --- | --- |
+| `stable` (el predeterminado) | El último release completo. |
+| `canary` | El último pre-release cuyo tag contiene `-canary.`. |
+
+```bash
+vx upgrade --channel canary
+```
+
+Una instalación con Homebrew solo sigue `stable`. Para seguir `canary`, instalá `vx` con el script de instalación y después corré el comando de arriba. Para volver a los releases estables, corré `vx upgrade --channel stable`: instala el último release estable cuando es más nuevo que la versión que tenés.
+
+## Verificar sin cambiar nada
+
+```bash
+vx upgrade --check
+```
+
+imprime la versión disponible en el canal y no cambia nada: ni el binario ni el proyecto.
+
+## El scaffold de un proyecto
+
+Un binario nuevo puede traer un núcleo del commander, skills o un hook más nuevos. Después del paso del binario, `upgrade` refresca el proyecto donde lo corriste. Fuera de un proyecto inicializado solo actualiza el binario.
+
+El refresco funciona como [`init`](/es/docs/get-started/quickstart): lista los archivos tuyos que va a cambiar y pregunta antes (`Continue? [Y/n]`). Después:
 
 - Escribe o actualiza el bloque de vexillum en el archivo que lo tiene (`AGENTS.md`, o `CLAUDE.md` cuando el bloque vive ahí) y, cuando el bloque está en `AGENTS.md`, se asegura de que `CLAUDE.md` lo importe. Un bloque que editaste **no** se pisa: `upgrade` imprime el diff entre el tuyo y la plantilla actual. Un bloque malformado no se toca hasta que confirmes las reparaciones que lista, y el archivo se guarda antes en `.vexillum/AGENTS.md.backup` (o `.vexillum/CLAUDE.md.backup`). Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot);
 - Refresca las skills instaladas que no cambiaron desde que vexillum las escribió (se guarda un hash de contenido por skill en `.vexillum/config.json`) y reporta las que editaste. Ver [Skills](/es/docs/concepts/skills);
 - Mantiene al día el hook `Stop` del sentinel, para que encuentre `vx` aunque no esté en el `PATH` del shell del hook (el comando también prueba `~/.local/bin`, Homebrew y `/usr/local/bin`). Tus propios hooks `Stop` se conservan. Ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path);
 - Crea `.vexillum/models.json` si falta. Uno existente nunca se pisa: es tuyo. Ver [`models.json`](/es/docs/reference/models-json).
 
-Sin terminal `upgrade` no pregunta nada y no cambia nada salvo que pases `--yes`.
+Sin terminal el refresco no pregunta nada y no cambia nada salvo que pases `--yes`.
+
+Para refrescar solo el scaffold y dejar el binario como está, por ejemplo sin conexión o en un script, corré:
+
+```bash
+vx upgrade --scaffold-only
+```
+
+## Flags
 
 | Flag | Efecto |
 | --- | --- |
+| `--channel stable\|canary` | Canal de releases a seguir. El predeterminado es `stable`. |
+| `--check` | Imprime la versión disponible y no cambia nada. |
+| `--scaffold-only` | Refresca el scaffold y deja el binario como está. |
 | `--yes`, `-y` | Acepta todas las preguntas, incluso las reparaciones de un bloque malformado (el archivo se respalda antes). |
 | `--force` | Sobrescribe lo que editaste: el bloque de vexillum o una skill editada. Antes se guarda un backup: `.vexillum/agents-md-slot.backup.md` para el bloque, `.vexillum/backups/skills/<name>/` para una skill. |
 | `--lang en\|es` | Idioma del bloque, en lugar de conservar el idioma actual del bloque o detectarlo. |
 | `--skills` | Instala también las skills que faltan. |
 | `--no-skills` | Deja las skills como están: sin instalar ni refrescar. |
+
+Ver la [referencia de `vx upgrade`](/es/docs/reference/cli/upgrade).

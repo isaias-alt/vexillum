@@ -1,41 +1,83 @@
 ---
 title: Upgrading
-description: Upgrade the binary, then refresh each project's scaffold.
+description: One command updates the vx binary and then refreshes each project's scaffold.
 ---
 
-Upgrading has two independent parts: the binary, and the files vexillum scaffolded into your projects.
-
-## The binary
-
-Use the same channel you installed with:
-
-```bash
-brew upgrade vexillum
-```
-
-or run the [curl install script](/docs/get-started/install) again; it installs the latest release.
-
-## A project's scaffold
-
-A new binary may ship a newer commander core, newer skills or a newer hook. Refresh a project with:
+`vx upgrade` does two things, in this order: it updates the `vx` binary itself, then it refreshes the files vexillum scaffolded into the current project, using the new binary so its templates are the ones that apply.
 
 ```bash
 vx upgrade
 ```
 
-`upgrade` works like [`init`](/docs/get-started/quickstart): it lists the files of yours it will change and asks first (`Continue? [Y/n]`). Then it:
+## The binary
+
+How `vx` was installed decides what `upgrade` does. It resolves the path of the running executable and picks one of three cases:
+
+| Installed with | What `upgrade` does |
+| --- | --- |
+| Homebrew (the binary lives under a Homebrew `Cellar`) | Runs `brew upgrade vexillum`. |
+| The [install script](/docs/get-started/install) (a direct download) | Downloads the release archive for your OS and architecture from GitHub Releases, verifies its sha256 checksum against the release's `checksums.txt`, and replaces the executable atomically: the new file is written next to the old one and then renamed over it, keeping its file mode. |
+| Anything else, such as a build from source or a renamed binary | Refuses, and tells you how to reinstall. |
+
+`upgrade` stops, with the binary untouched, when the checksum does not match, when the release has no archive for your platform, or when the directory that holds `vx` is not writable. For the last case it tells you to reinstall into a directory you own: run the install script with `VX_INSTALL_DIR` set to it.
+
+When `vx` is already on the latest release it leaves the binary alone, and `upgrade` never downgrades. It still refreshes the project's scaffold.
+
+A sentinel that is already running notices that its binary was replaced and retires, and the next command that needs one starts it from the new binary. You do not restart it yourself. See [Sentinel](/docs/concepts/sentinel#staying-current).
+
+## Channels
+
+`--channel` picks which releases `upgrade` follows. There are two:
+
+| Channel | Follows |
+| --- | --- |
+| `stable` (the default) | The latest full release. |
+| `canary` | The latest pre-release whose tag contains `-canary.`. |
+
+```bash
+vx upgrade --channel canary
+```
+
+A Homebrew install only follows `stable`. To follow `canary`, install `vx` with the install script instead and then run the command above. To go back to the stable releases, run `vx upgrade --channel stable`: it installs the latest stable release once that is newer than the version you have.
+
+## Check without changing anything
+
+```bash
+vx upgrade --check
+```
+
+prints the version that is available on the channel and changes nothing: not the binary, not the project.
+
+## A project's scaffold
+
+A new binary may ship a newer commander core, newer skills or a newer hook. After the binary step, `upgrade` refreshes the project you ran it in. Outside an initialized project it only updates the binary.
+
+The refresh works like [`init`](/docs/get-started/quickstart): it lists the files of yours it will change and asks first (`Continue? [Y/n]`). Then it:
 
 - Writes or updates the vexillum block in the file that holds it (`AGENTS.md`, or `CLAUDE.md` when the block lives there) and, when the block is in `AGENTS.md`, makes sure `CLAUDE.md` imports it. A block you edited is **not** overwritten: `upgrade` prints the diff between yours and the current template. A malformed block is not touched until you confirm the repairs it lists, and the file is saved to `.vexillum/AGENTS.md.backup` (or `.vexillum/CLAUDE.md.backup`) first. See [The AGENTS.md slot](/docs/concepts/agents-md-slot);
 - Refreshes the installed skills that are unchanged since vexillum wrote them (a content hash per skill is kept in `.vexillum/config.json`) and reports the ones you edited. See [Skills](/docs/concepts/skills);
 - Keeps the sentinel `Stop` hook current, so it finds `vx` even when it is not on the `PATH` of the hook's shell (the command also tries `~/.local/bin`, Homebrew and `/usr/local/bin`). Your own `Stop` hooks are kept. See [Sentinel](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path);
 - Creates `.vexillum/models.json` if it is missing. An existing one is never overwritten: it is yours. See [`models.json`](/docs/reference/models-json).
 
-Without a terminal `upgrade` asks nothing and changes nothing unless you pass `--yes`.
+Without a terminal the refresh asks nothing and changes nothing unless you pass `--yes`.
+
+To refresh only the scaffold and leave the binary alone, for example offline or in a script, run:
+
+```bash
+vx upgrade --scaffold-only
+```
+
+## Flags
 
 | Flag | Effect |
 | --- | --- |
+| `--channel stable\|canary` | Release channel to follow. The default is `stable`. |
+| `--check` | Print the available version and change nothing. |
+| `--scaffold-only` | Refresh the scaffold and leave the binary alone. |
 | `--yes`, `-y` | Accept every question, including the repairs to a malformed block (the file is backed up first). |
 | `--force` | Overwrite what you edited: the vexillum block or an edited skill. A backup is saved first: `.vexillum/agents-md-slot.backup.md` for the block, `.vexillum/backups/skills/<name>/` for a skill. |
 | `--lang en\|es` | Language of the block, instead of keeping the block's current language or detecting it. |
 | `--skills` | Also install the skills that are missing. |
 | `--no-skills` | Leave the skills alone: no install, no refresh. |
+
+See the [`vx upgrade` reference](/docs/reference/cli/upgrade).

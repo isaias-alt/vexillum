@@ -39,7 +39,7 @@ curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/
 | Command | Description |
 | --- | --- |
 | `vx init` | Prepare the current project to be orchestrated by vexillum |
-| `vx upgrade` | Refresh an already-initialized project's vexillum scaffold |
+| `vx upgrade` | Update vx to the latest release, then refresh the project's vexillum scaffold |
 | `vx doctor` | Report on the health of the vexillum environment |
 | `vx dispatch` | Dispatch a soldier (mission or scout) into an isolated camp |
 | `vx models` | List the model and effort profiles a dispatch can use |
