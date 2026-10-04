@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { INSTALL_COMMANDS } from "@/lib/site";
 
-const TABS = ["curl", "brew"] as const;
+const TABS = ["brew", "curl"] as const;
 
-// design/Vexillum Landing.dc.html: a segmented curl|brew switch above a
+// design/Vexillum Landing.dc.html: a segmented brew|curl switch above a
 // sunken command box with a copy button.
 export function InstallCommand({
   className,
@@ -16,7 +16,7 @@ export function InstallCommand({
   copy?: string;
   copied?: string;
 }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("curl");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("brew");
   const [done, setDone] = useState(false);
 
   async function handleCopy() {

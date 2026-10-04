@@ -76,7 +76,7 @@ const en: Dictionary = {
         title: "Install vexillum",
         command: "curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash",
         description:
-          "One binary, no runtime dependencies. Works the same over curl or brew.",
+          "One binary, no runtime dependencies. Works the same over brew or curl.",
         output: [
           "[ok]    Checksum verified",
           "[ok]    Installed vx to /usr/local/bin/vx",
@@ -206,7 +206,7 @@ const es: Dictionary = {
         {
           title: "Instalá vexillum",
           description:
-            "Un solo binario, sin dependencias de runtime. Funciona igual con curl o con brew.",
+            "Un solo binario, sin dependencias de runtime. Funciona igual con brew o con curl.",
         },
         {
           title: "Despachá una mission",
