@@ -1,6 +1,6 @@
 ---
 title: Install
-description: Install the vexillum binary with Homebrew or the curl script, and check your environment.
+description: Install the vexillum binary with Homebrew or the curl script, pick a release channel, and check your environment.
 ---
 
 vexillum supports macOS and Linux, on amd64 and arm64.
@@ -31,6 +31,8 @@ The script:
 3. Otherwise downloads the release archive for your platform and **verifies its sha256 checksum** against the release's `checksums.txt`, refusing to install on a mismatch;
 4. Installs the binary into `/usr/local/bin`, or into `~/.local/bin` when you cannot write to `/usr/local/bin` (it warns if that directory is not on your PATH);
 5. Checks that a working `vx` now exists (in the install directory, the Homebrew prefix or your PATH) and exits with an error if it does not.
+
+Without options it installs the latest **stable** release and never a pre-release. To try a canary build or install an exact version, pass `--channel canary` or `--version <tag>`; both are direct downloads that skip Homebrew. See [Release channels](/docs/get-started/release-channels).
 
 Check it worked:
 

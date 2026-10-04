@@ -1,1 +1,1 @@
-{ "title": "Empezar", "defaultOpen": true, "pages": ["install", "quickstart", "upgrading"] }
+{ "title": "Empezar", "defaultOpen": true, "pages": ["install", "release-channels", "quickstart", "upgrading"] }

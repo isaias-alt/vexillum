@@ -25,6 +25,14 @@ curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/
 Both install a prebuilt binary for your platform (amd64/arm64). The curl
 script verifies the release checksum before installing.
 
+Both install the latest stable release. To try the latest canary build (no
+stability promise) or an exact version, pass an option to the script:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --channel canary
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --version v0.2.0-rc.1
+```
+
 ## Usage
 
 <!-- docgen:commands:start -->

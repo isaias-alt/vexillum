@@ -1,0 +1,94 @@
+---
+title: Release channels
+description: Stable, rc and canary - what each channel is, how to install it, and what to expect from it.
+---
+
+vexillum ships through three channels. Most people want **stable**, which is what the default install gives you. The other two exist so you can try what is coming before it is released.
+
+| Channel | Version looks like | What it is | Promise |
+| --- | --- | --- | --- |
+| stable | `v0.2.0` | The official release, cut by hand. | The one to rely on. |
+| rc | `v0.2.0-rc.1` | A release candidate: the build that is about to become a stable release. | Close to final, published to be tried. |
+| canary | `v0.2.1-canary.20261004.gabc1234` | A build of the latest work, made automatically. | None. |
+
+Stable is the only channel that reaches Homebrew. rc and canary builds are published as GitHub pre-releases, so they never replace the version `brew install` or the default install gives you.
+
+## Stable
+
+Stable releases are cut by hand, when the work is ready. This is the default channel:
+
+<CodeBlockTabs defaultValue="brew">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="brew">brew</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="curl">curl</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="brew">
+```bash
+brew install isaias-alt/tap/vexillum
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="curl">
+```bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+The install script never installs a pre-release on its own: without options it installs the latest stable release. See [Install](/docs/get-started/install).
+
+## rc
+
+An rc (release candidate) is published before a stable release so the release itself can be tried. It is a GitHub pre-release and is not offered through Homebrew or by the default install. To install a specific one, name its version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --version v0.2.0-rc.1
+```
+
+Find the available versions on the [GitHub releases page](https://github.com/isaias-alt/vexillum/releases).
+
+## Canary
+
+A canary is a build of the latest work. One is made every night, and only when there is something new since the previous one, so a quiet week produces no builds. A canary never turns into a stable release by itself, and it never reaches Homebrew.
+
+Install the latest canary with the `--channel` option:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --channel canary
+```
+
+Canary installs are always a direct download, even when Homebrew is on your PATH. The script verifies the sha256 checksum of the archive, installs `vx` into `/usr/local/bin` (or `~/.local/bin` when you cannot write there) and prints the exact build it installed:
+
+```bash
+vx --version
+```
+
+<Callout type="warn" title="Canary has no stability promise">
+  A canary can contain unfinished work, change behavior from one build to the next or break. Do not use it for work you cannot afford to interrupt. If something breaks, go back to stable.
+</Callout>
+
+Every canary is a separate build with its own version: the next patch after the latest stable, the build date and the commit it was built from, as in `v0.2.1-canary.20261004.gabc1234`. It documents itself on GitHub: open the release for its version to see what changed in that build, and read the project as it was at that version. Old canary builds are cleaned up after a while, so pin a canary only for as long as you are testing it.
+
+### Go back to stable
+
+Remove the canary `vx` from the directory the install message printed (for example `/usr/local/bin`) and install stable again:
+
+```bash
+rm /usr/local/bin/vx
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
+```
+
+If you installed with Homebrew before, make sure the `vx` that runs is the one you want: `vx doctor` warns when another `vx` earlier in your PATH shadows the one you just installed.
+
+## Install options
+
+These options go after `bash -s --` when you pipe the script:
+
+| Option | Effect |
+| --- | --- |
+| `--channel stable` | The default. Installs the latest stable release, through Homebrew when it is available. Never installs a pre-release. |
+| `--channel canary` | Installs the latest canary build by direct download. |
+| `--version <tag>` | Installs exactly that release by direct download, for example `v0.2.0` or `v0.2.0-rc.1`. The leading `v` is optional. |
+
+`--channel` and `--version` cannot be combined: a version already names the exact release. `--help` prints the same list.
+
+Next: the [Install](/docs/get-started/install) page covers what the script checks and how to verify your environment.
