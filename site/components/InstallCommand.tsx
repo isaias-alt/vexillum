@@ -1,71 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import {
+  CodeBlock,
+  CodeBlockTab,
+  CodeBlockTabs,
+  CodeBlockTabsList,
+  CodeBlockTabsTrigger,
+  Pre,
+} from "fumadocs-ui/components/codeblock";
 import { INSTALL_COMMANDS } from "@/lib/site";
 
 const TABS = ["brew", "curl"] as const;
 
-// design/Vexillum Landing.dc.html: a segmented brew|curl switch above a
-// sunken command box with a copy button.
-export function InstallCommand({
-  className,
-  copy = "copy",
-  copied = "copied",
-}: {
-  className?: string;
-  copy?: string;
-  copied?: string;
-}) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("brew");
-  const [done, setDone] = useState(false);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(INSTALL_COMMANDS[tab]);
-    } catch {
-      // clipboard unavailable (insecure context, blocked): the label still
-      // answers the click.
-    }
-    setDone(true);
-    setTimeout(() => setDone(false), 1600);
-  }
-
+// The same brew|curl tabbed code block the docs install page renders
+// (/docs/get-started/install#install-the-binary), so the hero and the docs
+// look and behave alike: tabs on top, a scrollable command, a copy button.
+export function InstallCommand({ className }: { className?: string }) {
   return (
-    <div className={className}>
-      <div
-        role="tablist"
-        aria-label="Install method"
-        className="mb-3.5 inline-flex overflow-hidden rounded-md border border-border"
-      >
+    <div className={`mx-auto max-w-[640px] text-left ${className ?? ""}`}>
+      <CodeBlockTabs defaultValue="brew">
+        <CodeBlockTabsList>
+          {TABS.map((t) => (
+            <CodeBlockTabsTrigger key={t} value={t}>
+              {t}
+            </CodeBlockTabsTrigger>
+          ))}
+        </CodeBlockTabsList>
         {TABS.map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={`cursor-pointer px-[18px] py-[9px] text-[12.5px] ${
-              tab === t
-                ? "bg-sunken text-text"
-                : "bg-transparent text-text-muted hover:text-text-secondary"
-            }`}
-          >
-            {t}
-          </button>
+          <CodeBlockTab key={t} value={t}>
+            <CodeBlock>
+              <Pre>
+                <code>
+                  <span className="line">{INSTALL_COMMANDS[t]}</span>
+                </code>
+              </Pre>
+            </CodeBlock>
+          </CodeBlockTab>
         ))}
-      </div>
-      <div className="mx-auto flex max-w-[560px] items-center gap-2.5 rounded-md border border-border bg-sunken px-[18px] py-3 text-[13px] text-text">
-        <span className="text-text-muted">$</span>
-        <code className="min-w-0 flex-1 overflow-x-auto text-left whitespace-nowrap">
-          {INSTALL_COMMANDS[tab]}
-        </code>
-        <button
-          onClick={handleCopy}
-          className="btn btn-secondary shrink-0"
-          style={{ fontSize: 11, padding: "4px 10px" }}
-        >
-          {done ? copied : copy}
-        </button>
-      </div>
+      </CodeBlockTabs>
     </div>
   );
 }

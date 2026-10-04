@@ -79,11 +79,7 @@ export default async function Home({
           <p className="mx-auto mb-8 max-w-[480px] text-sm leading-[1.7] text-text-secondary">
             {t.hero.sub}
           </p>
-          <InstallCommand
-            className="mb-5"
-            copy={lang === "es" ? "copiar" : "copy"}
-            copied={lang === "es" ? "copiado" : "copied"}
-          />
+          <InstallCommand className="mb-5" />
           <Link
             href={`${prefix}/docs`}
             className="btn btn-primary"
