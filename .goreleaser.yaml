@@ -71,6 +71,9 @@ brews:
     homepage: https://github.com/isaias-alt/vexillum
     description: "CLI orchestrator for code agents"
     license: "MIT"
+    # Only stable tags reach the tap: rc and canary tags (semver pre-releases)
+    # must never overwrite the formula that brew users get.
+    skip_upload: auto
     install: |
       bin.install "vx"
     test: |
@@ -80,5 +83,8 @@ release:
   github:
     owner: isaias-alt
     name: vexillum
+  # Tags with a pre-release suffix (-rc.N, -canary.<date>.<sha>) are published
+  # as GitHub pre-releases, so releases/latest keeps pointing at the last stable.
+  prerelease: auto
   footer: |
     {{ if .PreviousTag }}**Full changelog**: https://github.com/isaias-alt/vexillum/compare/{{ .PreviousTag }}...{{ .Tag }}{{ end }}
