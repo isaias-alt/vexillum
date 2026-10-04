@@ -14,8 +14,8 @@ Uso:
 
 Solo se puede responder una tarea con status "blocked". Entrega <answer> al
 pane de herdr todavía abierto del soldier y lo registra contra la decisión
-estructurada de la tarea (ver 'vx status --json', campo "decision"), no solo
-como más prosa en la transcripción. Si la pregunta abierta vino del selector
+estructurada de la tarea, no solo como más prosa en la transcripción. Esa
+decisión es el campo "decision" de 'vx status --json'. Si la pregunta abierta vino del selector
 AskUserQuestion de Claude Code, <answer> (el texto exacto de una opción, o su
 número renderizado, contando desde 1) se entrega como una única pulsación de
 tecla, el mismo mecanismo que usaría una persona al elegir en ese menú, salvo
@@ -39,8 +39,8 @@ estuvo preguntando nada) sin enviarle nada: ni un prompt ni una pulsación de
 tecla. La tarea pasa a ser lo que su pane dice que es: running si el soldier
 sigue trabajando, done (o unconfirmed) si terminó, interrupted si el pane ya
 no existe. Se rechaza si el pane está realmente bloqueado por una pregunta. La
-pregunta descartada queda en la tarea (ver 'vx status --json'), marcada como
-dismissed, y no la vuelve a bloquear. Usalo cuando 'vx prompt' o 'vx ship'
+pregunta descartada queda en la tarea, marcada como dismissed, y no la vuelve
+a bloquear; 'vx status --json' la muestra. Usalo cuando 'vx prompt' o 'vx ship'
 rechacen una tarea por estar blocked y no haya nada que responder.
 
 Si la tarea en realidad está "interrupted" (su pane de herdr ya no existe;

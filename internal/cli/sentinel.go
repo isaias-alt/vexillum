@@ -26,13 +26,12 @@ Usage:
   ` + cmdname.Name + ` sentinel         Poll forever (foreground; run it backgrounded)
   ` + cmdname.Name + ` sentinel drain   Print and acknowledge pending wakes right now
   ` + cmdname.Name + ` sentinel await   Block until a wake arrives, or time out (for the
-                             async Stop hook - see '` + cmdname.Name + ` init')
+                             async Stop hook set up by '` + cmdname.Name + ` init')
 
 The sentinel polls every tracked "running" task's live herdr status,
-across every project it's ever seen (one sentinel process per machine -
-see internal/sentinel.Tick). When one settles (done or blocked), it
-persists the change and records a durable wake, scoped to that task's own
-project. "drain"/"await" resolve which project to act on from the
+across every project it's ever seen (one sentinel process per machine).
+When one settles (done or blocked), it persists the change and records a
+durable wake, scoped to that task's own project. "drain"/"await" resolve which project to act on from the
 current directory (git toplevel, namespaced the same way "vx
 dispatch" namespaces a project's camps) - not a repo, or a toplevel
 that's itself a vexillum-managed camp, means nothing to drain here, so
@@ -49,12 +48,12 @@ happens to already be pending at the exact moment a turn is ending.
 reaches any other tool's own Claude Code turns too, which have no task
 for the sentinel to track.
 
-A wake can also be forum feedback: the forum listener (see "vx forum")
-stores a user's prompt in the project's inbox and records a forum wake, which
-both "drain" and "await" report as "forum session <file>: N new messages
+A wake can also be forum feedback: the forum listener stores a user's prompt
+in the project's inbox and records a forum wake, which both "drain" and
+"await" report as "forum session <file>: N new messages
 (ended: false). Run vx forum inbox." It is the same hook and the same
 once-only delivery; a forum wake whose messages were already confirmed is
-dropped.
+dropped. See "vx forum" for the listener.
 
 One sentinel runs per machine, enforced by a lock the kernel drops when the
 process dies, so a crash never leaves a stale claim. The sentinel records the

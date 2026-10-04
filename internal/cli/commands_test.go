@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -74,5 +75,17 @@ func TestCommandsReturnsACopy(t *testing.T) {
 	cs[0].Name = "mutated"
 	if Commands()[0].Name == "mutated" {
 		t.Error("Commands() exposes the registry's backing array")
+	}
+}
+
+// The help is published as the CLI reference, so it describes behavior for
+// users: no repository paths or Go identifiers, and cross references are
+// plain "See ..." sentences, never parenthesized.
+func TestUsageStaysUserFacing(t *testing.T) {
+	banned := regexp.MustCompile(`internal/|SKILL\.md|\.go\b|cmd/vx|tools/|\((?i:see) |\(v\d+\)`)
+	for _, c := range Commands() {
+		if m := banned.FindString(c.Usage); m != "" {
+			t.Errorf("%s: usage contains %q, which does not belong in the published reference", c.Name, m)
+		}
 	}
 }

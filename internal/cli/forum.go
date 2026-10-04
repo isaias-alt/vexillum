@@ -52,7 +52,7 @@ the session stays resumable). Delivered feedback is consumed. --reply shows
 the agent's markdown answer in the browser's conversation panel before it
 waits again; --reply-file reads it from a file (- is stdin). --timeout
 returns status timeout if nothing arrives in time. Run it again after each
-response; see skills/forum/SKILL.md for the exact output format.
+response. See the forum skill for the exact output format.
 
 forum poll --all listens to every open session at once, so one poll covers
 several review windows. Each call delivers the feedback of one session (the

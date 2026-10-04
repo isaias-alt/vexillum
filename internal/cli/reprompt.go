@@ -36,9 +36,9 @@ shipped, since the new commits are not on the pull request yet; run
 working - wait for it to settle.
 
 <text> is delivered to the soldier verbatim. It is also recorded on the task
-as an amendment (see '` + cmdname.Name + ` status --json', field "amendments"), with a timestamp and
-its source command, once it has been delivered: a mission's tribunal review
-judges the change against the dispatch prompt followed by these later
+as an amendment, with a timestamp and its source command, once it has been
+delivered; the amendments are the field "amendments" of '` + cmdname.Name + ` status --json'.
+A mission's tribunal review judges the change against the dispatch prompt followed by these later
 instructions, so what you asked for here is not reported as unrequested. The
 dispatch prompt itself is never changed. Amendments are written only by this
 command and by '` + cmdname.Name + ` decide', into the task's state file, never into a file in the

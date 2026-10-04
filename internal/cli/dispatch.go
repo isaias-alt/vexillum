@@ -32,7 +32,7 @@ it never picks one for you.
 optional ~/.vexillum/models.json over the built-in defaults). An explicit
 --model or --effort still wins over the profile. An unknown profile is
 an error listing the valid ones; "default" selects the table's default
-entry. Which profile fits a task is your call - see the vexillum skill.
+entry. Which profile fits a task is your call. See the vexillum skill.
 
 Runs a real, interactive Claude Code session in a herdr pane, inside a
 fresh git worktree isolated from this project's own working tree, with
@@ -49,7 +49,7 @@ Returns quickly: it only waits out a short quick-settle probe, not the
 soldier's whole task. A trivial prompt may finish within that window and
 report its result immediately; anything else is left running and
 auto-starts a sentinel (if one isn't already watching this project) to
-record its final status - see '` + cmdname.Name + ` sentinel'.
+record its final status. See '` + cmdname.Name + ` sentinel'.
 `
 
 // Dispatch runs the "vx dispatch" command.

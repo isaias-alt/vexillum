@@ -100,8 +100,8 @@ upgrade trabaja en dos pasos.
 
 2. El scaffold. Se arranca el binario nuevo para refrescar los archivos del
    proyecto, así se aplican sus propias plantillas. Lista los archivos tuyos que
-   va a cambiar y pide consentimiento primero, igual que 'vx init' (ver su
-   ayuda), y después:
+   va a cambiar y pide consentimiento primero, igual que 'vx init'. Ver su
+   ayuda. Después:
 
   - escribe o actualiza el bloque de vexillum en el archivo que lo contiene
     (AGENTS.md, o CLAUDE.md cuando el bloque vive ahí), y se asegura de que
@@ -197,7 +197,7 @@ models' la lista: <project>/.vexillum/models.json sobre el
 ~/.vexillum/models.json opcional sobre los valores por defecto incluidos). Un
 --model o --effort explícito sigue ganándole al perfil. Un perfil desconocido
 es un error que lista los válidos; "default" selecciona la entrada por defecto
-de la tabla. Qué perfil conviene a una tarea lo decidís vos: ver la skill
+de la tabla. Qué perfil conviene a una tarea lo decidís vos. Ver la skill
 vexillum.
 
 Corre una sesión real e interactiva de Claude Code en un pane de herdr, dentro
@@ -215,7 +215,7 @@ Vuelve rápido: solo espera una breve sonda de arranque, no la tarea
 completa del soldier. Un prompt trivial puede terminar dentro de esa ventana e
 informar su resultado de inmediato; cualquier otro se deja corriendo e inicia
 automáticamente un sentinel (si no hay uno ya vigilando este proyecto) para
-registrar su estado final: ver 'vx sentinel'.
+registrar su estado final. Ver 'vx sentinel'.
 `,
 	},
 
@@ -293,8 +293,8 @@ Uso:
 
 Solo se puede responder una tarea con status "blocked". Entrega <answer> al
 pane de herdr todavía abierto del soldier y lo registra contra la decisión
-estructurada de la tarea (ver 'vx status --json', campo "decision"), no solo
-como más prosa en la transcripción. Si la pregunta abierta vino del selector
+estructurada de la tarea, no solo como más prosa en la transcripción. Esa
+decisión es el campo "decision" de 'vx status --json'. Si la pregunta abierta vino del selector
 AskUserQuestion de Claude Code, <answer> (el texto exacto de una opción, o su
 número renderizado, contando desde 1) se entrega como una única pulsación de
 tecla, el mismo mecanismo que usaría una persona al elegir en ese menú, salvo
@@ -318,8 +318,8 @@ estuvo preguntando nada) sin enviarle nada: ni un prompt ni una pulsación de
 tecla. La tarea pasa a ser lo que su pane dice que es: running si el soldier
 sigue trabajando, done (o unconfirmed) si terminó, interrupted si el pane ya
 no existe. Se rechaza si el pane está realmente bloqueado por una pregunta. La
-pregunta descartada queda en la tarea (ver 'vx status --json'), marcada como
-dismissed, y no la vuelve a bloquear. Usalo cuando 'vx prompt' o 'vx ship'
+pregunta descartada queda en la tarea, marcada como dismissed, y no la vuelve
+a bloquear; 'vx status --json' la muestra. Usalo cuando 'vx prompt' o 'vx ship'
 rechacen una tarea por estar blocked y no haya nada que responder.
 
 Si la tarea en realidad está "interrupted" (su pane de herdr ya no existe;
@@ -355,9 +355,9 @@ decide' (o, si se marcó blocked por error, se limpia con 'vx decide <task-id>
 está trabajando: esperá a que termine.
 
 <text> se entrega al soldier tal cual. También se registra en la tarea como
-una enmienda (ver 'vx status --json', campo "amendments"), con una marca de
-tiempo y su comando de origen, una vez entregado: la revisión del tribunal de
-una mission juzga el cambio contra el prompt del dispatch seguido de estas
+una enmienda, con una marca de tiempo y su comando de origen, una vez
+entregado; las enmiendas son el campo "amendments" de 'vx status --json'. La
+revisión del tribunal de una mission juzga el cambio contra el prompt del dispatch seguido de estas
 instrucciones posteriores, así que lo que pediste acá no se informa como no
 solicitado. El prompt del dispatch en sí nunca se modifica. Las enmiendas las
 escriben solo este comando y 'vx decide', en el archivo de estado de la tarea,
@@ -380,16 +380,21 @@ diseñada, aterrizar una terminada, hacer ship de un PR) y que, si no, vivirían
 solo en la cabeza del commander, perdidas si la sesión se corta.
 
 Uso:
-  vx pending add <text>
+  vx pending add <text> [--option <label>]... [--recommend <n>]
   vx pending list [--json]
   vx pending clear <id>
 
-add registra <text> como una nueva decisión pendiente e imprime su id. clear
-elimina una cuando el general ya decidió. list las imprime de la más antigua
-a la más nueva.
+add registra <text> como una nueva decisión pendiente e imprime su id. Dale
+las respuestas entre las que el general puede elegir con un --option <label>
+por respuesta, en orden, y marcá la que recomendás con --recommend <n> (índice
+desde 1 dentro de las opciones; necesita al menos un --option). Poné "--" antes
+de un texto que empiece con "--". clear elimina una cuando el general ya
+decidió. list las imprime de la más antigua a la más nueva, con las opciones
+numeradas y la recomendada marcada.
 
-Esta es una categoría distinta de una tarea blocked (un soldier que necesita al
-general, ver 'vx decide'): acá es el commander quien necesita al general. Una
+Esta es una categoría distinta de una tarea blocked: allá un soldier necesita
+al general y 'vx decide' la responde; acá es el commander quien necesita al
+general. Una
 mission done que espera 'vx land' no necesita ninguna entrada, la skill /muster
 lo deriva de git; usá esto para decisiones que no existen en ningún otro lado.
 
@@ -401,11 +406,14 @@ objeto JSON:
     "schema_version": 1,
     "generated_at": "2026-09-24T12:00:00Z",
     "pending": [
-      {"schema_version": 1, "id": "1a2b3c4d", "text": "...", "created_at": "..."}
+      {"schema_version": 1, "id": "1a2b3c4d", "text": "...",
+       "options": ["...", "..."], "recommended": 1, "created_at": "..."}
     ]
   }
 
-La skill /muster lee esto para mostrar una sección "Pending decisions".
+"options" y "recommended" se omiten en un item registrado sin ellos. La skill
+/muster lee esto para mostrar cada item como una tarjeta en su sección
+"Decisions for you".
 `,
 	},
 
@@ -429,9 +437,9 @@ primero).
     "tasks": [ ... ]
   }
 
-"tasks" es exactamente el esquema internal/state.Task (v3) que el propio
-vexillum persiste en <project root>/tasks/*.json: este comando no le agrega
-nada, así que un consumidor (por ejemplo el plugin /muster) lee la misma forma
+"tasks" es exactamente el registro de tarea que el propio vexillum persiste en
+<project root>/tasks/*.json: este comando no le agrega nada, así que un
+consumidor (por ejemplo la skill /muster) lee la misma forma
 con la que razona el propio vexillum, nunca una reinterpretación aparte. El
 agrupamiento, el filtrado y los juicios (qué cuenta como "needs attention",
 qué está en la sesión actual, el enriquecimiento con PRs de GitHub) se dejan a
@@ -642,13 +650,12 @@ Uso:
                       segundo plano)
   vx sentinel drain   Imprime y confirma los wakes pendientes ahora mismo
   vx sentinel await   Bloquea hasta que llegue un wake, o hasta el timeout
-                      (para el hook Stop asíncrono: ver 'vx init')
+                      (para el hook Stop asíncrono que configura 'vx init')
 
 El sentinel consulta cada tarea "running" rastreada en el status en vivo de
 herdr, en todos los proyectos que haya visto alguna vez (un proceso sentinel
-por máquina: ver internal/sentinel.Tick). Cuando una termina (done o
-blocked), persiste el cambio y registra un wake durable, con alcance al
-proyecto propio de esa tarea. "drain" y "await" resuelven en qué proyecto
+por máquina). Cuando una termina (done o blocked), persiste el cambio y
+registra un wake durable, con alcance al proyecto propio de esa tarea. "drain" y "await" resuelven en qué proyecto
 actuar a partir del directorio actual (el toplevel de git, con el mismo
 namespace con el que "vx dispatch" arma los camps de un proyecto): si no es un
 repo, o si el toplevel es en sí un camp administrado por vexillum, no hay nada
@@ -665,12 +672,11 @@ administrado por herdr (sin HERDR_WORKSPACE_ID): el hook se commitea en el
 proyecto y por eso alcanza también a los turnos de Claude Code de cualquier
 otra herramienta, que no tienen ninguna tarea para que el sentinel rastree.
 
-Un wake también puede ser feedback de forum: el listener de forum (ver "vx
-forum") guarda el prompt de un usuario en el inbox del proyecto y registra un
-wake de forum, que tanto "drain" como "await" informan como "forum session
-<file>: N new messages (ended: false). Run vx forum inbox." Es el mismo hook y
-la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
-confirmados se descarta.
+Un wake también puede ser feedback de forum: el listener de forum guarda el prompt de un usuario en el inbox del
+proyecto y registra un wake de forum, que tanto "drain" como "await" informan
+como "forum session <file>: N new messages (ended: false). Run vx forum
+inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
+confirmados se descarta. Ver "vx forum" para el listener.
 
 Corre un sentinel por máquina, garantizado por un lock que el kernel suelta
 cuando el proceso muere, así que un crash nunca deja un reclamo viejo. El
@@ -724,8 +730,8 @@ browser_disconnected; la sesión se puede retomar). El feedback entregado se
 consume. --reply muestra la respuesta en markdown del agente en el panel de
 conversación del navegador antes de volver a esperar; --reply-file la lee de
 un archivo (- es stdin). --timeout devuelve el status timeout si no llega nada
-a tiempo. Correlo de nuevo después de cada respuesta; ver skills/forum/SKILL.md
-para el formato exacto de la salida.
+a tiempo. Correlo de nuevo después de cada respuesta. Ver la skill forum para el formato
+exacto de la salida.
 
 forum poll --all escucha todas las sesiones abiertas a la vez, así que un solo
 poll cubre varias ventanas de revisión. Cada llamada entrega el feedback de una

@@ -30,9 +30,9 @@ decide' (o, si se marcó blocked por error, se limpia con 'vx decide <task-id>
 está trabajando: esperá a que termine.
 
 <text> se entrega al soldier tal cual. También se registra en la tarea como
-una enmienda (ver 'vx status --json', campo "amendments"), con una marca de
-tiempo y su comando de origen, una vez entregado: la revisión del tribunal de
-una mission juzga el cambio contra el prompt del dispatch seguido de estas
+una enmienda, con una marca de tiempo y su comando de origen, una vez
+entregado; las enmiendas son el campo "amendments" de 'vx status --json'. La
+revisión del tribunal de una mission juzga el cambio contra el prompt del dispatch seguido de estas
 instrucciones posteriores, así que lo que pediste acá no se informa como no
 solicitado. El prompt del dispatch en sí nunca se modifica. Las enmiendas las
 escriben solo este comando y 'vx decide', en el archivo de estado de la tarea,

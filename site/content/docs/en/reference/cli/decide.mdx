@@ -14,8 +14,8 @@ Usage:
 
 Only a task in status "blocked" can be answered. Delivers <answer> to the
 soldier's still-open herdr pane and records it against the task's structured
-decision (see 'vx status --json', field "decision"), not just as more
-prose in the transcript. If the open question came from Claude Code's
+decision, not just as more prose in the transcript. That decision is the
+field "decision" of 'vx status --json'. If the open question came from Claude Code's
 AskUserQuestion selector, <answer> (an option's exact text, or its 1-based
 rendered number) is delivered as a single key press - the same mechanism a
 human picking from that menu would use - unless it resolves to "Type
@@ -36,8 +36,8 @@ never really asking anything - without sending it anything: no prompt, no key
 press. The task becomes whatever its pane says it is: running if the soldier
 is still working, done (or unconfirmed) if it has settled, interrupted if the
 pane is gone. It is refused if the pane is genuinely blocked on a question.
-The dismissed question stays on the task (see 'vx status --json'), marked
-dismissed, and does not block it again. Use it when 'vx prompt' or
+The dismissed question stays on the task, marked dismissed, and does not
+block it again; 'vx status --json' shows it. Use it when 'vx prompt' or
 'vx ship' refuse a task as blocked and there is nothing to answer.
 
 If the task is actually "interrupted" (its herdr pane is gone - vexillum

@@ -13,13 +13,12 @@ Uso:
                       segundo plano)
   vx sentinel drain   Imprime y confirma los wakes pendientes ahora mismo
   vx sentinel await   Bloquea hasta que llegue un wake, o hasta el timeout
-                      (para el hook Stop asíncrono: ver 'vx init')
+                      (para el hook Stop asíncrono que configura 'vx init')
 
 El sentinel consulta cada tarea "running" rastreada en el status en vivo de
 herdr, en todos los proyectos que haya visto alguna vez (un proceso sentinel
-por máquina: ver internal/sentinel.Tick). Cuando una termina (done o
-blocked), persiste el cambio y registra un wake durable, con alcance al
-proyecto propio de esa tarea. "drain" y "await" resuelven en qué proyecto
+por máquina). Cuando una termina (done o blocked), persiste el cambio y
+registra un wake durable, con alcance al proyecto propio de esa tarea. "drain" y "await" resuelven en qué proyecto
 actuar a partir del directorio actual (el toplevel de git, con el mismo
 namespace con el que "vx dispatch" arma los camps de un proyecto): si no es un
 repo, o si el toplevel es en sí un camp administrado por vexillum, no hay nada
@@ -36,12 +35,11 @@ administrado por herdr (sin HERDR_WORKSPACE_ID): el hook se commitea en el
 proyecto y por eso alcanza también a los turnos de Claude Code de cualquier
 otra herramienta, que no tienen ninguna tarea para que el sentinel rastree.
 
-Un wake también puede ser feedback de forum: el listener de forum (ver "vx
-forum") guarda el prompt de un usuario en el inbox del proyecto y registra un
-wake de forum, que tanto "drain" como "await" informan como "forum session
-<file>: N new messages (ended: false). Run vx forum inbox." Es el mismo hook y
-la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
-confirmados se descarta.
+Un wake también puede ser feedback de forum: el listener de forum guarda el prompt de un usuario en el inbox del
+proyecto y registra un wake de forum, que tanto "drain" como "await" informan
+como "forum session <file>: N new messages (ended: false). Run vx forum
+inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
+confirmados se descarta. Ver "vx forum" para el listener.
 
 Corre un sentinel por máquina, garantizado por un lock que el kernel suelta
 cuando el proceso muere, así que un crash nunca deja un reclamo viejo. El

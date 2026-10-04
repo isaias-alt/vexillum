@@ -27,7 +27,7 @@ upgrade works in two steps.
 
 2. The scaffold. The new binary is started to refresh the project's files,
    so its own templates apply. It lists the files of yours it will change and
-   asks for consent first, exactly like '` + cmdname.Name + ` init' (see its help), and then:
+   asks for consent first, exactly like '` + cmdname.Name + ` init'. See its help. Then it:
 
   - writes or updates the vexillum block in the file that holds it (AGENTS.md,
     or CLAUDE.md when the block lives there), and makes sure CLAUDE.md imports

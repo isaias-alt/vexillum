@@ -13,16 +13,21 @@ diseñada, aterrizar una terminada, hacer ship de un PR) y que, si no, vivirían
 solo en la cabeza del commander, perdidas si la sesión se corta.
 
 Uso:
-  vx pending add <text>
+  vx pending add <text> [--option <label>]... [--recommend <n>]
   vx pending list [--json]
   vx pending clear <id>
 
-add registra <text> como una nueva decisión pendiente e imprime su id. clear
-elimina una cuando el general ya decidió. list las imprime de la más antigua
-a la más nueva.
+add registra <text> como una nueva decisión pendiente e imprime su id. Dale
+las respuestas entre las que el general puede elegir con un --option <label>
+por respuesta, en orden, y marcá la que recomendás con --recommend <n> (índice
+desde 1 dentro de las opciones; necesita al menos un --option). Poné "--" antes
+de un texto que empiece con "--". clear elimina una cuando el general ya
+decidió. list las imprime de la más antigua a la más nueva, con las opciones
+numeradas y la recomendada marcada.
 
-Esta es una categoría distinta de una tarea blocked (un soldier que necesita al
-general, ver 'vx decide'): acá es el commander quien necesita al general. Una
+Esta es una categoría distinta de una tarea blocked: allá un soldier necesita
+al general y 'vx decide' la responde; acá es el commander quien necesita al
+general. Una
 mission done que espera 'vx land' no necesita ninguna entrada, la skill /muster
 lo deriva de git; usá esto para decisiones que no existen en ningún otro lado.
 
@@ -34,9 +39,12 @@ objeto JSON:
     "schema_version": 1,
     "generated_at": "2026-09-24T12:00:00Z",
     "pending": [
-      {"schema_version": 1, "id": "1a2b3c4d", "text": "...", "created_at": "..."}
+      {"schema_version": 1, "id": "1a2b3c4d", "text": "...",
+       "options": ["...", "..."], "recommended": 1, "created_at": "..."}
     ]
   }
 
-La skill /muster lee esto para mostrar una sección "Pending decisions".
+"options" y "recommended" se omiten en un item registrado sin ellos. La skill
+/muster lee esto para mostrar cada item como una tarjeta en su sección
+"Decisions for you".
 ```

@@ -23,9 +23,9 @@ Without --json, prints one line per task (most recently updated first).
     "tasks": [ ... ]
   }
 
-"tasks" is the exact internal/state.Task schema (v3) vexillum itself
-persists to <project root>/tasks/*.json - this command adds nothing to
-it, so a consumer (e.g. the /muster plugin) reads the same shape vexillum
+"tasks" is the exact task record vexillum itself persists to
+<project root>/tasks/*.json - this command adds nothing to it, so a
+consumer (e.g. the /muster skill) reads the same shape vexillum
 itself reasons about, never a separate reinterpretation of it. Grouping,
 filtering, and judgment calls (what counts as "needs attention", what's
 in the current session, GitHub PR enrichment) are left to that consumer,

@@ -24,9 +24,9 @@ primero).
     "tasks": [ ... ]
   }
 
-"tasks" es exactamente el esquema internal/state.Task (v3) que el propio
-vexillum persiste en <project root>/tasks/*.json: este comando no le agrega
-nada, así que un consumidor (por ejemplo el plugin /muster) lee la misma forma
+"tasks" es exactamente el registro de tarea que el propio vexillum persiste en
+<project root>/tasks/*.json: este comando no le agrega nada, así que un
+consumidor (por ejemplo la skill /muster) lee la misma forma
 con la que razona el propio vexillum, nunca una reinterpretación aparte. El
 agrupamiento, el filtrado y los juicios (qué cuenta como "needs attention",
 qué está en la sesión actual, el enriquecimiento con PRs de GitHub) se dejan a
