@@ -88,6 +88,12 @@ func runSetupCommand(kind setupKind, usage string, args []string) int {
 		return 1
 	}
 
+	if kind == setupUpgrade && !opts.ScaffoldOnly {
+		if done, code := upgradeBinary(opts, args, osBinaryEnv()); done {
+			return code
+		}
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, cmdname.Name+": cannot determine home directory: %v\n", err)

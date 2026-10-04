@@ -28,7 +28,7 @@ type Command struct {
 // there fails if the two drift.
 var commands = []Command{
 	{"init", "Prepare the current project to be orchestrated by vexillum", initUsage},
-	{"upgrade", "Refresh an already-initialized project's vexillum scaffold", upgradeUsage},
+	{"upgrade", "Update vx to the latest release, then refresh the project's vexillum scaffold", upgradeUsage},
 	{"doctor", "Report on the health of the vexillum environment", doctorUsage},
 	{"dispatch", "Dispatch a soldier (mission or scout) into an isolated camp", dispatchUsage},
 	{"models", "List the model and effort profiles a dispatch can use", modelsUsage},

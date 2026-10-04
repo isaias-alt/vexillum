@@ -4,14 +4,30 @@ import (
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 )
 
-const upgradeUsage = `Refresh an already-initialized project's vexillum scaffold to match this binary's
-latest version, without deleting and re-running '` + cmdname.Name + ` init'.
+const upgradeUsage = `Update ` + cmdname.Name + ` to the latest release, then refresh the project's vexillum scaffold with it.
 
 Usage:
-  ` + cmdname.Name + ` upgrade [--force] [--yes] [--lang en|es] [--skills | --no-skills]
+  ` + cmdname.Name + ` upgrade [--channel stable|canary] [--check] [--scaffold-only] [--force] [--yes] [--lang en|es] [--skills | --no-skills]
 
-upgrade lists the files of yours it will change and asks for consent first,
-exactly like '` + cmdname.Name + ` init' (see its help), and then:
+upgrade works in two steps.
+
+1. The binary. It looks at how ` + cmdname.Name + ` was installed:
+   - Homebrew: it runs 'brew upgrade vexillum'.
+   - The install script (a direct download): it downloads the release archive
+     for your OS and architecture from GitHub Releases, verifies its sha256
+     checksum against the release's checksums.txt, and replaces the
+     executable atomically, keeping its file mode. A checksum mismatch, or a
+     directory you cannot write to, stops the upgrade with the binary
+     untouched.
+   - Anything else (a build from source, a renamed binary): it refuses and
+     tells you how to reinstall. '` + cmdname.Name + ` upgrade --scaffold-only' still works.
+   When ` + cmdname.Name + ` is already on the latest release nothing is replaced, and it
+   never downgrades. A running sentinel notices the replaced binary and
+   retires; the next command that needs one starts it from the new binary.
+
+2. The scaffold. The new binary is started to refresh the project's files,
+   so its own templates apply. It lists the files of yours it will change and
+   asks for consent first, exactly like '` + cmdname.Name + ` init' (see its help), and then:
 
   - writes or updates the vexillum block in the file that holds it (AGENTS.md,
     or CLAUDE.md when the block lives there), and makes sure CLAUDE.md imports
@@ -25,15 +41,21 @@ exactly like '` + cmdname.Name + ` init' (see its help), and then:
     reports the ones you edited. When no skill is installed yet it offers to
     install them, as init does.
   - keeps the sentinel Stop hook current, and creates .vexillum/models.json
-    if it is missing. A hook that only works when ` + cmdname.Name + ` is on the PATH of
-    the hook's shell is replaced by one that also tries the known install
-    locations; your own hooks are kept. An existing models.json is never
-    overwritten.
+    if it is missing. An existing models.json is never overwritten, and your
+    own hooks are kept.
 
-Without a terminal upgrade asks nothing and does nothing unless --yes is
-given.
+Outside an initialized project only the binary is updated. Without a terminal
+the scaffold step asks nothing and does nothing unless --yes is given.
 
 Flags:
+  --channel stable|canary
+                  Release channel to follow (default stable). stable is the
+                  latest full release; canary is the latest pre-release whose
+                  tag contains -canary. A Homebrew install only follows
+                  stable.
+  --check         Print the available version and change nothing.
+  --scaffold-only
+                  Refresh the scaffold and leave the binary alone.
   --yes, -y       Accept every question, including the repairs to a malformed
                   block (the file is backed up first).
   --force         Overwrite what you edited: the vexillum block, an edited

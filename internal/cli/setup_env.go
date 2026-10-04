@@ -8,6 +8,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/install"
+	"github.com/isaias-alt/vexillum/internal/selfupdate"
 	"github.com/isaias-alt/vexillum/internal/slot"
 )
 
@@ -38,6 +39,17 @@ type setupOptions struct {
 	Lang slot.Lang
 	// Skills is nil to ask, or the --skills / --no-skills decision.
 	Skills *bool
+
+	// The next three are upgrade only: it updates the binary before the
+	// scaffold.
+
+	// Channel is the --channel value ("" is stable).
+	Channel selfupdate.Channel
+	// Check (--check) only reports the available version.
+	Check bool
+	// ScaffoldOnly (--scaffold-only) refreshes the scaffold and leaves the
+	// binary alone.
+	ScaffoldOnly bool
 }
 
 // parseSetupArgs parses the flags of init (allowForce false) or upgrade. help
@@ -52,6 +64,24 @@ func parseSetupArgs(kind setupKind, args []string) (opts setupOptions, help bool
 			opts.Yes = true
 		case a == "--force" && kind == setupUpgrade:
 			opts.Force = true
+		case a == "--check" && kind == setupUpgrade:
+			opts.Check = true
+		case a == "--scaffold-only" && kind == setupUpgrade:
+			opts.ScaffoldOnly = true
+		case kind == setupUpgrade && (a == "--channel" || strings.HasPrefix(a, "--channel=")):
+			val := strings.TrimPrefix(a, "--channel=")
+			if a == "--channel" {
+				if i+1 >= len(args) {
+					return opts, false, fmt.Errorf("--channel needs a value (stable or canary)")
+				}
+				i++
+				val = args[i]
+			}
+			ch, err := selfupdate.ParseChannel(val)
+			if err != nil {
+				return opts, false, err
+			}
+			opts.Channel = ch
 		case a == "--skills" || a == "--no-skills":
 			want := a == "--skills"
 			if opts.Skills != nil && *opts.Skills != want {
@@ -75,6 +105,9 @@ func parseSetupArgs(kind setupKind, args []string) (opts setupOptions, help bool
 		default:
 			return opts, false, fmt.Errorf("unknown %s flag %q", kind, a)
 		}
+	}
+	if opts.Check && opts.ScaffoldOnly {
+		return opts, false, fmt.Errorf("--check and --scaffold-only contradict each other")
 	}
 	return opts, false, nil
 }
