@@ -106,7 +106,7 @@ const openPRView = `{"number":9,"state":"OPEN","isDraft":false,"mergeable":"MERG
 func releaseOf(t *testing.T, m remotelyMergedMission, opts releaseOptions) (code int, out string) {
 	t.Helper()
 	var buf bytes.Buffer
-	code = runRelease(m.project, m.home, t.TempDir(), m.task.ID, opts, &fakeHerdr{}, &buf, &buf)
+	code = runRelease(m.project, m.home, m.task.ID, opts, &fakeHerdr{}, &buf, &buf)
 	return code, buf.String()
 }
 

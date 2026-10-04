@@ -79,13 +79,7 @@ func Release(args []string) int {
 		return 1
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, cmdname.Name+": cannot determine home directory:", err)
-		return 1
-	}
-
-	return runRelease(projectDir, vexillumHome, homeDir, taskID, opts, herdr.CLI{}, os.Stdout, os.Stderr)
+	return runRelease(projectDir, vexillumHome, taskID, opts, herdr.CLI{}, os.Stdout, os.Stderr)
 }
 
 // releaseOptions are release's flags.
@@ -121,7 +115,7 @@ func parseReleaseArgs(args []string) (taskID string, opts releaseOptions, err er
 	return taskID, opts, nil
 }
 
-func runRelease(projectDir, vexillumHome, homeDir, taskID string, opts releaseOptions, client herdr.Client, stdout, stderr io.Writer) int {
+func runRelease(projectDir, vexillumHome, taskID string, opts releaseOptions, client herdr.Client, stdout, stderr io.Writer) int {
 	if err := state.ValidateID(taskID); err != nil {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
@@ -163,7 +157,7 @@ func runRelease(projectDir, vexillumHome, homeDir, taskID string, opts releaseOp
 		PRMerged: mergedPullRequest(projectDir, task, c.Branch),
 		Discard:  opts.Discard,
 	}
-	report, err := soldier.ReleaseInHerdrWith(task, c, client, homeDir, campOpts)
+	report, err := soldier.ReleaseInHerdrWith(task, c, client, campOpts)
 	printDiscarded(stdout, c.Branch, report)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": release refused: %v\n", err)

@@ -55,8 +55,8 @@ func writeStub(t *testing.T, dir, name, script string) {
 
 // writeSkillFile creates <dir>/.claude/skills/<name>/SKILL.md - the real
 // on-disk layout "npx skills add" leaves behind (verified against
-// vercel-labs/skills, the CLI quota-tool's own README recommends), so
-// tests can simulate an installed AXI skill without running that CLI.
+// vercel-labs/skills), so tests can simulate an installed skill without
+// running that CLI.
 func writeSkillFile(t *testing.T, dir, name string) {
 	t.Helper()
 	skillDir := filepath.Join(dir, ".claude", "skills", name)
@@ -317,82 +317,6 @@ func TestDoctor_HerdrMissingHasNoSeparateVersionLine(t *testing.T) {
 	}
 }
 
-// B1-01: quota-tool installed globally (homeDir/.claude/skills/) is reported
-// installed.
-func TestDoctor_AxiInstalledGlobally(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-	writeSkillFile(t, homeDir, "quota-tool")
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if !bytes.Contains(out.Bytes(), []byte("[installed] quota-tool")) {
-		t.Errorf("expected quota-tool reported installed, got:\n%s", out.String())
-	}
-}
-
-// B1-02: quota-tool installed at project level only (no global install) is
-// also reported installed - either location is enough.
-func TestDoctor_AxiInstalledAtProjectLevel(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	writeSkillFile(t, projectDir, "quota-tool")
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if !bytes.Contains(out.Bytes(), []byte("[installed] quota-tool")) {
-		t.Errorf("expected quota-tool reported installed, got:\n%s", out.String())
-	}
-}
-
-// B1-03: quota-tool not installed anywhere - reported with the exact
-// install command from its own README.
-func TestDoctor_AxiNotInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	want := "[not installed] quota-tool - install with: npx skills add upstream --skill quota-tool -g"
-	if !bytes.Contains(out.Bytes(), []byte(want)) {
-		t.Errorf("expected exact install hint, got:\n%s", out.String())
-	}
-}
-
-// B1-04: AXI status never affects the exit code or the ready summary -
-// same otherwise-healthy environment, with and without the skill
-// installed, both exit 0 with "Environment ready.".
-func TestDoctor_AxiStatusNeverAffectsExitCode(t *testing.T) {
-	for _, installed := range []bool{true, false} {
-		t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-		projectDir := initializedProject(t)
-		vexillumHome := t.TempDir()
-		homeDir := t.TempDir()
-		if installed {
-			writeSkillFile(t, homeDir, "quota-tool")
-		}
-
-		var out bytes.Buffer
-		code := runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-		if code != 0 {
-			t.Fatalf("installed=%v: expected exit 0, got %d\noutput:\n%s", installed, code, out.String())
-		}
-		if !bytes.Contains(out.Bytes(), []byte("Environment ready")) {
-			t.Errorf("installed=%v: expected a ready summary unaffected by AXI status, got:\n%s", installed, out.String())
-		}
-	}
-}
-
 // forum-tool was replaced by `vx forum`: doctor must no longer report it.
 func TestDoctor_ForumNotListed(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
@@ -406,39 +330,6 @@ func TestDoctor_ForumNotListed(t *testing.T) {
 
 	if bytes.Contains(out.Bytes(), []byte("forum")) {
 		t.Errorf("doctor must not mention forum any more, got:\n%s", out.String())
-	}
-}
-
-// B3-01: chrome-devtools-tool installed globally.
-func TestDoctor_ChromeDevtoolsInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-	writeSkillFile(t, homeDir, "chrome-devtools-tool")
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if !bytes.Contains(out.Bytes(), []byte("[installed] chrome-devtools-tool")) {
-		t.Errorf("expected chrome-devtools-tool reported installed, got:\n%s", out.String())
-	}
-}
-
-// B3-02: chrome-devtools-tool not installed - same recommended shape as
-// quota-tool (--skill matches the repo name, with -g).
-func TestDoctor_ChromeDevtoolsNotInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	want := "[not installed] chrome-devtools-tool - install with: npx skills add upstream --skill chrome-devtools-tool -g"
-	if !bytes.Contains(out.Bytes(), []byte(want)) {
-		t.Errorf("expected exact install hint, got:\n%s", out.String())
 	}
 }
 
@@ -514,8 +405,10 @@ func TestDoctor_FirstPartySkills(t *testing.T) {
 	if strings.Contains(out, "npx skills add isaias-alt") {
 		t.Errorf("stale install hint for an embedded skill:\n%s", out)
 	}
-	if !strings.Contains(out, "npx skills add upstream") {
-		t.Errorf("third-party hints must stay:\n%s", out)
+	for _, gone := range []string{"AXI", "quota-tool", "chrome-devtools"} {
+		if strings.Contains(out, gone) {
+			t.Errorf("doctor must not mention %q any more:\n%s", gone, out)
+		}
 	}
 
 	skill := filepath.Join(projectDir, ".claude", "skills", "forum", "SKILL.md")

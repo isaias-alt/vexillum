@@ -78,7 +78,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 
 	agentName := herdrAgentName(task)
 
-	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName, chromeDevtoolsSessionEnvVar+"="+chromeDevtoolsSessionName(task.ID))
+	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName)
 	if err != nil {
 		return task, fmt.Errorf("creating herdr tab for camp: %w", err)
 	}
@@ -473,27 +473,25 @@ const (
 
 // ReleaseInHerdr releases c back to the camp pool (camp.Release - never a
 // dirty or unlanded camp, never the wrong owner) and, only once that
-// succeeds, stops any orphaned chrome-devtools-tool browser bridge the
-// soldier left running (PRD v2, B.3) and closes the soldier's herdr tab.
-// Both happen at the same moment as the worktree return, not when the
-// soldier's turn merely finishes: matches upstream-tool's own teardown
+// succeeds, closes the soldier's herdr tab. That happens at the same
+// moment as the worktree return, not when the soldier's turn merely
+// finishes: matches upstream-tool's own teardown
 // ("committed work must be landed before the worktree is returned...
 // cleanup closes only the exact recorded task pane", docs/herdr-backend.md).
-// If camp.Release refuses, neither the browser nor the pane is touched -
-// there's still something worth looking at.
-func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir string) error {
-	_, err := ReleaseInHerdrWith(task, c, client, homeDir, camp.ReleaseOptions{})
+// If camp.Release refuses, the pane is left open - there's still
+// something worth looking at.
+func ReleaseInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
+	_, err := ReleaseInHerdrWith(task, c, client, camp.ReleaseOptions{})
 	return err
 }
 
 // ReleaseInHerdrWith is ReleaseInHerdr with camp.ReleaseOptions, returning
 // what a Discard release threw away.
-func ReleaseInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, homeDir string, opts camp.ReleaseOptions) (camp.ReleaseReport, error) {
+func ReleaseInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, opts camp.ReleaseOptions) (camp.ReleaseReport, error) {
 	report, err := camp.ReleaseWith(c, task.ID, opts)
 	if err != nil {
 		return report, err
 	}
-	stopOrphanBrowser(task.ID, homeDir)
 	if task.HerdrTabID == "" {
 		return report, nil
 	}
@@ -512,11 +510,10 @@ func ReleaseInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, homeD
 // TabClose error here is reported but never blocks the caller from
 // proceeding to re-dispatch - there's nothing left to clean up on
 // herdr's side either way.
-func DiscardInHerdr(task state.Task, c camp.Camp, client herdr.Client, homeDir string) error {
+func DiscardInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
 	if err := camp.Discard(c, task.ID); err != nil {
 		return err
 	}
-	stopOrphanBrowser(task.ID, homeDir)
 	if task.HerdrTabID == "" {
 		return nil
 	}

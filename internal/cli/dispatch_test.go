@@ -37,7 +37,7 @@ type fakeHerdr struct {
 	tabClosed     bool
 }
 
-func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
+func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
 	if f.createTabErr != nil {
 		return "", "", f.createTabErr
 	}
@@ -409,7 +409,7 @@ func TestRunDispatch_CreateTabFails_TaskIsRecoverable(t *testing.T) {
 	// release and redispatch require state.Load to succeed first, and no
 	// task file existed for it at all.
 	out.Reset()
-	if code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
+	if code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
 		t.Fatalf("expected the stranded task's camp to be releasable, got exit %d: %s", code, out.String())
 	}
 }
@@ -468,7 +468,7 @@ func TestRunLand_AutoReleasesCamp(t *testing.T) {
 
 	client := &fakeHerdr{}
 	var out bytes.Buffer
-	if code := runLand(project, home, t.TempDir(), task.ID, client, &out, &out); code != 0 {
+	if code := runLand(project, home, task.ID, client, &out, &out); code != 0 {
 		t.Fatalf("runLand: expected exit 0, got %d: %s", code, out.String())
 	}
 	if !strings.Contains(out.String(), "landed:") || !strings.Contains(out.String(), "released:") {
@@ -481,7 +481,7 @@ func TestRunLand_AutoReleasesCamp(t *testing.T) {
 	// The camp is already released - a second, independent release call
 	// for the same task must find nothing left to do.
 	out.Reset()
-	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected a follow-up 'vx release' to fail, camp was already released; got exit 0: %s", out.String())
 	}
@@ -507,7 +507,7 @@ func TestRunLand_RefusalLeavesCampUntouched(t *testing.T) {
 
 	client := &fakeHerdr{}
 	var out bytes.Buffer
-	code := runLand(project, home, t.TempDir(), task.ID, client, &out, &out)
+	code := runLand(project, home, task.ID, client, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected a non-zero exit for a refused land, got 0: %s", out.String())
 	}
@@ -521,7 +521,7 @@ func TestRunLand_RefusalLeavesCampUntouched(t *testing.T) {
 	// The camp is still leased and untouched: releasing it directly still
 	// refuses too, since the mission's commit never actually landed.
 	out.Reset()
-	code = runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code = runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected release to still refuse an un-landed camp, got exit 0: %s", out.String())
 	}
@@ -545,7 +545,7 @@ func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
 
 	client := &fakeHerdr{}
 	var out bytes.Buffer
-	code := runLand(project, home, t.TempDir(), task.ID, client, &out, &out)
+	code := runLand(project, home, task.ID, client, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected a non-zero exit when the automatic release fails, got 0: %s", out.String())
 	}
@@ -575,7 +575,7 @@ func TestRunLand_MergeSucceedsButAutoReleaseFails(t *testing.T) {
 		t.Fatalf("removing leftover file: %v", err)
 	}
 	out.Reset()
-	if code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
+	if code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out); code != 0 {
 		t.Fatalf("expected the manual follow-up release to succeed once the camp is clean, got %d: %s", code, out.String())
 	}
 }
@@ -596,7 +596,7 @@ func runGitOutput(t *testing.T, dir string, args ...string) string {
 // front, before runLand touches the filesystem at all.
 func TestRunLand_RejectsInvalidTaskID(t *testing.T) {
 	var out bytes.Buffer
-	code := runLand("/does/not/matter", "/does/not/matter", "/does/not/matter", "../../etc/passwd", &fakeHerdr{}, &out, &out)
+	code := runLand("/does/not/matter", "/does/not/matter", "../../etc/passwd", &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an invalid task id")
@@ -608,7 +608,7 @@ func TestRunLand_RejectsInvalidTaskID(t *testing.T) {
 
 func TestRunRelease_RejectsInvalidTaskID(t *testing.T) {
 	var out bytes.Buffer
-	code := runRelease("/does/not/matter", "/does/not/matter", "/does/not/matter", "../../etc/passwd", releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runRelease("/does/not/matter", "/does/not/matter", "../../etc/passwd", releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an invalid task id")
@@ -655,7 +655,7 @@ func TestRunRelease_RefusesScoutWithoutReport(t *testing.T) {
 	task, projectRoot := newReleaseTestScoutTask(t, project, home)
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected a non-zero exit for a scout with no report")
@@ -680,7 +680,7 @@ func TestRunRelease_ScoutWithReportSucceeds(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 for a scout with a report, got %d: %s", code, out.String())
@@ -695,7 +695,7 @@ func TestRunRelease_ForceSkipsReportGate(t *testing.T) {
 	task, _ := newReleaseTestScoutTask(t, project, home)
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{Force: true}, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, task.ID, releaseOptions{Force: true}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 with --force despite the missing report, got %d: %s", code, out.String())
@@ -731,7 +731,7 @@ func TestRunRelease_MissionNeverRequiresReport(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRelease(project, home, t.TempDir(), task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
+	code := runRelease(project, home, task.ID, releaseOptions{}, &fakeHerdr{}, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 for a mission with no report, got %d: %s", code, out.String())

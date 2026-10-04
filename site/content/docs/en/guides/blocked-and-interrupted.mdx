@@ -43,7 +43,7 @@ Then, only if you want the task redone:
 vx redispatch <task-id>
 ```
 
-This is re-dispatch, **not resumption**. It discards the old camp (uncommitted changes and unlanded commits included), creates a fresh one and relaunches the original prompt. Nothing of the dead soldier's partial work or session is recovered. Because it is destructive, the commander tells you what it found in the camp and asks before running it. Only `interrupted` tasks can be re-dispatched. If the soldier had a browser open, redispatch stops that orphaned browser too.
+This is re-dispatch, **not resumption**. It discards the old camp (uncommitted changes and unlanded commits included), creates a fresh one and relaunches the original prompt. Nothing of the dead soldier's partial work or session is recovered. Because it is destructive, the commander tells you what it found in the camp and asks before running it. Only `interrupted` tasks can be re-dispatched. Redispatch does not touch the browser: tabs a soldier opened through claude-in-chrome live in your own Chrome and stay there until you close them.
 
 ## Unconfirmed: idle without proof
 

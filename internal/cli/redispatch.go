@@ -46,12 +46,6 @@ func Redispatch(args []string) int {
 		return 1
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, cmdname.Name+": cannot determine home directory:", err)
-		return 1
-	}
-
 	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
 	if workspaceID == "" {
 		fmt.Fprintln(os.Stderr, cmdname.Name+": HERDR_WORKSPACE_ID is not set - redispatch must run from inside a herdr-managed pane")
@@ -60,10 +54,10 @@ func Redispatch(args []string) int {
 
 	ensureSentinelRunning(vexillumHome, os.Stderr)
 
-	return runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
+	return runRedispatch(projectDir, vexillumHome, workspaceID, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
 }
 
-func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
+func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
 	if err := state.ValidateID(taskID); err != nil {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
@@ -92,7 +86,7 @@ func runRedispatch(projectDir, vexillumHome, homeDir, workspaceID, taskID string
 			fmt.Fprintf(stderr, cmdname.Name+": resolving old camp: %v\n", err)
 			return 1
 		}
-		if err := soldier.DiscardInHerdr(task, c, client, homeDir); err != nil {
+		if err := soldier.DiscardInHerdr(task, c, client); err != nil {
 			fmt.Fprintf(stderr, cmdname.Name+": discarding old camp: %v\n", err)
 			return 1
 		}

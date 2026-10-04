@@ -31,7 +31,7 @@ func TestCLI_CreateTab_Success(t *testing.T) {
   "tab create") echo '{"result":{"tab":{"tab_id":"tab-1"},"root_pane":{"pane_id":"pane-1"}}}' ;;
 esac`))
 
-	tabID, paneID, err := CLI{}.CreateTab("ws1", "/some/cwd", "soldier-1", "FOO=bar")
+	tabID, paneID, err := CLI{}.CreateTab("ws1", "/some/cwd", "soldier-1")
 	if err != nil {
 		t.Fatalf("CreateTab: %v", err)
 	}

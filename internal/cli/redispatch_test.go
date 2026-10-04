@@ -108,7 +108,6 @@ func interruptedTestScoutTask(t *testing.T, project, home string) state.Task {
 func TestRunRedispatch_CleansUpStaleReport(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	homeDir := t.TempDir()
 
 	task := interruptedTestScoutTask(t, project, home)
 
@@ -127,7 +126,7 @@ func TestRunRedispatch_CleansUpStaleReport(t *testing.T) {
 	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
 
 	var out bytes.Buffer
-	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+	code := runRedispatch(project, home, "w1", task.ID, client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -144,7 +143,6 @@ func TestRunRedispatch_CleansUpStaleReport(t *testing.T) {
 func TestRunRedispatch_CleansUpStalePause(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	homeDir := t.TempDir()
 
 	task := interruptedTestTask(t, project, home)
 
@@ -163,7 +161,7 @@ func TestRunRedispatch_CleansUpStalePause(t *testing.T) {
 	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
 
 	var out bytes.Buffer
-	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+	code := runRedispatch(project, home, "w1", task.ID, client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -177,7 +175,7 @@ func TestRunRedispatch_CleansUpStalePause(t *testing.T) {
 // filepath.Join calls - runRedispatch rejects it up front.
 func TestRunRedispatch_RejectsInvalidTaskID(t *testing.T) {
 	var out bytes.Buffer
-	code := runRedispatch("/does/not/matter", "/does/not/matter", "/does/not/matter", "w1", "../../etc/passwd", &fakeHerdr{}, &out, &out)
+	code := runRedispatch("/does/not/matter", "/does/not/matter", "w1", "../../etc/passwd", &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an invalid task id")
@@ -192,7 +190,6 @@ func TestRunRedispatch_RejectsInvalidTaskID(t *testing.T) {
 func TestRunRedispatch_RefusesNonInterrupted(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	homeDir := t.TempDir()
 
 	task, err := state.New(state.KindMission, "do a thing")
 	if err != nil {
@@ -208,7 +205,7 @@ func TestRunRedispatch_RefusesNonInterrupted(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRedispatch(project, home, homeDir, "w1", task.ID, &fakeHerdr{}, &out, &out)
+	code := runRedispatch(project, home, "w1", task.ID, &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for a non-interrupted task")
@@ -232,14 +229,13 @@ func TestRunRedispatch_RefusesNonInterrupted(t *testing.T) {
 func TestRunRedispatch_Success(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	homeDir := t.TempDir()
 
 	task := interruptedTestTask(t, project, home)
 
 	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
 
 	var out bytes.Buffer
-	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+	code := runRedispatch(project, home, "w1", task.ID, client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -285,7 +281,6 @@ func TestRunRedispatch_Success(t *testing.T) {
 func TestRunRedispatch_ClearsStaleDecision(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	homeDir := t.TempDir()
 
 	task := interruptedTestTask(t, project, home)
 	task.Decision = &state.Decision{
@@ -304,7 +299,7 @@ func TestRunRedispatch_ClearsStaleDecision(t *testing.T) {
 	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
 
 	var out bytes.Buffer
-	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+	code := runRedispatch(project, home, "w1", task.ID, client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -325,7 +320,6 @@ func TestRunRedispatch_ClearsStaleDecision(t *testing.T) {
 func TestRunRedispatch_SucceedsDespiteTabCloseFailure(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
-	homeDir := t.TempDir()
 
 	task := interruptedTestTask(t, project, home)
 
@@ -335,53 +329,9 @@ func TestRunRedispatch_SucceedsDespiteTabCloseFailure(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
+	code := runRedispatch(project, home, "w1", task.ID, client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0 despite the old tab's close failing, got %d: %s", code, out.String())
-	}
-}
-
-// B3-05: an orphaned chrome-devtools-tool bridge left by the dead soldier
-// (PRD v2, B.3's requisito derivado on A.2) doesn't block the redispatch
-// either - it's stopped as part of discarding the old camp, best-effort,
-// same as the old herdr tab.
-func TestRunRedispatch_StopsOrphanBrowser(t *testing.T) {
-	project := initDispatchTestProject(t)
-	home := t.TempDir()
-	homeDir := t.TempDir()
-
-	task := interruptedTestTask(t, project, home)
-
-	sessionDir := filepath.Join(homeDir, ".chrome-devtools-tool", "sessions", "vx-"+task.ID)
-	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
-		t.Fatalf("creating session dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(sessionDir, "bridge.pid"), []byte("1 2\n"), 0o644); err != nil {
-		t.Fatalf("writing bridge.pid: %v", err)
-	}
-	logFile := filepath.Join(t.TempDir(), "npx.log")
-	npxDir := t.TempDir()
-	script := "#!/bin/sh\necho \"$@ $CHROME_DEVTOOLS_AXI_SESSION\" >> " + logFile + "\n"
-	if err := os.WriteFile(filepath.Join(npxDir, "npx"), []byte(script), 0o755); err != nil {
-		t.Fatalf("writing npx stub: %v", err)
-	}
-	t.Setenv("PATH", npxDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
-
-	var out bytes.Buffer
-	code := runRedispatch(project, home, homeDir, "w1", task.ID, client, &out, &out)
-
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
-	}
-
-	log, err := os.ReadFile(logFile)
-	if err != nil {
-		t.Fatalf("expected the orphaned browser bridge to be stopped, but npx was never invoked: %v", err)
-	}
-	if !strings.Contains(string(log), "vx-"+task.ID) {
-		t.Errorf("expected the stop invocation scoped to this task's session, got: %q", log)
 	}
 }

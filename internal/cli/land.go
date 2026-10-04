@@ -60,16 +60,10 @@ func Land(args []string) int {
 		return 1
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, cmdname.Name+": cannot determine home directory:", err)
-		return 1
-	}
-
-	return runLand(projectDir, vexillumHome, homeDir, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
+	return runLand(projectDir, vexillumHome, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
 }
 
-func runLand(projectDir, vexillumHome, homeDir, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
+func runLand(projectDir, vexillumHome, taskID string, client herdr.Client, stdout, stderr io.Writer) int {
 	if err := state.ValidateID(taskID); err != nil {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
@@ -111,7 +105,7 @@ func runLand(projectDir, vexillumHome, homeDir, taskID string, client herdr.Clie
 	// fails anyway (rare - the merge just made the camp clean and landed),
 	// the merge itself stands: report both outcomes plainly and leave the
 	// camp for a manual release, never swallow the error.
-	if err := soldier.ReleaseInHerdr(task, c, client, homeDir); err != nil {
+	if err := soldier.ReleaseInHerdr(task, c, client); err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": landed, but automatic release failed: %v\n", err)
 		fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" release %s' by hand to clean up the camp\n", taskID)
 		return 1

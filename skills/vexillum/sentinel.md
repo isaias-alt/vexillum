@@ -126,5 +126,6 @@ soldier's partial work: not its working tree, not its agent session. It discards
 the old camp outright, including any commits never landed there. Because that is
 destructive, tell the general what you found in the old camp and ask before
 running it. Never redispatch on your own judgment just because a task went
-interrupted. If the dead soldier had a browser open (chrome-devtools-tool),
-redispatch also stops that orphaned browser process on its own.
+interrupted. A soldier's browser access comes from claude-in-chrome, which runs
+in the general's own Chrome: redispatch does not touch it, so tabs the dead
+soldier opened stay there until the general closes them.

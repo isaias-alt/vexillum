@@ -1,9 +1,8 @@
 // Package doctorcheck implements the individual environment checks
 // "vx doctor" reports on - required and optional binaries, herdr's
-// version, the project's own scaffold - plus the catalog of AXIs and
-// first-party skills doctor lists informationally. Each check is a pure
-// function returning a Result (or, for the AXI catalog, a status line);
-// "vx doctor" itself only composes and prints them, and never
+// version, the project's own scaffold - plus the first-party skills
+// doctor lists informationally. Each check is a pure function returning
+// a Result; "vx doctor" itself only composes and prints them, and never
 // affects the exit code beyond what Result.Required/OK say.
 package doctorcheck
 
@@ -29,35 +28,6 @@ type Result struct {
 	Warn     bool
 	Detail   string
 	Required bool
-}
-
-// AXI is one AXI vexillum knows about, tracked in doctor's
-// informational-only AXIs section: doctor verifies skill presence, it never
-// installs anything, and absence is never a warning or a failure - a mission
-// that needs it installs it on demand.
-//
-// Each AXI's own README names its own recommended install command; both
-// below recommend -g (global).
-type AXI struct {
-	// Name is the skill's own folder name once installed (also the
-	// --skill value) - matches its SKILL.md frontmatter `name`, which
-	// isn't guaranteed to match Repo's own name.
-	Name string
-	// Repo is "<owner>/<repo>", for "npx skills add <repo> --skill <name>".
-	Repo string
-	// Global is whether that AXI's own README recommends installing
-	// with -g. Detection itself always checks both locations regardless
-	// (see AXIInstalled) - this only shapes the install hint shown when
-	// the skill is missing.
-	Global bool
-}
-
-// KnownAXIs is every third-party AXI doctor reports on. The first-party
-// skills (vexillum, forum, muster) ship inside the binary and are reported
-// by Skills instead, with their state against the embedded copy.
-var KnownAXIs = []AXI{
-	{Name: "quota-tool", Repo: "upstream", Global: true},
-	{Name: "chrome-devtools-tool", Repo: "upstream", Global: true},
 }
 
 // Binary checks whether binaryName is on PATH.
@@ -212,32 +182,4 @@ func GitRepo(projectDir string) Result {
 		return Result{Name: name, OK: true, Required: true}
 	}
 	return Result{Name: name, OK: false, Detail: "current directory is not a git repository", Required: true}
-}
-
-// AXIInstalled reports whether a's skill is present project-level
-// (<projectDir>/.claude/skills/<name>/SKILL.md) or globally
-// (<homeDir>/.claude/skills/<name>/SKILL.md) - "npx skills add" can
-// install to either depending on the "-g" flag, and doctor only cares
-// that the skill is reachable, not which.
-func AXIInstalled(projectDir, homeDir, name string) bool {
-	for _, dir := range []string{projectDir, homeDir} {
-		path := filepath.Join(dir, ".claude", "skills", name, "SKILL.md")
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return true
-		}
-	}
-	return false
-}
-
-// AXIStatusLine renders a's install status for doctor's informational
-// AXIs section.
-func AXIStatusLine(a AXI, projectDir, homeDir string) string {
-	if AXIInstalled(projectDir, homeDir, a.Name) {
-		return fmt.Sprintf("[installed] %s", a.Name)
-	}
-	cmd := fmt.Sprintf("npx skills add %s --skill %s", a.Repo, a.Name)
-	if a.Global {
-		cmd += " -g"
-	}
-	return fmt.Sprintf("[not installed] %s - install with: %s", a.Name, cmd)
 }

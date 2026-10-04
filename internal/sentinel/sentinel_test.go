@@ -33,7 +33,7 @@ type fakeHerdr struct {
 	waitErr           error
 }
 
-func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
+func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
 	return "", "", nil
 }
 func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error { return nil }

@@ -115,11 +115,6 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	}
 
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "AXIs (on-demand, installed as Agent Skills - not required):")
-	for _, a := range doctorcheck.KnownAXIs {
-		fmt.Fprintln(out, doctorcheck.AXIStatusLine(a, projectDir, homeDir))
-	}
-	fmt.Fprintln(out)
 
 	if !ready {
 		fmt.Fprintln(out, "Environment not ready, see missing checks above.")
