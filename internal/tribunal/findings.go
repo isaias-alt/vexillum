@@ -9,10 +9,9 @@ import (
 	"strings"
 )
 
-// Severity and action vocabularies of a review finding, ported from
-// review-tool' internal/types/findings.go (MIT, see THIRD-PARTY-NOTICES.md).
-// Severity decides whether a finding blocks the ship; action decides who
-// may resolve it (see Finding).
+// Severity and action vocabularies of a review finding. Severity decides
+// whether a finding blocks the ship; action decides who may resolve it (see
+// Finding).
 const (
 	SeverityError   = "error"
 	SeverityWarning = "warning"

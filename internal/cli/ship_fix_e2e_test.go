@@ -44,7 +44,7 @@ var fixLoopBasePaths = []string{"change.txt", "package.json", "test.sh"}
 const claudeRoleScript = `#!/bin/sh
 d='%s'
 case "$2" in
-  *"Investigate the review findings"*) role=fix ;;
+  *"You are repairing a change after an adversarial review"*) role=fix ;;
   *) role=review ;;
 esac
 n=$(cat "$d/n.$role" 2>/dev/null || echo 0)

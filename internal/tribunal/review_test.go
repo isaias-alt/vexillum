@@ -47,8 +47,8 @@ func TestRunReview_PromptHasNoDiffAndNoAuthorContext(t *testing.T) {
 	}
 	baseSHA := strings.TrimSpace(run(t, dir, "rev-parse", "base"))
 	head := strings.TrimSpace(run(t, dir, "rev-parse", "HEAD"))
-	for _, want := range []string{"vexillum/abc", baseSHA, head, "- src/change.txt", "MISSION_STATEMENT add a file", "Read the relevant history and diff yourself", "assume the change is wrong",
-		"Pull request text (pr_title and pr_description", "Write them from the diff and the commits", `"pr_title":`, `"pr_description":`,
+	for _, want := range []string{"vexillum/abc", baseSHA, head, "- src/change.txt", "MISSION_STATEMENT add a file", "Obtain the history and the diff yourself", "assumption that the change is wrong",
+		"Pull request text (pr_title, pr_description)", "Draw them from the diff and the commits", `"pr_title":`, `"pr_description":`,
 		"never copy or paraphrase it into pr_title or pr_description"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("expected the prompt to contain %q:\n%s", want, prompt)
@@ -190,7 +190,7 @@ func TestRunReview_InvalidJSONIsRetriedThenAccepted(t *testing.T) {
 	if stub.calls() != 3 {
 		t.Fatalf("expected 3 attempts, got %d", stub.calls())
 	}
-	if !strings.Contains(stub.prompt(2), "previous answer was rejected") || !strings.Contains(stub.prompt(2), "findings") {
+	if !strings.Contains(stub.prompt(2), "report you just gave was rejected") || !strings.Contains(stub.prompt(2), "findings") {
 		t.Errorf("expected the retry to carry the validation error:\n%s", stub.prompt(2))
 	}
 	if !strings.Contains(stub.prompt(3), `severity must be one of`) {
@@ -286,7 +286,7 @@ func TestRunReview_IntentIncludesTheGeneralsLaterInstructions(t *testing.T) {
 
 	// Required by an instruction is not unrequested, but required by neither
 	// is still reported.
-	for _, want := range []string{"a component any of them asks for is required", "neither the original request nor a later instruction strictly requires", `severity "warning" and action "ask-user"`} {
+	for _, want := range []string{"a component that any of them asks for is required", "neither the original request nor a later instruction strictly requires", `severity "warning" and action "ask-user"`} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("expected the simplification rules to contain %q:\n%s", want, prompt)
 		}
