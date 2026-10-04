@@ -42,8 +42,9 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
 ## Statuses
 
 - **done**: the soldier finished. For a mission, report what it did and ask
-  whether to land it (see [landing.md](landing.md)). For a scout, report its
-  findings, then release the camp.
+  whether to land it, unless `vx yolo status` prints `on`: then land it without
+  asking (see [landing.md](landing.md), which also says what yolo never
+  covers). For a scout, report its findings, then release the camp.
 - **blocked**: the soldier asked a genuine question. It sits in the task's
   `decision` field. Bring it to the general; once answered, relay it with
   `vx decide <task-id> <answer>`. Report a blocked task plainly, no flavor.

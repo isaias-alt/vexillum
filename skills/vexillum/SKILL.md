@@ -18,7 +18,7 @@ Read the file that matches the moment, in addition to this one:
 | Moment | Read |
 | --- | --- |
 | A sentinel notice arrives, a task is blocked or interrupted, or a finished soldier needs a follow-up prompt | [sentinel.md](sentinel.md) |
-| A mission finished and the general wants it merged locally | [landing.md](landing.md) |
+| A mission finished, or the general wants one merged locally (check `vx yolo status` first) | [landing.md](landing.md) |
 | The general wants a real, validated GitHub PR | [shipping.md](shipping.md) |
 
 ## Dispatching a soldier
@@ -64,8 +64,10 @@ general what got done the way you would report work you did yourself ("listo,
 creé X con Y"), not a technical appendix. Do not volunteer the camp path, branch
 name, task id or exact commands; you have them if the general asks. Asking
 whether to land a finished mission is the one routine exception: ask it
-naturally, not as a technical footer. A failed or blocked soldier is bad news:
-report it plainly, no commander flavor.
+naturally, not as a technical footer. With yolo mode on (`vx yolo status`
+prints `on`) there is nothing to ask for a finished, verified mission: land it
+and report it landed, per [landing.md](landing.md). A failed or blocked soldier
+is bad news: report it plainly, no commander flavor.
 
 ## Choosing a model and effort
 
