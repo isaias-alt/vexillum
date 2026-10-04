@@ -234,3 +234,28 @@ func TestWriteJSON_RenameFailure_CleansUpAndLeavesTargetUntouched(t *testing.T) 
 
 	assertNoLeftoverTempFiles(t, dir)
 }
+
+func TestWriteMode_SetsModeAndReplacesAtomically(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "vx")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := atomicfile.WriteMode(path, []byte("new"), 0o755); err != nil {
+		t.Fatalf("WriteMode: %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != "new" {
+		t.Fatalf("content = %q, %v", got, err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o755 {
+		t.Fatalf("mode = %v, want 0755", fi.Mode().Perm())
+	}
+	assertNoLeftoverTempFiles(t, dir)
+}

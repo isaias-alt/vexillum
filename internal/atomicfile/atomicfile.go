@@ -28,6 +28,18 @@ func WriteJSON(path string, v any) error {
 // for non-JSON content (e.g. the whiteboard feedback PNG in
 // internal/forum). The parent directory must already exist.
 func Write(path string, data []byte) error {
+	return write(path, data, 0, false)
+}
+
+// WriteMode is Write for a file that must end up with the given permission
+// bits (an executable, say) and must be on disk before it replaces path: the
+// temp file is chmod-ed, then synced, then renamed into place.
+func WriteMode(path string, data []byte, perm os.FileMode) error {
+	return write(path, data, perm, true)
+}
+
+// write is the shared body. perm 0 keeps the temp file's own mode (0600).
+func write(path string, data []byte, perm os.FileMode, sync bool) error {
 	dir := filepath.Dir(path)
 
 	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
@@ -40,6 +52,20 @@ func Write(path string, data []byte) error {
 		tmp.Close()
 		os.Remove(tmpPath)
 		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	if perm != 0 {
+		if err := tmp.Chmod(perm); err != nil {
+			tmp.Close()
+			os.Remove(tmpPath)
+			return fmt.Errorf("setting the mode of %s: %w", path, err)
+		}
+	}
+	if sync {
+		if err := tmp.Sync(); err != nil {
+			tmp.Close()
+			os.Remove(tmpPath)
+			return fmt.Errorf("syncing %s: %w", path, err)
+		}
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmpPath)
