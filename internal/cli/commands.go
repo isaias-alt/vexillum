@@ -26,6 +26,8 @@ type Command struct {
 // commands is in display order: the order of `vx --help`. When adding
 // a command, add its case to the switch in cmd/vx/main.go too - a test
 // there fails if the two drift.
+// Its Spanish summary and help go in tools/docgen/cli_es.go - a test there
+// fails until they exist.
 var commands = []Command{
 	{"init", "Prepare the current project to be orchestrated by vexillum", initUsage},
 	{"upgrade", "Update vx to the latest release, then refresh the project's vexillum scaffold", upgradeUsage},

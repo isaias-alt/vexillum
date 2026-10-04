@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/cli"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/commander"
 	"github.com/isaias-alt/vexillum/internal/slot"
 	"github.com/isaias-alt/vexillum/skills"
@@ -178,15 +179,15 @@ func TestTablesEscapeHostileSummaries(t *testing.T) {
 	if got := indexPage(cmds, localeEN); !strings.Contains(got, escapeMDX(hostileSummary)) {
 		t.Errorf("index page does not use the MDX escape:\n%s", got)
 	}
-	if got := commandPage(cmds[0]); !strings.Contains(got, "description: "+yamlString(hostileSummary)) {
+	if got := commandPage(cmds[0], localeEN); !strings.Contains(got, "description: "+yamlString(hostileSummary)) {
 		t.Errorf("frontmatter does not use the YAML quoting:\n%s", got)
 	}
 }
 
-// The Spanish tree gets only an index (and the folder meta): it links the
-// English command pages under /es/docs, and its stale cleanup never runs.
+// The Spanish tree is generated like the English one: its index links the
+// Spanish pages under /es/docs, and its stale cleanup covers the directory.
 func TestSpanishIndexLinksUnderEsPrefix(t *testing.T) {
-	cmds := []cli.Command{{Name: "x", Summary: "do x", Usage: "Usage: vexillum x"}}
+	cmds := []cli.Command{{Name: "x", Summary: "hacer x", Usage: "Uso: vexillum x"}}
 	got := indexPage(cmds, localeES)
 	if !strings.Contains(got, "(/es/docs/reference/cli/x)") {
 		t.Errorf("Spanish index does not link under /es/docs:\n%s", got)
@@ -194,27 +195,51 @@ func TestSpanishIndexLinksUnderEsPrefix(t *testing.T) {
 	if strings.Contains(got, "(/docs/") {
 		t.Errorf("Spanish index links to the English prefix:\n%s", got)
 	}
+}
 
-	files := map[string]string{
-		referenceDirES + "/index.mdx": "",
-		referenceDirES + "/meta.json": "",
-	}
+func TestStaleCleanupCoversSpanishCommandPages(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, filepath.FromSlash(referenceDirES))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "dispatch.mdx"), []byte("traducida a mano"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "gone.mdx"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	stale, err := staleFiles(root, files)
+	stale, err := staleFiles(root, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, rel := range stale {
-		if strings.Contains(rel, "/es/") {
-			t.Errorf("generator claims a hand-translated Spanish page as stale: %s", rel)
+	if len(stale) != 1 || stale[0] != referenceDirES+"/gone.mdx" {
+		t.Errorf("stale = %v, want the removed Spanish command page", stale)
+	}
+}
+
+// Every English command page has a Spanish twin with the same sidebar order,
+// the generated-file header and Spanish frontmatter.
+func TestSpanishCommandPagesMirrorEnglishOnes(t *testing.T) {
+	files, err := generate(repoRoot)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, c := range cli.Commands() {
+		page, ok := files[referenceDirES+"/"+c.Name+".mdx"]
+		if !ok {
+			t.Errorf("no Spanish page for %s", c.Name)
+			continue
 		}
+		if !strings.Contains(page, localeES.notice) {
+			t.Errorf("Spanish page for %s lacks the generated-file header", c.Name)
+		}
+		if !strings.Contains(page, "title: "+yamlString(cmdname.Name+" "+c.Name)+"\n") {
+			t.Errorf("Spanish page for %s has the wrong title", c.Name)
+		}
+		if strings.Contains(page, "description: "+yamlString(c.Summary)) {
+			t.Errorf("Spanish page for %s still has the English description", c.Name)
+		}
+	}
+	if files[referenceDirES+"/meta.json"] != files[referenceDir+"/meta.json"] {
+		t.Error("the Spanish sidebar order differs from the English one")
 	}
 }
 
