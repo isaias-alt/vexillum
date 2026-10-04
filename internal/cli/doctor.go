@@ -18,7 +18,8 @@ Besides the tools vexillum drives, doctor reports, for an initialized project,
 the state of the AGENTS.md block (absent, current, stale, drifted or
 malformed), whether CLAUDE.md imports AGENTS.md, each first-party skill
 (installed and current, stale, edited by hand, or missing), a rules file left
-by an older version, and whether the model profiles in models.json are valid.
+by an older version, whether the model profiles in models.json are valid, and
+whether yolo mode is on (the commander lands a finished mission without asking).
 
 It also checks the sentinel Stop hook, the one that wakes the commander when a
 soldier finishes: whether it is registered in .claude/settings.json, whether

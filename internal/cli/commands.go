@@ -32,6 +32,7 @@ var commands = []Command{
 	{"doctor", "Report on the health of the vexillum environment", doctorUsage},
 	{"dispatch", "Dispatch a soldier (mission or scout) into an isolated camp", dispatchUsage},
 	{"models", "List the model and effort profiles a dispatch can use", modelsUsage},
+	{"yolo", "Turn yolo mode on or off for this project, or print whether it is on", yoloUsage},
 	{"redispatch", "Re-dispatch an interrupted task from its original prompt", redispatchUsage},
 	{"decide", "Answer a blocked task's open question so it can continue", decideUsage},
 	{"prompt", "Send a follow-up prompt to a soldier that already finished", repromptUsage},

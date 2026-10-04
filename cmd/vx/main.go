@@ -41,6 +41,8 @@ func run(args []string) int {
 		return cli.Dispatch(args[1:])
 	case "models":
 		return cli.Models(args[1:])
+	case "yolo":
+		return cli.Yolo(args[1:])
 	case "redispatch":
 		return cli.Redispatch(args[1:])
 	case "decide":

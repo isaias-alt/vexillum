@@ -43,6 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/
 | `vx doctor` | Report on the health of the vexillum environment |
 | `vx dispatch` | Dispatch a soldier (mission or scout) into an isolated camp |
 | `vx models` | List the model and effort profiles a dispatch can use |
+| `vx yolo` | Turn yolo mode on or off for this project, or print whether it is on |
 | `vx redispatch` | Re-dispatch an interrupted task from its original prompt |
 | `vx decide` | Answer a blocked task's open question so it can continue |
 | `vx prompt` | Send a follow-up prompt to a soldier that already finished |

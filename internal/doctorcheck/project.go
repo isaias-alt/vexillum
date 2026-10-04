@@ -11,11 +11,12 @@ import (
 	"github.com/isaias-alt/vexillum/internal/models"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/slot"
+	"github.com/isaias-alt/vexillum/internal/yolo"
 )
 
 // ProjectChecks reports on what vexillum put in an initialized project: the
 // AGENTS.md block, the CLAUDE.md import, the first-party skills, a leftover
-// rules file from an older version, models.json, and the sentinel Stop hook
+// rules file from an older version, models.json, yolo mode, and the sentinel Stop hook
 // with the sentinel behind it. Every check is
 // read-only, and none is Required: a stale or missing piece is something to
 // fix with init or upgrade, not a reason to call the environment unusable.
@@ -31,6 +32,7 @@ func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
 	}
 	out = append(out, Skills(projectDir, vexillumHome, homeDir)...)
 	out = append(out, Models(projectDir, vexillumHome))
+	out = append(out, Yolo(projectDir))
 	out = append(out, StopHooks(projectDir, vexillumHome, homeDir)...)
 	return out
 }
@@ -168,4 +170,20 @@ func Models(projectDir, vexillumHome string) Result {
 		detail += " (built-in defaults only)"
 	}
 	return Result{Name: name, OK: true, Detail: detail}
+}
+
+// Yolo reports whether yolo mode is on for the project: the commander lands
+// a finished, verified mission without asking the general first. Either state
+// is healthy; an invalid .vexillum/yolo.json is a warning, and the commander
+// treats anything but "on" as off.
+func Yolo(projectDir string) Result {
+	const name = "yolo mode"
+	on, err := yolo.Enabled(projectDir)
+	if err != nil {
+		return Result{Name: name, Warn: true, Detail: "invalid: " + err.Error()}
+	}
+	if on {
+		return Result{Name: name, OK: true, Detail: "on, the commander lands a finished mission without asking (" + cmdname.Name + " yolo off to stop)"}
+	}
+	return Result{Name: name, OK: true, Detail: "off"}
 }
