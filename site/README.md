@@ -14,6 +14,7 @@ pnpm lint
 pnpm typecheck
 pnpm seo:audit  # after pnpm build: serves the build and audits every page's SEO
 pnpm links:check  # after pnpm build: serves the build and checks every link (needs lychee)
+pnpm diagrams   # re-export diagrams/*.excalidraw to public/diagrams/*.svg (needs Google Chrome)
 ```
 
 ## Layout
@@ -27,6 +28,8 @@ pnpm links:check  # after pnpm build: serves the build and checks every link (ne
 | `lib/strings.ts` | landing and nav strings per locale |
 | `app/api/search/route.ts` | static search index, queried in the browser per locale |
 | `app/llms.txt`, `app/llms-full.txt`, `app/llms.mdx` | `llms.txt`, `llms-full.txt` and `/docs/<page>.md` (`/es/...` for Spanish) |
+| `diagrams/*.excalidraw` | the sources of the docs diagrams, one scene per language; edit them at excalidraw.com or in any Excalidraw editor |
+| `public/diagrams` | **generated** by `pnpm diagrams`: a light and a dark SVG per scene, shown by `components/Diagram.tsx` |
 | `lib/seo.ts`, `lib/docs-seo.ts` | metadata (title, canonical, hreflang, Open Graph, Twitter) and JSON-LD for every page |
 | `app/sitemap.ts`, `app/robots.txt` | sitemap with hreflang alternates, robots.txt |
 | `app/og/[lang]/[...slug]` | the 1200x630 social images, prerendered at build with `next/og` (`lib/og.tsx`, fonts in `assets/fonts`) |

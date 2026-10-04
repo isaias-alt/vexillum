@@ -15,7 +15,8 @@
     "links:check": "node scripts/link-check.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "pretypecheck": "node scripts/changelog.mjs",
-    "changelog": "node scripts/changelog.mjs"
+    "changelog": "node scripts/changelog.mjs",
+    "diagrams": "node scripts/export-diagrams.mjs"
   },
   "dependencies": {
     "@fuma-translate/react": "1.0.2",
@@ -29,12 +30,15 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

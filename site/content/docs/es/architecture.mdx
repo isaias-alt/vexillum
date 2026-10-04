@@ -5,36 +5,28 @@ description: Cómo encajan las piezas, y las decisiones que están cerradas.
 
 ## Las piezas
 
-```text
- general ──► commander (Claude Code, núcleo en AGENTS.md, skills)
-                │  vx dispatch
-                ▼
-         ┌── vexillum (binario Go) ─┐
-         │  pool de camps  estado   │         ┌─────────────┐
-         │  worktrees      wakes    │◄────────│  sentinel   │ consulta cada 5s
-         └──────┬───────────────────┘         └──────┬──────┘
-                │ pane de herdr                      │ hook Stop
-                ▼                                    ▼
-         soldier (Claude Code) en un camp ──► se despierta al commander
-```
+Le hablás a un commander. Él despacha soldiers, cada uno en su propio camp, y un sentinel lo despierta cuando uno termina.
 
-## Capas
+<Diagram
+  name="architecture.es"
+  width={614}
+  height={762}
+  alt="Diagrama de las piezas de vexillum. El general habla con el commander y revisa sus artefactos en el forum. El commander ejecuta vx dispatch sobre el binario vexillum, que guarda el estado en disco y abre un camp donde un soldier corre en un pane de herdr. El sentinel consulta herdr, registra los resultados en el estado y despierta al commander mediante el hook Stop."
+  caption="Las piezas de vexillum y cómo se comunican entre sí."
+/>
 
-vexillum se construye por capas, cada una probada antes de la siguiente:
-
-1. **CLI base** - `init` y `doctor`.
-2. **Estado en disco** - structs como JSON bajo `~/.vexillum`, escritos de forma atómica.
-3. **Un proceso** - un soldier en un camp.
-4. **Concurrencia** - N soldiers, y el sentinel sobre la socket API de herdr, a prueba de reinicios.
+- Le hablás al **commander**, una sesión de Claude Code guiada por `AGENTS.md` y skills. Te abre artefactos en el **forum** y lee de ahí tu feedback.
+- El commander ejecuta `vx dispatch`. El binario **vexillum** guarda su estado en disco, toma un **camp** e inicia un **soldier** en un pane de **herdr**.
+- El **sentinel** consulta herdr cada 5 segundos, registra cada resultado en el estado y despierta al commander mediante el hook `Stop`.
 
 ## Decisiones cerradas
 
 - **Go**, distribuido como binario por Homebrew y curl, sin dependencias de runtime.
-- **Un solo harness**, Claude Code, con una costura dejada para otro.
-- **herdr es el backend primario; tmux queda como backend de control.**
+- **Claude Code** es el harness del commander y de cada soldier.
+- **herdr** aloja los panes donde corren los soldiers.
 - **La inteligencia es markdown, no Go.** El binario hace plomería determinista; el ruteo y el criterio viven en el núcleo de AGENTS.md y en las skills.
 - **El vocabulario del dominio se queda en inglés** - commander, soldier, mission, scout, camp, sentinel - en todos los idiomas.
-- **Sin segundo commander** en esta versión.
+- **Un solo commander.** Siempre le hablás a un único commander.
 
 ## Modelo de seguridad
 
@@ -47,7 +39,3 @@ vexillum se construye por capas, cada una probada antes de la siguiente:
 | `redispatch` | la única operación que descarta un camp, por eso el commander pregunta primero |
 
 El proceso en sí no está en un sandbox. Ver la [advertencia de la introducción](/es/docs).
-
-## Contribuir
-
-El código, el tracker de issues y la guía CONTRIBUTING están en [GitHub](https://github.com/isaias-alt/vexillum). La referencia de comandos se genera desde el registro en `internal/cli`, así que no puede desfasarse del binario.
