@@ -46,6 +46,8 @@ curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/
 
 Las versiones disponibles están en la [página de releases de GitHub](https://github.com/isaias-alt/vexillum/releases).
 
+Mientras no exista un `v0.2.0` stable, correr el script sin `--version` instala el último stable (hoy v0.1.x), por Homebrew cuando `brew` está presente, y nunca el rc. Para probar el rc, pasá `--version v0.2.0-rc.1`: es una descarga directa que saltea Homebrew.
+
 ## Canary
 
 Un canary es un build de lo último que se trabajó. Se hace uno cada noche, y solo cuando hay algo nuevo desde el anterior, así que una semana tranquila no produce builds. Un canary nunca se convierte en un release stable por sí solo, y nunca llega a Homebrew.
