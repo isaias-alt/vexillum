@@ -19,18 +19,18 @@ brew install isaias-alt/tap/vexillum
   </CodeBlockTab>
   <CodeBlockTab value="curl">
 ```bash
-curl -fsSL https://vx.lucasco.dev/install | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
 ```
   </CodeBlockTab>
 </CodeBlockTabs>
 
-`/install` redirige a `scripts/install.sh` del repositorio, así que el script que corrés es el del árbol de código. Este script:
+Este script:
 
 1. Detecta tu sistema operativo y arquitectura;
-2. Usa Homebrew si `brew` está en tu PATH (`brew install isaias-alt/tap/vexillum`, o `brew upgrade` cuando la fórmula ya está instalada, como pasa con el viejo comando `vexillum` de la v0.1.x);
+2. Usa Homebrew si `brew` está en tu PATH (`brew install isaias-alt/tap/vexillum`, o `brew upgrade` cuando la fórmula ya está instalada);
 3. Si no, descarga el archivo del release para tu plataforma y **verifica su checksum sha256** contra el `checksums.txt` del release, y se niega a instalar si no coincide;
-4. Instala el binario en `/usr/local/bin`, o en `~/.local/bin` cuando no puedes escribir en él `/usr/local/bin` (avisa si ese directorio no está en tu PATH);
-5. Comprueba que ahora existe un `vx` que funciona (en el directorio de instalación, el prefijo de Homebrew o tu PATH) y termina con un error si no, nombrando el binario viejo `vexillum` cuando es lo único que encuentra.
+4. Instala el binario en `/usr/local/bin`, o en `~/.local/bin` cuando no podés escribir en `/usr/local/bin` (avisa si ese directorio no está en tu PATH);
+5. Comprueba que ahora existe un `vx` que funciona (en el directorio de instalación, el prefijo de Homebrew o tu PATH) y termina con un error si no.
 
 Comprobá que funcionó:
 
@@ -47,7 +47,6 @@ vexillum no instala sus herramientas; las verifica.
 | [Claude Code](https://claude.com/claude-code) | el commander y cada soldier | sí |
 | [herdr](https://herdr.dev) | los panes donde corren los soldiers | sí |
 | `gh` (GitHub CLI) | `vx ship`, y aterrizar un PR enviado | solo para eso |
-| `tmux` | backend de control opcional | no |
 
 Corré la verificación cuando quieras:
 
@@ -68,25 +67,3 @@ vx doctor
 ```
 
 Sale con código distinto de cero cuando falla un chequeo requerido. Un hook `Stop` que no encuentra vx es un `[warn]` con el arreglo, nunca un fallo.
-
-## Instalación global
-
-Por defecto `vx init` es local: prepara un solo proyecto. Para que el commander aplique en todas las sesiones de Claude Code de la máquina, activalo una vez:
-
-```bash
-vx init --global
-```
-
-En ese caso no hay un `AGENTS.md` de proyecto, así que el mismo núcleo se escribe, sin marcadores, en `~/.claude/rules/vexillum.md`, que Claude Code carga en cada sesión. Las skills van a `~/.claude/skills/` y se crea `~/.vexillum/config.json` si falta. Corre el mismo flujo de consentimiento que el `init` de proyecto: lista `~/.claude/rules/vexillum.md` como un archivo tuyo que va a cambiar, y pregunta antes.
-
-<Callout type="warn" title="Afecta a todas las sesiones">
-  Las reglas globales aplican a **todas** las sesiones de Claude Code de esta máquina, no solo a los proyectos de vexillum. No lo uses salvo que quieras eso. El hook `Stop` del sentinel sigue siendo por proyecto y viene de `vx init` dentro de un proyecto.
-</Callout>
-
-Para refrescarlo después de instalar un binario más nuevo, corré:
-
-```bash
-vx upgrade --global
-```
-
-El archivo de reglas se reemplaza solo cuando no cambió desde que vexillum lo escribió; si lo editaste, `upgrade --global --force` lo reemplaza después de guardar tu versión en `~/.vexillum/backups/rules-vexillum.md`. Las skills instaladas siguen las mismas reglas que en un proyecto. Mirá [Actualización](/es/docs/get-started/upgrading).

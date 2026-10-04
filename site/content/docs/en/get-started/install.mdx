@@ -19,28 +19,24 @@ brew install isaias-alt/tap/vexillum
   </CodeBlockTab>
   <CodeBlockTab value="curl">
 ```bash
-curl -fsSL https://vx.lucasco.dev/install | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
 ```
   </CodeBlockTab>
 </CodeBlockTabs>
 
-`/install` redirects to `scripts/install.sh` in the repository, so the script you run is the one in the source tree. It:
+The script:
 
-1. detects your OS and architecture;
-2. uses Homebrew if `brew` is on your PATH (`brew install isaias-alt/tap/vexillum`, or `brew upgrade` when the formula is already installed, as it is for the old v0.1.x `vexillum` command);
-3. otherwise downloads the release archive for your platform and **verifies its sha256 checksum** against the release's `checksums.txt`, refusing to install on a mismatch;
-4. installs the binary into `/usr/local/bin`, or into `~/.local/bin` when you cannot write to `/usr/local/bin` (it warns if that directory is not on your PATH);
-5. checks that a working `vx` now exists (in the install directory, the Homebrew prefix or your PATH) and exits with an error if it does not, naming the old `vexillum` binary when that is all it finds.
+1. Detects your OS and architecture;
+2. Uses Homebrew if `brew` is on your PATH (`brew install isaias-alt/tap/vexillum`, or `brew upgrade` when the formula is already installed);
+3. Otherwise downloads the release archive for your platform and **verifies its sha256 checksum** against the release's `checksums.txt`, refusing to install on a mismatch;
+4. Installs the binary into `/usr/local/bin`, or into `~/.local/bin` when you cannot write to `/usr/local/bin` (it warns if that directory is not on your PATH);
+5. Checks that a working `vx` now exists (in the install directory, the Homebrew prefix or your PATH) and exits with an error if it does not.
 
 Check it worked:
 
 ```bash
 vx --version
 ```
-
-<Callout title="Coming from the `vexillum` command?">
-  The executable is now called `vx`, and it is the only one: there is no `vexillum` alias. The product is still vexillum, and the Homebrew package keeps its name (`brew install isaias-alt/tap/vexillum` installs the `vx` executable). Run `vx upgrade` once in each project you initialized before - see [Migrating from vexillum to vx](/docs/get-started/upgrading#migrating-from-vexillum-to-vx).
-</Callout>
 
 ## Install what vexillum orchestrates
 
@@ -51,7 +47,6 @@ vexillum does not install its tools; it checks for them.
 | [Claude Code](https://claude.com/claude-code) | the commander and every soldier | yes |
 | [herdr](https://herdr.dev) | the panes soldiers run in | yes |
 | `gh` (GitHub CLI) | `vx ship`, and landing a shipped PR | only for those |
-| `tmux` | optional control backend | no |
 
 Run the check any time:
 
@@ -72,27 +67,3 @@ vx doctor
 ```
 
 It exits non-zero when a required check fails. A `Stop` hook that cannot find vx is a `[warn]` with the fix, never a failure.
-
-## Install globally
-
-By default `vx init` is local: it prepares one project. To make the commander apply in every Claude Code session on the machine, opt in once:
-
-```bash
-vx init --global
-```
-
-There is no project `AGENTS.md` in that case, so the same core is written, without markers, to `~/.claude/rules/vexillum.md`, which Claude Code loads in every session. The skills go to `~/.claude/skills/` and `~/.vexillum/config.json` is created if missing. It runs the same consent flow as the project `init`: it lists `~/.claude/rules/vexillum.md` as a file of yours it will change, and asks first.
-
-<Callout type="warn" title="It affects every session">
-  The global rules apply to **all** Claude Code sessions on this machine, not only vexillum projects. Leave it out unless you want that. The sentinel `Stop` hook is still per-project and comes from `vx init` inside a project.
-</Callout>
-
-To refresh it after installing a newer binary, run:
-
-```bash
-vx upgrade --global
-```
-
-The rules file is replaced only when it is unchanged since vexillum wrote it; if you edited it, `upgrade --global --force` replaces it after saving your version to `~/.vexillum/backups/rules-vexillum.md`. Installed skills follow the same rules as in a project. See [Upgrading](/docs/get-started/upgrading).
-
-Next: the [Quickstart](/docs/get-started/quickstart).

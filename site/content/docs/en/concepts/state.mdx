@@ -3,13 +3,12 @@ title: State
 description: Everything vexillum remembers is plain JSON on disk, written atomically.
 ---
 
-vexillum keeps no daemon memory. Every fact it relies on is a file, so a restart - of vexillum, herdr, or your machine - loses nothing it knew.
+vexillum keeps no daemon memory. Every fact it relies on is a file, so a restart (of vexillum, herdr, or your machine) loses nothing it knew.
 
 ## Layout
 
 ```text
 ~/.vexillum/
-  config.json              only after `vx init --global`
   sentinel.pid  sentinel.log
   sentinel-awaiters/       one record per live `vx sentinel await`
   projects/
@@ -30,12 +29,12 @@ In the project itself, `init` writes `.vexillum/config.json` and `.claude/`. See
 A project's namespace is `<repo>-<hash>`: the directory name plus the first 8 hex characters of the sha256 of its absolute path, after resolving symlinks. Two projects never see each other's tasks, wakes or camps.
 
 <Callout type="warn" title="Moving a project orphans its state">
-  The key is derived from the path. If you rename or move the project, what was recorded under the old key becomes invisible to commands run from the new location. vexillum does not migrate or detect it.
+  The key is derived from the path. If you rename or move the project, what was recorded under the old key becomes invisible to commands run from the new location. vexillum does not detect the move.
 </Callout>
 
 ## Tasks
 
-A task file is the `Task` schema (currently version 3): id, kind, prompt, status, timestamps, the camp slot, path, branch and base, the herdr pane identifiers, the model and effort, and, once blocked, a structured `decision`. `vx status --json` prints exactly this schema; see [status --json](/docs/reference/status-json).
+A task file is the `Task` schema: id, kind, prompt, status, timestamps, the camp slot, path, branch and base, the herdr pane identifiers, the model and effort, and, once blocked, a structured `decision`. `vx status --json` prints exactly this schema; see [status --json](/docs/reference/status-json).
 
 ## Atomic writes
 

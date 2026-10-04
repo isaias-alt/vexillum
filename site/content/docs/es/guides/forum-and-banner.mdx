@@ -11,7 +11,7 @@ Dos comandos permiten a los agentes mostrarte algo más rico que texto de termin
 vx forum .vexillum/forum/plan.html
 ```
 
-Los agentes escriben sus artifacts en `.vexillum/forum/` dentro del proyecto. `vx init` agrega un `.vexillum/.gitignore` que mantiene esa carpeta fuera de git; cualquier ruta que pases por la línea de comandos sigue funcionando, incluida una carpeta `.forum/` vieja.
+Los agentes escriben sus artifacts en `.vexillum/forum/` dentro del proyecto. `vx init` agrega un `.vexillum/.gitignore` que mantiene esa carpeta fuera de git; cualquier ruta que pases por la línea de comandos sigue funcionando.
 
 Sirve un archivo HTML que escribió el agente a tu navegador y le lleva tu feedback de vuelta. Un servidor local por usuario corre en `127.0.0.1` y se detiene solo cuando no hay nada conectado. Podés chatear, encolar mensajes, completar formularios de decisión y anotar elementos, y mandarlo todo al agente. Un diagrama Mermaid se convierte en una pizarra editable.
 
@@ -39,7 +39,7 @@ El servidor intenta no moverse ni desaparecer debajo de una pestaña abierta:
 
 ### El listener y el inbox
 
-Antes el agente sostenía un poll bloqueante por sesión, y el poll moría cuando el agente se ocupaba. Ahora lo sostiene un proceso chico en segundo plano: `vx forum listen` (oculto; `vx forum <file>` lo arranca si no está corriendo, uno por usuario, protegido por un pid lock). Es código común, sin ningún modelo detrás, así que solo puede reenviar. Por cada prompt que mandás desde una sesión abierta dentro de un proyecto de vexillum:
+Un proceso chico en segundo plano sostiene el poll bloqueante de cada sesión, así que no muere cuando el agente se ocupa: `vx forum listen` (oculto; `vx forum <file>` lo arranca si no está corriendo, uno por usuario, protegido por un pid lock). Es código común, sin ningún modelo detrás, así que solo puede reenviar. Por cada prompt que mandás desde una sesión abierta dentro de un proyecto de vexillum:
 
 1. escribe el prompt, con todos sus campos y las rutas de las imágenes adjuntas, en el inbox durable del proyecto (`forum-inbox/<session>/<uid>.json`, un archivo atómico por prompt, así que un crash o una reentrega nunca pierde ni duplica uno),
 2. registra un **forum wake**, uno por sesión sin importar cuántos mensajes llegaron,
@@ -52,7 +52,7 @@ Una sesión abierta fuera de cualquier proyecto no tiene commander al que desper
 
 ### Varias sesiones a la vez
 
-Cada sesión con poll necesita un listener, y un poll muere cuando entrega feedback, cuando vence su tarea en segundo plano o cuando el agente está ocupado. Con varias sesiones abiertas eso dejaba a algunas sin nadie escuchando. `vx forum poll --all` lo resuelve con un solo listener para todas:
+Cada sesión con poll necesita un listener, y un poll muere cuando entrega feedback, cuando vence su tarea en segundo plano o cuando el agente está ocupado. Con varias sesiones abiertas, algunas pueden quedar sin nadie escuchando. `vx forum poll --all` lo resuelve con un solo listener para todas:
 
 - Cubre cada sesión abierta (las sesiones que se abren mientras espera se suman), así que todos los paneles muestran al agente escuchando.
 - Cada llamada entrega el feedback de una sola sesión, la que más espera, e imprime su `session` y su `file` para que el agente sepa qué artefacto editar. `other_sessions_pending` indica cuántas más están esperando; la siguiente llamada las entrega.

@@ -3,7 +3,7 @@ title: Sentinel
 description: The background process that wakes the commander only when a soldier needs attention.
 ---
 
-The sentinel is what lets you walk away. It watches every dispatched soldier and interrupts the commander - and so you - only when one settles.
+The sentinel is what lets you walk away or work on several tasks at once. It watches every dispatched soldier and interrupts the commander (and so you) only when one settles.
 
 ## What it does
 
@@ -21,14 +21,14 @@ A soldier is only recorded as `blocked` on a `needs-decision:` line it wrote in 
 
 ## Staying current
 
-A sentinel is a long-lived process, so it can outlive the binary it started from. An old one would keep rewriting task state with old logic, which is how fields written by a newer build used to get erased. Two things prevent that:
+A sentinel is a long-lived process, so it can outlive the binary it started from. A stale one would keep rewriting task state with outdated logic. Two things prevent that:
 
-- **Tasks keep what they do not understand.** Saving a task changes only the fields the running build owns and writes every other top-level field back exactly as it found it, so an older process cannot erase what a newer one recorded.
-- **The sentinel retires when its binary changes.** It records the build it started from (version and executable file) in `~/.vexillum/sentinel.json` and checks it after every pass. Once that file has been replaced on disk (a rebuild, `brew upgrade`) it finishes the pass it is in, releases its lock and exits. It compares the file, not just the version, because every plain `go build` reports `dev`.
+- **Tasks keep what they do not understand.** Saving a task changes only the fields the running build owns and writes every other top-level field back exactly as it found it, so a stale process cannot erase what a newer one recorded.
+- **The sentinel retires when its binary changes.** It records the build it started from (version and executable file) in `~/.vexillum/sentinel.json` and checks it after every pass. Once that file has been replaced on disk (a rebuild, `brew upgrade`) it finishes the pass it is in, releases its lock and exits. It compares the file, not just the version, so a rebuild is always noticed.
 
 The next `vx dispatch`, `vx prompt` or Stop hook `await` then starts a fresh sentinel from the new binary, and the replacement waits briefly for the old one to let go instead of giving up. An `await` checks on every poll, so a commander session that is only waiting gets a new sentinel within seconds.
 
-`vx doctor` warns when more than one sentinel process is alive, when the live sentinel is a different version than the binary running doctor, when its executable has changed since it started, or when it predates this tracking. Each warning names the pid to stop with `kill`, and the next dispatch starts a current one. Doctor never stops a process itself.
+`vx doctor` warns when more than one sentinel process is alive, when the live sentinel is a different version than the binary running doctor, or when its executable has changed since it started. Each warning names the pid to stop with `kill`, and the next dispatch starts a current one. Doctor never stops a process itself.
 
 ## How the commander is woken
 
@@ -75,9 +75,9 @@ If none is found the hook does not stay silent: it prints one line to stderr, `v
 [ok] sentinel - running, 1 Stop hook await(s) waiting
 ```
 
-A hook that cannot find vx is a warning, not a failure, and the line names the fix: install vx where the hook looks (`~/.local/bin` or Homebrew) and run `vx upgrade` to rewrite an older hook.
+A hook that cannot find vx is a warning, not a failure, and the line names the fix: install vx where the hook looks (`~/.local/bin` or Homebrew) and run `vx upgrade` to rewrite the hook.
 
-`vx init` and `vx upgrade` migrate the earlier forms, a bare `vx sentinel await`, the pre-rename `vexillum sentinel await` and the synchronous `vexillum sentinel drain`, to the command above. They ask first like the rest of `upgrade`, and any `Stop` hook of yours that is not vexillum's is kept.
+`vx init` and `vx upgrade` keep the hook up to date. They ask first like the rest of `upgrade`, and any `Stop` hook of yours that is not vexillum's is kept.
 
 ## Following up on a finished soldier
 

@@ -1,9 +1,9 @@
 ---
 title: Introduction
-description: vexillum orchestrates coding agents from your terminal - one commander, many soldiers, each in its own camp.
+description: vexillum orchestrates coding agents from your terminal, one commander, many soldiers, each in its own camp.
 ---
 
-vexillum is a CLI orchestrator for code agents, written in Go. You talk to one agent, the **commander** (Claude Code). It dispatches **soldiers** - more Claude Code sessions - in parallel. Each soldier works in its own git worktree, a **camp**, so parallel work never collides, and hands back either a change to land (a **mission**) or a written report (a **scout**). A background **sentinel** watches the soldiers and wakes the commander only when something needs attention.
+vexillum is a CLI orchestrator for code agents, written in Go. You talk to one agent, the **commander** (Claude Code). It dispatches **soldiers** (more Claude Code sessions) in parallel. Each soldier works in its own git worktree, a **camp**, so parallel work never collides, and hands back either a change to land (a **mission**) or a written report (a **scout**). A background **sentinel** watches the soldiers and wakes the commander only when something needs attention.
 
 You do not learn a new interface: you keep talking to Claude Code, and the commander calls `vx` for you.
 
@@ -15,9 +15,9 @@ Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)
 ## What vexillum is, and is not
 
 - **A single Go binary.** It does deterministic plumbing: it creates worktrees, starts sessions, tracks state on disk, and refuses unsafe operations. It installs by Homebrew or a curl script, with no runtime dependencies.
-- **Not the brain.** The commander's judgment - when to dispatch, which model to pick, when to ask you - lives in markdown: a short core in a block of your own `AGENTS.md`, plus [skills](/docs/concepts/skills) the commander loads when it needs them. `vx init` writes them into your project, after asking. You can read and edit them. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
+- **Not the brain.** The commander's judgment (when to dispatch, which model to pick, when to ask you) lives in markdown: a short core in a block of your own `AGENTS.md`, plus [skills](/docs/concepts/skills) the commander loads when it needs them. `vx init` writes them into your project, after asking. You can read and edit them. See [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
 - **Claude Code only, for now.** The soldier harness is Claude Code. Other harnesses are not supported yet.
-- **herdr for panes.** Soldiers run in [herdr](https://herdr.dev) panes; tmux is an optional control backend. `vx doctor` checks for them but never installs them.
+- **herdr for panes.** Soldiers run in [herdr](https://herdr.dev) panes. `vx doctor` checks for it but never installs it.
 
 ## Where to go next
 

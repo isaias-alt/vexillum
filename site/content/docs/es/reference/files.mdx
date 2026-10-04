@@ -10,7 +10,7 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | `AGENTS.md` | `init`, `upgrade` | recibe el bloque de vexillum (entre los marcadores); tu propio texto nunca se toca. Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot) |
 | `CLAUDE.md` | `init`, `upgrade` | se crea con, o recibe, la línea `@AGENTS.md` para que Claude Code vea el bloque |
 | `.claude/skills/<name>/` | `init`, `upgrade` | las [skills](/es/docs/concepts/skills) `vexillum`, `forum` y `muster`, si las aceptaste |
-| `.claude/settings.json` | `init`, `upgrade` | suma el hook `Stop` asíncrono que corre `vx sentinel await` mediante un wrapper de una línea que no depende del PATH (ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path)); un `vx sentinel await` pelado anterior se migra, y el contenido existente se fusiona, nunca se pisa. Un JSON inválido se deja intacto y se reporta |
+| `.claude/settings.json` | `init`, `upgrade` | suma el hook `Stop` asíncrono que corre `vx sentinel await` mediante un wrapper de una línea que no depende del PATH (ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path)); el contenido existente se fusiona, nunca se pisa. Un JSON inválido se deja intacto y se reporta |
 | `.vexillum/config.json` | `init`, `upgrade` | marca el proyecto como inicializado; guarda un hash de contenido por skill instalada para que `upgrade` sepa si la editaste |
 | `.vexillum/models.json` | `init` (una vez) | los perfiles de modelo y effort; **tuyo para editar**, nunca se pisa. Ver [`models.json`](/es/docs/reference/models-json) |
 | `.vexillum/.gitignore` | `init` | ignora `.vexillum/forum/`, los artefactos temporales del forum |
@@ -18,13 +18,12 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | `.vexillum/AGENTS.md.backup` | `upgrade` | el `AGENTS.md` entero, guardado antes de reparar un bloque malformado |
 | `.vexillum/backups/skills/<name>/` | `upgrade --force` | una skill editada, guardada antes de sobrescribirla |
 
-`AGENTS.md` y `CLAUDE.md` son tuyos: `init` los lista en un aviso y pregunta antes de cambiarlos. Estos archivos los trackea git, así que commitealos. El viejo `.claude/rules/vexillum.md` ya no se escribe; mirá [Migrar del archivo de reglas](/es/docs/get-started/upgrading#migrar-del-archivo-de-reglas-al-slot).
+`AGENTS.md` y `CLAUDE.md` son tuyos: `init` los lista en un aviso y pregunta antes de cambiarlos. Estos archivos los trackea git, así que commitealos.
 
 ## En `~/.vexillum`
 
 | Ruta | Propósito |
 | --- | --- |
-| `config.json` | solo después de `init --global` |
 | `models.json` | base global opcional para los [perfiles](/es/docs/reference/models-json); lo creás vos |
 | `sentinel.pid`, `sentinel.log` | el único sentinel por máquina |
 | `forum/listener.pid`, `forum/listener.log` | el único listener de forum por usuario, ver [Forum y banner](/es/docs/guides/forum-and-banner) |
@@ -36,9 +35,5 @@ description: Cada archivo que vexillum lee o escribe, y dónde.
 | `projects/<repo>-<hash>/camps/` | el pool de worktrees: `pool.json` y `<slot>/<repo>/` |
 | `projects/<repo>-<hash>/reports/<agent>-<id>.md` | el reporte final de un scout |
 | `projects/<repo>-<hash>/pauses/<agent>.md` | una pausa declarada por un soldier |
-
-## Global
-
-Con `init --global`, el núcleo del commander va a `~/.claude/rules/vexillum.md` (sin marcadores, sin ningún `AGENTS.md` de proyecto) y las skills a `~/.claude/skills/`. Aplican a cada sesión de Claude Code de la máquina.
 
 Ver [Estado](/es/docs/concepts/state) para saber cómo se deriva la clave del proyecto.

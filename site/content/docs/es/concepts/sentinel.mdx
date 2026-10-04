@@ -21,14 +21,14 @@ Un soldier solo queda registrado como `blocked` por una línea `needs-decision:`
 
 ## Mantenerse al día
 
-Un sentinel es un proceso de larga vida, así que puede sobrevivir al binario con el que arrancó. Uno viejo seguiría reescribiendo el estado de las tareas con lógica vieja, que es como antes se borraban campos escritos por un build más nuevo. Dos cosas lo evitan:
+Un sentinel es un proceso de larga vida, así que puede sobrevivir al binario con el que arrancó. Uno desactualizado seguiría reescribiendo el estado de las tareas con lógica vieja. Dos cosas lo evitan:
 
-- **Las tareas conservan lo que no entienden.** Guardar una tarea cambia solo los campos que el build en ejecución conoce y vuelve a escribir tal cual cualquier otro campo de primer nivel, así que un proceso viejo no puede borrar lo que registró uno más nuevo.
-- **El sentinel se retira cuando cambia su binario.** Registra el build desde el que arrancó (versión y archivo ejecutable) en `~/.vexillum/sentinel.json` y lo revisa después de cada pasada. Cuando ese archivo fue reemplazado en disco (un rebuild, `brew upgrade`) termina la pasada en curso, suelta su lock y sale. Compara el archivo y no solo la versión, porque todo `go build` común reporta `dev`.
+- **Las tareas conservan lo que no entienden.** Guardar una tarea cambia solo los campos que el build en ejecución conoce y vuelve a escribir tal cual cualquier otro campo de primer nivel, así que un proceso desactualizado no puede borrar lo que registró uno más nuevo.
+- **El sentinel se retira cuando cambia su binario.** Registra el build desde el que arrancó (versión y archivo ejecutable) en `~/.vexillum/sentinel.json` y lo revisa después de cada pasada. Cuando ese archivo fue reemplazado en disco (un rebuild, `brew upgrade`) termina la pasada en curso, suelta su lock y sale. Compara el archivo y no solo la versión, así que un rebuild siempre se detecta.
 
 El siguiente `vx dispatch`, `vx prompt` o `await` del hook Stop arranca entonces un sentinel nuevo desde el binario nuevo, y el reemplazo espera un momento a que el viejo suelte el lock en vez de rendirse. Un `await` lo verifica en cada consulta, así que una sesión de commander que solo está esperando recibe un sentinel nuevo en segundos.
 
-`vx doctor` avisa cuando hay más de un proceso sentinel vivo, cuando el sentinel vivo es de otra versión que el binario que corre doctor, cuando su ejecutable cambió desde que arrancó, o cuando es anterior a este seguimiento. Cada aviso nombra el pid que hay que detener con `kill`, y el siguiente dispatch arranca uno al día. Doctor nunca detiene un proceso por su cuenta.
+`vx doctor` avisa cuando hay más de un proceso sentinel vivo, cuando el sentinel vivo es de otra versión que el binario que corre doctor, o cuando su ejecutable cambió desde que arrancó. Cada aviso nombra el pid que hay que detener con `kill`, y el siguiente dispatch arranca uno al día. Doctor nunca detiene un proceso por su cuenta.
 
 ## Cómo se despierta al commander
 
@@ -75,9 +75,9 @@ Si no encuentra ninguno, el hook no se queda callado: imprime una línea por std
 [ok] sentinel - running, 1 Stop hook await(s) waiting
 ```
 
-Un hook que no encuentra vx es un aviso (`warn`), no un fallo, y la línea nombra el arreglo: instalá vx donde el hook busca (`~/.local/bin` o Homebrew) y corré `vx upgrade` para reescribir un hook viejo.
+Un hook que no encuentra vx es un aviso (`warn`), no un fallo, y la línea nombra el arreglo: instalá vx donde el hook busca (`~/.local/bin` o Homebrew) y corré `vx upgrade` para reescribir el hook.
 
-`vx init` y `vx upgrade` migran las formas anteriores, un `vx sentinel await` pelado, el `vexillum sentinel await` previo al cambio de nombre y el `vexillum sentinel drain` sincrónico, al comando de arriba. Preguntan primero, como el resto de `upgrade`, y cualquier hook `Stop` tuyo que no sea de vexillum se conserva.
+`vx init` y `vx upgrade` mantienen el hook al día. Preguntan primero, como el resto de `upgrade`, y cualquier hook `Stop` tuyo que no sea de vexillum se conserva.
 
 ## Dar seguimiento a un soldier terminado
 

@@ -3,7 +3,7 @@ title: Quickstart
 description: De una instalación nueva a tu primera mission aterrizada.
 ---
 
-Necesitás vexillum, Claude Code y herdr instalados (ver: [Instalación](/es/docs/get-started/install)).
+Necesitás vexillum, Claude Code y herdr instalados. Ver [Instalación](/es/docs/get-started/install).
 
 ## 1. Preparar tu proyecto
 
@@ -43,9 +43,6 @@ Sin terminal (scripts, CI) `init` no pregunta nada y no cambia nada salvo que pa
 | `--skills` | Instala las skills sin preguntar. |
 | `--no-skills` | No instala las skills, sin preguntar. |
 | `--lang en\|es` | Idioma del bloque de AGENTS.md, en lugar de detectarlo. |
-| `--global` | Prepara todos los proyectos de esta máquina en vez de este. |
-
-Para que el commander aplique en todas las sesiones de Claude Code y no proyecto por proyecto, mirá [Instalación global](/es/docs/get-started/install#instalación-global) (`vx init --global`, opt-in, afecta a todas las sesiones).
 
 <Callout title="Commiteá el scaffold temprano">
   `vx land` se niega a correr con el checkout sucio, y un `init` recién hecho deja archivos nuevos sin commitear. Commiteá `AGENTS.md`, `CLAUDE.md`, `.claude/` y `.vexillum/` antes de despachar tu primera mission.
@@ -69,13 +66,13 @@ Abrí un pane de herdr, hacé `cd` al proyecto e iniciá Claude Code. `vx dispat
 > dispatch a soldier to fix the flaky login test
 ```
 
-El commander corre `vx dispatch "fix the flaky login test" --kind mission`, que imprime el id de la tarea, la branch del camp (`vexillum/<task-id>`) y `status=running`. El primer dispatch también inicia el sentinel en segundo plano. 
+El commander corre `vx dispatch "fix the flaky login test" --kind mission`, que imprime el id de la tarea, la branch del camp (`vexillum/<task-id>`) y `status=running`. El primer dispatch también inicia el sentinel en segundo plano.
 
 Podés seguir hablando con el commander mientras el soldier trabaja. Esa es la magia de **vexillum**.
 
 ## 5. Enterarte
 
-Cuando el soldier termina (done o blocked) el sentinel despierta al commander, que te reporta. Para mirar vos mismo:
+Cuando el soldier termina (done o blocked), el sentinel despierta al commander, que te reporta. Para mirar vos mismo:
 
 ```bash
 vx status
@@ -89,4 +86,4 @@ Cuando la mission está done, revisala y decile al commander que la aterrice. Co
 vx land <task-id>
 ```
 
-Eso hace fast-forward de tu checkout hasta la branch de la mission y devuelve el camp al pool. Si preferís un pull request revisado (ver: [Land vs ship](/es/docs/guides/land-vs-ship)).
+Eso hace fast-forward de tu checkout hasta la branch de la mission y devuelve el camp al pool. Si preferís un pull request revisado, ver [Land vs ship](/es/docs/guides/land-vs-ship).

@@ -4,7 +4,7 @@ description: El bloque que vexillum mantiene dentro de tu propio AGENTS.md, qué
 ---
 
 <Callout type="warn" title="vx init modifica tu AGENTS.md (y tu CLAUDE.md)">
-  `vx init` escribe un bloque en **tu propio** `AGENTS.md`, y se asegura de que tu `CLAUDE.md` lo importe. Los dos archivos son tuyos, así que `init` primero lista los archivos que va a tocar y **te pide consentimiento** antes de escribir nada. Si respondés que no, no se cambia nada. Mirá [`vx init`](/es/docs/reference/cli/init) y el [Quickstart](/es/docs/get-started/quickstart).
+  `vx init` escribe un bloque en **tu propio** `AGENTS.md`, y se asegura de que tu `CLAUDE.md` lo importe. Los dos archivos son tuyos, así que `init` primero lista los archivos que va a tocar y **te pide consentimiento** antes de escribir nada. Si respondés que no, no se cambia nada. Ver [`vx init`](/es/docs/reference/cli/init) y el [Quickstart](/es/docs/get-started/quickstart).
 </Callout>
 
 ## Qué es el slot
@@ -13,7 +13,7 @@ El slot es un bloque que vexillum administra dentro de un archivo que es tuyo: e
 
 Por qué un slot y no un archivo de reglas propio:
 
-- **Un bloque corto en vez de un archivo de 15 KB.** El viejo `.claude/rules/vexillum.md` se cargaba entero en cada sesión. El núcleo es chico y el detalle va a pedido.
+- **Un bloque corto.** El núcleo es chico y el detalle va a pedido.
 - **Vive en el archivo que el ecosistema ya lee.** `AGENTS.md` es donde van las instrucciones de agentes de tu proyecto. vexillum agrega ahí en vez de crear una convención paralela.
 - **Es seguro compartir el archivo.** Todo lo que está fuera de los marcadores es tuyo y nunca se reordena ni se reescribe.
 
@@ -33,7 +33,7 @@ El bloque lo renderiza el binario, en inglés o en español. Podés ver el texto
 
 | Parte | Significado |
 | --- | --- |
-| `v:1` | La versión del **formato del marcador**, no de vexillum. Un binario futuro que cambie el formato la sube, así todavía puede reconocer un bloque escrito por uno anterior. |
+| `v:1` | El **formato del marcador**, para que vexillum sepa cómo leer el bloque. |
 | `hash:<8hex>` | Los primeros 8 caracteres hexadecimales del SHA-256 del **cuerpo** del bloque: el texto entre los dos marcadores, con los fines de línea normalizados a LF y sin saltos de línea finales (las líneas de los marcadores no entran en el hash). Es lo que le permite a vexillum distinguir un bloque que escribió y dejaste en paz de uno que editaste. |
 
 ### El cuerpo
@@ -123,10 +123,6 @@ CLAUDE.md does not import AGENTS.md, so Claude Code would not see the vexillum b
 ```
 
 Si decís que no, `init` avisa que Claude Code no va a ver el bloque y te dice que agregues la línea vos. Un `CLAUDE.md` que es un symlink a `AGENTS.md` ya cuenta como import. `vx doctor` lo reporta como `CLAUDE.md imports AGENTS.md`.
-
-## Con `--global`
-
-`vx init --global` no tiene un `AGENTS.md` de proyecto donde escribir. Escribe el mismo núcleo, sin marcadores, en `~/.claude/rules/vexillum.md`, que Claude Code carga en cada sesión. Mirá [Instalación global](/es/docs/get-started/install#instalación-global).
 
 ## Relacionado
 

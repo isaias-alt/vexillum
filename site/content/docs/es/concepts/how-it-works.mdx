@@ -21,7 +21,7 @@ description: Los roles, y la vida de una tarea desde el dispatch hasta el releas
 2. **El commander despacha.** Siguiendo la skill `vexillum` corre `vx dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
 3. **Se adquiere un camp.** vexillum toma un worktree limpio del [pool](/es/docs/concepts/camps) del proyecto (o crea uno) en una branch nueva, `vexillum/<task-id>`, bifurcada de tu branch actual.
 4. **Arranca un soldier.** Se abre una sesión real e interactiva de Claude Code en un pane de herdr dentro de ese camp. El comando vuelve rápido: solo espera un breve probe para los prompts triviales que terminan enseguida.
-5. **El sentinel vigila.** Consulta el estado en vivo del soldier y registra el resultado en disco. (Ver: [Sentinel](/es/docs/concepts/sentinel)).
+5. **El sentinel vigila.** Consulta el estado en vivo del soldier y registra el resultado en disco. Ver [Sentinel](/es/docs/concepts/sentinel).
 6. **Se despierta al commander.** Un hook `Stop` muestra el cambio, así el commander te reporta aunque su turno ya hubiera terminado.
 7. **Decidís vos.** Para una mission, [la aterrizás o la enviás](/es/docs/guides/land-vs-ship). Para un scout, el commander transmite el reporte.
 8. **Se hace release del camp** de vuelta al pool, una vez que no queda nada por perder.
@@ -32,4 +32,4 @@ description: Los roles, y la vida de una tarea desde el dispatch hasta el releas
 
 ## Dónde vive la inteligencia
 
-El binario es plomería determinista (estado en disco, worktrees, panes, rechazos). Elegir un modelo, decidir si preguntarte, redactar un reporte: eso es criterio del commander, guiado por markdown. (Ver: [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules)).
+El binario es plomería determinista (estado en disco, worktrees, panes, rechazos). Elegir un modelo, decidir si preguntarte, redactar un reporte: eso es criterio del commander, guiado por markdown. Ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).

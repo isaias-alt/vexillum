@@ -24,14 +24,14 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `schema_version` | number | currently `3` |
+| `schema_version` | number | version of the task file schema |
 | `id` | string | 16 hex characters |
 | `kind` | `"mission"` or `"scout"` | |
 | `prompt` | string | the original prompt |
 | `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; see [Missions and scouts](/docs/concepts/missions-and-scouts). A `shipped` task is waiting for its pull request to be merged, not stuck |
 | `created_at`, `updated_at` | RFC 3339 time | |
 | `camp_slot`, `camp_path`, `camp_branch` | number, string, string | set once a camp is acquired |
-| `camp_base` | string | branch the camp was forked from; may be empty on older tasks |
+| `camp_base` | string | branch the camp was forked from; may be empty |
 | `exit_code`, `output` | number, string | `output` is the captured transcript |
 | `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | the soldier's herdr pane |
 | `agent_not_found_since`, `idle_unconfirmed_since` | time | when the sentinel first saw the condition |
@@ -67,4 +67,4 @@ Omitted when empty. A task keeps its 20 most recent amendments. `prompt` never c
 
 ## Compatibility
 
-New fields are added without bumping `schema_version` when an older file can still be read; the version changes only when the shape breaks reading older state. Treat unknown fields as additive.
+Treat unknown fields as additive.

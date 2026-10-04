@@ -15,7 +15,7 @@ Una mission terminada sale de su camp de dos maneras. Las dos son explícitas, y
 Por defecto el commander pregunta antes de aterrizar. Una vez que le decís que aterrice sin preguntar, puede saltear ese paso en el proyecto.
 
 <Callout title="A shipped soldier waits on purpose">
-  Después de un `vx ship` exitoso, el pane y el camp del soldier quedan abiertos hasta que mergees el pull request. Es a propósito, no es un soldier trabado. Mirá [Por qué un soldier shipped sigue abierto](#por-qué-un-soldier-shipped-sigue-abierto) más abajo.
+  Después de un `vx ship` exitoso, el pane y el camp del soldier quedan abiertos hasta que mergees el pull request. Es a propósito, no es un soldier trabado. Ver [Por qué un soldier shipped sigue abierto](#por-qué-un-soldier-shipped-sigue-abierto) más abajo.
 </Callout>
 
 ## Land
@@ -77,7 +77,7 @@ git push --force-with-lease=<branch>:<sha registrado> origin <branch>
 
 El lease nombra solo la branch de la mission, nunca la branch base ni ninguna otra ref, y git lo rechaza si origin se movió mientras tanto. `vx ship` imprime una línea (`rewrote the PR branch <branch> on origin (force-with-lease) from <old> to <new>`), refresca el título y la descripción del pull request e imprime su URL.
 
-Cuando el tip de origin es cualquier otro, porque alguien más pusheó a la branch, o cuando no hay ningún push registrado (una tarea shipped antes de que se registrara), `vx ship` nunca fuerza. Falla y dice qué hay en origin y cómo decidir: corré `git fetch origin <branch>` en el camp e inspeccionalo, o autorizá un push con lease manual con el SHA de origin que imprimió, y después corré `vx ship <task-id>` de nuevo.
+Cuando el tip de origin es cualquier otro, porque alguien más pusheó a la branch, o cuando no hay ningún push registrado, `vx ship` nunca fuerza. Falla y dice qué hay en origin y cómo decidir: corré `git fetch origin <branch>` en el camp e inspeccionalo, o autorizá un push con lease manual con el SHA de origin que imprimió, y después corré `vx ship <task-id>` de nuevo.
 
 ### El texto del pull request
 

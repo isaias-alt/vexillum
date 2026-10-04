@@ -24,14 +24,14 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 
 | Campo | Tipo | Notas |
 | --- | --- | --- |
-| `schema_version` | number | hoy `3` |
+| `schema_version` | number | versión del schema del archivo de tarea |
 | `id` | string | 16 caracteres hexadecimales |
 | `kind` | `"mission"` o `"scout"` | |
 | `prompt` | string | el prompt original |
 | `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; ver [Missions y scouts](/es/docs/concepts/missions-and-scouts). Una tarea `shipped` espera que se mergee su pull request, no está trabada |
 | `created_at`, `updated_at` | hora RFC 3339 | |
 | `camp_slot`, `camp_path`, `camp_branch` | number, string, string | se definen cuando se adquiere un camp |
-| `camp_base` | string | branch de la que se bifurcó el camp; puede estar vacío en tareas viejas |
+| `camp_base` | string | branch de la que se bifurcó el camp; puede estar vacío |
 | `exit_code`, `output` | number, string | `output` es el transcript capturado |
 | `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | el pane de herdr del soldier |
 | `agent_not_found_since`, `idle_unconfirmed_since` | hora | cuándo el sentinel vio la condición por primera vez |
@@ -67,4 +67,4 @@ Se omite cuando está vacío. Una tarea conserva sus 20 amendments más reciente
 
 ## Compatibilidad
 
-Los campos nuevos se agregan sin subir `schema_version` cuando un archivo viejo todavía puede leerse; la versión cambia solo cuando la forma rompe la lectura de estado anterior. Tratá los campos desconocidos como aditivos.
+Tratá los campos desconocidos como aditivos.

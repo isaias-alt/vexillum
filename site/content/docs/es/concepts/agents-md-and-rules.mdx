@@ -3,16 +3,11 @@ title: AGENTS.md y rules
 description: El comportamiento del commander es markdown en tu proyecto, no código del binario, un núcleo corto siempre activo en tu AGENTS.md, y las operaciones en skills.
 ---
 
-## Dos archivos distintos
+## Tu AGENTS.md
 
-- **El `AGENTS.md` propio de vexillum** (en el repositorio de vexillum) gobierna cómo se construye vexillum. No es lo que recibís.
-- **El `AGENTS.md` de tu proyecto** es donde `vx init` escribe el núcleo del commander, dentro de un bloque que administra (el [slot](/es/docs/concepts/agents-md-slot)). El archivo es tuyo; solo lo que está entre los marcadores es de vexillum.
+`vx init` escribe el núcleo del commander en el `AGENTS.md` de tu proyecto, dentro de un bloque que administra (el [slot](/es/docs/concepts/agents-md-slot)). El archivo es tuyo; solo lo que está entre los marcadores es de vexillum.
 
 Esta es la decisión central del producto: la inteligencia del commander es markdown, el binario es plomería.
-
-<Callout title="El archivo de reglas ya no existe">
-  Las versiones anteriores creaban `.claude/rules/vexillum.md`, que se cargaba entero en cada sesión. Ya no se crea. El núcleo vive ahora en el slot de AGENTS.md y el detalle operativo en [skills](/es/docs/concepts/skills). `vx upgrade` migra un proyecto existente: mirá [Migrar del archivo de reglas](/es/docs/get-started/upgrading#migrar-del-archivo-de-reglas-al-slot).
-</Callout>
 
 ## Qué va dónde
 
@@ -26,12 +21,10 @@ Separarlos mantiene chico el costo siempre activo: el commander paga el detalle 
 
 ### Elegir modelo y effort
 
-La tabla ya no es prosa. Son datos en [`models.json`](/es/docs/reference/models-json): el commander corre `vx models`, lee la línea `when` de cada perfil, elige el que encaja y despacha con `--profile`. Qué perfil encaja con una tarea es criterio, y eso queda en markdown; los valores de modelo y effort los editás vos. vexillum valida los valores pero nunca los elige.
+La elección son datos en [`models.json`](/es/docs/reference/models-json): el commander corre `vx models`, lee la línea `when` de cada perfil, elige el que encaja y despacha con `--profile`. Qué perfil encaja con una tarea es criterio, y eso queda en markdown; los valores de modelo y effort los editás vos. vexillum valida los valores pero nunca los elige.
 
 ## Editar y actualizar
 
-- El slot está protegido por un hash: si editás adentro, `upgrade` te muestra el diff y no lo pisa sin `--force`. Mirá [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot).
-- `upgrade` refresca las skills y una editada se reporta, no se reemplaza. Mirá [Skills](/es/docs/concepts/skills).
+- El slot está protegido por un hash: si editás adentro, `upgrade` te muestra el diff y no lo pisa sin `--force`. Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot).
+- `upgrade` refresca las skills y una editada se reporta, no se reemplaza. Ver [Skills](/es/docs/concepts/skills).
 - `models.json` es tuyo: `init` nunca lo pisa y `upgrade` nunca lo toca.
-
-`vx init --global` instala para cada sesión de Claude Code de la máquina en vez de un solo proyecto. Mirá [Instalación global](/es/docs/get-started/install#instalación-global).

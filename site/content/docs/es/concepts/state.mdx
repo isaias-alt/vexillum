@@ -9,7 +9,6 @@ vexillum no guarda memoria en un daemon. Cada dato en el que se apoya es un arch
 
 ```text
 ~/.vexillum/
-  config.json              solo después de `vx init --global`
   sentinel.pid  sentinel.log
   sentinel-awaiters/       un registro por cada `vx sentinel await` vivo
   projects/
@@ -30,12 +29,12 @@ En el proyecto mismo, `init` escribe `.vexillum/config.json` y `.claude/`. Ver [
 El namespace de un proyecto es `<repo>-<hash>`: el nombre del directorio más los primeros 8 caracteres hexadecimales del sha256 de su ruta absoluta, después de resolver symlinks. Dos proyectos nunca ven las tareas, wakes o camps del otro.
 
 <Callout type="warn" title="Mover un proyecto deja huérfano su estado">
-  La clave se deriva de la ruta. Si renombrás o movés el proyecto, lo registrado bajo la clave vieja queda invisible para los comandos corridos desde la nueva ubicación. vexillum no lo migra ni lo detecta.
+  La clave se deriva de la ruta. Si renombrás o movés el proyecto, lo registrado bajo la clave vieja queda invisible para los comandos corridos desde la nueva ubicación. vexillum no detecta el cambio.
 </Callout>
 
 ## Tareas
 
-Un archivo de tarea es el schema `Task` (hoy versión 3): id, kind, prompt, status, timestamps, el slot, la ruta, la branch y la base del camp, los identificadores del pane de herdr, el modelo y el effort, y, una vez bloqueada, un `decision` estructurado. `vx status --json` imprime exactamente este schema; ver [status --json](/es/docs/reference/status-json).
+Un archivo de tarea es el schema `Task`: id, kind, prompt, status, timestamps, el slot, la ruta, la branch y la base del camp, los identificadores del pane de herdr, el modelo y el effort, y, una vez bloqueada, un `decision` estructurado. `vx status --json` imprime exactamente este schema; ver [status --json](/es/docs/reference/status-json).
 
 ## Escrituras atómicas
 

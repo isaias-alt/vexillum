@@ -77,7 +77,7 @@ git push --force-with-lease=<branch>:<recorded sha> origin <branch>
 
 The lease names the mission branch only, never the base branch or any other ref, and git refuses it if origin moved in the meantime. `vx ship` prints one line (`rewrote the PR branch <branch> on origin (force-with-lease) from <old> to <new>`), refreshes the pull request's title and description and prints its URL.
 
-When origin's tip is anything else, because somebody else pushed to the branch, or when no push is recorded (a task shipped before this was tracked), `vx ship` never forces. It fails and says what origin holds and how to decide: run `git fetch origin <branch>` in the camp and inspect it, or authorize one manual lease push with the origin SHA it printed, then run `vx ship <task-id>` again.
+When origin's tip is anything else, because somebody else pushed to the branch, or when no push is recorded, `vx ship` never forces. It fails and says what origin holds and how to decide: run `git fetch origin <branch>` in the camp and inspect it, or authorize one manual lease push with the origin SHA it printed, then run `vx ship <task-id>` again.
 
 ### The pull request text
 

@@ -13,7 +13,7 @@ The slot is a block that vexillum owns inside a file you own: your project's `AG
 
 Why a slot, and not a rules file of its own:
 
-- **One short block instead of a 15 KB file.** The old `.claude/rules/vexillum.md` was loaded whole in every session. The core is small and the detail is on demand.
+- **One short block.** The core is small and the detail is on demand.
 - **It lives in the file the ecosystem already reads.** `AGENTS.md` is where your project's agent instructions go. vexillum adds to it instead of creating a parallel convention.
 - **It is safe to share the file.** Everything outside the markers is yours and is never reordered or rewritten.
 
@@ -33,7 +33,7 @@ The block is rendered by the binary, in English or Spanish. You can see the exac
 
 | Part | Meaning |
 | --- | --- |
-| `v:1` | The version of the **marker format**, not of vexillum. A future binary that changes the format bumps it, so it can still recognize a block written by an older one. |
+| `v:1` | The **marker format**, so vexillum knows how to read the block. |
 | `hash:<8hex>` | The first 8 hex characters of the SHA-256 of the block **body**: the text between the two markers, with line endings normalized to LF and trailing newlines dropped (the marker lines themselves are not hashed). It is how vexillum tells a block it wrote and you left alone from one you edited. |
 
 ### The body
@@ -98,8 +98,8 @@ The slot ships in English and Spanish. The domain vocabulary stays in English in
 When `init` or `upgrade` is about to write the block, the language is settled in this order:
 
 1. `--lang en` or `--lang es`, if you pass it;
-2. the language of a block that is already in the file, so a rerun does not flip it because your surrounding text reads differently;
-3. the language **detected** in your own `AGENTS.md`;
+2. The language of a block that is already in the file, so a rerun does not flip it because your surrounding text reads differently;
+3. The language **detected** in your own `AGENTS.md`;
 4. English.
 
 Detection is simple, deterministic and offline: it counts frequent function words of each language, ignoring code, URLs and the vexillum block itself. It needs at least 8 hits and a 70% share to decide; otherwise, and when there is no `AGENTS.md`, it defaults to English.
@@ -123,10 +123,6 @@ CLAUDE.md does not import AGENTS.md, so Claude Code would not see the vexillum b
 ```
 
 Decline and `init` warns that Claude Code will not see the block and tells you to add the line yourself. A `CLAUDE.md` that is a symlink to `AGENTS.md` already counts as importing it. `vx doctor` reports it as `CLAUDE.md imports AGENTS.md`.
-
-## With `--global`
-
-`vx init --global` has no project `AGENTS.md` to write into. It writes the same core, without markers, to `~/.claude/rules/vexillum.md`, which Claude Code loads in every session. See [Install globally](/docs/get-started/install#install-globally).
 
 ## Related
 

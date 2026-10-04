@@ -25,43 +25,17 @@ vx upgrade
 
 `upgrade` funciona como [`init`](/es/docs/get-started/quickstart): lista los archivos tuyos que va a cambiar y pregunta antes (`Continue? [Y/n]`). Después:
 
-- escribe o actualiza el bloque de vexillum en `AGENTS.md` y se asegura de que `CLAUDE.md` lo importe. Un bloque que editaste **no** se pisa: `upgrade` imprime el diff entre el tuyo y la plantilla actual. Un bloque malformado no se toca hasta que confirmes las reparaciones que lista, y el archivo se guarda antes en `.vexillum/AGENTS.md.backup`. (Ver: [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot));
-- refresca las skills instaladas que no cambiaron desde que vexillum las escribió (se guarda un hash de contenido por skill en `.vexillum/config.json`) y reporta las que editaste. (Ver: [Skills](/es/docs/concepts/skills));
-- mantiene al día el hook `Stop` del sentinel. Un hook sincrónico viejo, `vx sentinel drain`, se actualiza en el lugar al hook asíncrono, sin duplicarse, y lo mismo un `vx sentinel await` pelado, que solo funciona cuando `vx` está en el `PATH` del shell del hook: el comando nuevo también prueba `~/.local/bin`, Homebrew y `/usr/local/bin`. Tus propios hooks `Stop` se conservan. (Ver: [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path));
-- crea `.vexillum/models.json` si falta. Uno existente nunca se pisa: es tuyo. (Ver: [`models.json`](/es/docs/reference/models-json)).
+- Escribe o actualiza el bloque de vexillum en `AGENTS.md` y se asegura de que `CLAUDE.md` lo importe. Un bloque que editaste **no** se pisa: `upgrade` imprime el diff entre el tuyo y la plantilla actual. Un bloque malformado no se toca hasta que confirmes las reparaciones que lista, y el archivo se guarda antes en `.vexillum/AGENTS.md.backup`. Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot);
+- Refresca las skills instaladas que no cambiaron desde que vexillum las escribió (se guarda un hash de contenido por skill en `.vexillum/config.json`) y reporta las que editaste. Ver [Skills](/es/docs/concepts/skills);
+- Mantiene al día el hook `Stop` del sentinel, para que encuentre `vx` aunque no esté en el `PATH` del shell del hook (el comando también prueba `~/.local/bin`, Homebrew y `/usr/local/bin`). Tus propios hooks `Stop` se conservan. Ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path);
+- Crea `.vexillum/models.json` si falta. Uno existente nunca se pisa: es tuyo. Ver [`models.json`](/es/docs/reference/models-json).
 
 Sin terminal `upgrade` no pregunta nada y no cambia nada salvo que pases `--yes`.
 
 | Flag | Efecto |
 | --- | --- |
 | `--yes`, `-y` | Acepta todas las preguntas, incluso las reparaciones de un bloque malformado (el archivo se respalda antes). |
-| `--force` | Sobrescribe lo que editaste: el bloque de AGENTS.md, una skill editada, un archivo de reglas global editado. Antes se guarda un backup: `.vexillum/agents-md-slot.backup.md` para el bloque, `.vexillum/backups/skills/<name>/` para una skill. |
+| `--force` | Sobrescribe lo que editaste: el bloque de AGENTS.md, una skill editada. Antes se guarda un backup: `.vexillum/agents-md-slot.backup.md` para el bloque, `.vexillum/backups/skills/<name>/` para una skill. |
 | `--lang en\|es` | Idioma del bloque de AGENTS.md, en lugar de conservar el idioma actual del bloque o detectarlo. |
 | `--skills` | Instala también las skills que faltan. |
 | `--no-skills` | Deja las skills como están: sin instalar ni refrescar. |
-| `--global` | Actualiza el scaffold global (`~/.claude/rules/vexillum.md` y `~/.claude/skills/`, escritos por `vx init --global`) en lugar del del proyecto. |
-
-## Migrar del archivo de reglas al slot
-
-Las versiones anteriores de vexillum creaban `.claude/rules/vexillum.md`. Ya no se crea: el núcleo vive ahora en el [slot de AGENTS.md](/es/docs/concepts/agents-md-slot) y las operaciones en [skills](/es/docs/concepts/skills). Corré `vx upgrade` una vez en cada proyecto para migrar. Hace esto:
-
-- **borra** `.claude/rules/vexillum.md` cuando sigue siendo exactamente lo que escribió vexillum (compara un hash guardado), y borra la carpeta `.claude/rules/` si queda vacía;
-- **lo deja** si lo editaste, y lo reporta como redundante con el bloque de AGENTS.md y las skills. Pasá a tu propio texto de `AGENTS.md` lo que quieras conservar, y borrá el archivo vos;
-- escribe el slot y, como todavía no hay ninguna skill instalada, ofrece instalarlas.
-
-`vx init` en un proyecto viejo no borra nada: te avisa que el archivo de reglas es redundante y que corras `vx upgrade`. `vx doctor` también reporta un archivo de reglas sobrante.
-
-## Migrar de vexillum a vx
-
-El comando se llamaba `vexillum`. Ahora es `vx`, y el nombre viejo desapareció: no hay alias `vexillum` ni un segundo ejecutable. El nombre del producto, el repositorio, el paquete de Homebrew (`brew upgrade vexillum`) y las carpetas de estado (`.vexillum/`, `~/.vexillum/`) no cambian.
-
-1. Instalá el binario nuevo (arriba). Borrá un ejecutable `vexillum` sobrante si una instalación vieja con curl lo dejó en tu `PATH`.
-2. En **cada** proyecto que inicializaste con el comando viejo, corré una vez:
-
-```bash
-vx upgrade
-```
-
-Esto reescribe el hook `Stop` del sentinel (`vexillum sentinel await` pasa al comando de `vx` que no depende del PATH) y migra el archivo de reglas al bloque de AGENTS.md y a las skills, como se explicó arriba, para que el commander escriba `vx`. Si usás una [instalación global](/es/docs/get-started/install#instalación-global), corré también `vx upgrade --global`.
-
-3. Corré `vx doctor`. Avisa cuando otro `vx` más arriba en tu `PATH` tapa a este, lo que haría que los hooks y el commander corran el binario equivocado.

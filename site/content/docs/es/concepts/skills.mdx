@@ -15,7 +15,7 @@ El slot termina con una instrucción dura de cargar la skill `vexillum` antes de
 | --- | --- |
 | `vexillum` | El manual de operación del commander: despachar un soldier, elegir modelo y effort desde [`models.json`](/es/docs/reference/models-json), aterrizar, hacer ship, liberar un camp y atender al sentinel. Además de `SKILL.md` trae `landing.md`, `shipping.md` y `sentinel.md`, que se leen en el momento que corresponde. |
 | `forum` | El bucle de revisión en el navegador detrás de [`vx forum`](/es/docs/guides/forum-and-banner): abrir un plan, comparación, diagrama, tabla o formulario de decisión en HTML, recibir tu feedback por el inbox de forum y responder en el navegador. Trae playbooks para cada tipo de artefacto. |
-| `muster` | Un resumen de la tropa de missions y scouts, agrupada por lo que necesita de vos. Mirá [Skill muster](/es/docs/guides/muster-skill). |
+| `muster` | Un resumen de la tropa de missions y scouts, agrupada por lo que necesita de vos. Ver [Skill muster](/es/docs/guides/muster-skill). |
 
 El texto completo de cada archivo está en [Contenido de las skills](/es/docs/reference/skills), generado desde los archivos embebidos en el binario, así que siempre coincide con lo que se instala:
 
@@ -25,12 +25,7 @@ El texto completo de cada archivo está en [Contenido de las skills](/es/docs/re
 
 ## Dónde se instalan
 
-Las skills están embebidas en el binario `vx`, así que instalarlas no necesita Node, ni `npx`, ni red. `vx init` las escribe en:
-
-| Alcance | Ubicación |
-| --- | --- |
-| proyecto (por defecto) | `.claude/skills/<name>/` |
-| global (`vx init --global`) | `~/.claude/skills/<name>/` |
+Las skills están embebidas en el binario `vx`, así que instalarlas no necesita Node, ni `npx`, ni red. `vx init` las escribe en `.claude/skills/<name>/` dentro de tu proyecto.
 
 `init` **pregunta antes de instalarlas**: después del aviso de consentimiento imprime `These skills teach the commander how to use vexillum well.` y pregunta `Install the vexillum, forum and muster skills? [Y/n]`. Las ejecuciones no interactivas deciden con `--skills` o `--no-skills`, y `--yes` acepta. Si decís que no, te quedás con el slot de AGENTS.md, el hook del sentinel y tu config. Las skills que ya están instaladas nunca se reinstalan.
 
@@ -45,14 +40,14 @@ Las skills están embebidas en el binario `vx`, así que instalarlas no necesita
 | Skill instalada | Qué hace `upgrade` |
 | --- | --- |
 | vigente | nada |
-| más vieja que la copia del binario, y sin editar | la refresca |
+| atrasada respecto de la copia del binario, y sin editar | la refresca |
 | editada por vos | la deja como está y lo dice (`Skill <name>: edited by hand, left as it is; rerun with --force to overwrite it (a backup is saved first)`) |
 | un symlink | la deja en paz: la administrás vos |
-| faltante | no se reinstala sola, así que una skill que sacaste a propósito sigue sacada; `vx upgrade --skills` la instala. Cuando **no** hay ninguna skill instalada (un proyecto que se está migrando) ofrece instalarlas como `init` |
+| faltante | no se reinstala sola, así que una skill que sacaste a propósito sigue sacada; `vx upgrade --skills` la instala. Cuando **no** hay ninguna skill instalada ofrece instalarlas como `init` |
 
 `vx upgrade --force` sobrescribe una skill editada con la embebida, después de guardar tu versión en `.vexillum/backups/skills/<name>/`. `--no-skills` deja las skills como están: sin instalar ni refrescar.
 
-`vx doctor` reporta cada skill como `installed, current`, `installed, stale`, `installed, edited by hand` o `missing`, y anota un symlink o una instalación global. Mirá [Actualización](/es/docs/get-started/upgrading).
+`vx doctor` reporta cada skill como `installed, current`, `installed, stale`, `installed, edited by hand` o `missing`, y anota un symlink. Ver [Actualización](/es/docs/get-started/upgrading).
 
 ## Editar una skill
 

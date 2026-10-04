@@ -3,7 +3,7 @@ title: Quickstart
 description: From a fresh install to your first landed mission.
 ---
 
-You need vexillum, Claude Code and herdr installed - see [Install](/docs/get-started/install).
+You need vexillum, Claude Code and herdr installed. See [Install](/docs/get-started/install).
 
 ## 1. Prepare your project
 
@@ -43,9 +43,6 @@ Without a terminal (scripts, CI) `init` asks nothing and changes nothing unless 
 | `--skills` | Install the skills without asking. |
 | `--no-skills` | Do not install the skills, without asking. |
 | `--lang en\|es` | Language of the AGENTS.md block, instead of detecting it. |
-| `--global` | Scaffold for every project on this machine instead of this one. |
-
-To have the commander apply in every Claude Code session instead of one project at a time, see [Install globally](/docs/get-started/install#install-globally) (`vx init --global`, opt-in, affects all sessions).
 
 <Callout title="Commit the scaffold early">
   `vx land` refuses to run while your checkout is dirty, and a fresh `init` leaves new files uncommitted. Commit `AGENTS.md`, `CLAUDE.md`, `.claude/` and `.vexillum/` before you dispatch your first mission.
@@ -69,11 +66,13 @@ Open a herdr pane, `cd` into the project and start Claude Code. `vx dispatch` ne
 > dispatch a soldier to fix the flaky login test
 ```
 
-The commander runs `vx dispatch "fix the flaky login test" --kind mission`, which prints the task id, the camp branch (`vexillum/<task-id>`), and `status=running`. The first dispatch also starts the sentinel in the background. You can keep talking to the commander while the soldier works.
+The commander runs `vx dispatch "fix the flaky login test" --kind mission`, which prints the task id, the camp branch (`vexillum/<task-id>`), and `status=running`. The first dispatch also starts the sentinel in the background.
+
+You can keep talking to the commander while the soldier works. That is the magic of **vexillum**.
 
 ## 5. Hear back
 
-When the soldier settles - done or blocked - the sentinel wakes the commander, which reports to you. To look yourself:
+When the soldier settles (done or blocked), the sentinel wakes the commander, which reports to you. To look yourself:
 
 ```bash
 vx status
