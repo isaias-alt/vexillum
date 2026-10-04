@@ -1,5 +1,9 @@
 name: Release
 
+# Releases a tag that was pushed by hand. The canary and stable-release
+# workflows tag and release in their own job: a tag pushed with GITHUB_TOKEN
+# does not start this workflow. Tags with a pre-release suffix (-rc.N,
+# -canary.<date>.<sha>) become GitHub pre-releases and never reach the tap.
 on:
   push:
     tags:
@@ -16,23 +20,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: ./.github/actions/goreleaser
         with:
-          go-version-file: go.mod
-
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: "v2.18.2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-
-      # goreleaser has already published these notes as the GitHub release
-      # body, which is what the docs page /docs/changelog is built from (see
-      # site/scripts/changelog.mjs). Keep the file too, for inspection.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: changelog
-          path: dist/CHANGELOG.md
+          tag: ${{ github.ref_name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          homebrew-tap-token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

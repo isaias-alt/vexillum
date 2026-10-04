@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [canary]
+    # release/** so the stable-release workflow can require green CI for the
+    # tip of a release branch.
+    branches: [canary, "release/**"]
   pull_request:
 
 jobs:

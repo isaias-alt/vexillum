@@ -1,0 +1,103 @@
+name: Canary
+
+# Publishes a canary pre-release of the tip of canary: every night, and only
+# when canary has commits since the last canary tag (a manual run can force a
+# build). A canary never becomes a stable release and never touches the
+# Homebrew tap: the tap token is not even passed to goreleaser.
+#
+# The tag is created and released in this one job. A tag pushed with
+# GITHUB_TOKEN does not start release.yml, so that workflow is not involved.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even when canary has no commits since the last canary tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+# Shared with the stable release so two tag-cutting runs never overlap.
+concurrency:
+  group: release-tags
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    if: github.repository == 'isaias-alt/vexillum'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: canary
+          fetch-depth: 0
+
+      - name: Look for new commits
+        id: pending
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          sha="$(git rev-parse HEAD)"
+          if [ "${FORCE:-false}" = "true" ]; then
+            pending=true
+          else
+            pending="$(scripts/release-tag.sh canary-pending --sha "$sha")"
+          fi
+          {
+            echo "sha=${sha}"
+            echo "pending=${pending}"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$pending" != "true" ]; then
+            echo "No commits on canary since the last canary tag, nothing to build." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Require green CI for the commit
+        if: steps.pending.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ steps.pending.outputs.sha }}
+        run: scripts/ci-green.sh "$SHA"
+
+      - name: Create and push the tag
+        id: tag
+        if: steps.pending.outputs.pending == 'true'
+        env:
+          SHA: ${{ steps.pending.outputs.sha }}
+        run: |
+          tag="$(scripts/release-tag.sh canary-tag --sha "$SHA")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "vexillum canary ${tag}" "$SHA"
+          git push origin "refs/tags/${tag}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Tagged ${tag} at ${SHA}" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: ./.github/actions/goreleaser
+        if: steps.pending.outputs.pending == 'true'
+        with:
+          tag: ${{ steps.tag.outputs.tag }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # A tag with no release would hide these commits from the next night's
+      # "anything new?" check, so a build that failed before publishing gives
+      # its tag back. A tag that already has a release is kept.
+      - name: Remove the tag when no release was published
+        if: failure() && steps.tag.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if out="$(gh release view "$TAG" 2>&1)"; then
+            echo "Release ${TAG} exists, keeping the tag."
+          elif printf '%s' "$out" | grep -qi "release not found"; then
+            git push origin ":refs/tags/${TAG}"
+            echo "No release for ${TAG}: removed the tag so the next run can retry."
+          else
+            echo "Could not tell whether ${TAG} has a release, keeping the tag: ${out}"
+          fi

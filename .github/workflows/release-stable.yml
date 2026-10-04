@@ -1,0 +1,121 @@
+name: Stable release
+
+# Cuts a stable release (or an rc) by hand. It validates the ref, requires
+# green CI for its tip, computes the next tag, creates an annotated tag and
+# releases it in this one job. A tag pushed with GITHUB_TOKEN does not start
+# release.yml, so that workflow is not involved (it stays for tags pushed by
+# hand).
+#
+# Ordinary stable and rc tags come from release/vX.Y branches; the first
+# release of a line can come from canary.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch to release from: canary or release/vX.Y"
+        type: string
+        default: canary
+      bump:
+        description: Which part of the latest stable version to bump (ignored when a version is given)
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      version:
+        description: Explicit version X.Y.Z, instead of a bump (leave empty to bump)
+        type: string
+        default: ""
+      prerelease:
+        description: "none cuts vX.Y.Z; rc cuts vX.Y.Z-rc.N, a pre-release that does not reach the tap"
+        type: choice
+        options:
+          - none
+          - rc
+        default: none
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: release-tags
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'isaias-alt/vexillum'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Compute the tag
+        id: compute
+        env:
+          REF: ${{ inputs.ref }}
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          args=(stable --ref "$REF" --bump "$BUMP")
+          if [ -n "$VERSION" ]; then
+            args+=(--version "$VERSION")
+          fi
+          if [ "$PRERELEASE" = "rc" ]; then
+            args+=(--rc)
+          fi
+          tag="$(scripts/release-tag.sh "${args[@]}")"
+          sha="$(git rev-parse HEAD)"
+          {
+            echo "tag=${tag}"
+            echo "sha=${sha}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing ${tag} from ${REF} at ${sha}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Require green CI for the commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ steps.compute.outputs.sha }}
+        run: scripts/ci-green.sh "$SHA"
+
+      - name: Create and push the annotated tag
+        id: tag
+        env:
+          TAG: ${{ steps.compute.outputs.tag }}
+          SHA: ${{ steps.compute.outputs.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "vexillum ${TAG}" "$SHA"
+          git push origin "refs/tags/${TAG}"
+
+      # An rc is a pre-release: it does not get the tap token at all.
+      - uses: ./.github/actions/goreleaser
+        with:
+          tag: ${{ steps.compute.outputs.tag }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          homebrew-tap-token: ${{ inputs.prerelease == 'none' && secrets.HOMEBREW_TAP_TOKEN || '' }}
+
+      # A tag with no release blocks a retry of the same version, so a build
+      # that failed before publishing gives its tag back. A tag that already
+      # has a release is kept: published tags are immutable.
+      - name: Remove the tag when no release was published
+        if: failure() && steps.tag.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.compute.outputs.tag }}
+        run: |
+          if out="$(gh release view "$TAG" 2>&1)"; then
+            echo "Release ${TAG} exists, keeping the tag."
+          elif printf '%s' "$out" | grep -qi "release not found"; then
+            git push origin ":refs/tags/${TAG}"
+            echo "No release for ${TAG}: removed the tag so the next run can retry."
+          else
+            echo "Could not tell whether ${TAG} has a release, keeping the tag: ${out}"
+          fi

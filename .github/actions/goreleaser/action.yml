@@ -1,0 +1,39 @@
+name: goreleaser
+description: Build and publish the release for a tag with the pinned goreleaser version.
+
+inputs:
+  tag:
+    description: The tag to release; it must already exist in the checkout.
+    required: true
+  github-token:
+    description: Token used to create the GitHub release.
+    required: true
+  homebrew-tap-token:
+    description: Token for the Homebrew tap. Leave empty for rc and canary builds.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - uses: goreleaser/goreleaser-action@v6
+      with:
+        distribution: goreleaser
+        version: "v2.18.2"
+        args: release --clean
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        HOMEBREW_TAP_TOKEN: ${{ inputs.homebrew-tap-token }}
+        GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
+
+    # goreleaser has already published these notes as the GitHub release
+    # body, which is what the docs page /docs/changelog is built from (see
+    # site/scripts/changelog.mjs). Keep the file too, for inspection.
+    - uses: actions/upload-artifact@v4
+      with:
+        name: changelog
+        path: dist/CHANGELOG.md
