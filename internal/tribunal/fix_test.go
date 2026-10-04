@@ -27,7 +27,7 @@ func TestBuildFixPrompt_CarriesRulesFindingsAndOptionalMission(t *testing.T) {
 			t.Errorf("expected the fix prompt to contain %q:\n%s", want, bare)
 		}
 	}
-	if strings.Contains(bare, "—") {
+	if strings.Contains(bare, "\u2014") {
 		t.Error("the prompt must not contain an em dash")
 	}
 	if with := buildFixPrompt(findings, "THE MISSION", "br"); !strings.Contains(with, "<mission>\nTHE MISSION\n</mission>") {

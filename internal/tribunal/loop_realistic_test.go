@@ -90,7 +90,7 @@ func TestLoop_RealisticChangeReviewedFixedAndReReviewed(t *testing.T) {
 
 	for n := 1; n <= 3; n++ {
 		p := stub.prompt(n)
-		if strings.Contains(p, "—") {
+		if strings.Contains(p, "\u2014") {
 			t.Errorf("prompt %d contains an em dash", n)
 		}
 		for _, leak := range []string{"TEST_ONLY_MARKER", "diff --git", "\n@@ ", "ErrEmptyID = errors.New"} {
