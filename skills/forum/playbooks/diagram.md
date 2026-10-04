@@ -1,70 +1,119 @@
-<!--
-Adapted from upstream (MIT License, Copyright (c) 2026 the upstream author),
-src/playbooks.js at v0.1.80 (commit a2a199c), rewritten for vx forum
-(window.forum and the `vx forum` commands). See THIRD-PARTY-NOTICES.md at
-the vexillum repo root.
--->
+# Diagram: show how something works
 
-# Playbook: diagram
+Use it to explain relationships, flows, state machines, architecture and
+concepts. The goal is that the reader understands the mechanism after looking
+at the picture, and only needs the text for the reasons behind it.
 
-Use when: explain relationships, flows, state, architecture, and concepts with illustrations.
+## Pick the tool
 
-## Choose
+- **Hand-written inline SVG is the default.** You control position, size,
+  emphasis and grouping, so the layout itself says something: the important
+  box is big, the dependency points the way it really goes, the boundary is a
+  visible region.
+- **Mermaid is opt-in.** Only when the user asks for an editable whiteboard.
+  Write `<div class="mermaid">...</div>`; in the forum browser it becomes an
+  editable whiteboard the user can redraw, and their edits come back as a
+  `tag: whiteboard` prompt (see "Whiteboards" in SKILL.md). Do not pick it just
+  because it is quicker to author: it hands the layout to an engine.
+- **Not div-and-flexbox boxes with arrows.** Figures are SVG; HTML carries the
+  prose around them.
 
-- Default to hand-authored inline SVG: it gives proportion, emphasis, spatial metaphor and annotation-ready structure that generated layouts cannot.
-- Use Mermaid only when the user asks for an editable whiteboard: a Mermaid diagram in a `<div class="mermaid">` container becomes an editable Excalidraw whiteboard in the forum browser (see the whiteboard section of SKILL.md for how its feedback reaches you).
-- For large systems, draw a small overview illustration and put detail in module cards below it, instead of one dense auto-laid graph.
+## Compose the explanation
 
-## Structure
+- **Start from the question.** Title each figure with what it answers ("How
+  does a prompt get from the page to the agent?"), not with the name of the
+  component.
+- **Assume no prior knowledge.** Introduce the pieces before the connections
+  between them.
+- **One idea per figure.** Several small figures that build on each other beat
+  a single dense one. For a large system: a small overview of the main parts,
+  then a card per part with its own detail below.
+- **Overview first, evidence second.** Put the core relationship at the top and
+  push file paths, edge cases and caveats under it.
+- **Separate topology from detail.** What is connected to what is one picture;
+  what flows through each connection is another.
+- **Claims need support.** Do not draw an architecture you have not checked in
+  the code; cite the file or command next to the figure.
 
-- Assume the reader knows nothing about the system: explain from zero.
-- Prefer one concept per diagram: a sequence of simple single-concept illustrations over one dense figure; layer understanding step by step.
-- Lead with the question the diagram answers, not with the implementation detail that produced it.
-- Keep the first visual to the core relationship, then put dense evidence or file references below it.
-- For complex systems, separate topology from detail so the overview stays readable.
+## Drawing it
 
-## Design rules
+- Size with `viewBox` and `width="100%"`, never fixed pixel dimensions, and
+  keep every shape and label inside the viewBox so nothing is cropped.
+- Colors come from forum's classes (`fr-node`, `fr-edge`, `fr-arrow`,
+  `fr-label`, and their variants) or from `currentColor` and `--fr-*` custom
+  properties, never raw hex. That keeps the figure correct in dark and light.
+- Give every meaningful node, edge and region a stable `id` and a `<title>`;
+  that is what lets the user comment on exactly one part and lets screen
+  readers navigate the figure. Add `role="img"` and an `aria-labelledby` title
+  to the `<svg>`.
+- Labels stay to a few words. SVG text does not wrap, so brevity is also your
+  protection against overflow. Longer explanations go in HTML beside or under
+  the figure.
+- Emphasize by size, weight and the accent variants (`fr-node--accent`,
+  `--success`, `--danger`, `--bronze`), and use `fr-label--muted` for
+  secondary text. One accent per figure usually reads better than five.
+- Self-contained: no external images, fonts or scripts.
+- If you use Mermaid, initialize it from the page theme: read
+  `data-fr-theme` on `<html>` (it follows the user's dark/light switch)
+  instead of hardcoding a theme.
 
-- Size with `viewBox` plus `width: 100%`; never fixed pixel dimensions, and keep every element inside the viewBox.
-- Color through `currentColor` and the page's CSS custom properties so figures follow the artifact's light and dark themes.
-- Give every meaningful node, edge and region a stable `id` and a `<title>`.
-- Keep labels to a few words and put prose beside the figure in HTML: SVG text does not wrap, so short labels are also the overflow discipline.
-- Keep figures self-contained: no external images, fonts or scripts.
-- Check the artifact in light, dark and a narrow viewport before handing it over.
-- When the user asked for a whiteboard, initialize Mermaid theme-aware (read `data-fr-theme` on `<html>`, which follows the user's dark/light switch) instead of hardcoding one theme.
-
-## Pitfalls
-
-- Do not cram every file or function into one figure when a layered explanation is clearer.
-- Do not hand-build boxes-and-arrows from div/flexbox: inline SVG owns figures, HTML owns the prose around them.
-- Do not reach for Mermaid to save authoring effort: it surrenders position, size and emphasis to the engine.
-- Do not present unverified architecture claims as facts; cite the files or commands that support them.
-
-## With forum
-
-- Make modules, edges and captions easy to discuss: when a relationship is uncertain, label it as a question and add a small decision form so the user can resolve it (input playbook).
-- A whiteboard's edits arrive as a `tag: whiteboard` prompt with a bounded summary and two file paths: read the summary, then update the Mermaid source in the artifact.
-- The browser audits the page for layout failures (text clipped by a fixed-width `overflow: hidden` box, controls pushed past the viewport, text covered by an opaque sibling, a page that scrolls sideways) and shows them to the user, who may send them to you as a `layout-warnings` prompt. Avoid them up front: let text wrap, keep fixed widths off containers that clip, and check a narrow width.
-
-## Styles (forum-artifact.css)
-
-Draw the figure with forum's SVG classes instead of hard-coded colors, so it follows the dark and light themes, and wrap it in `fr-figure`. No Tailwind, daisyUI or external CSS from a CDN.
-
-The forum styles are injected only while the artifact has no `<style>`, stylesheet `<link>` or CSS-framework CDN of its own; for tweaks use `style="..."` attributes, or add `<meta name="forum-style" content="on">` to keep the forum look next to your own `<style>` (SKILL.md, "When the forum styles apply").
+## Example
 
 ```html
 <figure class="fr-figure">
-  <svg viewBox="0 0 360 80" width="100%" role="img" aria-labelledby="t1">
-    <title id="t1">The commander dispatches a soldier</title>
-    <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="fr-arrow" d="M0 0L10 5L0 10z"/></marker></defs>
-    <rect id="commander" class="fr-node fr-node--accent" x="10" y="20" width="110" height="40" rx="6"/>
-    <text class="fr-label" x="65" y="45" text-anchor="middle">commander</text>
-    <path class="fr-edge" d="M120 40H220" marker-end="url(#arrow)"/>
-    <rect id="soldier" class="fr-node" x="230" y="20" width="110" height="40" rx="6"/>
-    <text class="fr-label" x="285" y="45" text-anchor="middle">soldier</text>
+  <svg viewBox="0 0 480 120" width="100%" role="img" aria-labelledby="flow-title">
+    <title id="flow-title">A prompt travels from the page to the agent</title>
+    <defs>
+      <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path class="fr-arrow" d="M0 0L10 5L0 10z"/>
+      </marker>
+    </defs>
+    <g id="page"><title>The artifact page</title>
+      <rect class="fr-node" x="10" y="35" width="120" height="50" rx="6"/>
+      <text class="fr-label" x="70" y="65" text-anchor="middle">page</text></g>
+    <path id="queue-edge" class="fr-edge" d="M130 60H180" marker-end="url(#head)"><title>queuePrompt</title></path>
+    <g id="queue"><title>The user's queue</title>
+      <rect class="fr-node fr-node--accent" x="180" y="35" width="120" height="50" rx="6"/>
+      <text class="fr-label" x="240" y="65" text-anchor="middle">queue</text></g>
+    <path id="send-edge" class="fr-edge" d="M300 60H350" marker-end="url(#head)"><title>Send to Agent</title></path>
+    <g id="inbox"><title>The project inbox</title>
+      <rect class="fr-node" x="350" y="35" width="120" height="50" rx="6"/>
+      <text class="fr-label" x="410" y="65" text-anchor="middle">inbox</text></g>
+    <text class="fr-label fr-label--muted" x="240" y="108" text-anchor="middle">the user decides when to send</text>
   </svg>
-  <figcaption>Dispatch flow</figcaption>
+  <figcaption>Nothing leaves the queue until the user presses Send to Agent.</figcaption>
 </figure>
 ```
 
-Node variants: `fr-node--accent`, `--success`, `--danger`, `--bronze`; secondary text: `fr-label fr-label--muted`.
+## With forum
+
+- When part of the picture is uncertain, label it as a question and attach a
+  small decision form (input playbook) so the user resolves it in place.
+- A whiteboard's edits arrive as a `tag: whiteboard` prompt with a bounded edit
+  summary plus the paths of a scene file and a PNG preview. Read the summary,
+  open the files only if you need more, then change the **Mermaid source** in
+  the artifact; never try to write the scene back.
+- Keep stable ids on nodes: the user's annotation records the element's
+  selector, so a figure that keeps its ids keeps its comments attached.
+
+## Styling and layout checks
+
+Use forum's classes, not a CDN framework. The `fr-*` figure classes live in
+`forum-artifact.css`, which forum injects only while the artifact has no
+`<style>`, no stylesheet `<link>` and no CSS framework of its own. For a
+tweak use `style="..."`; if a `<style>` block is unavoidable, add
+`<meta name="forum-style" content="on">` so the forum look stays underneath
+(SKILL.md, "When the forum styles apply").
+
+The browser audits layout (clipped text, unreachable controls, covered text,
+sideways scroll) and files findings in the user's Layout issues tray; they
+reach you only if the user queues them. Before handing over, view the figure in
+dark, in light and at phone width, and confirm no label is cut off.
+
+## Mistakes to avoid
+
+- One figure containing every file and function.
+- Boxes-and-arrows built out of HTML elements.
+- Using Mermaid to save effort when nobody asked for a whiteboard.
+- Hard-coded colors that vanish in one of the themes.
+- Architecture claims you did not verify.

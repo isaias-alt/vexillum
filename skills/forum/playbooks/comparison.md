@@ -1,64 +1,129 @@
-<!--
-Adapted from upstream (MIT License, Copyright (c) 2026 the upstream author),
-src/playbooks.js at v0.1.80 (commit a2a199c), rewritten for vx forum
-(window.forum and the `vx forum` commands). See THIRD-PARTY-NOTICES.md at
-the vexillum repo root.
--->
+# Comparison: options, tradeoffs, before and after
 
-# Playbook: comparison
+Use it when the user has to weigh alternatives, or needs to see how something
+differs between now and later. The page should let them see the difference at
+a glance and, when a choice is needed, make it without leaving the page.
 
-Use when: show options, tradeoffs, and current vs target behavior.
+## Pick the form
 
-## Choose
+| Situation | Form |
+|---|---|
+| One thing changing over time | **Before / after**: two cards with matching headings |
+| Mutually exclusive directions | **Option cards** in a grid, one per option |
+| Many options against explicit criteria | A **scorecard** table (`fr-table-wrap`), only if the criteria are real and comparable |
+| One option vs. the status quo | Before / after, with the status quo as "before" |
 
-- Use before and after when the same system is changing over time.
-- Use option cards when the user must choose between mutually exclusive directions.
-- Use a scorecard only when the criteria are explicit and comparable.
+Do not use a scorecard to look rigorous. Invented numeric scores hide the
+reasoning; a short sentence per cell is more honest.
 
-## Structure
+## Build it in this order
 
-- Name the decision at the top of the artifact.
-- Show the concrete behavior or artifact shape for each side, not just abstract pros and cons.
-- End with a recommendation only when the evidence supports one.
+1. **State the decision** in the title or the first line: "Where should the
+   cache live?", not "Cache options".
+2. **Show each option concretely.** A real config snippet, a command, a
+   screenshot, a table of before and after values: whatever the option would
+   actually look like. "Simpler" and "more flexible" are conclusions, not
+   evidence.
+3. **Keep the options parallel.** Same headings in the same order inside every
+   card, same units, same level of detail, so the eye can run across and see
+   exactly where they differ.
+4. **Give cost the same weight as benefit.** Each option gets what it costs
+   (time, risk, lock-in, a new dependency) in the same visual treatment as what
+   it gives.
+5. **State your assumptions.** If the verdict flips when an assumption does
+   ("assuming under 1000 users"), write it next to the verdict.
+6. **Recommend only what the evidence supports.** When one option is clearly
+   better, mark it (`fr-card--accent` plus a "recommended" badge) and say why in
+   one line. When it is a close call, say so and do not dress one option up.
 
-## Design rules
+## Letting the user decide
 
-- Keep corresponding details aligned so differences are visible without hunting.
-- Use visual hierarchy to separate primary tradeoffs from secondary notes.
-- Make the cost of each option as visible as the benefit.
-
-## Pitfalls
-
-- Do not make every option look equally recommended if one is clearly preferred.
-- Do not compare vague summaries when concrete examples are available.
-- Do not bury assumptions that would change the recommendation.
-
-## With forum
-
-- If the goal is selection, give each option a native radio in one `<form data-forum-question="...">` plus a field for the rationale, and queue the chosen option with its rationale once, on submit (input playbook).
-- A re-submission replaces the previous unsent answer thanks to the question key.
-- The browser audits the page for layout failures (text clipped by a fixed-width `overflow: hidden` box, controls pushed past the viewport, text covered by an opaque sibling, a page that scrolls sideways) and shows them to the user, who may send them to you as a `layout-warnings` prompt. Avoid them up front: let text wrap, keep fixed widths off containers that clip, and check a narrow width.
-
-## Styles (forum-artifact.css)
-
-Use forum's classes, not Tailwind or daisyUI from a CDN. Option cards in a grid, the recommended one accented, each with badges for its cost and benefit:
-
-The forum styles are injected only while the artifact has no `<style>`, stylesheet `<link>` or CSS-framework CDN of its own; for tweaks use `style="..."` attributes, or add `<meta name="forum-style" content="on">` to keep the forum look next to your own `<style>` (SKILL.md, "When the forum styles apply").
+Put a form under the cards and queue the choice once, on submit; the full
+mechanics (and why never on click) are in the input playbook. Native radios in
+a single form, plus an optional reason:
 
 ```html
-<section class="fr-grid">
-  <article class="fr-card">
-    <h3>A. Rewrite in Go</h3>
-    <p>One binary, no runtime.</p>
-    <span class="fr-badge fr-badge--success">simple to ship</span>
-    <span class="fr-badge fr-badge--danger">3 weeks</span>
-  </article>
-  <article class="fr-card fr-card--accent">
-    <h3>B. Keep the wrapper <span class="fr-badge fr-badge--accent">recommended</span></h3>
-    <p>Ship now, revisit later.</p>
-    <span class="fr-badge fr-badge--bronze">keeps a Node dependency</span>
-  </article>
-</section>
+<form class="fr-form" data-forum-question="cache-layer">
+  <fieldset class="fr-choices" style="border:0;padding:0">
+    <legend style="padding:0">Pick a direction</legend>
+    <label class="fr-choice"><input type="radio" name="option" value="memory" required>
+      <span>In memory</span></label>
+    <label class="fr-choice"><input type="radio" name="option" value="disk">
+      <span>On disk</span></label>
+  </fieldset>
+  <div class="fr-field">
+    <label for="why">Reason (optional)</label>
+    <textarea id="why" name="why" rows="2"></textarea>
+  </div>
+  <div class="fr-actions"><button type="submit">Queue my choice</button></div>
+</form>
+<script>
+  document.querySelector('[data-forum-question="cache-layer"]')
+    .addEventListener('submit', (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const option = data.get('option');
+      if (!option) return;
+      const why = String(data.get('why') || '').trim();
+      window.forum.queuePrompt('Keep the cache ' + (option === 'disk' ? 'on disk' : 'in memory') +
+          (why ? '. Reason: ' + why : ''),
+        { tag: 'choice', text: 'Cache: ' + option, element: form,
+          data: { question: 'cache-layer', answer: option, reason: why } });
+    });
+</script>
 ```
 
-For before/after of the same thing, use two `fr-card`s with matching headings, and a `fr-table-wrap` table when the criteria are explicit.
+Submitting again before sending replaces the earlier answer. After the user
+commits, update the page: keep the chosen option, fold the rest into a short
+"considered and set aside" note, and remove the form.
+
+If the comparison is only for understanding (no decision), skip the form and
+let the user comment on the page, which they can do by selecting text or
+clicking an element.
+
+## Example
+
+```html
+<main class="fr-page fr-stack">
+  <h1>Where should the cache live?</h1>
+  <p class="fr-muted">Assuming one process and fewer than 10k entries.</p>
+  <section class="fr-grid">
+    <article class="fr-card" id="opt-memory">
+      <h3>In memory</h3>
+      <p><code>cache := map[string]Entry{}</code> guarded by a mutex.</p>
+      <p><span class="fr-badge fr-badge--success">no extra I/O</span>
+         <span class="fr-badge fr-badge--danger">cold start after every restart</span></p>
+    </article>
+    <article class="fr-card fr-card--accent" id="opt-disk">
+      <h3>On disk <span class="fr-badge fr-badge--accent">recommended</span></h3>
+      <p>One JSON file per key, written atomically.</p>
+      <p><span class="fr-badge fr-badge--success">survives restarts</span>
+         <span class="fr-badge fr-badge--bronze">one read per lookup</span></p>
+    </article>
+  </section>
+</main>
+```
+
+## Styling and layout checks
+
+Use forum's classes (`fr-card`, `fr-grid`, `fr-badge`, `fr-table-wrap`), not a
+CDN framework. They are defined in `forum-artifact.css`, which forum injects
+only while the artifact has no `<style>`, no stylesheet `<link>` and no CSS
+framework of its own. Tweak with `style="..."` attributes, or add
+`<meta name="forum-style" content="on">` when you need your own `<style>` block
+on top (SKILL.md, "When the forum styles apply").
+
+The browser audits layout (clipped text, unreachable controls, text hidden
+under another element, sideways scroll) and files findings in the user's
+Layout issues tray without waking you. Prevent them: let text wrap, avoid fixed
+widths on anything that clips, and check dark, light and a phone-width view
+yourself.
+
+## Mistakes to avoid
+
+- Making all options look equally good when you prefer one.
+- Comparing summaries when you could show the real thing side by side.
+- Leaving out the assumption that would change the recommendation.
+- Cards whose sections differ in order or wording, which forces the reader to
+  hunt for the matching part.
