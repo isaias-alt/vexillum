@@ -32,3 +32,11 @@ func SetListProcesses(f func() (string, error)) (restore func()) {
 	listProcesses = f
 	return func() { listProcesses = old }
 }
+
+// SetTryAcquireLock swaps the lock attempt AcquireLockRetiring makes for the
+// duration of a test and returns a function that restores it.
+func SetTryAcquireLock(f func(string) (func(), error)) (restore func()) {
+	old := tryAcquireLock
+	tryAcquireLock = f
+	return func() { tryAcquireLock = old }
+}

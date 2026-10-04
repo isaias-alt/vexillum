@@ -402,6 +402,50 @@ func TestAcquireLockRetiring_WaitsForAStaleHolder(t *testing.T) {
 	release()
 }
 
+// The holder is caught mid-release: its build record is already gone while it
+// still holds the flock, and it only drops the flock after a further refusal.
+// A holder seen stale once must keep being waited for.
+func TestAcquireLockRetiring_SurvivesTheHolderExitingAfterARefusal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vx")
+	fakeExecutable(t, path)
+	home := t.TempDir()
+	build, err := sentinel.CurrentBuild("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseOld, err := sentinel.AcquireLock(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sentinel.PublishInfo(home, build); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("the new build"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	attempts := 0
+	t.Cleanup(sentinel.SetTryAcquireLock(func(h string) (func(), error) {
+		release, err := sentinel.AcquireLock(h)
+		attempts++
+		switch attempts {
+		case 1:
+			if err := os.Remove(filepath.Join(h, "sentinel.json")); err != nil {
+				t.Errorf("removing the build record: %v", err)
+			}
+		case 2:
+			releaseOld()
+		}
+		return release, err
+	}))
+
+	release, err := sentinel.AcquireLockRetiring(home, 10*time.Second)
+	if err != nil {
+		t.Fatalf("AcquireLockRetiring: %v", err)
+	}
+	release()
+}
+
 // A holder that is not stale is not waited for: two live sentinels of the same
 // build never queue up behind each other.
 func TestAcquireLockRetiring_RefusesAtOnceWhenTheHolderIsCurrent(t *testing.T) {

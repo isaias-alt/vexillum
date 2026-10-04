@@ -110,15 +110,26 @@ func AcquireLock(vexillumHome string) (release func(), err error) {
 // up to wait for it. Any other refusal is returned immediately.
 func AcquireLockRetiring(vexillumHome string, wait time.Duration) (release func(), err error) {
 	deadline := time.Now().Add(wait)
+	retiring := false
 	for {
-		release, err := AcquireLock(vexillumHome)
+		// A retiring holder removes its build record just before it drops the
+		// flock, so a holder seen stale once stays stale: judging it again
+		// could find no record while the flock is still held and give up on
+		// a holder that is only moments from gone. The judgement also comes
+		// before the attempt, never after a refusal, for the same reason.
+		retiring = retiring || HolderStale(vexillumHome)
+		release, err := tryAcquireLock(vexillumHome)
 		var running *ErrRunning
-		if err == nil || !errors.As(err, &running) || !HolderStale(vexillumHome) || !time.Now().Before(deadline) {
+		if err == nil || !errors.As(err, &running) || !retiring || !time.Now().Before(deadline) {
 			return release, err
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 }
+
+// tryAcquireLock is AcquireLock; a variable so tests can interleave a holder's
+// exit with a refused attempt.
+var tryAcquireLock = AcquireLock
 
 // readPID reads the pid file.
 func readPID(vexillumHome string) (int, bool) {
