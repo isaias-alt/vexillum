@@ -16,6 +16,9 @@ below satisfy their attribution requirements.
 | `@excalidraw/mermaid-to-excalidraw` 2.2.2             | MIT     | Copyright (c) 2023 Excalidraw                      |
 | `mermaid` 11.12.1 (exact, bundled for the converter)  | MIT     | Copyright (c) 2014 - 2022 Knut Sveidqvist          |
 | `react`, `react-dom` 18.3.1                           | MIT     | Copyright (c) Meta Platforms, Inc. and affiliates  |
+| `dompurify` 3.4.16                                    | MPL-2.0 OR Apache-2.0 | Copyright (c) Cure53 and other contributors |
+
+Other transitive dependencies of the packages above are bundled too (for example `d3` under ISC, `katex`, `cytoscape`, `dayjs`, `lodash-es`, `marked`, `roughjs` and `uuid` under MIT); their exact versions and licenses are in `tools/whiteboard-bundle/package-lock.json`.
 
 The full MIT license text applies to each of the packages above:
 
@@ -58,11 +61,11 @@ Excalidraw falls back to its CDN or the system font for those glyphs.
 ## Adapted integration code
 
 `tools/whiteboard-bundle/src/whiteboard-core.js`,
-`tools/whiteboard-bundle/src/whiteboard-frame.js`,
-`tools/whiteboard-bundle/src/whiteboard-frame.css`, and
-`tools/whiteboard-bundle/src/whiteboard-embed.js` are adapted from
+`tools/whiteboard-bundle/src/whiteboard-frame.js` and
+`tools/whiteboard-bundle/src/whiteboard-embed.js` (and its embedded copy
+`internal/forum/assets/whiteboard-embed.js`) are adapted from
 [`upstream`](https://github.com/upstream) at
-**v0.1.80** (commit `a2a199c`), MIT licensed:
+tag `forum-tool-v0.1.80` (commit `a2a199c`), MIT licensed:
 
 ```
 MIT License
@@ -91,45 +94,15 @@ SOFTWARE.
 Also adapted from the same forum-tool release (same MIT license and
 copyright notice as above):
 
-- `internal/forum/assets/chrome/forum-sdk.js`: the prompt-context helpers
-  (selector, element text, queue-key derivation) and the annotation mode
-  (hover outline, click-to-annotate, text selection capture, the mode
-  shortcut) of `src/artifact-sdk.js`; the note card is reimplemented in
-  `forum-chrome.js`.
-  The `queuePrompt`/`sendQueuedPrompts` option model and the poll/session
-  semantics (`feedback`, `ended`, `browser_disconnected`, user-ended sessions
-  needing `--reopen`) follow `src/server.js` and `src/session-store.js`,
-  reimplemented in Go.
 - `internal/forum/assets/chrome/forum-layout.js`: the passive layout audit
   (the severe-failure classifiers and the audit passes) of
   `src/artifact-sdk.js`, and `internal/forum/layout.go`: the warning
   lifecycle of `src/layout-warnings.js` (a warning is cleared only by a newer
   load plus a complete pass), reimplemented in Go.
-- `internal/forum/attachments.go` and `internal/forum/hub.go`: the attachment
-  size, count and disk limits of `src/attachment-store.js`, the transcript cap
-  of `src/chat-messages.js` and the SSE live feed of `src/server.js`.
-- `skills/forum/playbooks/*.md` (plan, comparison, input, diagram, table):
-  rewritten for `window.forum` and the `vx forum` commands from
-  `src/playbooks.js`.
 
-Each adapted file's own header comment describes what changed from
-upstream. Treat this code as vexillum's own - not an opaque vendor blob -
-per `tools/whiteboard-bundle/README.md`: forum-tool ships a high release
-cadence and keeps patching real bugs in this exact conversion path, so
-diff against a newer forum-tool tag when something in the conversion looks
-wrong before assuming it's a vexillum-specific bug.
-
-## Adapted into `internal/tribunal/` (review and fix prompts)
-
-The adversarial review step of `vx ship` (`internal/tribunal/review.go`
-and `internal/tribunal/fix.go`) adapts prompt text, rules and the findings
-vocabulary (severity error/warning/info, action ask-user/auto-fix/no-op,
-`reviewed_paths` coverage record, fix-round provenance clause, simplification
-pass, invariant-at-every-sibling-site fixer rules) from
-[review-tool](https://github.com/upstream)
-(`internal/pipeline/steps/review.go`, `internal/types/findings.go`), MIT
-licensed, Copyright (c) 2026 the upstream author. No code is vendored or linked; the
-full MIT license text above applies to the adapted portions.
+Each adapted file's own header comment says what it adapts. Treat this code
+as vexillum's own (not an opaque vendor blob) per
+`tools/whiteboard-bundle/README.md`.
 
 ## Inspired by `internal/slot/` (AGENTS.md marker block repair)
 

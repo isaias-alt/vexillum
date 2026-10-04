@@ -1,3 +1,7 @@
+// Adapted from upstream (MIT License, Copyright (c) 2026 the upstream author),
+// src/layout-warnings.js at tag forum-tool-v0.1.80 (commit a2a199c), reimplemented
+// in Go. See THIRD-PARTY-NOTICES.md at the vexillum repo root.
+
 package forum
 
 import (
