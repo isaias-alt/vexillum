@@ -33,11 +33,16 @@ const SchemaVersion = 1
 
 const dirName = "pending"
 
-// Item is one pending decision.
+// Item is one pending decision. Options and Recommended are optional: an
+// item recorded as free text carries neither. Recommended is the 1-based
+// index into Options of the commander's recommendation, 0 when there is
+// none.
 type Item struct {
 	SchemaVersion int       `json:"schema_version"`
 	ID            string    `json:"id"`
 	Text          string    `json:"text"`
+	Options       []string  `json:"options,omitempty"`
+	Recommended   int       `json:"recommended,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -74,12 +79,54 @@ func path(projectRoot, id string) string {
 	return filepath.Join(dir(projectRoot), id+".json")
 }
 
+// normalizeOptions trims every option label and checks them together with
+// the 1-based recommended index. It returns the cleaned labels.
+func normalizeOptions(options []string, recommended int) ([]string, error) {
+	var cleaned []string
+	seen := make(map[string]bool, len(options))
+	for _, o := range options {
+		o = strings.TrimSpace(o)
+		if o == "" {
+			return nil, errors.New("pending decision option is empty")
+		}
+		if seen[o] {
+			return nil, fmt.Errorf("pending decision option %q is repeated", o)
+		}
+		seen[o] = true
+		cleaned = append(cleaned, o)
+	}
+	if err := validateRecommended(len(cleaned), recommended); err != nil {
+		return nil, err
+	}
+	return cleaned, nil
+}
+
+// validateRecommended checks a 1-based recommended index against the number
+// of options. 0 means no recommendation and is always valid.
+func validateRecommended(options, recommended int) error {
+	switch {
+	case recommended == 0:
+		return nil
+	case options == 0:
+		return errors.New("a recommended option needs at least one option")
+	case recommended < 0 || recommended > options:
+		return fmt.Errorf("recommended option %d is out of range (1-%d)", recommended, options)
+	}
+	return nil
+}
+
 // Add records text as a new pending decision and returns it. text is
-// trimmed and must not be empty.
-func Add(projectRoot, text string) (Item, error) {
+// trimmed and must not be empty. options are the answers the general can
+// pick from (optional) and recommended is the 1-based index of the
+// recommended one, 0 for none.
+func Add(projectRoot, text string, options []string, recommended int) (Item, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return Item{}, errors.New("pending decision text is empty")
+	}
+	options, err := normalizeOptions(options, recommended)
+	if err != nil {
+		return Item{}, err
 	}
 	if err := os.MkdirAll(dir(projectRoot), 0o755); err != nil {
 		return Item{}, fmt.Errorf("creating pending directory: %w", err)
@@ -103,7 +150,7 @@ func Add(projectRoot, text string) (Item, error) {
 		return Item{}, errors.New("could not generate a free pending decision id")
 	}
 
-	item := Item{SchemaVersion: SchemaVersion, ID: id, Text: text, CreatedAt: time.Now().UTC()}
+	item := Item{SchemaVersion: SchemaVersion, ID: id, Text: text, Options: options, Recommended: recommended, CreatedAt: time.Now().UTC()}
 	if err := atomicfile.WriteJSON(path(projectRoot, id), item); err != nil {
 		return Item{}, fmt.Errorf("saving pending decision %s: %w", id, err)
 	}
@@ -142,6 +189,9 @@ func List(projectRoot string) ([]Item, error) {
 		}
 		if item.SchemaVersion != SchemaVersion {
 			return nil, fmt.Errorf("%s: unsupported schema version %d (expected %d)", p, item.SchemaVersion, SchemaVersion)
+		}
+		if err := validateRecommended(len(item.Options), item.Recommended); err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
 		}
 		items = append(items, item)
 	}

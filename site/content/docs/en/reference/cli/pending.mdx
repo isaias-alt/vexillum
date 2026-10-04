@@ -13,12 +13,17 @@ already designed, land a finished one, ship a PR) and would otherwise live
 only in the commander's head, lost if the session is cut.
 
 Usage:
-  vx pending add <text>
+  vx pending add <text> [--option <label>]... [--recommend <n>]
   vx pending list [--json]
   vx pending clear <id>
 
-add records <text> as a new pending decision and prints its id. clear
-removes one once the general has decided. list prints them oldest first.
+add records <text> as a new pending decision and prints its id. Give the
+answers the general can pick from with one --option <label> per answer, in
+order, and mark the one you recommend with --recommend <n> (1-based index
+into the options, needs at least one --option). Put "--" before text that
+starts with "--". clear removes one once the general has decided. list
+prints them oldest first, with the options numbered and the recommended one
+marked.
 
 This is a different category from a blocked task (a soldier needing the
 general, see 'vx decide'): here the commander needs the general. A
@@ -32,9 +37,12 @@ they survive a cut session. --json prints a single JSON object:
     "schema_version": 1,
     "generated_at": "2026-09-24T12:00:00Z",
     "pending": [
-      {"schema_version": 1, "id": "1a2b3c4d", "text": "...", "created_at": "..."}
+      {"schema_version": 1, "id": "1a2b3c4d", "text": "...",
+       "options": ["...", "..."], "recommended": 1, "created_at": "..."}
     ]
   }
 
-The /muster skill reads this to show a "Pending decisions" section.
+"options" and "recommended" are left out of an item recorded without them.
+The /muster skill reads this to show each item as a card in its "Decisions
+for you" section.
 ```
