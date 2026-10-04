@@ -25,6 +25,8 @@ const (
 	productName = "vexillum"
 	// InstallCommand reinstalls vx from scratch.
 	InstallCommand = "curl -fsSL https://vx.lucasco.dev/install | bash"
+	// CanaryInstallCommand installs the latest canary build.
+	CanaryInstallCommand = InstallCommand + " -s -- --channel canary"
 	// devVersion is what a build outside the release pipeline reports.
 	devVersion = "dev"
 )
@@ -211,7 +213,7 @@ func brewPrefix(exe string) (string, bool) {
 
 func (u *Updater) upgradeBrew(ctx context.Context, res Result) (Result, error) {
 	if res.Channel == Canary {
-		return Result{}, fmt.Errorf("%w. To follow canary, uninstall the formula (brew uninstall %s), install %s with the install script (%s) and then run '%s upgrade --channel canary'", ErrBrewChannel, productName, cmdname.Name, InstallCommand, cmdname.Name)
+		return Result{}, fmt.Errorf("%w. To follow canary, uninstall the formula (brew uninstall %s) and install the canary build with the install script (%s); '%s upgrade --channel canary' keeps it current from then on", ErrBrewChannel, productName, CanaryInstallCommand, cmdname.Name)
 	}
 	u.say("%s is installed with Homebrew: running 'brew upgrade %s'", cmdname.Name, productName)
 	if err := u.Brew.Upgrade(ctx, productName); err != nil {

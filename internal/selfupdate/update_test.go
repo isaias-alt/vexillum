@@ -451,7 +451,7 @@ func TestUpgrade_BrewRefusesCanary(t *testing.T) {
 	brew := &fakeBrew{}
 	u, _ := brewFixture(t, src, brew, "0.3.0")
 	_, err := u.Upgrade(context.Background(), Canary)
-	if !errors.Is(err, ErrBrewChannel) || len(brew.formulas) != 0 {
+	if !errors.Is(err, ErrBrewChannel) || len(brew.formulas) != 0 || !strings.Contains(err.Error(), CanaryInstallCommand) {
 		t.Fatalf("err = %v, brew = %v", err, brew.formulas)
 	}
 }

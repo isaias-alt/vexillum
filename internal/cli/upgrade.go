@@ -52,7 +52,8 @@ Flags:
                   Release channel to follow (default stable). stable is the
                   latest full release; canary is the latest pre-release whose
                   tag contains -canary. A Homebrew install only follows
-                  stable.
+                  stable: install a canary build with the install script's
+                  --channel canary instead.
   --check         Print the available version and change nothing.
   --scaffold-only
                   Refresh the scaffold and leave the binary alone.
