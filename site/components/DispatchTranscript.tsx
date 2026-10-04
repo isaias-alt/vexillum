@@ -1,8 +1,5 @@
 import type { Dictionary } from "@/lib/strings";
-
-function Output({ children }: { children: React.ReactNode }) {
-  return <div className="pl-3.5 text-text-muted">&#8627; {children}</div>;
-}
+import { Output, Prompt, ToolCall } from "./transcript";
 
 // A commander session in Claude Code: the general talks, the commander calls
 // `vx dispatch`. Outputs are the real stdout lines of the command.
@@ -15,20 +12,20 @@ export function DispatchTranscript({
 }) {
   return (
     <div
-      className={`overflow-x-auto rounded-xl border border-border bg-surface px-6 py-5 text-[12.5px] leading-[1.9] ${className ?? ""}`}
+      className={`rounded-xl border border-border bg-surface px-6 py-5 text-[12.5px] leading-[1.9] ${className ?? ""}`}
     >
-      <div className="text-text">&gt; {t.promptA}</div>
-      <div className="text-accent">
-        Bash(vx dispatch &quot;refactor the payment module&quot; --kind
-        mission --model sonnet)
-      </div>
+      <Prompt>{t.promptA}</Prompt>
+      <ToolCall>
+        Bash(vx dispatch &quot;refactor the payment module&quot; --kind mission
+        --model sonnet)
+      </ToolCall>
       {t.outputA.map((line) => (
         <Output key={line}>{line}</Output>
       ))}
-      <div className="mt-3 text-text">&gt; {t.promptB}</div>
-      <div className="text-accent">
+      <Prompt className="mt-3">{t.promptB}</Prompt>
+      <ToolCall>
         Bash(vx dispatch &quot;trace the memory leak&quot; --kind scout)
-      </div>
+      </ToolCall>
       <Output>{t.outputB}</Output>
     </div>
   );

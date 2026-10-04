@@ -1,4 +1,6 @@
 import { i18n, type Lang } from "@/lib/i18n";
+import { demoCopy, type DemoCopy } from "@/lib/demo-strings";
+import { loopCopy, type LoopCopy } from "@/lib/loop-strings";
 
 export interface Step {
   title: string;
@@ -31,6 +33,7 @@ export interface Dictionary {
     title: string;
     items: { term: string; def: string }[];
   };
+  loop: LoopCopy;
   dispatching: {
     eyebrow: string;
     title: string;
@@ -40,6 +43,7 @@ export interface Dictionary {
     outputA: string[];
     outputB: string;
   };
+  demo: DemoCopy;
   oss: {
     eyebrow: string;
     title: string;
@@ -159,6 +163,7 @@ const en: Dictionary = {
       },
     ],
   },
+  loop: loopCopy.en,
   dispatching: {
     eyebrow: "dispatching",
     title: "No new interface to learn.",
@@ -172,6 +177,7 @@ const en: Dictionary = {
     ],
     outputB: `task_id=${TASK_B} kind=scout camp_slot=2`,
   },
+  demo: demoCopy.en,
   oss: {
     eyebrow: "open source",
     title: "Found a bug? Want to help?",
@@ -261,6 +267,7 @@ const es: Dictionary = {
       },
     ],
   },
+  loop: loopCopy.es,
   dispatching: {
     eyebrow: "despacho",
     title: "Ninguna interfaz nueva que aprender.",
@@ -271,6 +278,7 @@ const es: Dictionary = {
     outputA: en.dispatching.outputA,
     outputB: en.dispatching.outputB,
   },
+  demo: demoCopy.es,
   oss: {
     eyebrow: "código abierto",
     title: "¿Encontraste un bug? ¿Querés ayudar?",

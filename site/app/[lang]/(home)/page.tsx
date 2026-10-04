@@ -8,6 +8,9 @@ import { Footer } from "@/components/Footer";
 import { InstallCommand } from "@/components/InstallCommand";
 import { MinuteSteps } from "@/components/MinuteSteps";
 import { DispatchTranscript } from "@/components/DispatchTranscript";
+import { CommandLoop } from "@/components/CommandLoop";
+import { LandVsShip, RestartProof } from "@/components/DetailDiagrams";
+import { InAction } from "@/components/InAction";
 import { ExternalLink } from "@/components/ExternalLink";
 import { GITHUB_URL } from "@/lib/site";
 import { i18n, type Lang } from "@/lib/i18n";
@@ -135,6 +138,24 @@ export default async function Home({
           </div>
         </section>
 
+        {/* the command loop */}
+        <section className="border-t border-border">
+          <div className="site-container py-(--section-space)">
+            <div className="mx-auto mb-12 max-w-[min(100%,52rem)] text-center">
+              <Eyebrow>{t.loop.eyebrow}</Eyebrow>
+              <h2 className="section-title mb-5">{t.loop.title}</h2>
+              <p className="text-sm leading-[1.7] text-text-secondary">
+                {t.loop.sub}
+              </p>
+            </div>
+            <CommandLoop t={t.loop} />
+            <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <LandVsShip t={t.loop.details.land} />
+              <RestartProof t={t.loop.details.state} />
+            </div>
+          </div>
+        </section>
+
         {/* dispatching */}
         <section className="border-t border-border">
           <div className="site-container py-(--section-space)">
@@ -150,6 +171,24 @@ export default async function Home({
             <DispatchTranscript
               t={t.dispatching}
               className="mx-auto max-w-(--content-narrow)"
+            />
+          </div>
+        </section>
+
+        {/* see it in action */}
+        <section className="border-t border-border">
+          <div className="site-container py-(--section-space)">
+            <div className="mx-auto mb-14 max-w-[min(100%,52rem)] text-center">
+              <Eyebrow>{t.demo.eyebrow}</Eyebrow>
+              <h2 className="section-title mb-5">{t.demo.title}</h2>
+              <p className="text-sm leading-[1.7] text-text-secondary">
+                {t.demo.sub}
+              </p>
+            </div>
+            <InAction
+              copy={t.demo}
+              docsLabel={t.minute.docsLink}
+              docsRoot={`${prefix}/docs`}
             />
           </div>
         </section>
