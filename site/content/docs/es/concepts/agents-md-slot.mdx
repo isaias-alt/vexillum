@@ -98,9 +98,9 @@ El slot viene en inglés y en español. El vocabulario del dominio queda en ingl
 Cuando `init` o `upgrade` están por escribir el bloque, el idioma se resuelve en este orden:
 
 1. `--lang en` o `--lang es`, si lo pasás;
-2. el idioma de un bloque que ya está en el archivo, para que una nueva corrida no lo cambie porque el texto que lo rodea se lee distinto;
-3. el idioma **detectado** en tu propio `AGENTS.md`;
-4. inglés.
+2. El idioma de un bloque que ya está en el archivo, para que una nueva corrida no lo cambie porque el texto que lo rodea se lee distinto;
+3. El idioma **detectado** en tu propio `AGENTS.md`;
+4. Inglés.
 
 La detección es simple, determinista y offline: cuenta palabras funcionales frecuentes de cada idioma, ignorando código, URLs y el propio bloque de vexillum. Necesita al menos 8 coincidencias y un 70% de participación para decidir; si no, y cuando no hay `AGENTS.md`, usa inglés.
 

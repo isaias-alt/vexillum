@@ -26,21 +26,17 @@ curl -fsSL https://vx.lucasco.dev/install | bash
 
 `/install` redirige a `scripts/install.sh` del repositorio, así que el script que corrés es el del árbol de código. Este script:
 
-1. detecta tu sistema operativo y arquitectura;
-2. usa Homebrew si `brew` está en tu PATH (`brew install isaias-alt/tap/vexillum`, o `brew upgrade` cuando la fórmula ya está instalada, como pasa con el viejo comando `vexillum` de la v0.1.x);
-3. si no, descarga el archivo del release para tu plataforma y **verifica su checksum sha256** contra el `checksums.txt` del release, y se niega a instalar si no coincide;
-4. instala el binario en `/usr/local/bin`, o en `~/.local/bin` cuando no podés escribir en `/usr/local/bin` (avisa si ese directorio no está en tu PATH);
-5. comprueba que ahora existe un `vx` que funciona (en el directorio de instalación, el prefijo de Homebrew o tu PATH) y termina con un error si no, nombrando el binario viejo `vexillum` cuando es lo único que encuentra.
+1. Detecta tu sistema operativo y arquitectura;
+2. Usa Homebrew si `brew` está en tu PATH (`brew install isaias-alt/tap/vexillum`, o `brew upgrade` cuando la fórmula ya está instalada, como pasa con el viejo comando `vexillum` de la v0.1.x);
+3. Si no, descarga el archivo del release para tu plataforma y **verifica su checksum sha256** contra el `checksums.txt` del release, y se niega a instalar si no coincide;
+4. Instala el binario en `/usr/local/bin`, o en `~/.local/bin` cuando no puedes escribir en él `/usr/local/bin` (avisa si ese directorio no está en tu PATH);
+5. Comprueba que ahora existe un `vx` que funciona (en el directorio de instalación, el prefijo de Homebrew o tu PATH) y termina con un error si no, nombrando el binario viejo `vexillum` cuando es lo único que encuentra.
 
 Comprobá que funcionó:
 
 ```bash
 vx --version
 ```
-
-<Callout title="¿Venís del comando `vexillum`?">
-  El ejecutable ahora se llama `vx`, y es el único: no hay un alias `vexillum`. El producto sigue siendo vexillum, y el paquete de Homebrew mantiene su nombre (`brew install isaias-alt/tap/vexillum` instala el ejecutable `vx`). Corré `vx upgrade` una vez en cada proyecto que hayas inicializado antes - mirá [Migrar de vexillum a vx](/es/docs/get-started/upgrading#migrar-de-vexillum-a-vx).
-</Callout>
 
 ## Instalá lo que vexillum orquesta
 
@@ -94,5 +90,3 @@ vx upgrade --global
 ```
 
 El archivo de reglas se reemplaza solo cuando no cambió desde que vexillum lo escribió; si lo editaste, `upgrade --global --force` lo reemplaza después de guardar tu versión en `~/.vexillum/backups/rules-vexillum.md`. Las skills instaladas siguen las mismas reglas que en un proyecto. Mirá [Actualización](/es/docs/get-started/upgrading).
-
-Siguiente: el [Quickstart](/es/docs/get-started/quickstart).
