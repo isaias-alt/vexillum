@@ -1,13 +1,13 @@
 ---
 title: Skill muster
-description: Un skill first-party de Claude Code que convierte vx status en un tablero de la tropa.
+description: Un skill first-party de Claude Code que convierte vx status en un tablero de la tropa con las decisiones que tenés que tomar como tarjetas respondibles.
 ---
 
-`muster` es un Agent Skill de Claude Code que viene dentro del binario de vexillum. Lee `vx status --json` y `vx pending list --json` y agrupa las tareas del proyecto y las decisiones pendientes del commander para que veas de un vistazo qué te necesita.
+`muster` es un Agent Skill de Claude Code que viene dentro del binario de vexillum. Lee `vx status --json` y `vx pending list --json` y abre un tablero con todo lo que tenés que decidir arriba, como tarjetas que respondés en el navegador, y el estado de la tropa debajo.
 
 ## Instalación
 
-`vx init` ofrece instalarlo junto con las otras [skills](/es/docs/concepts/skills) (en `.claude/skills/muster/`), y `vx upgrade --skills` lo instala después. No interviene Node ni `npx`. `vx doctor` informa `skill muster - installed, current`. El texto completo está en [Skill: muster](/es/docs/reference/skills/muster).
+`vx init` ofrece instalarlo junto con las otras [skills](/es/docs/concepts/skills) (en `.claude/skills/muster/`), y `vx upgrade --skills` lo instala después. No interviene Node ni `npx`. `vx doctor` informa `skill muster - installed, current`. Ver [Skill: muster](/es/docs/reference/skills/muster) para el texto completo.
 
 ## Uso
 
@@ -17,18 +17,35 @@ description: Un skill first-party de Claude Code que convierte vx status en un t
 | `/muster pr` | missions con un PR real de GitHub, enriquecidas con el estado en vivo del PR |
 | `/muster sitrep` | un resumen solo en terminal de los dispatches de esta sesión; nunca abre un tablero |
 
-El tablero tiene seis secciones: **Needs attention** (blocked, interrupted, failed), **Pending decisions** (lo que el commander espera que apruebes), **Awaiting land approval** (missions done todavía no aterrizadas), **In flight**, **Finished** y **Shipped**. Una tarea blocked muestra su pregunta en el tablero. Una tarea shipped es un soldier que espera a propósito que se mergee su pull request; mirá [Por qué un soldier shipped sigue abierto](/es/docs/guides/land-vs-ship#por-qué-un-soldier-shipped-sigue-abierto).
+El tablero empieza con **Decisions for you**, seguida de **Needs attention** (soldiers interrupted o failed), **In flight**, **Finished** y **Shipped**. Una tarea shipped es un soldier que espera a propósito que se mergee su pull request. Ver [Por qué un soldier shipped sigue abierto](/es/docs/guides/land-vs-ship#por-qué-un-soldier-shipped-sigue-abierto).
+
+## Decisions for you
+
+Cada decisión que espera por vos es una tarjeta de esta única sección, con un contexto breve, opciones para elegir, la opción recomendada marcada y un botón que encola tu respuesta. Las tarjetas salen de cuatro lugares:
+
+| Origen | Opciones |
+| --- | --- |
+| Una [decisión pendiente](#decisiones-pendientes) que registró el commander | las que registró el commander, o un cuadro de texto libre si no registró ninguna |
+| La pregunta de un soldier blocked | las opciones del propio soldier, o un cuadro de texto libre |
+| Una mission done que espera aprobación de land | `land now` u `hold`; para una mission que necesita rebase, `ask the soldier to rebase` u `hold` |
+| Una tarea shipped cuyo pull request está abierto y en verde | `I will merge it` u `hold` |
+
+La sección termina con **Your manual actions**: las cosas que solo vos podés hacer, como mergear un pull request que elegiste mergear vos o iniciar sesión en una herramienta.
+
+### Qué pasa cuando respondés
+
+El tablero nunca actúa por sí solo sobre una respuesta. Apretar el botón solo encola tu respuesta; cuando apretás Send to Agent en el panel de forum, el commander la lee y actúa bajo las reglas de siempre. Aterriza una mission solo si respondiste `land now`, pasa la respuesta a un soldier blocked con `vx decide`, limpia la decisión pendiente una vez que la decidiste, y descarta el trabajo sin aterrizar de un camp solo si lo pediste de forma explícita. Una respuesta `hold` no cambia nada. Después el commander refresca el tablero, así que lo que respondiste desaparece de él.
 
 ## Decisiones pendientes
 
-**Needs attention** significa que un soldier está trabado y te necesita. **Pending decisions** es la otra dirección: el commander necesita tu aprobación para algo que, si no, viviría solo en su cabeza, como una mission que ya diseñó y quiere despachar, o un PR que haría ship. El commander las registra con [`vx pending`](/es/docs/reference/cli/pending) en el momento en que te pregunta, y las limpia cuando decidís, así sobreviven a una sesión cortada:
+**Needs attention** significa que un soldier está trabado. Una decisión pendiente es la otra dirección: el commander necesita tu aprobación para algo que, si no, viviría solo en su cabeza, como una mission que ya diseñó y quiere despachar, o un PR que haría ship. El commander registra cada una con [`vx pending`](/es/docs/reference/cli/pending) en el momento en que te pregunta, junto con las opciones y su recomendación, y la limpia cuando decidís, así sobrevive a una sesión cortada:
 
 ```text
-vx pending add "dispatch the docs mission"
+vx pending add "Dispatch the docs mission now?" --option "dispatch now" --option "wait" --recommend 1
 vx pending list
 vx pending clear <id>
 ```
 
-Una mission terminada que espera `vx land` no necesita entrada: muster deriva **Awaiting land approval** desde git. Los items se guardan en `projects/<repo>-<hash>/pending/` dentro de `~/.vexillum`, un archivo cada uno, así que nada depende de un vault ni de otra herramienta.
+Una mission terminada que espera `vx land` y un pull request shipped listo para mergear no necesitan entrada: muster deriva sus tarjetas desde git y GitHub. Los items se guardan en `projects/<repo>-<hash>/pending/` dentro de `~/.vexillum`, un archivo cada uno.
 
-muster es de solo lectura: nunca aterriza, hace release ni re-despacha nada, y nunca agrega ni limpia una decisión pendiente. Nunca infiere un status que vexillum no reportó, y clasifica "aterrizada" con git, ya que vexillum no registra el landing en la tarea.
+Armar el tablero es de solo lectura: muster nunca aterriza, hace release ni re-despacha nada. Nunca infiere un status que vexillum no reportó, y clasifica "aterrizada" con git, ya que vexillum no registra el landing en la tarea.

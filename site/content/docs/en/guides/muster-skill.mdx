@@ -1,13 +1,13 @@
 ---
 title: Muster skill
-description: A first-party Claude Code skill that turns vx status into a troop board.
+description: A first-party Claude Code skill that turns vx status into a troop board with the decisions you must take as answerable cards.
 ---
 
-`muster` is a Claude Code Agent Skill that ships inside the vexillum binary. It reads `vx status --json` and `vx pending list --json` and groups the project's tasks and the commander's pending decisions so you can see, at a glance, what needs you.
+`muster` is a Claude Code Agent Skill that ships inside the vexillum binary. It reads `vx status --json` and `vx pending list --json` and opens a board with everything you have to decide at the top, as cards you answer in the browser, and the state of the troop below.
 
 ## Install
 
-`vx init` offers to install it with the other [skills](/docs/concepts/skills) (to `.claude/skills/muster/`), and `vx upgrade --skills` installs it later. No Node or `npx` is involved. `vx doctor` reports `skill muster - installed, current`. The full text is on [Skill: muster](/docs/reference/skills/muster).
+`vx init` offers to install it with the other [skills](/docs/concepts/skills) (to `.claude/skills/muster/`), and `vx upgrade --skills` installs it later. No Node or `npx` is involved. `vx doctor` reports `skill muster - installed, current`. See [Skill: muster](/docs/reference/skills/muster) for the full text.
 
 ## Use
 
@@ -17,18 +17,35 @@ description: A first-party Claude Code skill that turns vx status into a troop b
 | `/muster pr` | missions with a real GitHub PR, enriched with live PR status |
 | `/muster sitrep` | a terminal-only recap of this session's own dispatches; never opens a board |
 
-The board has six sections: **Needs attention** (blocked, interrupted, failed), **Pending decisions** (what the commander is waiting on you to approve), **Awaiting land approval** (done missions not yet landed), **In flight**, **Finished** and **Shipped**. A blocked task shows its question on the board. A shipped task is a soldier waiting on purpose for its pull request to be merged; see [Why a shipped soldier stays open](/docs/guides/land-vs-ship#why-a-shipped-soldier-stays-open).
+The board starts with **Decisions for you**, followed by **Needs attention** (interrupted or failed soldiers), **In flight**, **Finished** and **Shipped**. A shipped task is a soldier waiting on purpose for its pull request to be merged. See [Why a shipped soldier stays open](/docs/guides/land-vs-ship#why-a-shipped-soldier-stays-open).
+
+## Decisions for you
+
+Every decision that waits on you is a card in this one section, with a short context, radio options, the recommended option badged, and a button that queues your answer. The cards come from four places:
+
+| Source | Options |
+| --- | --- |
+| A [pending decision](#pending-decisions) the commander recorded | the ones the commander recorded, or a free-text box when it recorded none |
+| The question of a blocked soldier | the soldier's own options, or a free-text box |
+| A done mission awaiting land approval | `land now` or `hold`; for a mission that needs a rebase, `ask the soldier to rebase` or `hold` |
+| A shipped task whose pull request is open and green | `I will merge it` or `hold` |
+
+The section ends with **Your manual actions**: the things only you can do, such as merging a pull request you chose to merge yourself or logging in to a tool.
+
+### What happens when you answer
+
+The board never acts on an answer by itself. Pressing the button only queues your answer; when you press Send to Agent in the forum panel, the commander reads it and acts under the usual rules. It lands a mission only if you answered `land now`, passes a blocked soldier's answer on with `vx decide`, clears the pending decision once you decided it, and discards a camp's unlanded work only if you explicitly asked for that. An answer of `hold` changes nothing. Afterwards the commander refreshes the board, so what you answered leaves it.
 
 ## Pending decisions
 
-**Needs attention** means a soldier is stuck and needs you. **Pending decisions** is the other direction: the commander needs your approval for something that would otherwise live only in its head, such as a mission it has already designed and wants to dispatch, or a PR it would ship. The commander records these with [`vx pending`](/docs/reference/cli/pending) the moment it asks you, and clears them once you decide, so they survive a cut session:
+**Needs attention** means a soldier is stuck. A pending decision is the other direction: the commander needs your approval for something that would otherwise live only in its head, such as a mission it has already designed and wants to dispatch, or a PR it would ship. The commander records each one with [`vx pending`](/docs/reference/cli/pending) the moment it asks you, together with the options and its recommendation, and clears it once you decide, so it survives a cut session:
 
 ```text
-vx pending add "dispatch the docs mission"
+vx pending add "Dispatch the docs mission now?" --option "dispatch now" --option "wait" --recommend 1
 vx pending list
 vx pending clear <id>
 ```
 
-A finished mission awaiting `vx land` needs no entry: muster derives **Awaiting land approval** from git. Items are stored under `projects/<repo>-<hash>/pending/` in `~/.vexillum`, one file each, so nothing depends on a vault or any other tool.
+A finished mission awaiting `vx land` and a shipped pull request ready to merge need no entry: muster derives their cards from git and GitHub. Items are stored under `projects/<repo>-<hash>/pending/` in `~/.vexillum`, one file each.
 
-muster is read-only: it never lands, releases or redispatches anything, and it never adds or clears a pending decision. It never infers a status vexillum did not report, and it classifies "landed" with git, since vexillum does not record landing on the task.
+Building the board is read-only: muster never lands, releases or redispatches anything. It never infers a status vexillum did not report, and it classifies "landed" with git, since vexillum does not record landing on the task.
