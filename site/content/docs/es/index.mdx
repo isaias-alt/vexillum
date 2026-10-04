@@ -3,7 +3,7 @@ title: Introducción
 description: vexillum orquesta agentes de código desde tu terminal, un commander, muchos soldiers, cada uno en su propio camp.
 ---
 
-vexillum es un orquestador de agentes de código por CLI, escrito en Go. Le hablás a un solo agente, el **commander** (Claude Code). Él despacha **soldiers** (más sesiones de Claude Code) en paralelo. Cada soldier trabaja en su propio git worktree, un **camp**, así el trabajo en paralelo nunca choca, y devuelve un cambio para aterrizar (una **mission**) o un reporte escrito (un **scout**). Un **sentinel** en segundo plano vigila a los soldiers y despierta al commander solo cuando algo necesita atención.
+vexillum es un orquestador de agentes de código por CLI, escrito en Go. Le hablás a un solo agente, el **commander** (Claude Code). Él despacha **soldiers** (más sesiones de Claude Code) en paralelo. Cada soldier trabaja en su propio git worktree (un **camp**), así el trabajo en paralelo nunca choca, y devuelve un cambio para aterrizar (una **mission**) o un reporte escrito (un **scout**). Un **sentinel** en segundo plano vigila a los soldiers y despierta al commander solo cuando algo necesita atención.
 
 No hay una interfaz nueva que aprender: seguís hablando con Claude Code y el commander llama a `vx` por vos.
 
