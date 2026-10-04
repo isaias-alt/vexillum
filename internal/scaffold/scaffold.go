@@ -1,10 +1,9 @@
-// Package scaffold manages the files vexillum writes into a project (or,
-// with --global, into the user's home directory) so Claude Code picks up
-// the commander persona and the sentinel Stop hook: .vexillum/config.json
-// (or vexillumHome/config.json for the global scaffold) and the hook entry
-// inside .claude/settings.json (see hook.go). The commander rules themselves
-// live in AGENTS.md and the skills (internal/slot, internal/install); this
-// package only keeps the bookkeeping around them.
+// Package scaffold manages the files vexillum writes into a project so
+// Claude Code picks up the commander persona and the sentinel Stop hook:
+// .vexillum/config.json and the hook entry inside .claude/settings.json (see
+// hook.go). The commander rules themselves live in the vexillum block of
+// AGENTS.md or CLAUDE.md and in the skills (internal/slot, internal/install);
+// this package only keeps the bookkeeping around them.
 package scaffold
 
 import (
@@ -20,18 +19,16 @@ import (
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 )
 
-// Config is the schema of .vexillum/config.json (or, for the global
-// scaffold, vexillumHome/config.json directly).
+// Config is the schema of .vexillum/config.json.
 type Config struct {
 	Version       int       `json:"version"`
 	InitializedAt time.Time `json:"initialized_at"`
 	// VexillumRuleHash is the sha256 hex digest of the content vexillum
 	// itself last wrote to a .claude/rules/vexillum.md file. Projects no
-	// longer get that file (the rules moved into AGENTS.md and the
-	// skills), so for them it only marks an old scaffold: 'vx upgrade'
-	// removes the file when it still hashes to this, and leaves an edited
-	// one alone. The global scaffold still writes that file and keeps its
-	// hash here. Empty means unknown provenance.
+	// longer get that file (the rules moved into the vexillum block and the
+	// skills), so it only marks an old scaffold: 'vx upgrade' removes the
+	// file when it still hashes to this, and leaves an edited one alone.
+	// Empty means unknown provenance.
 	VexillumRuleHash string `json:"vexillum_rule_hash,omitempty"`
 	// Skills maps a first-party skill name to the content hash (see
 	// skills.HashFiles) of what vexillum last installed under
@@ -48,9 +45,8 @@ func HashContent(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ReadConfig reads config.json directly inside configDir - the project's
-// .vexillum/ for local scaffolds, or vexillumHome itself for the global
-// scaffold (see WriteConfig).
+// ReadConfig reads config.json directly inside configDir, the project's
+// .vexillum/ (see WriteConfig).
 func ReadConfig(configDir string) (Config, error) {
 	data, err := os.ReadFile(filepath.Join(configDir, "config.json"))
 	if err != nil {
@@ -89,16 +85,8 @@ func ProjectInitialized(projectDir string) bool {
 	return err == nil
 }
 
-// GlobalInitialized reports whether the global scaffold
-// (vexillumHome/config.json, written by 'vx init --global') exists.
-func GlobalInitialized(vexillumHome string) bool {
-	_, err := os.Stat(filepath.Join(vexillumHome, "config.json"))
-	return err == nil
-}
-
-// WriteConfig creates a fresh config.json directly inside configDir - the
-// project's .vexillum/ for local scaffolds, or vexillumHome itself for the
-// global scaffold.
+// WriteConfig creates a fresh config.json directly inside configDir, the
+// project's .vexillum/.
 func WriteConfig(configDir string) error {
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return err

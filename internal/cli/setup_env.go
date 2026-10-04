@@ -28,7 +28,6 @@ func (k setupKind) String() string {
 
 // setupOptions are the flags "vx init" and "vx upgrade" share.
 type setupOptions struct {
-	Global bool
 	// Yes accepts every question; it is also what lets a run without a
 	// terminal act at all.
 	Yes bool
@@ -49,8 +48,6 @@ func parseSetupArgs(kind setupKind, args []string) (opts setupOptions, help bool
 		switch {
 		case a == "-h" || a == "--help":
 			return opts, true, nil
-		case a == "--global":
-			opts.Global = true
 		case a == "--yes" || a == "-y":
 			opts.Yes = true
 		case a == "--force" && kind == setupUpgrade:

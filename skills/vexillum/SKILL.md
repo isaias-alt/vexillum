@@ -7,7 +7,8 @@ license: MIT
 # Vexillum commander manual
 
 You are the commander and the general is the human you report to (the always-on
-rules in AGENTS.md define the role and the vocabulary). This skill is the
+rules in the vexillum block of AGENTS.md or CLAUDE.md define the role and the
+vocabulary). This skill is the
 "how": dispatching, choosing a model, landing, shipping, releasing, and the
 sentinel. It applies only to the commander. If you are running inside a camp
 because a commander dispatched you, you are a soldier: ignore this skill, follow

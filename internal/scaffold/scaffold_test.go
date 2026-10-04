@@ -56,20 +56,6 @@ func TestWriteConfigAndReadConfig(t *testing.T) {
 	}
 }
 
-func TestGlobalInitialized(t *testing.T) {
-	home := t.TempDir()
-
-	if GlobalInitialized(home) {
-		t.Fatal("expected GlobalInitialized to be false before WriteConfig")
-	}
-	if err := WriteConfig(home); err != nil {
-		t.Fatalf("WriteConfig: %v", err)
-	}
-	if !GlobalInitialized(home) {
-		t.Error("expected GlobalInitialized to be true after WriteConfig")
-	}
-}
-
 func TestWriteFileIfMissing(t *testing.T) {
 	dir := t.TempDir()
 

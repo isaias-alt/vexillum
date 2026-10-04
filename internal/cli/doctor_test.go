@@ -526,10 +526,10 @@ func TestDoctor_FirstPartySkills(t *testing.T) {
 	if out := run(); !strings.Contains(out, "[missing] skill muster - missing") {
 		t.Errorf("missing skill not reported:\n%s", out)
 	}
-	// A global install satisfies it.
+	// A skill installed outside the project does not count.
 	writeFileT(t, filepath.Join(homeDir, ".claude", "skills", "muster", "SKILL.md"), "x")
-	if out := run(); !strings.Contains(out, "skill muster - installed, edited by hand (global)") {
-		t.Errorf("global skill not reported:\n%s", out)
+	if out := run(); !strings.Contains(out, "[missing] skill muster - missing") {
+		t.Errorf("a skill in the home directory must not satisfy the project:\n%s", out)
 	}
 }
 
@@ -541,7 +541,7 @@ func TestDoctor_SlotStates(t *testing.T) {
 		name, agents, want string
 	}{
 		{"absent", englishAgents, "[missing] AGENTS.md vexillum block - absent"},
-		{"no file", "", "[missing] AGENTS.md vexillum block - absent"},
+		{"no file", "", "[missing] CLAUDE.md vexillum block - absent"},
 		{"current", current, "[ok] AGENTS.md vexillum block - current (en)"},
 		{"stale", stale, "[warn] AGENTS.md vexillum block - stale"},
 		{"drifted", strings.Replace(current, "## Vexillum commander", "## Mine", 1), "[warn] AGENTS.md vexillum block - drifted"},
@@ -563,6 +563,63 @@ func TestDoctor_SlotStates(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The block can live in CLAUDE.md when the project has no AGENTS.md: doctor
+// reports it there and has no import to check.
+func TestDoctor_ClaudeMDSlot(t *testing.T) {
+	core, _ := install.SlotTemplate(slot.LangEN)
+	current, _ := slot.Upsert(englishAgents, core, false)
+	stale, _ := slot.Upsert(englishAgents, "## Vexillum commander\n\nOld.\n", false)
+	tests := []struct {
+		name, claude, want string
+	}{
+		{"current", current, "[ok] CLAUDE.md vexillum block - current (en)"},
+		{"stale", stale, "[warn] CLAUDE.md vexillum block - stale"},
+		{"drifted", strings.Replace(current, "## Vexillum commander", "## Mine", 1), "[warn] CLAUDE.md vexillum block - drifted"},
+		{"malformed", englishAgents + "<!-- BEGIN VEXILLUM v:1 hash:00000000 -->\n", "[warn] CLAUDE.md vexillum block - malformed"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+			projectDir := initializedProject(t)
+			writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), tc.claude)
+			var out bytes.Buffer
+			if code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out); code != 0 {
+				t.Fatalf("slot state must never fail doctor: exit %d\n%s", code, out.String())
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Errorf("missing %q in:\n%s", tc.want, out.String())
+			}
+			if strings.Contains(out.String(), "imports AGENTS.md") || strings.Contains(out.String(), "AGENTS.md vexillum block") {
+				t.Errorf("a block in CLAUDE.md has no AGENTS.md checks:\n%s", out.String())
+			}
+		})
+	}
+
+	t.Run("after init with the default", func(t *testing.T) {
+		t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+		projectDir, home := newProject(t)
+		if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+			t.Fatal(r.out, r.errOut)
+		}
+		var out bytes.Buffer
+		runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+		if !strings.Contains(out.String(), "[ok] CLAUDE.md vexillum block - current (en)") || strings.Contains(out.String(), "imports AGENTS.md") {
+			t.Errorf("doctor after init:\n%s", out.String())
+		}
+	})
+	t.Run("an AGENTS.md that appears later keeps the report on CLAUDE.md", func(t *testing.T) {
+		t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+		projectDir := initializedProject(t)
+		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), current)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
+		var out bytes.Buffer
+		runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+		if !strings.Contains(out.String(), "[ok] CLAUDE.md vexillum block - current (en)") {
+			t.Errorf("doctor:\n%s", out.String())
+		}
+	})
 }
 
 func TestDoctor_ClaudeImportAndLegacyRules(t *testing.T) {

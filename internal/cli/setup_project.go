@@ -58,14 +58,19 @@ const (
 // projectPlan is everything init/upgrade learned about the project before
 // writing anything.
 type projectPlan struct {
-	kind       setupKind
-	opts       setupOptions
-	dir        string
-	configDir  string
-	skillsDir  string
-	cfg        scaffold.Config
-	cfgExists  bool
-	agents     install.Agents
+	kind      setupKind
+	opts      setupOptions
+	dir       string
+	configDir string
+	skillsDir string
+	cfg       scaffold.Config
+	cfgExists bool
+	// slotFile is the file that holds, or will hold, the vexillum block:
+	// AGENTS.md or CLAUDE.md.
+	slotFile install.SlotFile
+	// chooseSlot is true when the person may still pick the file: there is
+	// no AGENTS.md and no block anywhere yet.
+	chooseSlot bool
 	lang       slot.Lang
 	langSource install.LangSource
 	slotIns    slot.Inspection
@@ -128,14 +133,11 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 		return nil, fmt.Errorf("cannot read .vexillum/config.json: %w", err)
 	}
 
-	if p.agents, err = install.ReadAgents(projectDir); err != nil {
+	var file install.SlotFile
+	if file, p.chooseSlot, err = install.LocateSlotFile(projectDir); err != nil {
 		return nil, err
 	}
-	p.lang, p.langSource = install.ResolveLang(p.agents.Content, opts.Lang)
-	if p.slotIns, p.tmpl, err = install.InspectSlot(p.agents.Content, p.lang); err != nil {
-		return nil, err
-	}
-	if p.claude, err = slot.EnsureClaudeImport(projectDir); err != nil {
+	if err := p.useSlotFile(file); err != nil {
 		return nil, err
 	}
 
@@ -163,6 +165,53 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 		}
 	}
 	return p, nil
+}
+
+// useSlotFile points the plan at file as the home of the vexillum block and
+// inspects the block in it, and what CLAUDE.md needs in response: nothing
+// when it is the file that holds the block, the @AGENTS.md import otherwise.
+func (p *projectPlan) useSlotFile(file install.SlotFile) error {
+	var err error
+	p.slotFile = file
+	p.lang, p.langSource = install.ResolveLang(file.Content, p.opts.Lang)
+	if p.slotIns, p.tmpl, err = install.InspectSlot(file.Content, p.lang); err != nil {
+		return err
+	}
+	if file.Name == install.ClaudeFile {
+		p.claude = slot.ClaudeImport{Path: file.Path, Exists: file.Exists, Imports: true}
+		return nil
+	}
+	p.claude, err = slot.EnsureClaudeImport(p.dir)
+	return err
+}
+
+// chooseSlotFile asks whether the block should go to CLAUDE.md when the
+// project has no AGENTS.md. CLAUDE.md is the default answer, which --yes and
+// a run without a terminal take; no creates an AGENTS.md instead.
+func (p *projectPlan) chooseSlotFile(e *setupEnv) error {
+	if !p.chooseSlot {
+		return nil
+	}
+	p.chooseSlot = false
+	if e.opts.Yes || !e.interactive {
+		return nil
+	}
+	q := "This project has no AGENTS.md. Put the vexillum block in CLAUDE.md instead of creating an AGENTS.md?"
+	if p.slotFile.Exists {
+		q = "This project has no AGENTS.md. Add the vexillum block to your CLAUDE.md instead of creating an AGENTS.md?"
+	}
+	ok, err := e.prompt.confirm(q, true)
+	if err != nil {
+		return err
+	}
+	if ok {
+		return nil
+	}
+	agents, err := install.ReadSlotFile(p.dir, install.AgentsFile)
+	if err != nil {
+		return err
+	}
+	return p.useSlotFile(agents)
 }
 
 func exists(path string) bool {
@@ -224,21 +273,22 @@ func (p *projectPlan) inspectSkills() error {
 func (p *projectPlan) userFileLines() []string {
 	var lines []string
 	pad := func(name, what string) { lines = append(lines, fmt.Sprintf("%-26s %s", name, what)) }
+	name := p.slotFile.Name
 
 	switch p.slotPlan() {
 	case slotWrite:
 		switch {
-		case !p.agents.Exists:
-			pad("AGENTS.md", "create it with the vexillum block")
+		case !p.slotFile.Exists:
+			pad(name, "create it with the vexillum block")
 		case p.slotIns.State == slot.StateAbsent:
-			pad("AGENTS.md", "add the vexillum block")
+			pad(name, "add the vexillum block")
 		case p.slotIns.State == slot.StateDrifted:
-			pad("AGENTS.md", "replace your edited vexillum block (your version is saved to "+slot.BackupRelPath+" first)")
+			pad(name, "replace your edited vexillum block (your version is saved to "+slot.BackupRelPath+" first)")
 		default:
-			pad("AGENTS.md", "update the vexillum block")
+			pad(name, "update the vexillum block")
 		}
 	case slotRepair:
-		pad("AGENTS.md", "repair the malformed vexillum block (shows the repairs and asks first)")
+		pad(name, "repair the malformed vexillum block (shows the repairs and asks first)")
 	}
 	switch p.claude.Action {
 	case slot.ClaudeCreate:
@@ -254,7 +304,7 @@ func (p *projectPlan) userFileLines() []string {
 		}
 	}
 	if p.kind == setupUpgrade && p.legacy == legacyUnedited {
-		pad(legacyRulesRel, "remove it (the rules now live in AGENTS.md and the skills)")
+		pad(legacyRulesRel, "remove it (the rules now live in the vexillum block and the skills)")
 	}
 	return lines
 }
@@ -314,11 +364,11 @@ func (p *projectPlan) hasWork() bool {
 func (p *projectPlan) report(e *setupEnv) {
 	switch p.slotPlan() {
 	case slotReportDrift:
-		e.say("AGENTS.md: the vexillum block was edited by hand, so it is left as it is. What you have, against the current template:")
+		e.say("%s: the vexillum block was edited by hand, so it is left as it is. What you have, against the current template:", p.slotFile.Name)
 		e.say("%s", slot.UnifiedDiff(p.slotIns.Body, p.tmpl, "your edit", "vexillum template"))
 		e.say("Re-run '%s upgrade --force' to replace it (your version is saved first).", cmdname.Name)
 	case slotReportMalformed:
-		e.say("AGENTS.md: the vexillum block is malformed (%s), so it is left as it is. Run '%s upgrade' to repair it.", p.slotIns.Reason, cmdname.Name)
+		e.say("%s: the vexillum block is malformed (%s), so it is left as it is. Run '%s upgrade' to repair it.", p.slotFile.Name, p.slotIns.Reason, cmdname.Name)
 	}
 	if p.hookErr != nil {
 		e.warn("could not add the sentinel Stop hook: %v", p.hookErr)
@@ -326,9 +376,9 @@ func (p *projectPlan) report(e *setupEnv) {
 	switch p.legacy {
 	case legacyEdited:
 		if p.kind == setupUpgrade {
-			e.say("%s: you edited it, so it is left as it is. It is now redundant with the AGENTS.md block and the skills; delete it once you have moved anything you want to keep.", legacyRulesRel)
+			e.say("%s: you edited it, so it is left as it is. It is now redundant with the vexillum block and the skills; delete it once you have moved anything you want to keep.", legacyRulesRel)
 		} else {
-			e.say("%s is from an older vexillum and is now redundant with the AGENTS.md block and the skills. Run '%s upgrade' to migrate it.", legacyRulesRel, cmdname.Name)
+			e.say("%s is from an older vexillum and is now redundant with the vexillum block and the skills. Run '%s upgrade' to migrate it.", legacyRulesRel, cmdname.Name)
 		}
 	case legacyUnedited:
 		if p.kind == setupInit {
@@ -393,6 +443,9 @@ func runProjectSetup(e *setupEnv, kind setupKind, projectDir, vexillumHome strin
 	p, err := inspectProject(kind, e.opts, projectDir)
 	if err != nil {
 		return e.fail("%v", err)
+	}
+	if err := p.chooseSlotFile(e); err != nil {
+		return e.askFailed(err)
 	}
 	p.report(e)
 
@@ -482,7 +535,7 @@ func (p *projectPlan) apply(e *setupEnv, vexillumHome string) int {
 		_ = os.Remove(filepath.Dir(rules)) // only if it is now empty
 		p.cfg.VexillumRuleHash = ""
 		cfgDirty = true
-		e.say("Removed %s (unedited, replaced by the AGENTS.md block and the skills)", legacyRulesRel)
+		e.say("Removed %s (unedited, replaced by the vexillum block and the skills)", legacyRulesRel)
 	}
 
 	if cfgDirty {
@@ -503,15 +556,16 @@ func writeDefaultModels(configDir string) error {
 	return os.WriteFile(filepath.Join(configDir, models.FileName), models.DefaultJSON(), 0o644)
 }
 
-// applySlot writes (or repairs) the vexillum block in AGENTS.md.
+// applySlot writes (or repairs) the vexillum block in the slot file.
 func (p *projectPlan) applySlot(e *setupEnv) int {
 	plan := p.slotPlan()
 	if plan != slotWrite && plan != slotRepair {
 		return 0
 	}
-	target := "AGENTS.md"
-	if !p.agents.Exists {
-		target = "AGENTS.md (it does not exist yet)"
+	name := p.slotFile.Name
+	target := name
+	if !p.slotFile.Exists {
+		target = name + " (it does not exist yet)"
 	}
 	lang, err := e.chooseLang(p.lang, p.langSource, target)
 	if err != nil {
@@ -519,18 +573,18 @@ func (p *projectPlan) applySlot(e *setupEnv) int {
 	}
 	if lang != p.lang {
 		p.lang = lang
-		if p.slotIns, p.tmpl, err = install.InspectSlot(p.agents.Content, lang); err != nil {
+		if p.slotIns, p.tmpl, err = install.InspectSlot(p.slotFile.Content, lang); err != nil {
 			return e.fail("%v", err)
 		}
 	}
-	if !p.agents.Exists {
+	if !p.slotFile.Exists {
 		e.say("Language: %s", lang)
 	}
 
-	content := p.agents.Content
+	content := p.slotFile.Content
 	if plan == slotRepair {
 		repaired, actions := slot.Repair(content)
-		e.say("AGENTS.md: the vexillum block is malformed (%s). Repairs:", p.slotIns.Reason)
+		e.say("%s: the vexillum block is malformed (%s). Repairs:", name, p.slotIns.Reason)
 		for _, a := range actions {
 			e.say("  - %s", a)
 		}
@@ -539,10 +593,10 @@ func (p *projectPlan) applySlot(e *setupEnv) int {
 			return e.askFailed(err)
 		}
 		if !ok {
-			e.say("AGENTS.md was left as it is.")
+			e.say("%s was left as it is.", name)
 			return 0
 		}
-		backup, err := install.SaveAgentsBackup(p.dir, content)
+		backup, err := install.SaveSlotFileBackup(p.dir, name, content)
 		if err != nil {
 			return e.fail("%v", err)
 		}
@@ -558,10 +612,10 @@ func (p *projectPlan) applySlot(e *setupEnv) int {
 		if !(p.kind == setupUpgrade && p.opts.Force) {
 			// Only reachable after a repair: write the repaired markers
 			// and leave the edited body alone.
-			if err := slot.WriteFile(p.agents.Path, content); err != nil {
-				return e.fail("cannot write AGENTS.md: %v", err)
+			if err := slot.WriteFile(p.slotFile.Path, content); err != nil {
+				return e.fail("cannot write %s: %v", name, err)
 			}
-			e.say("AGENTS.md: markers repaired. The block was edited by hand, so its text is left as it is; run '%s upgrade --force' to replace it.", cmdname.Name)
+			e.say("%s: markers repaired. The block was edited by hand, so its text is left as it is; run '%s upgrade --force' to replace it.", name, cmdname.Name)
 			return 0
 		}
 		force = true
@@ -576,20 +630,20 @@ func (p *projectPlan) applySlot(e *setupEnv) int {
 	if err != nil {
 		return e.fail("cannot update the vexillum block: %v", err)
 	}
-	if out != p.agents.Content {
-		if err := slot.WriteFile(p.agents.Path, out); err != nil {
-			return e.fail("cannot write AGENTS.md: %v", err)
+	if out != p.slotFile.Content {
+		if err := slot.WriteFile(p.slotFile.Path, out); err != nil {
+			return e.fail("cannot write %s: %v", name, err)
 		}
 		switch {
-		case !p.agents.Exists:
-			e.say("Created AGENTS.md with the vexillum block")
+		case !p.slotFile.Exists:
+			e.say("Created %s with the vexillum block", name)
 		case p.slotIns.State == slot.StateAbsent:
-			e.say("Added the vexillum block to AGENTS.md")
+			e.say("Added the vexillum block to %s", name)
 		default:
-			e.say("Updated the vexillum block in AGENTS.md")
+			e.say("Updated the vexillum block in %s", name)
 		}
 	}
-	p.agents.Content, p.agents.Exists = out, true
+	p.slotFile.Content, p.slotFile.Exists = out, true
 	return 0
 }
 

@@ -433,6 +433,146 @@ func TestInit_ClaudeMD(t *testing.T) {
 	})
 }
 
+// With no AGENTS.md the block goes to CLAUDE.md, which is the default answer.
+// Answering no creates an AGENTS.md and CLAUDE.md imports it, as before.
+func TestInit_ClaudeMDSlot(t *testing.T) {
+	core, _ := install.SlotTemplate(slot.LangEN)
+	noSkills := setupOptions{Skills: boolp(false)}
+	yesNoSkills := setupOptions{Yes: true, Skills: boolp(false)}
+
+	t.Run("--yes takes the default: block in a new CLAUDE.md, no AGENTS.md", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		r := doInit(projectDir, home, yesNoSkills, "", false)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+		got := readFile(t, filepath.Join(projectDir, "CLAUDE.md"))
+		if ins := slot.Inspect(got, core); ins.State != slot.StateCurrent {
+			t.Errorf("CLAUDE.md block state = %v, want current:\n%s", ins.State, got)
+		}
+		if slot.ImportsAgents(got) {
+			t.Error("CLAUDE.md must not import an AGENTS.md that does not exist")
+		}
+		if !strings.Contains(r.out, "CLAUDE.md") || !strings.Contains(r.out, "create it with the vexillum block") || !strings.Contains(r.out, "Created CLAUDE.md with the vexillum block") {
+			t.Errorf("the notice and the result must name CLAUDE.md:\n%s", r.out)
+		}
+		if strings.Contains(r.out, "AGENTS.md") {
+			t.Errorf("AGENTS.md should not be mentioned:\n%s", r.out)
+		}
+		if again := doInit(projectDir, home, yesNoSkills, "", false); again.code != 0 || !strings.Contains(again.out, "Nothing to change") {
+			t.Errorf("rerun: %s%s", again.out, again.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	})
+	t.Run("an existing CLAUDE.md keeps its text and gets the block", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), englishAgents)
+		r := doInit(projectDir, home, yesNoSkills, "", false)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+		got := readFile(t, filepath.Join(projectDir, "CLAUDE.md"))
+		if !strings.HasPrefix(got, englishAgents) || strings.Count(got, "BEGIN VEXILLUM") != 1 {
+			t.Errorf("CLAUDE.md = %q", got)
+		}
+		if !strings.Contains(r.out, "add the vexillum block") {
+			t.Errorf("the notice must say it adds the block to CLAUDE.md:\n%s", r.out)
+		}
+	})
+	t.Run("interactive default accepts CLAUDE.md", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		// slot file / Continue? / language
+		r := doInit(projectDir, home, noSkills, "\ny\ny\n", true)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if !strings.Contains(r.out, "Put the vexillum block in CLAUDE.md instead of creating an AGENTS.md?") {
+			t.Errorf("the slot question was not asked:\n%s", r.out)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+		if !strings.Contains(readFile(t, filepath.Join(projectDir, "CLAUDE.md")), "BEGIN VEXILLUM") {
+			t.Error("no block in CLAUDE.md")
+		}
+	})
+	t.Run("interactive question over an existing CLAUDE.md says so", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), englishAgents)
+		r := doInit(projectDir, home, noSkills, "y\ny\ny\n", true)
+		if r.code != 0 || !strings.Contains(r.out, "Add the vexillum block to your CLAUDE.md instead of creating an AGENTS.md?") {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	})
+	t.Run("answering no creates AGENTS.md and CLAUDE.md imports it", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		// slot file: no / Continue? / language
+		r := doInit(projectDir, home, noSkills, "n\ny\ny\n", true)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if ins := slot.Inspect(readFile(t, filepath.Join(projectDir, "AGENTS.md")), core); ins.State != slot.StateCurrent {
+			t.Errorf("AGENTS.md block state = %v, want current", ins.State)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "@AGENTS.md\n" {
+			t.Errorf("CLAUDE.md = %q", got)
+		}
+	})
+	t.Run("answering no over an existing CLAUDE.md asks before importing", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# Mine\n")
+		// slot file: no / Continue? / language / CLAUDE.md import
+		r := doInit(projectDir, home, noSkills, "n\ny\ny\ny\n", true)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		mustStat(t, filepath.Join(projectDir, "AGENTS.md"))
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "# Mine\n@AGENTS.md\n" {
+			t.Errorf("CLAUDE.md = %q", got)
+		}
+	})
+	t.Run("an existing AGENTS.md is never asked about", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
+		// Continue? / language / CLAUDE.md is created without a question
+		r := doInit(projectDir, home, noSkills, "y\ny\n", true)
+		if r.code != 0 || strings.Contains(r.out, "instead of creating an AGENTS.md") {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "@AGENTS.md\n" {
+			t.Errorf("CLAUDE.md = %q", got)
+		}
+	})
+	t.Run("without a terminal and without --yes nothing is written, CLAUDE.md is proposed", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		r := doInit(projectDir, home, setupOptions{}, "", false)
+		if r.code == 0 || !strings.Contains(r.out, "CLAUDE.md") {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, "CLAUDE.md"))
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	})
+	t.Run("a block already in CLAUDE.md stays there once an AGENTS.md appears", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		if r := doInit(projectDir, home, yesNoSkills, "", false); r.code != 0 {
+			t.Fatal(r.out, r.errOut)
+		}
+		before := readFile(t, filepath.Join(projectDir, "CLAUDE.md"))
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
+		r := doInit(projectDir, home, yesNoSkills, "", false)
+		if r.code != 0 || !strings.Contains(r.out, "Nothing to change") {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "AGENTS.md")); got != englishAgents {
+			t.Errorf("AGENTS.md was touched:\n%s", got)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != before {
+			t.Errorf("CLAUDE.md was touched:\n%s", got)
+		}
+	})
+}
+
 // models.json is created once and never overwritten.
 func TestInit_ModelsNeverOverwritten(t *testing.T) {
 	projectDir, home := newProject(t)
@@ -504,6 +644,7 @@ func TestInit_FlagParsing(t *testing.T) {
 		{[]string{"--lang", "fr"}, "unsupported language"},
 		{[]string{"--lang"}, "needs a value"},
 		{[]string{"--force"}, "unknown init flag"},
+		{[]string{"--global"}, "unknown init flag"},
 		{[]string{"--bogus"}, "unknown init flag"},
 	} {
 		_, _, err := parseSetupArgs(setupInit, tc.args)
@@ -511,8 +652,8 @@ func TestInit_FlagParsing(t *testing.T) {
 			t.Errorf("%v: err = %v, want %q", tc.args, err, tc.wantErr)
 		}
 	}
-	opts, _, err := parseSetupArgs(setupInit, []string{"--yes", "--lang=es", "--no-skills", "--global"})
-	if err != nil || !opts.Yes || opts.Lang != slot.LangES || opts.Skills == nil || *opts.Skills || !opts.Global {
+	opts, _, err := parseSetupArgs(setupInit, []string{"--yes", "--lang=es", "--no-skills"})
+	if err != nil || !opts.Yes || opts.Lang != slot.LangES || opts.Skills == nil || *opts.Skills {
 		t.Errorf("opts = %+v, err = %v", opts, err)
 	}
 	if opts, _, err := parseSetupArgs(setupUpgrade, []string{"--force"}); err != nil || !opts.Force {
@@ -611,74 +752,6 @@ func TestInit_IgnoresForumArtifacts(t *testing.T) {
 	os.Remove(ignorePath)
 	doInit(projectDir, home, setupOptions{Yes: true}, "", false)
 	mustStat(t, ignorePath)
-}
-
-// Global: the same core body goes to ~/.claude/rules/vexillum.md, the skills
-// to ~/.claude/skills/, after the same consent flow.
-func TestInitGlobal(t *testing.T) {
-	t.Run("yes", func(t *testing.T) {
-		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-		home := t.TempDir()
-		env, out, errOut := setupTestEnv(setupOptions{Yes: true}, "", false)
-		if code := runInitGlobal(env, vexillumHome, home); code != 0 {
-			t.Fatalf("%s%s", out, errOut)
-		}
-		core, _ := install.SlotTemplate(slot.LangEN)
-		if got := readFile(t, filepath.Join(home, ".claude", "rules", "vexillum.md")); got != core {
-			t.Error("global rules file is not the core body")
-		}
-		for _, n := range skills.Names() {
-			mustStat(t, filepath.Join(home, ".claude", "skills", n, "SKILL.md"))
-		}
-		cfg, _ := scaffold.ReadConfig(vexillumHome)
-		if cfg.VexillumRuleHash != scaffold.HashContent(core) || cfg.Skills["vexillum"] == "" {
-			t.Errorf("config = %+v", cfg)
-		}
-		notExist(t, filepath.Join(home, ".vexillum"))
-		notExist(t, filepath.Join(home, "AGENTS.md"))
-
-		env, out, errOut = setupTestEnv(setupOptions{Yes: true}, "", false)
-		if code := runInitGlobal(env, vexillumHome, home); code != 0 || !strings.Contains(out.String(), "Nothing to change") {
-			t.Errorf("rerun: %s%s", out, errOut)
-		}
-	})
-	t.Run("non tty without yes refuses", func(t *testing.T) {
-		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-		home := t.TempDir()
-		env, _, errOut := setupTestEnv(setupOptions{}, "", false)
-		if code := runInitGlobal(env, vexillumHome, home); code == 0 || !strings.Contains(errOut.String(), "--yes") {
-			t.Errorf("code %d, %s", code, errOut)
-		}
-		notExist(t, filepath.Join(home, ".claude"))
-	})
-	t.Run("interactive spanish, skills declined", func(t *testing.T) {
-		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-		home := t.TempDir()
-		env, out, errOut := setupTestEnv(setupOptions{}, "y\nn\nes\nn\n", true)
-		if code := runInitGlobal(env, vexillumHome, home); code != 0 {
-			t.Fatalf("%s%s", out, errOut)
-		}
-		core, _ := install.SlotTemplate(slot.LangES)
-		if readFile(t, filepath.Join(home, ".claude", "rules", "vexillum.md")) != core {
-			t.Error("expected the Spanish core")
-		}
-		notExist(t, filepath.Join(home, ".claude", "skills"))
-	})
-	t.Run("edited rules file is left alone", func(t *testing.T) {
-		vexillumHome := filepath.Join(t.TempDir(), ".vexillum")
-		home := t.TempDir()
-		env, _, _ := setupTestEnv(setupOptions{Yes: true}, "", false)
-		runInitGlobal(env, vexillumHome, home)
-		path := filepath.Join(home, ".claude", "rules", "vexillum.md")
-		writeFileT(t, path, "# mine\n")
-		env, out, _ := setupTestEnv(setupOptions{Yes: true}, "", false)
-		if code := runInitGlobal(env, vexillumHome, home); code != 0 {
-			t.Fatal(out)
-		}
-		if readFile(t, path) != "# mine\n" {
-			t.Error("edited global rules file overwritten")
-		}
-	})
 }
 
 // vx init adds the sentinel Stop hook to a fresh .claude/settings.json.

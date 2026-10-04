@@ -59,19 +59,19 @@ var (
 		},
 		skillIntro: func(name, hash string, n int) string {
 			return fmt.Sprintf("This is the full content of the `%s` skill: %d %s, shown verbatim. "+
-				"`"+cmdname.Name+" init` writes them to `.claude/skills/%s/` (or `~/.claude/skills/%s/` with `--global`), and `"+cmdname.Name+" upgrade` keeps them current. "+
+				"`"+cmdname.Name+" init` writes them to `.claude/skills/%s/`, and `"+cmdname.Name+" upgrade` keeps them current. "+
 				"Content hash: `%s`. See [Skills](/docs/concepts/skills) for the overview.",
-				name, n, plural(n, "file", "files"), name, name, hash[:12])
+				name, n, plural(n, "file", "files"), name, hash[:12])
 		},
 		fileHeading: func(rel string) string { return "`" + rel + "`" },
 
 		slotTitle:       "AGENTS.md block",
-		slotDescription: "The exact block vexillum keeps in your AGENTS.md, in English and Spanish, generated from the binary.",
-		slotIntro: "This is the block `" + cmdname.Name + " init` writes into your `AGENTS.md`, rendered by the same code the binary runs, markers and hash included. " +
+		slotDescription: "The exact block vexillum keeps in your AGENTS.md or CLAUDE.md, in English and Spanish, generated from the binary.",
+		slotIntro: "This is the block `" + cmdname.Name + " init` writes into your `AGENTS.md` (or into `CLAUDE.md` when the project has no `AGENTS.md`), rendered by the same code the binary runs, markers and hash included. " +
 			"For how each part works, see [The AGENTS.md slot](/docs/concepts/agents-md-slot).",
 		slotEN:   "English",
 		slotES:   "Spanish",
-		slotNote: "Which language is written follows the language detected in your `AGENTS.md`, or `--lang`. The hash differs per language because it is computed over the body.",
+		slotNote: "Which language is written follows the language detected in the file that holds the block, or `--lang`. The hash differs per language because it is computed over the body.",
 	}
 	contentES = contentLocale{
 		urlPrefix: "/es/docs",
@@ -90,19 +90,19 @@ var (
 		},
 		skillIntro: func(name, hash string, n int) string {
 			return fmt.Sprintf("Este es el contenido completo de la skill `%s`: %d %s, mostrados tal cual y en inglés. "+
-				"`"+cmdname.Name+" init` los escribe en `.claude/skills/%s/` (o en `~/.claude/skills/%s/` con `--global`), y `"+cmdname.Name+" upgrade` los mantiene al día. "+
-				"Hash del contenido: `%s`. Mirá [Skills](/es/docs/concepts/skills) para la visión general.",
-				name, n, plural(n, "archivo", "archivos"), name, name, hash[:12])
+				"`"+cmdname.Name+" init` los escribe en `.claude/skills/%s/`, y `"+cmdname.Name+" upgrade` los mantiene al día. "+
+				"Hash del contenido: `%s`. Ver [Skills](/es/docs/concepts/skills) para la visión general.",
+				name, n, plural(n, "archivo", "archivos"), name, hash[:12])
 		},
 		fileHeading: func(rel string) string { return "`" + rel + "`" },
 
 		slotTitle:       "Bloque de AGENTS.md",
-		slotDescription: "El bloque exacto que vexillum mantiene en tu AGENTS.md, en inglés y en español, generado desde el binario.",
-		slotIntro: "Este es el bloque que `" + cmdname.Name + " init` escribe en tu `AGENTS.md`, renderizado por el mismo código que corre el binario, con marcadores y hash incluidos. " +
-			"Para entender cada parte, mirá [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot).",
+		slotDescription: "El bloque exacto que vexillum mantiene en tu AGENTS.md o CLAUDE.md, en inglés y en español, generado desde el binario.",
+		slotIntro: "Este es el bloque que `" + cmdname.Name + " init` escribe en tu `AGENTS.md` (o en `CLAUDE.md` cuando el proyecto no tiene `AGENTS.md`), renderizado por el mismo código que corre el binario, con marcadores y hash incluidos. " +
+			"Para entender cada parte, ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot).",
 		slotEN:   "Inglés",
 		slotES:   "Español",
-		slotNote: "El idioma que se escribe sigue el idioma detectado en tu `AGENTS.md`, o `--lang`. El hash cambia por idioma porque se calcula sobre el cuerpo.",
+		slotNote: "El idioma que se escribe sigue el idioma detectado en el archivo que tiene el bloque, o `--lang`. El hash cambia por idioma porque se calcula sobre el cuerpo.",
 	}
 )
 

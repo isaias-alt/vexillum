@@ -5,31 +5,28 @@ import (
 )
 
 const upgradeUsage = `Refresh an already-initialized project's vexillum scaffold to match this binary's
-latest version, migrating an older one, without deleting and re-running '` + cmdname.Name + ` init'.
+latest version, without deleting and re-running '` + cmdname.Name + ` init'.
 
 Usage:
-  ` + cmdname.Name + ` upgrade [--force] [--global] [--yes] [--lang en|es] [--skills | --no-skills]
+  ` + cmdname.Name + ` upgrade [--force] [--yes] [--lang en|es] [--skills | --no-skills]
 
 upgrade lists the files of yours it will change and asks for consent first,
 exactly like '` + cmdname.Name + ` init' (see its help), and then:
 
-  - removes .claude/rules/vexillum.md, the rules file of older versions, when
-    it is still what vexillum wrote (the rules now live in the AGENTS.md block
-    and the skills). A copy you edited is left alone and reported as
-    redundant.
-  - writes or updates the vexillum block in AGENTS.md, and makes sure
-    CLAUDE.md imports it. A block you edited is not overwritten: upgrade
-    prints the diff between yours and the current template. A malformed block
-    (unbalanced or duplicated markers) is not touched until you confirm the
-    repairs it lists; the file is saved as .vexillum/AGENTS.md.backup first.
+  - writes or updates the vexillum block in the file that holds it (AGENTS.md,
+    or CLAUDE.md when the block lives there), and makes sure CLAUDE.md imports
+    AGENTS.md when the block is in AGENTS.md. A block you edited is not
+    overwritten: upgrade prints the diff between yours and the current
+    template. A malformed block (unbalanced or duplicated markers) is not
+    touched until you confirm the repairs it lists; the file is saved as
+    .vexillum/<file>.backup first.
   - refreshes the installed skills that are unchanged since vexillum wrote
     them (a content hash per skill is kept in .vexillum/config.json) and
     reports the ones you edited. When no skill is installed yet it offers to
     install them, as init does.
   - keeps the sentinel Stop hook current, and creates .vexillum/models.json
-    if it is missing. An older hook that only works when ` + cmdname.Name + ` is on the
-    PATH of the hook's shell (a bare "` + cmdname.Name + ` sentinel await", or the
-    "vexillum ..." forms) is replaced by one that also tries the known install
+    if it is missing. A hook that only works when ` + cmdname.Name + ` is on the PATH of
+    the hook's shell is replaced by one that also tries the known install
     locations; your own hooks are kept. An existing models.json is never
     overwritten.
 
@@ -39,19 +36,14 @@ given.
 Flags:
   --yes, -y       Accept every question, including the repairs to a malformed
                   block (the file is backed up first).
-  --force         Overwrite what you edited: the AGENTS.md block, an edited
-                  skill, an edited global rules file. A backup is saved first
+  --force         Overwrite what you edited: the vexillum block, an edited
+                  skill. A backup is saved first
                   (.vexillum/agents-md-slot.backup.md for the block,
                   .vexillum/backups/skills/<name>/ for a skill).
-  --lang en|es    Language of the AGENTS.md block, instead of keeping the
-                  block's current language or detecting it.
+  --lang en|es    Language of the block, instead of keeping the block's
+                  current language or detecting it.
   --skills        Also install the skills that are missing.
   --no-skills     Leave the skills alone: no install, no refresh.
-  --global        Upgrade the global scaffold (~/.claude/rules/vexillum.md and
-                  ~/.claude/skills/, written by '` + cmdname.Name + ` init --global') instead of the
-                  current project's. The rules file is replaced by the
-                  current core only when it is unchanged since vexillum wrote
-                  it.
 `
 
 // Upgrade runs the "vx upgrade" command.

@@ -1,7 +1,7 @@
 // Package install holds the read and write logic behind "vx init", "vx
 // upgrade" and "vx doctor" for the three things vexillum puts in a user's
 // project: the first-party skills under .claude/skills/, the vexillum block
-// in AGENTS.md, and the language the block is written in. Inspection is
+// in AGENTS.md or CLAUDE.md, and the language the block is written in. Inspection is
 // separate from writing so doctor can share it while staying read-only.
 package install
 

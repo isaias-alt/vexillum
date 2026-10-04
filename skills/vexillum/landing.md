@@ -41,7 +41,7 @@ attempting it yourself.
 ## A dirty checkout
 
 A dirty checkout is often just vexillum's own scaffold (the managed block in
-AGENTS.md, `.claude/skills/`, `.vexillum/`) never having been committed: `vx init`
+AGENTS.md or CLAUDE.md, `.claude/skills/`, `.vexillum/`) never having been committed: `vx init`
 writes those files but never commits them. If you notice uncommitted scaffold
 files (or anything else untracked) before you ever dispatch a soldier, commit
 them yourself with the general's ok early, instead of hitting the refusal later

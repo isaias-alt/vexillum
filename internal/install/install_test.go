@@ -155,14 +155,65 @@ func TestResolveLang(t *testing.T) {
 	}
 }
 
-func TestReadAgents(t *testing.T) {
+func TestReadSlotFile(t *testing.T) {
 	dir := t.TempDir()
-	a, err := ReadAgents(dir)
-	if err != nil || a.Exists || a.Content != "" {
-		t.Fatalf("%+v %v", a, err)
+	f, err := ReadSlotFile(dir, AgentsFile)
+	if err != nil || f.Exists || f.Content != "" || f.Name != AgentsFile {
+		t.Fatalf("%+v %v", f, err)
 	}
 	write(t, filepath.Join(dir, "AGENTS.md"), "x")
-	if a, _ = ReadAgents(dir); !a.Exists || a.Content != "x" {
-		t.Errorf("%+v", a)
+	if f, _ = ReadSlotFile(dir, AgentsFile); !f.Exists || f.Content != "x" {
+		t.Errorf("%+v", f)
+	}
+}
+
+func TestLocateSlotFile(t *testing.T) {
+	core, _ := SlotTemplate(slot.LangEN)
+	block, _ := slot.Upsert("# Mine\n", core, false)
+
+	tests := []struct {
+		name       string
+		agents     string // "" means the file does not exist
+		claude     string
+		wantFile   string
+		wantChoose bool
+	}{
+		{"nothing at all: CLAUDE.md is proposed", "", "", ClaudeFile, true},
+		{"only a CLAUDE.md without a block: still proposed", "", "# Mine\n", ClaudeFile, true},
+		{"AGENTS.md without a block", "# Mine\n", "", AgentsFile, false},
+		{"AGENTS.md without a block, CLAUDE.md imports it", "# Mine\n", "@AGENTS.md\n", AgentsFile, false},
+		{"block in AGENTS.md", block, "@AGENTS.md\n", AgentsFile, false},
+		{"block in CLAUDE.md, no AGENTS.md", "", block, ClaudeFile, false},
+		{"block in CLAUDE.md, AGENTS.md without one", "# Mine\n", block, ClaudeFile, false},
+		{"blocks in both: AGENTS.md wins", block, block, AgentsFile, false},
+	}
+	for _, tc := range tests {
+		dir := t.TempDir()
+		if tc.agents != "" {
+			write(t, filepath.Join(dir, "AGENTS.md"), tc.agents)
+		}
+		if tc.claude != "" {
+			write(t, filepath.Join(dir, "CLAUDE.md"), tc.claude)
+		}
+		f, choose, err := LocateSlotFile(dir)
+		if err != nil || f.Name != tc.wantFile || choose != tc.wantChoose {
+			t.Errorf("%s: got (%s, choose=%v, %v), want (%s, choose=%v)", tc.name, f.Name, choose, err, tc.wantFile, tc.wantChoose)
+		}
+	}
+}
+
+func TestSaveSlotFileBackup(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{AgentsFile, ClaudeFile} {
+		p, err := SaveSlotFileBackup(dir, name, "was "+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join(dir, ".vexillum", name+".backup"); p != want {
+			t.Errorf("path = %s, want %s", p, want)
+		}
+		if got, _ := os.ReadFile(p); string(got) != "was "+name {
+			t.Errorf("backup = %q", got)
+		}
 	}
 }

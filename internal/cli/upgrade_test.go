@@ -273,8 +273,123 @@ func TestUpgrade_BlockStateTable(t *testing.T) {
 		projectDir, home := initedProject(t, setupOptions{Skills: boolp(false)})
 		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), malformed)
 		doUpgrade(projectDir, home, setupOptions{Yes: true, Skills: boolp(false)}, "", false)
-		if b := readFile(t, filepath.Join(projectDir, filepath.FromSlash(install.AgentsBackupRelPath))); b != malformed {
+		if b := readFile(t, filepath.Join(projectDir, filepath.FromSlash(install.SlotFileBackupRelPath(install.AgentsFile)))); b != malformed {
 			t.Errorf("backup = %q", b)
+		}
+	})
+}
+
+// A project whose block lives in CLAUDE.md (no AGENTS.md): upgrade keeps that
+// block fresh there, never creates an AGENTS.md and never adds an import.
+func TestUpgrade_ClaudeMDSlot(t *testing.T) {
+	core, _ := install.SlotTemplate(slot.LangEN)
+	stale, _ := slot.Upsert(englishAgents, "## Vexillum commander\n\nOld text.\n", false)
+	current, _ := slot.Upsert(englishAgents, core, false)
+	edited := strings.Replace(current, "## Vexillum commander", "## My commander", 1)
+	malformed := englishAgents + "\n<!-- BEGIN VEXILLUM v:1 hash:00000000 -->\nhalf a block\n"
+
+	// claudeProject is a project initialized with the CLAUDE.md slot whose
+	// CLAUDE.md is then replaced by content.
+	claudeProject := func(t *testing.T, content string) (projectDir, home, claude string) {
+		t.Helper()
+		projectDir, home = newProject(t)
+		if r := doInit(projectDir, home, setupOptions{Yes: true, Skills: boolp(false)}, "", false); r.code != 0 {
+			t.Fatalf("init: %s%s", r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+		claude = filepath.Join(projectDir, "CLAUDE.md")
+		writeFileT(t, claude, content)
+		return
+	}
+	upgrade := func(t *testing.T, projectDir, home string, opts setupOptions) result {
+		t.Helper()
+		opts.Skills = boolp(false)
+		r := doUpgrade(projectDir, home, opts, "", false)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+		return r
+	}
+
+	t.Run("stale is refreshed in CLAUDE.md", func(t *testing.T) {
+		projectDir, home, claude := claudeProject(t, stale)
+		r := upgrade(t, projectDir, home, setupOptions{Yes: true})
+		if !strings.Contains(r.out, "Updated the vexillum block in CLAUDE.md") {
+			t.Errorf("output lacks the CLAUDE.md update:\n%s", r.out)
+		}
+		got := readFile(t, claude)
+		if ins := slot.Inspect(got, core); ins.State != slot.StateCurrent {
+			t.Errorf("block is %v, want current:\n%s", ins.State, got)
+		}
+		if !strings.HasPrefix(got, englishAgents) || slot.ImportsAgents(got) {
+			t.Errorf("user text changed or an import was added:\n%s", got)
+		}
+	})
+	t.Run("current is untouched", func(t *testing.T) {
+		projectDir, home, claude := claudeProject(t, current)
+		if r := upgrade(t, projectDir, home, setupOptions{Yes: true}); !strings.Contains(r.out, "Nothing to change") {
+			t.Errorf("output:\n%s", r.out)
+		}
+		if got := readFile(t, claude); got != current {
+			t.Errorf("CLAUDE.md changed:\n%s", got)
+		}
+	})
+	t.Run("drifted: diff, no overwrite; --force backs up then replaces", func(t *testing.T) {
+		projectDir, home, claude := claudeProject(t, edited)
+		if r := upgrade(t, projectDir, home, setupOptions{Yes: true}); !strings.Contains(r.out, "CLAUDE.md: the vexillum block was edited by hand") || !strings.Contains(r.out, "--- your edit") {
+			t.Errorf("output:\n%s", r.out)
+		}
+		if got := readFile(t, claude); got != edited {
+			t.Error("an edited block must not be overwritten without --force")
+		}
+		upgrade(t, projectDir, home, setupOptions{Yes: true, Force: true})
+		if ins := slot.Inspect(readFile(t, claude), core); ins.State != slot.StateCurrent {
+			t.Errorf("block is %v, want current", ins.State)
+		}
+		if b := readFile(t, filepath.Join(projectDir, filepath.FromSlash(slot.BackupRelPath))); !strings.Contains(b, "## My commander") {
+			t.Errorf("backup = %q", b)
+		}
+	})
+	t.Run("malformed: repair saves the whole CLAUDE.md first", func(t *testing.T) {
+		projectDir, home, claude := claudeProject(t, malformed)
+		r := upgrade(t, projectDir, home, setupOptions{Yes: true})
+		if !strings.Contains(r.out, "CLAUDE.md: the vexillum block is malformed") {
+			t.Errorf("output:\n%s", r.out)
+		}
+		if b := readFile(t, filepath.Join(projectDir, filepath.FromSlash(install.SlotFileBackupRelPath(install.ClaudeFile)))); b != malformed {
+			t.Errorf("backup = %q", b)
+		}
+		if ins := slot.Inspect(readFile(t, claude), core); ins.State != slot.StateCurrent {
+			t.Errorf("block is %v, want current", ins.State)
+		}
+	})
+	t.Run("an AGENTS.md that appears later does not take the block", func(t *testing.T) {
+		projectDir, home, claude := claudeProject(t, stale)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
+		r := doUpgrade(projectDir, home, setupOptions{Yes: true, Skills: boolp(false)}, "", false)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if got := readFile(t, filepath.Join(projectDir, "AGENTS.md")); got != englishAgents {
+			t.Errorf("AGENTS.md was touched:\n%s", got)
+		}
+		if ins := slot.Inspect(readFile(t, claude), core); ins.State != slot.StateCurrent {
+			t.Errorf("block in CLAUDE.md is %v, want current", ins.State)
+		}
+	})
+	t.Run("a project with no block anywhere is asked for the file too", func(t *testing.T) {
+		projectDir, home, claude := claudeProject(t, englishAgents)
+		// slot file: no / Continue? / language / CLAUDE.md import
+		r := doUpgrade(projectDir, home, setupOptions{Skills: boolp(false)}, "n\ny\ny\ny\n", true)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if ins := slot.Inspect(readFile(t, filepath.Join(projectDir, "AGENTS.md")), core); ins.State != slot.StateCurrent {
+			t.Errorf("AGENTS.md block is %v, want current", ins.State)
+		}
+		if got := readFile(t, claude); !slot.ImportsAgents(got) {
+			t.Errorf("CLAUDE.md does not import AGENTS.md:\n%s", got)
 		}
 	})
 }
@@ -446,76 +561,6 @@ func TestUpgrade_MigratesProjectInitializedBeforeTheRename(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Global: an unedited rules file from the previous version is replaced by the
-// core; an edited one is kept unless --force, which saves a backup.
-func TestUpgradeGlobal(t *testing.T) {
-	setup := func(t *testing.T) (vexillumHome, home, rules string) {
-		t.Helper()
-		vexillumHome = filepath.Join(t.TempDir(), ".vexillum")
-		home = t.TempDir()
-		rules = filepath.Join(home, ".claude", "rules", "vexillum.md")
-		old, err := os.ReadFile(filepath.Join("testdata", "old-scaffold", ".claude", "rules", "vexillum.md"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		writeFileT(t, rules, string(old))
-		if err := scaffold.WriteConfig(vexillumHome); err != nil {
-			t.Fatal(err)
-		}
-		cfg, _ := scaffold.ReadConfig(vexillumHome)
-		cfg.VexillumRuleHash = scaffold.HashContent(string(old))
-		if err := scaffold.SaveConfig(vexillumHome, cfg); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	run := func(opts setupOptions, vexillumHome, home string) (int, string) {
-		env, out, errOut := setupTestEnv(opts, "", false)
-		code := runUpgradeGlobal(env, vexillumHome, home)
-		return code, out.String() + errOut.String()
-	}
-
-	t.Run("refuses uninitialized", func(t *testing.T) {
-		if code, out := run(setupOptions{Yes: true}, filepath.Join(t.TempDir(), ".vexillum"), t.TempDir()); code == 0 || !strings.Contains(out, "init --global") {
-			t.Errorf("%d %s", code, out)
-		}
-	})
-	t.Run("unedited is replaced by the core, skills installed", func(t *testing.T) {
-		vexillumHome, home, rules := setup(t)
-		if code, out := run(setupOptions{Yes: true}, vexillumHome, home); code != 0 {
-			t.Fatal(out)
-		}
-		core, _ := install.SlotTemplate(slot.LangEN)
-		if readFile(t, rules) != core {
-			t.Error("rules file is not the core")
-		}
-		mustStat(t, filepath.Join(home, ".claude", "skills", "vexillum", "SKILL.md"))
-		cfg, _ := scaffold.ReadConfig(vexillumHome)
-		if cfg.VexillumRuleHash != scaffold.HashContent(core) {
-			t.Error("hash not updated")
-		}
-		if code, out := run(setupOptions{Yes: true}, vexillumHome, home); code != 0 || !strings.Contains(out, "Nothing to change") {
-			t.Errorf("rerun: %s", out)
-		}
-	})
-	t.Run("edited is kept, force saves a backup", func(t *testing.T) {
-		vexillumHome, home, rules := setup(t)
-		writeFileT(t, rules, "# mine\n")
-		if code, out := run(setupOptions{Yes: true, Skills: boolp(false)}, vexillumHome, home); code != 0 || readFile(t, rules) != "# mine\n" {
-			t.Fatalf("%d %s", code, out)
-		}
-		if code, out := run(setupOptions{Yes: true, Force: true, Skills: boolp(false)}, vexillumHome, home); code != 0 {
-			t.Fatal(out)
-		}
-		if readFile(t, rules) == "# mine\n" {
-			t.Error("--force did not replace the file")
-		}
-		if readFile(t, filepath.Join(vexillumHome, "backups", "rules-vexillum.md")) != "# mine\n" {
-			t.Error("backup missing")
-		}
-	})
 }
 
 // countStopHookCommand counts the Stop hook entries whose command is
