@@ -45,7 +45,7 @@ const (
 	maxQueuedPrompts   = 200
 	maxReplyChars      = 64000
 	maxTranscriptItems = 500
-	// maxTranscriptBytes bounds the transcript file (forum-tool's chat cap).
+	// maxTranscriptBytes bounds the transcript file.
 	maxTranscriptBytes = 5 << 20
 	// attachmentOnlyPrompt is the prompt text of a message that is only images.
 	attachmentOnlyPrompt = "(see the attached image)"

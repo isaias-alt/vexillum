@@ -147,8 +147,7 @@ func TestRelease_RefusesUnlandedCamp(t *testing.T) {
 // ancestor of the base branch - the merge commit's parent is the
 // pre-merge base, not the camp's tip. Release must still recognize the
 // work as landed once the project's own checkout has the same content,
-// via the content-in-base fallback (mirrors github.com/upstream/
-// upstream-tool's content_in_default, used for exactly this case).
+// via the content-in-base fallback.
 func TestRelease_AcceptsSquashMergedContent(t *testing.T) {
 	project := initProjectRepo(t)
 	home := t.TempDir()

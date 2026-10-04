@@ -204,9 +204,8 @@ func LeasedTasks(projectRoot string) (map[string]bool, error) {
 }
 
 // Land fast-forwards the project's own checkout to c's branch - the
-// "local-only" delivery mode from upstream-tool (bin/fm-merge-local.sh),
-// which vexillum mirrors here rather than leaving the commander to run
-// raw git commands on its own judgment. It never forces anything: the
+// "local-only" delivery mode, here rather than leaving the commander to
+// run raw git commands on its own judgment. It never forces anything: the
 // project's checkout must already be clean, and the merge must be a
 // clean fast-forward (c's branch has no divergent history from the base -
 // only commits ahead of it). If the base moved since the camp was
@@ -232,16 +231,14 @@ func Land(c Camp) error {
 		return fmt.Errorf("checking whether %s is a fast-forward of %s: %w", c.Branch, base, err)
 	}
 	if !fastForward {
-		// upstream-tool's own fm-merge-local.sh hits this exact case landing
-		// sibling missions dispatched from the same base one at a time:
-		// once the first lands, base has moved, so every other still-open
-		// mission stops being a fast-forward - not a defect, an inherent
-		// property of fast-forward-only landing with more than one
-		// branch sharing an ancestor. Its own message ("Have the crewmate
-		// rebase $BRANCH onto $DEFAULT, then retry") names who should do
-		// it - the soldier, with full context of its own change, not
-		// this function or the commander guessing at a rebase from
-		// outside.
+		// Landing sibling missions dispatched from the same base one at a
+		// time hits this exact case: once the first lands, base has moved,
+		// so every other still-open mission stops being a fast-forward -
+		// not a defect, an inherent property of fast-forward-only landing
+		// with more than one branch sharing an ancestor. The message names
+		// who should fix it - the soldier, with full context of its own
+		// change, not this function or the commander guessing at a rebase
+		// from outside.
 		return fmt.Errorf("%s is not a fast-forward of %s (it has diverged) - have the soldier rebase %s onto %s, then retry", c.Branch, base, c.Branch, base)
 	}
 
@@ -418,8 +415,7 @@ func campLanded(c Camp, base string, opts ReleaseOptions) (landed bool, why stri
 	// the merge commit's parent is the pre-merge base, not this camp's
 	// tip. Fall back to a content check: does merging this branch into the
 	// current base introduce anything base doesn't already have? If not,
-	// the work already landed, just under different commit SHAs. Same
-	// technique github.com/upstream uses for this exact case.
+	// the work already landed, just under different commit SHAs.
 	landed, err = contentAlreadyInBase(c.Path, base)
 	if err != nil {
 		return false, "", fmt.Errorf("checking whether camp content already landed: %w", err)

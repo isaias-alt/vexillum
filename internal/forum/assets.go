@@ -41,8 +41,7 @@ const whiteboardJSGzipName = "whiteboard.js.gz"
 // embedded bundle under /whiteboard-assets/. Access-Control-Allow-Origin: *
 // is required because the whiteboard frame runs in a sandboxed iframe
 // without allow-same-origin (an opaque, "null" origin), and a canvas font
-// fetch from an opaque origin is CORS-gated - matching forum-tool's own
-// server.js route for the same reason.
+// fetch from an opaque origin is CORS-gated.
 func whiteboardAssetsHandler() http.Handler {
 	sub, err := fs.Sub(assetsFS, "assets/whiteboard")
 	if err != nil {

@@ -39,14 +39,13 @@ import (
 const dirName = "pauses"
 
 // ValidityWindow bounds how long a declared pause is trusted before
-// internal/sentinel stops treating an idle turn as "known, waiting" and
-// falls back to its ambiguous-idle handling instead - mirroring
-// upstream-tool's own bounded "recheck on a long cadence" rather than
-// indefinite trust. Without this bound, a soldier that declared a pause
-// and then genuinely got stuck (its background job crashed silently,
-// say) would be trusted forever and never surface to the commander -
-// trading the original false-positive-done bug for a new
-// false-negative-stuck one.
+// internal/sentinel stops treating an idle turn as "known, waiting" and falls
+// back to its ambiguous-idle handling instead - a bounded recheck on a long
+// cadence rather than indefinite trust. Without this bound, a soldier that
+// declared a pause and then genuinely got stuck (its background job crashed
+// silently, say) would be trusted forever and never surface to the commander
+// - trading the original false-positive-done bug for a new false-negative-
+// stuck one.
 const ValidityWindow = 30 * time.Minute
 
 // Pause is a soldier's declared reason for deliberately pausing its turn.

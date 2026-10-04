@@ -9,15 +9,14 @@ import (
 // a new top-level exported Go declaration - "func Name(...)", "func (r
 // *T) Name(...)", "type Name ...", "const Name ..." or "var Name ...".
 // It does not see into a grouped "const ( ... )" / "var ( ... )" block -
-// out of scope for a v1 docs check that's meant to stay light (PRD
-// v2/docs/review-tool.md's own "Alcance" explicitly allows a lighter docs
-// step rather than blocking the rest of the pipeline on it).
+// out of scope for a v1 docs check that's meant to stay light rather than
+// blocking the rest of the pipeline on it).
 var exportedDeclPattern = regexp.MustCompile(`^(?:func|type|const|var)\s+(?:\([^)]*\)\s*)?([A-Z][A-Za-z0-9_]*)`)
 
 // runDocs checks that any exported Go declaration this mission's diff
 // introduces carries a doc comment - Go's own convention, and the
-// closest deterministic equivalent to review-tool' own docs step that
-// doesn't require reimplementing an entire documentation generator.
+// closest deterministic check that doesn't require reimplementing an
+// entire documentation generator.
 // Non-Go projects, and _test.go files (whose exported Test/Benchmark/...
 // functions are never doc-commented by convention in this codebase or
 // idiomatically elsewhere), are skipped rather than failed.

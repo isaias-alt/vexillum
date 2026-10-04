@@ -24,8 +24,8 @@ var (
 	rootSelectorRE = regexp.MustCompile(`(?i)(?:^|[\s,>~+])(?:html|body|:root|\*)(?:$|[^\w-])`)
 )
 
-// AnalyzeSelfPaint is a render-free, deliberately fail-open check (ported
-// from forum-tool's self-paint.js) for an artifact that never paints its own
+// AnalyzeSelfPaint is a render-free, deliberately fail-open check for an
+// artifact that never paints its own
 // page background. Any stylesheet link, @import, Tailwind runtime script,
 // color-scheme, or root paint signal counts as painted, because a wrong
 // warning is noise on every publish. signal names what suppressed the

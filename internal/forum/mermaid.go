@@ -23,15 +23,14 @@ type MermaidSource struct {
 // happens afterward in Go (hasClass) rather than inside the regex itself,
 // since HTML classes are a whitespace-separated token list, not a substring
 // match - a class regex like `\bmermaid\b` would wrongly match an unrelated
-// class such as "not-mermaid-at-all" (hyphens are non-word characters, so
-// \b still finds a boundary around "mermaid" there). It intentionally does
-// not handle a `.mermaid` container nested inside another `.mermaid`
-// container (not a shape the authoring convention produces - forum-tool's
-// own artifacts never nest them either) and is not a general HTML parser: a
-// malformed document (an unclosed div inside the container) can misdetect
-// the closing tag. Good enough for vexillum's own scaffolded artifacts; a
-// real HTML parser is out of scope for this feature (see internal/forum's
-// package doc on deferred scope).
+// class such as "not-mermaid-at-all" (hyphens are non-word characters, so \b
+// still finds a boundary around "mermaid" there). It intentionally does not
+// handle a `.mermaid` container nested inside another `.mermaid` container
+// (not a shape the authoring convention produces) and is not a general HTML
+// parser: a malformed document (an unclosed div inside the container) can
+// misdetect the closing tag. Good enough for vexillum's own scaffolded
+// artifacts; a real HTML parser is out of scope for this feature (see
+// internal/forum's package doc on deferred scope).
 var divWithClassPattern = regexp.MustCompile(`(?is)<div[^>]*\bclass\s*=\s*["']([^"']*)["'][^>]*>(.*?)</div>`)
 
 // ExtractMermaidSources scans an artifact's HTML for `.mermaid` containers

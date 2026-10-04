@@ -1,22 +1,19 @@
-// Package ghpr handles a shipped mission's real GitHub pull request end
-// to end via the "gh" CLI: opening it (Create, once "vx ship" has
-// pushed a mission's branch through internal/tribunal's own validation
-// pipeline) and later merging it (MergeShipped, "vx land" on a
-// shipped task) - the PR, not the project's own camp, is the source of
-// truth once a mission has shipped, so land verifies live, right before
-// merging, that the pull request is open, not a draft, mergeable, and
-// every check is green - binding the merge to the exact head it just
-// verified via --match-head-commit, so a push landing between that read
-// and the merge fails the merge instead of landing something nothing
-// checked.
+// Package ghpr handles a shipped mission's real GitHub pull request end to
+// end via the "gh" CLI: opening it (Create, once "vx ship" has pushed a
+// mission's branch through internal/tribunal's own validation pipeline) and
+// later merging it (MergeShipped, "vx land" on a shipped task) - the PR, not
+// the project's own camp, is the source of truth once a mission has shipped,
+// so land verifies live, right before merging, that the pull request is open,
+// not a draft, mergeable, and every check is green - binding the merge to the
+// exact head it just verified via --match-head-commit, so a push landing
+// between that read and the merge fails the merge instead of landing
+// something nothing checked.
 //
-// A scoped-down version of what github.com/upstream's
-// fm-pr-merge.sh does for the same problem: no away-authority or
-// captain-hold locking, since vexillum has one commander, not concurrent
-// agents trading merge authority over the same repo. No recorded pr=
-// either - the PR is looked up from the task's own camp branch name, the
-// same way GitHub already associates a branch with its open PR, so
-// vexillum's state has nothing new to keep in sync with GitHub's.
+// There is no away-authority or captain-hold locking, since vexillum has one
+// commander, not concurrent agents trading merge authority over the same
+// repo. No recorded pr= either - the PR is looked up from the task's own camp
+// branch name, the same way GitHub already associates a branch with its open
+// PR, so vexillum's state has nothing new to keep in sync with GitHub's.
 package ghpr
 
 import (
@@ -89,12 +86,10 @@ func View(projectDir, branch string) (PullRequest, error) {
 }
 
 // Create opens a new pull request for branch via "gh pr create", once a
-// mission has passed vexillum's own tribunal pipeline
-// (internal/tribunal) - the vexillum-side replacement for review-tool'
-// own auto-open-PR step, now that the push target is the real remote
-// directly rather than a gate remote that opened the PR on vexillum's
-// behalf. base may be empty, letting gh fall back to the repository's
-// default branch. Returns the new pull request's URL.
+// mission has passed vexillum's own tribunal pipeline (internal/tribunal).
+// The push target is the real remote directly, so vexillum opens the PR
+// itself. base may be empty, letting gh fall back to the repository's default
+// branch. Returns the new pull request's URL.
 func Create(projectDir, branch, base, title, body string) (url string, err error) {
 	args := []string{"pr", "create", "--head", branch, "--title", title, "--body", body}
 	if base != "" {

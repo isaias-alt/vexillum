@@ -1,7 +1,7 @@
 // Package forum implements "vx forum". It serves a single local HTML
-// artifact file so its Mermaid diagrams (each in a `<div class="mermaid">...</div>` container,
-// the same authoring convention forum-tool already uses) render as
-// editable Excalidraw whiteboards in the browser.
+// artifact file so its Mermaid diagrams (each in a
+// `<div class="mermaid">...</div>` container) render as editable Excalidraw
+// whiteboards in the browser.
 //
 // Beyond the whiteboards it carries the review loop: sessions keyed by the
 // artifact's path, a prompt queue the user fills from the browser (typed

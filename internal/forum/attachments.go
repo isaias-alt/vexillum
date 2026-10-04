@@ -20,8 +20,7 @@ import (
 // or Content-Type the client claims), and only a fixed set of raster formats
 // is accepted - notably not SVG, which can carry script.
 //
-// The size, count and total-disk limits follow forum-tool's attachment store
-// (upstream, MIT, v0.1.80; see THIRD-PARTY-NOTICES.md).
+// The size, count and total-disk limits are fixed constants below.
 const (
 	maxAttachmentBytes      = 10 << 20  // per image
 	maxAttachmentsPerPrompt = 4         // images on one prompt

@@ -647,8 +647,7 @@ func newReleaseTestScoutTask(t *testing.T, project, home string) (state.Task, st
 }
 
 // The report gate (docs/ decisions, point 5): a scout with no report file
-// is refused, analogous to upstream-tool's own teardown refusal for a task
-// missing report.md.
+// is refused.
 func TestRunRelease_RefusesScoutWithoutReport(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()
@@ -703,8 +702,8 @@ func TestRunRelease_ForceSkipsReportGate(t *testing.T) {
 }
 
 // A mission is never gated on a report, even with --force absent -
-// missions don't have one, optional or otherwise (confirmed against
-// upstream-tool: report.md is exclusive to worker/scout tasks).
+// missions don't have one, optional or otherwise (a report is exclusive to
+// scouts).
 func TestRunRelease_MissionNeverRequiresReport(t *testing.T) {
 	project := initDispatchTestProject(t)
 	home := t.TempDir()

@@ -7,8 +7,7 @@ import (
 
 // What a browser can send to /api/s/{key}/... lands in the agent's inbox as
 // the user's own instructions, so those routes are the sensitive surface of
-// the whole server (forum-tool guards its equivalent POST /api/:key/prompts
-// the same way). A session key is the hash of a file path - guessable, not
+// the whole server. A session key is the hash of a file path - guessable, not
 // a secret - so knowing it must never be enough. Three independent checks
 // stand between a request and the queue:
 //

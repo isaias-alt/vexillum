@@ -5,10 +5,10 @@
 // report living inside the soldier's own camp worktree wouldn't.
 //
 // The file is named after both the task's HerdrAgentName (internal/state.
-// Task) and its task ID, not a fixed "report.md" the way upstream-tool's
-// data/<task-id>/report.md is - this is a flat directory shared by every
-// soldier ever dispatched into the project, not one directory per task, so
-// the name is what keeps two concurrent soldiers' reports from colliding.
+// Task) and its task ID, not a fixed "report.md" - this is a flat directory
+// shared by every soldier ever dispatched into the project, not one
+// directory per task, so the name is what keeps two concurrent soldiers'
+// reports from colliding.
 //
 // HerdrAgentName alone used to be considered enough for that, on the
 // theory that it was already disambiguated against every other *live*

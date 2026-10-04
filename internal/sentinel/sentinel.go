@@ -12,12 +12,10 @@
 // given, so a commander in project A never drains a wake that belongs to
 // a soldier in project B.
 //
-// Polling, not push (herdr's events.subscribe): this matches upstream-tool's
-// own acknowledged fallback - "polling runs every cycle and remains the
-// permanent fallback" (docs/herdr-backend.md, "Push events and polling
-// fallback") - rather than depending on a raw socket event stream that
-// isn't exposed through herdr's CLI (internal/herdr only shells out to
-// the CLI, deliberately, per its own package doc).
+// Polling, not push (herdr's events.subscribe): polling runs every cycle
+// and remains the permanent fallback, rather than depending on a raw socket
+// event stream that isn't exposed through herdr's CLI (internal/herdr only
+// shells out to the CLI, deliberately, per its own package doc).
 package sentinel
 
 import (
@@ -42,10 +40,10 @@ import (
 )
 
 // Wake is a durable record that a tracked task's status changed - the
-// sentinel's equivalent of upstream-tool's wake queue. It's delivered, not
-// acknowledged: Drain removes a wake's file the moment it hands it back,
-// so a wake's mere presence on disk under <project root>/wakes/ already
-// means "pending" - there's no separate acked flag to go stale.
+// sentinel's wake queue. It's delivered, not acknowledged: Drain removes a
+// wake's file the moment it hands it back, so a wake's mere presence on disk
+// under <project root>/wakes/ already means "pending" - there's no separate
+// acked flag to go stale.
 type Wake struct {
 	TaskID     string       `json:"task_id"`
 	Kind       state.Kind   `json:"kind"`

@@ -24,8 +24,7 @@ import (
 // self-contained once published to a remote host that can't see the
 // author's filesystem. Remote references (an absolute URL, a
 // protocol-relative "//...", or already a data: URI) are left untouched -
-// they resolve in the visitor's own browser, same as forum-tool's own
-// export/share packaging.
+// they resolve in the visitor's own browser.
 //
 // A local stylesheet's own url(...) references (fonts, background
 // images) are inlined too, since a data: URI has no location of its own
@@ -71,7 +70,7 @@ func InlineLocalAssets(path string) (out string, warnings []string, err error) {
 	return buf.String(), in.warnings, nil
 }
 
-// Size caps on what gets inlined, per forum-tool's export bundle. Both can
+// Size caps on what gets inlined. Both can
 // be overridden (in bytes) through the environment.
 const (
 	DefaultMaxAssetBytes  int64 = 10 * 1024 * 1024
@@ -264,7 +263,6 @@ type srcsetCandidate struct{ start, end int }
 
 // parseSrcsetCandidates returns the byte span of each candidate URL in a
 // srcset value. A data: URL's own payload comma doesn't end the candidate
-// (ported from forum-tool's parseSrcsetCandidates).
 func parseSrcsetCandidates(value string) []srcsetCandidate {
 	var out []srcsetCandidate
 	i := 0

@@ -49,11 +49,10 @@ func (e *ErrRunning) Error() string {
 }
 
 // AcquireLock claims the single-sentinel-per-home lock, refusing if another
-// sentinel process is already alive - matches upstream-tool's own "never broadly
-// kill watchers... race-proof singleton lock" principle: vexillum should never
-// end up with two sentinels racing to reconcile the same tasks. Call the
-// returned release func (e.g. via defer) to release the lock on clean
-// shutdown; a process that dies without releasing frees it anyway.
+// sentinel process is already alive - a race-proof singleton lock, because
+// vexillum should never end up with two sentinels racing to reconcile the
+// same tasks. Call the returned release func (e.g. via defer) to release the
+// lock on clean shutdown; a process that dies without releasing frees it anyway.
 func AcquireLock(vexillumHome string) (release func(), err error) {
 	if err := os.MkdirAll(vexillumHome, 0o755); err != nil {
 		return nil, err

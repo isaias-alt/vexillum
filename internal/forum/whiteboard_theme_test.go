@@ -17,16 +17,16 @@ import (
 	"time"
 )
 
-// Every colour the old (Forum) whiteboard hard-coded: the gold of its
+// Every colour the old upstream whiteboard hard-coded: the gold of its
 // buttons and accents, its cream paper and the dark/cream pairs of its link
 // dialog. None of them may be in anything the forum serves for the
 // whiteboard - the whiteboard follows the forum's --fr-* tokens instead.
-var forumColours = []string{
+var upstreamColours = []string{
 	"#f4c95d", "#bf9455", "#fffbf3", "#17130a", "#f7f3ea", "#0f1115", "#1a1d23",
 	"244, 201, 93", "191, 148, 85", "23, 19, 10",
 }
 
-func TestWhiteboardAssets_NoForumColourRemains(t *testing.T) {
+func TestWhiteboardAssets_NoUpstreamColourRemains(t *testing.T) {
 	env := newEnv(t, time.Minute)
 	for _, path := range []string{"/whiteboard-embed.js", "/whiteboard-assets/whiteboard.css", "/whiteboard-assets/whiteboard.js", "/whiteboard-frame", "/favicon.svg"} {
 		resp, body := env.get(path)
@@ -34,9 +34,9 @@ func TestWhiteboardAssets_NoForumColourRemains(t *testing.T) {
 			t.Fatalf("GET %s = %d (%d bytes)", path, resp.StatusCode, len(body))
 		}
 		lower := strings.ToLower(body)
-		for _, colour := range forumColours {
+		for _, colour := range upstreamColours {
 			if strings.Contains(lower, colour) {
-				t.Errorf("%s still contains the old Forum value %q", path, colour)
+				t.Errorf("%s still contains the old upstream value %q", path, colour)
 			}
 		}
 	}
@@ -100,7 +100,7 @@ func TestFavicon_ICOFallbackAndVersionedLinkResolveToTheBlueMark(t *testing.T) {
 		t.Errorf("the favicon is not the blue mark on #15171A:\n%s", svg)
 	}
 	lower := strings.ToLower(svg)
-	for _, colour := range append([]string{"#c9a15a", "#c9a227"}, forumColours...) {
+	for _, colour := range append([]string{"#c9a15a", "#c9a227"}, upstreamColours...) {
 		if strings.Contains(lower, colour) {
 			t.Errorf("the favicon contains the gold value %q", colour)
 		}
@@ -253,7 +253,7 @@ func TestWhiteboardFrame_RealChrome_UsesForumTokensInBothThemes(t *testing.T) {
 			}
 			for _, cream := range []string{"rgb(255, 251, 243)", "rgb(244, 201, 93)", "rgb(105, 101, 219)", "rgb(168, 165, 255)"} {
 				if strings.Contains(got, cream) {
-					t.Errorf("%s: an old Forum/Excalidraw colour %s is still drawn: %s", theme, cream, got)
+					t.Errorf("%s: an old upstream/Excalidraw colour %s is still drawn: %s", theme, cream, got)
 				}
 			}
 		})

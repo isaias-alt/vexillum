@@ -137,9 +137,8 @@ func runRelease(projectDir, vexillumHome, taskID string, opts releaseOptions, cl
 	// landed commit is (checked by camp.Release itself, via
 	// soldier.ReleaseInHerdr below) - a mission never has one to check
 	// (internal/report's package doc), so this only ever applies to a
-	// scout. --force is the explicit, logged escape hatch, mirroring
-	// upstream-tool's own teardown gate ("REFUSED: scout task $ID has no
-	// report ... use --force after explicit discard approval").
+	// scout. --force is the explicit, logged escape hatch, for use after
+	// explicit discard approval.
 	if task.Kind == state.KindScout && !opts.Force && !report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
 		fmt.Fprintf(stderr, cmdname.Name+": release refused: scout task %s has no report at %s\n", taskID, report.Path(projectRoot, task.HerdrAgentName, task.ID))
 		fmt.Fprintln(stderr, cmdname.Name+": the report is the work product - have the soldier write it, or pass --force to release anyway")

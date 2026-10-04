@@ -24,11 +24,9 @@ import (
 // them turns them into an ordinary prompt tagged "layout-warnings", which
 // then travels like any other prompt (queued, sent, polled).
 //
-// The lifecycle follows forum-tool's layout-warnings.js (upstream/
-// forum-tool, MIT, v0.1.80; see THIRD-PARTY-NOTICES.md). Every rule is
-// conservative: an issue is cleared only by positive evidence - a newer
-// artifact load plus a complete pass for the same viewport class that no
-// longer detects it. A failed or incomplete pass, a different viewport, a
+// Every rule is conservative: an issue is cleared only by positive evidence -
+// a newer artifact load plus a complete pass for the same viewport class that
+// no longer detects it. A failed or incomplete pass, a different viewport, a
 // reload in flight or a delivered prompt never clears anything.
 
 // LayoutWarningsTag is the tag of the prompt a queued batch of layout issues

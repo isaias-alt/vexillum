@@ -12,10 +12,9 @@ metadata:
 carries their feedback back to you. The user chats, queues messages, fills in
 the decision forms you built, and presses **Send to Agent**; a small background
 **listener** (no model, it only forwards) stores it in your project's inbox and
-wakes you, and you read it with `vx forum inbox`. The loop and the idea are inspired by
-[forum-tool](https://github.com/upstream) (MIT, see
-THIRD-PARTY-NOTICES.md); forum is built into the vexillum binary and needs no
-Node, no `npx`, no network.
+wakes you, and you read it with `vx forum inbox`. Forum is built into the
+vexillum binary and needs no Node, no `npx`, no network. Adapted third-party
+code is credited in THIRD-PARTY-NOTICES.md.
 
 > The review chrome has its own fixed look (dark by default, with a light
 > theme the user can switch to from the top bar) and your artifact sits on a

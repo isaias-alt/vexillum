@@ -1,5 +1,4 @@
-// Package banner is vexillum's own client for forum-tool's "share"
-// contract (docs/self-hosting-share.md in upstream): a
+// Package banner is vexillum's own client for the "share" contract: a
 // single POST to publish an HTML page and a single PUT to republish it
 // in place, against a remote host - by default ht-ml.app, a third-party
 // service, not something vexillum operates. This is deliberately a thin
@@ -23,13 +22,13 @@ import (
 // with no BaseURL of its own.
 const DefaultBaseURL = "https://api.ht-ml.app"
 
-// requestTimeout bounds both the create and the republish request, per
-// forum-tool's own contract. Past it, a request that already reached the
-// server can't be told apart from one that never did.
+// requestTimeout bounds both the create and the republish request. Past it, a
+// request that already reached the server can't be told apart from one that
+// never did.
 const requestTimeout = 30 * time.Second
 
-// Client talks to a share backend implementing forum-tool's
-// self-hosting-share.md contract (POST /v1/sites, PUT /v1/sites/{id}).
+// Client talks to a share backend implementing the share
+// contract (POST /v1/sites, PUT /v1/sites/{id}).
 // The zero value is not ready to use - call NewClient.
 type Client struct {
 	BaseURL    string
@@ -80,7 +79,7 @@ func (e *AmbiguousCreateError) Error() string {
 func (e *AmbiguousCreateError) Unwrap() error { return e.Cause }
 
 // siteIDPattern is the charset share accepts for a backend-returned
-// site_id, per forum-tool's contract: it's interpolated into the PUT path
+// site_id: it's interpolated into the PUT path
 // unescaped, so an id outside this set (or made entirely of dots, which
 // could resolve to "." or "..") is refused rather than trusted.
 var siteIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)

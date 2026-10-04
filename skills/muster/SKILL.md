@@ -335,8 +335,8 @@ Afterwards rewrite the board from fresh state, so answered decisions leave
    pending list --json` and name them (they aren't tied to a session, so list
    all of them). Skip the line if there are none.
 4. Never invoke `forum` in this mode and never open a board - sitrep is
-   meant to be a lightweight, terminal-only recap (mirrors upstream-tool's own
-   `ahoy`), not a rendered artifact.
+   meant to be a lightweight, terminal-only recap, not a
+   rendered artifact.
 
 ## Scope
 

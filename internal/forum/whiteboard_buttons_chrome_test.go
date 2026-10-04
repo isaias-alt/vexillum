@@ -110,7 +110,7 @@ func TestWhiteboard_RealChrome_ButtonsAreSmallForumButtonsInBothThemes(t *testin
 			t.Logf("fullscreen Close: %s", closeBtn)
 			for name, got := range map[string]string{"frame buttons": frame, "Close": closeBtn} {
 				if strings.Contains(got, "244, 201, 93") {
-					t.Errorf("%s still use the yellow Forum colour: %s", name, got)
+					t.Errorf("%s still use the old upstream yellow colour: %s", name, got)
 				}
 			}
 			if strings.Contains(frame, `"h":0`) {

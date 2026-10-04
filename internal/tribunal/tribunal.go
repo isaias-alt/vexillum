@@ -1,12 +1,9 @@
-// Package tribunal is vexillum's own validation pipeline for a
-// finished mission's camp branch, run synchronously by "vx ship"
-// right before it pushes and opens a real pull request - replacing the
-// former dependency on the third-party github.com/upstream
-// binary (a local git remote fronting a pipeline in its own isolated
-// worktree). Same functional scope (lint, tests, a code review, a docs
-// check), no external binary, no separate worktree, no TUI to track
-// afterward: every step runs in the mission's own camp and Run returns
-// only once the whole pipeline has settled.
+// Package tribunal is vexillum's own validation pipeline for a finished
+// mission's camp branch, run synchronously by "vx ship" right before it
+// pushes and opens a real pull request. Its scope is lint, tests, a code
+// review and a docs check, with no external binary, no separate worktree and
+// no TUI to track afterward: every step runs in the mission's own camp and
+// Run returns only once the whole pipeline has settled.
 package tribunal
 
 import (
@@ -40,8 +37,7 @@ const (
 // steps is the fixed, ordered pipeline one round executes - lint, then
 // tests, then an adversarial soldier-driven review of the diff, then a docs
 // check. A round stops at the first step that doesn't pass, the same
-// "abort on first failure" posture review-tool itself had (PRD v2 /
-// docs/review-tool.md, "Alcance de la implementación").
+// "abort on first failure" posture.
 var steps = []Step{StepLint, StepTests, StepReview, StepDocs}
 
 // Default bounds of the opt-in fix loop and of each reviewer/fixer run.
