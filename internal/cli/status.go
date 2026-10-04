@@ -39,8 +39,8 @@ in the current session, GitHub PR enrichment) are left to that consumer,
 not decided here.
 
 A task in status "blocked" carries its open question in its "decision"
-field (question, options, asked_at, and - once '` + cmdname.Name + ` decide' has run -
-answer/answered_at) - not just the word "blocked". Without --json, a
+field (question, options, asked_at, and answer/answered_at once '` + cmdname.Name + ` decide'
+has run) - not just the word "blocked". Without --json, a
 blocked task's question is also printed on its own indented line.
 `
 

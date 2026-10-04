@@ -28,7 +28,7 @@ The task becomes what its pane says it is: `running` if the soldier is still wor
 
 ## Interrupted: the soldier vanished
 
-`interrupted` means vexillum lost the soldier itself - its pane was closed, or herdr restarted - while it was still working. It does not mean the soldier failed. Before doing anything else, look inside its camp:
+`interrupted` means vexillum lost the soldier itself (its pane was closed, or herdr restarted) while it was still working. It does not mean the soldier failed. Before doing anything else, look inside its camp:
 
 ```bash
 git -C <camp path> log --oneline
@@ -43,7 +43,7 @@ Then, only if you want the task redone:
 vx redispatch <task-id>
 ```
 
-This is re-dispatch, **not resumption**. It discards the old camp - uncommitted changes and unlanded commits included - creates a fresh one and relaunches the original prompt. Nothing of the dead soldier's partial work or session is recovered. Because it is destructive, the commander tells you what it found in the camp and asks before running it. Only `interrupted` tasks can be re-dispatched. If the soldier had a browser open, redispatch stops that orphaned browser too.
+This is re-dispatch, **not resumption**. It discards the old camp (uncommitted changes and unlanded commits included), creates a fresh one and relaunches the original prompt. Nothing of the dead soldier's partial work or session is recovered. Because it is destructive, the commander tells you what it found in the camp and asks before running it. Only `interrupted` tasks can be re-dispatched. If the soldier had a browser open, redispatch stops that orphaned browser too.
 
 ## Unconfirmed: idle without proof
 

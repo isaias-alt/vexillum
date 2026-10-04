@@ -25,8 +25,8 @@ soldier's still-open herdr pane and records it against the task's structured
 decision, not just as more prose in the transcript. That decision is the
 field "decision" of '` + cmdname.Name + ` status --json'. If the open question came from Claude Code's
 AskUserQuestion selector, <answer> (an option's exact text, or its 1-based
-rendered number) is delivered as a single key press - the same mechanism a
-human picking from that menu would use - unless it resolves to "Type
+rendered number) is delivered as a single key press (the same mechanism a
+human picking from that menu would use) unless it resolves to "Type
 something.", which falls back to plain text like every other decision.
 
 Once the answer is delivered it is also recorded on the task as an amendment
@@ -39,8 +39,8 @@ soldier is still going, blocked again if it asks another question, done or
 failed if it settled that quickly. Otherwise the task is left running for
 the sentinel to record the eventual settle, exactly like a fresh dispatch.
 
---dismiss clears a task that was marked blocked by mistake - the soldier was
-never really asking anything - without sending it anything: no prompt, no key
+--dismiss clears a task that was marked blocked by mistake (the soldier was
+never really asking anything) without sending it anything: no prompt, no key
 press. The task becomes whatever its pane says it is: running if the soldier
 is still working, done (or unconfirmed) if it has settled, interrupted if the
 pane is gone. It is refused if the pane is genuinely blocked on a question.

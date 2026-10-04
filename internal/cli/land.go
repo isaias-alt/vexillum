@@ -29,8 +29,8 @@ release logic '` + cmdname.Name + ` release' itself uses, which only clears a ca
 that's already clean and landed, so this doesn't relax that safeguard. A
 merge that's refused (dirty checkout, or diverged branch) never touches
 the camp at all. In the rare case the merge succeeds but that automatic
-release then fails, land reports both outcomes plainly - the merge is
-NOT undone - and leaves the camp for '` + cmdname.Name + ` release <task-id>' to
+release then fails, land reports both outcomes plainly (the merge is
+NOT undone) and leaves the camp for '` + cmdname.Name + ` release <task-id>' to
 retry by hand.
 
 For a task already shipped through vexillum's own tribunal pipeline

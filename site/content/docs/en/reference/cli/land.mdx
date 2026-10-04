@@ -21,8 +21,8 @@ release logic 'vx release' itself uses, which only clears a camp
 that's already clean and landed, so this doesn't relax that safeguard. A
 merge that's refused (dirty checkout, or diverged branch) never touches
 the camp at all. In the rare case the merge succeeds but that automatic
-release then fails, land reports both outcomes plainly - the merge is
-NOT undone - and leaves the camp for 'vx release <task-id>' to
+release then fails, land reports both outcomes plainly (the merge is
+NOT undone) and leaves the camp for 'vx release <task-id>' to
 retry by hand.
 
 For a task already shipped through vexillum's own tribunal pipeline

@@ -84,8 +84,8 @@ Read `$ARGUMENTS` verbatim, trimmed of whitespace:
    status `done`, run these from the git project root (the directory you ran
    `vx status --json` from; camp branches are plain local branches of
    that repo). `camp_base` is the branch the camp was forked from; if it's
-   empty, use the project's current branch instead - that's exactly what
-   `vx land` itself lands onto - and mark the item "base assumed".
+   empty, use the project's current branch instead (that's exactly what
+   `vx land` itself lands onto) and mark the item "base assumed".
    ```
    base=<camp_base, or: git rev-parse --abbrev-ref HEAD>
    git rev-parse --verify -q refs/heads/<camp_branch>      # does the branch exist?
