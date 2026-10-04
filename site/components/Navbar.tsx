@@ -37,14 +37,14 @@ export function Navbar({
       style={style}
     >
       <div
-        className={`site-container h-(--site-header-height) items-center gap-4 ${center ? "navbar-grid" : "flex"}`}
+        className={`site-container h-(--site-header-height) items-center gap-4 max-[359px]:gap-2 ${center ? "navbar-grid" : "flex"}`}
       >
         <Link href={`${prefix}/`} className="flex shrink-0 items-center gap-[9px]">
           <LogoMark className="h-[22px] w-[22px] shrink-0" />
           <span className="navbar-wordmark text-[13.5px] text-text">vexillum</span>
         </Link>
         {center}
-        <nav className="ml-auto flex justify-end items-center gap-2 text-[12.5px] text-text-secondary sm:gap-[26px]">
+        <nav className="ml-auto flex justify-end items-center gap-2 text-[12.5px] text-text-secondary max-[359px]:gap-1 sm:gap-[26px]">
           <Link
             href={`${prefix}/docs`}
             className="hover:text-text max-sm:hidden"

@@ -262,6 +262,13 @@ body {
 .theme-switch:hover {
   background: var(--fr-surface);
 }
+/* Below 360px the navbar controls give up some padding and gaps (see Navbar
+   and LangToggle) so the bar fits the 320px floor with its gutter intact. */
+@media (max-width: 359px) {
+  .theme-switch {
+    padding: 0 8px;
+  }
+}
 .theme-icon {
   flex: none;
 }

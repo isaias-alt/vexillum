@@ -31,7 +31,7 @@ export function LangToggle({ lang }: { lang: Lang }) {
           href={hrefFor(pathname, l)}
           hrefLang={l}
           aria-current={l === lang ? "true" : undefined}
-          className={`px-3 py-[7px] ${
+          className={`px-3 py-[7px] max-[359px]:px-2 ${
             l === lang
               ? "bg-sunken text-text"
               : "text-text-muted hover:text-text"
