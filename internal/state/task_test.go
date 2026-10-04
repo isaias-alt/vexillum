@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -485,5 +486,48 @@ func TestSave_ReplacesUnparsableExistingFile(t *testing.T) {
 	}
 	if _, err := Load(home, task.ID); err != nil {
 		t.Errorf("Load after replacing a corrupt file: %v", err)
+	}
+}
+
+// Task files written before the schema numbering restarted at 0 carry 1, 2
+// or 3. They must load without error or data loss, report the current
+// version, and be re-saved with it.
+func TestLoad_LegacySchemaVersions(t *testing.T) {
+	for _, legacy := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("v%d", legacy), func(t *testing.T) {
+			home := t.TempDir()
+			id := "0123456789abcdef"
+			raw := fmt.Sprintf(`{"schema_version":%d,"id":%q,"kind":"mission","prompt":"keep me","status":"done","exit_code":7,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`, legacy, id)
+			writeRawTask(t, home, id, []byte(raw))
+
+			got, err := Load(home, id)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got.SchemaVersion != SchemaVersion || got.Prompt != "keep me" || got.Status != StatusDone || got.ExitCode == nil || *got.ExitCode != 7 {
+				t.Errorf("legacy task = %+v, want current version and every other field intact", got)
+			}
+			listed, err := List(home)
+			if err != nil || len(listed) != 1 || listed[0].Prompt != "keep me" {
+				t.Fatalf("List = %v, %v", listed, err)
+			}
+
+			if err := Save(home, got); err != nil {
+				t.Fatalf("Save: %v", err)
+			}
+			if v := string(rawTaskFile(t, home, id)["schema_version"]); v != "0" {
+				t.Errorf("re-saved schema_version = %s, want 0", v)
+			}
+		})
+	}
+}
+
+// Version 4 is just past the legacy range: a newer build wrote it, so it is
+// refused even though the legacy numbers load.
+func TestLoad_RefusesVersionJustPastLegacy(t *testing.T) {
+	home := t.TempDir()
+	writeRawTask(t, home, "deadbeef", []byte(`{"schema_version":4,"id":"deadbeef","kind":"mission","status":"pending","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`))
+	if _, err := Load(home, "deadbeef"); err == nil {
+		t.Fatal("expected an error loading schema_version 4")
 	}
 }

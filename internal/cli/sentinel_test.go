@@ -82,7 +82,7 @@ func leaseCamp(t *testing.T, projectRoot, taskID string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("creating pool dir: %v", err)
 	}
-	pool := `{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"` + taskID + `"}]}`
+	pool := `{"schema_version":0,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"` + taskID + `"}]}`
 	if err := os.WriteFile(filepath.Join(dir, "pool.json"), []byte(pool), 0o644); err != nil {
 		t.Fatalf("writing pool: %v", err)
 	}

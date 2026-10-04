@@ -731,3 +731,30 @@ func TestReleaseWith_DiscardStillRefusesTheWrongOwner(t *testing.T) {
 		t.Fatal("expected a refusal for the wrong owner")
 	}
 }
+
+// A pool file written before the schema numbering restarted at 0 carries
+// schema_version 1 and must load with its slots intact.
+func TestLoadPool_AcceptsLegacySchemaVersion(t *testing.T) {
+	root := t.TempDir()
+	legacy := `{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"abc"}]}`
+	if err := os.WriteFile(poolStatePath(root), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := loadPool(root)
+	if err != nil {
+		t.Fatalf("loadPool: %v", err)
+	}
+	if p.SchemaVersion != poolSchemaVersion || len(p.Slots) != 1 || p.Slots[0].LeasedBy != "abc" {
+		t.Errorf("pool = %+v, want current version and the slot intact", p)
+	}
+}
+
+func TestLoadPool_RefusesFutureSchemaVersion(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(poolStatePath(root), []byte(`{"schema_version":2,"slots":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadPool(root); err == nil {
+		t.Fatal("expected an error loading a pool with schema_version 2")
+	}
+}

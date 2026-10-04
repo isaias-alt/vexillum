@@ -32,7 +32,7 @@ never initialized), say so plainly and stop - don't fall back to guessing.
 
 The commander's own pending decisions come from a second command, run from
 the same directory: `vx pending list --json`. Its output is
-`{"schema_version": 1, "generated_at": ..., "pending": [{"id", "text",
+`{"schema_version": 0, "generated_at": ..., "pending": [{"id", "text",
 "options", "recommended", "created_at"}, ...]}`, oldest first, persisted
 under the project's `~/.vexillum` namespace (`<project root>/pending/<id>.json`).
 `options` (the answers the general can pick from) and `recommended` (the

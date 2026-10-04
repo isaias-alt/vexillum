@@ -43,10 +43,10 @@ Items persist as <project root>/pending/<id>.json, written atomically, so
 they survive a cut session. --json prints a single JSON object:
 
   {
-    "schema_version": 1,
+    "schema_version": 0,
     "generated_at": "2026-09-24T12:00:00Z",
     "pending": [
-      {"schema_version": 1, "id": "1a2b3c4d", "text": "...",
+      {"schema_version": 0, "id": "1a2b3c4d", "text": "...",
        "options": ["...", "..."], "recommended": 1, "created_at": "..."}
     ]
   }

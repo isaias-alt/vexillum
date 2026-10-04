@@ -20,10 +20,15 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/schemaver"
 )
 
-// poolSchemaVersion is the pool state file's schema version.
-const poolSchemaVersion = 1
+// poolSchemaVersion is the pool state file's schema version. Numbering
+// restarted at 0; pool files written before that carry 1 (see
+// legacyPoolSchemaVersions).
+const poolSchemaVersion = schemaver.Current
+
+var legacyPoolSchemaVersions = []int{1}
 
 // Camp is one acquired worktree: an isolated checkout of the project on
 // its own branch, ready for a soldier to work in.
@@ -590,9 +595,10 @@ func loadPool(poolRoot string) (poolState, error) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return poolState{}, fmt.Errorf("parsing camp pool state: %w", err)
 	}
-	if p.SchemaVersion != poolSchemaVersion {
+	if !schemaver.Supported(p.SchemaVersion, legacyPoolSchemaVersions...) {
 		return poolState{}, fmt.Errorf("unsupported camp pool schema version %d (expected %d)", p.SchemaVersion, poolSchemaVersion)
 	}
+	p.SchemaVersion = poolSchemaVersion
 	return p, nil
 }
 

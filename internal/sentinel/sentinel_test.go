@@ -1308,7 +1308,7 @@ func leaseCamp(t *testing.T, projectRoot, taskID string) {
 	for i, id := range ids {
 		slots = append(slots, fmt.Sprintf(`{"number":%d,"branch":"vexillum/x%d","leased_by":%q}`, i+1, i+1, id))
 	}
-	pool := `{"schema_version":1,"slots":[` + strings.Join(slots, ",") + `]}`
+	pool := `{"schema_version":0,"slots":[` + strings.Join(slots, ",") + `]}`
 	if err := os.WriteFile(poolPath, []byte(pool), 0o644); err != nil {
 		t.Fatalf("writing pool: %v", err)
 	}
@@ -1319,7 +1319,7 @@ func leaseCamp(t *testing.T, projectRoot, taskID string) {
 func releaseCamp(t *testing.T, projectRoot string) {
 	t.Helper()
 	pool := filepath.Join(projectRoot, "camps", "pool.json")
-	if err := os.WriteFile(pool, []byte(`{"schema_version":1,"slots":[]}`), 0o644); err != nil {
+	if err := os.WriteFile(pool, []byte(`{"schema_version":0,"slots":[]}`), 0o644); err != nil {
 		t.Fatalf("writing pool: %v", err)
 	}
 }
@@ -1655,7 +1655,7 @@ func TestDrain_ReplaysNoStaleBacklog(t *testing.T) {
 
 	// Everything but the current soldier was landed and released.
 	pool := filepath.Join(proj, "camps", "pool.json")
-	if err := os.WriteFile(pool, []byte(`{"schema_version":1,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"`+live.ID+`"}]}`), 0o644); err != nil {
+	if err := os.WriteFile(pool, []byte(`{"schema_version":0,"slots":[{"number":1,"branch":"vexillum/x","leased_by":"`+live.ID+`"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

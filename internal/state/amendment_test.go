@@ -115,7 +115,7 @@ func TestAmendments_RoundTripThroughDisk(t *testing.T) {
 }
 
 // A task file written before amendments existed must keep loading, with no
-// amendments, under the same schema version.
+// amendments. It carries the legacy schema_version 3.
 func TestLoad_OlderTaskFileWithoutAmendments(t *testing.T) {
 	root := t.TempDir()
 	id := "0123456789abcdef"

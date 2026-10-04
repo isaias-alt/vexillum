@@ -50,7 +50,7 @@ func TestPending_AddListClearEndToEnd(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &snap); err != nil {
 		t.Fatalf("list --json is not valid JSON: %v\n%s", err, out)
 	}
-	if snap.SchemaVersion != 1 || len(snap.Pending) != 1 || snap.Pending[0].ID != id || snap.Pending[0].Text != "dispatch the docs mission" {
+	if snap.SchemaVersion != 0 || len(snap.Pending) != 1 || snap.Pending[0].ID != id || snap.Pending[0].Text != "dispatch the docs mission" {
 		t.Fatalf("snapshot = %+v", snap)
 	}
 
@@ -135,7 +135,7 @@ func TestPending_AddWithOptions(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &snap); err != nil {
 		t.Fatalf("list --json is not valid JSON: %v\n%s", err, out)
 	}
-	if snap.SchemaVersion != 1 || len(snap.Pending) != 2 {
+	if snap.SchemaVersion != 0 || len(snap.Pending) != 2 {
 		t.Fatalf("snapshot = %+v", snap)
 	}
 	with, without := snap.Pending[0], snap.Pending[1]

@@ -59,8 +59,8 @@ func TestStatus_JSON_EmptyProject(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &snapshot); err != nil {
 		t.Fatalf("parsing JSON output: %v\noutput: %s", err, out.String())
 	}
-	if snapshot.SchemaVersion != state.SchemaVersion {
-		t.Errorf("schema_version = %d, want %d", snapshot.SchemaVersion, state.SchemaVersion)
+	if snapshot.SchemaVersion != 0 {
+		t.Errorf("schema_version = %d, want 0", snapshot.SchemaVersion)
 	}
 	if snapshot.ProjectRoot != projectRoot {
 		t.Errorf("project_root = %q, want %q", snapshot.ProjectRoot, projectRoot)

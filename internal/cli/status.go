@@ -24,7 +24,7 @@ Without --json, prints one line per task (most recently updated first).
 --json prints a single JSON object instead:
 
   {
-    "schema_version": 3,
+    "schema_version": 0,
     "generated_at": "2026-09-24T12:00:00Z",
     "project_root": "/abs/path/to/this project's ~/.vexillum namespace",
     "tasks": [ ... ]
