@@ -192,10 +192,12 @@ func slotInAgents(t *testing.T, projectDir string) slot.Inspection {
 	return slot.Inspect(readFile(t, filepath.Join(projectDir, "AGENTS.md")), "")
 }
 
-// initedProject returns a project that init --yes set up.
+// initedProject returns a project that init --yes set up, with the block in
+// AGENTS.md (the project starts with one).
 func initedProject(t *testing.T, opts setupOptions) (projectDir, home string) {
 	t.Helper()
 	projectDir, home = newProject(t)
+	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 	opts.Yes = true
 	if r := doInit(projectDir, home, opts, "", false); r.code != 0 {
 		t.Fatalf("init: %s%s", r.out, r.errOut)

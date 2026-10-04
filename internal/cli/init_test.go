@@ -103,10 +103,11 @@ func notExist(t *testing.T, path string) {
 const spanishAgents = "# Guia del proyecto\n\nEsta es la guia para los agentes que trabajan en este repositorio y que debe seguir cuando se hace un cambio en el codigo.\n"
 const englishAgents = "# Project guide\n\nThis is the guide for the agents that work in this repository and that they should follow when they make a change to the code.\n"
 
-// The whole flow with --yes and no terminal: AGENTS.md block, CLAUDE.md
-// import, skills, models.json, config, gitignore and hook, and no rules file.
+// The whole flow with --yes and no terminal: the block in an existing
+// AGENTS.md, CLAUDE.md import, skills, models.json, config, gitignore and hook, and no rules file.
 func TestInit_YesWritesEverything(t *testing.T) {
 	projectDir, home := newProject(t)
+	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 	r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
@@ -176,18 +177,18 @@ func TestInit_NonTTYWithoutYes(t *testing.T) {
 	if r.code == 0 {
 		t.Fatal("expected a non-zero exit")
 	}
-	if !strings.Contains(r.out, "AGENTS.md") || !strings.Contains(r.errOut, "--yes") {
+	if !strings.Contains(r.out, "CLAUDE.md") || !strings.Contains(r.errOut, "--yes") {
 		t.Errorf("notice or hint missing:\nout: %s\nerr: %s", r.out, r.errOut)
 	}
 	notExist(t, filepath.Join(projectDir, ".vexillum"))
-	notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	notExist(t, filepath.Join(projectDir, "CLAUDE.md"))
 	notExist(t, home)
 
 	// --skills / --no-skills alone do not make it act either.
 	if r := doInit(projectDir, home, setupOptions{Skills: boolp(false)}, "", false); r.code == 0 {
 		t.Error("--no-skills without --yes must still refuse")
 	}
-	notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	notExist(t, filepath.Join(projectDir, "CLAUDE.md"))
 }
 
 func TestInit_SkillsFlags(t *testing.T) {
@@ -218,7 +219,8 @@ func TestInit_SkillsFlags(t *testing.T) {
 func TestInit_Consent(t *testing.T) {
 	t.Run("no stops before writing anything", func(t *testing.T) {
 		projectDir, home := newProject(t)
-		r := doInit(projectDir, home, setupOptions{}, "n\n", true)
+		// slot file: yes / Continue? no
+		r := doInit(projectDir, home, setupOptions{}, "y\nn\n", true)
 		if r.code != 0 || !strings.Contains(r.out, "Nothing was changed.") {
 			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
 		}
@@ -229,8 +231,8 @@ func TestInit_Consent(t *testing.T) {
 	})
 	t.Run("empty answers take the defaults (yes)", func(t *testing.T) {
 		projectDir, home := newProject(t)
-		// Continue? / language / skills, all default.
-		r := doInit(projectDir, home, setupOptions{}, "\n\n\n", true)
+		// slot file / Continue? / language / skills, all default.
+		r := doInit(projectDir, home, setupOptions{}, "\n\n\n\n", true)
 		if r.code != 0 {
 			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
 		}
@@ -243,12 +245,13 @@ func TestInit_Consent(t *testing.T) {
 	})
 	t.Run("declining the skills", func(t *testing.T) {
 		projectDir, home := newProject(t)
-		r := doInit(projectDir, home, setupOptions{}, "y\ny\nn\n", true)
+		// slot file / Continue? / language / skills: no
+		r := doInit(projectDir, home, setupOptions{}, "y\ny\ny\nn\n", true)
 		if r.code != 0 {
 			t.Fatalf("%s%s", r.out, r.errOut)
 		}
 		notExist(t, filepath.Join(projectDir, ".claude", "skills"))
-		mustStat(t, filepath.Join(projectDir, "AGENTS.md"))
+		mustStat(t, filepath.Join(projectDir, "CLAUDE.md"))
 	})
 	t.Run("closed input is an error, not a silent yes", func(t *testing.T) {
 		projectDir, home := newProject(t)
@@ -273,7 +276,7 @@ func TestInit_Language(t *testing.T) {
 	}{
 		{"spanish detected and confirmed", spanishAgents, setupOptions{Skills: boolp(false)}, "y\ny\n", slot.LangES, "Detected language: es"},
 		{"detected, overridden to en", spanishAgents, setupOptions{Skills: boolp(false)}, "y\nn\nen\n", slot.LangEN, "Language (en/es): "},
-		{"no text defaults to en and can be overridden", "", setupOptions{Skills: boolp(false)}, "y\nn\nes\n", slot.LangES, "No language detected in AGENTS.md (it does not exist yet), defaulting to en"},
+		{"no text defaults to en and can be overridden", "", setupOptions{Skills: boolp(false)}, "y\ny\nn\nes\n", slot.LangES, "No language detected in CLAUDE.md (it does not exist yet), defaulting to en"},
 		{"bad override is asked again", englishAgents, setupOptions{Skills: boolp(false)}, "y\nn\nfr\nes\n", slot.LangES, "Please type en or es."},
 		{"--lang skips the question", spanishAgents, setupOptions{Skills: boolp(false), Lang: slot.LangEN}, "y\n", slot.LangEN, ""},
 	}
@@ -291,7 +294,11 @@ func TestInit_Language(t *testing.T) {
 				t.Errorf("output lacks %q:\n%s", tc.wantOut, r.out)
 			}
 			want, _ := install.SlotTemplate(tc.wantLang)
-			if ins := slot.Inspect(readFile(t, filepath.Join(projectDir, "AGENTS.md")), want); ins.State != slot.StateCurrent {
+			file := "AGENTS.md"
+			if tc.agents == "" {
+				file = "CLAUDE.md" // no AGENTS.md: the block goes to CLAUDE.md
+			}
+			if ins := slot.Inspect(readFile(t, filepath.Join(projectDir, file)), want); ins.State != slot.StateCurrent {
 				t.Errorf("block is %v, want current in %s", ins.State, tc.wantLang)
 			}
 			if tc.opts.Lang != "" && strings.Contains(r.out, "for the vexillum block?") {
@@ -376,6 +383,7 @@ func TestInit_ClaudeMD(t *testing.T) {
 	yesNoSkills := setupOptions{Yes: true, Skills: boolp(false)}
 	t.Run("missing", func(t *testing.T) {
 		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 		doInit(projectDir, home, yesNoSkills, "", false)
 		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "@AGENTS.md\n" {
 			t.Errorf("CLAUDE.md = %q", got)
@@ -383,6 +391,7 @@ func TestInit_ClaudeMD(t *testing.T) {
 	})
 	t.Run("already importing", func(t *testing.T) {
 		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 		const own = "# Mine\n\n@AGENTS.md\n"
 		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), own)
 		doInit(projectDir, home, yesNoSkills, "", false)
@@ -392,6 +401,7 @@ func TestInit_ClaudeMD(t *testing.T) {
 	})
 	t.Run("not importing, accepted", func(t *testing.T) {
 		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# Mine\n")
 		// Continue? / language / CLAUDE.md edit
 		r := doInit(projectDir, home, noSkills, "y\ny\ny\n", true)
@@ -404,6 +414,7 @@ func TestInit_ClaudeMD(t *testing.T) {
 	})
 	t.Run("not importing, declined: warns", func(t *testing.T) {
 		projectDir, home := newProject(t)
+		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# Mine\n")
 		r := doInit(projectDir, home, noSkills, "y\ny\nn\n", true)
 		if r.code != 0 {

@@ -484,6 +484,7 @@ func TestDoctor_GitHubCLIInstalled(t *testing.T) {
 func TestDoctor_FirstPartySkills(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir, home := newProject(t)
+	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 	vexillumHome := t.TempDir()
 	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
 		t.Fatal(r.out, r.errOut)
