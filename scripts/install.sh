@@ -6,6 +6,17 @@ set -euo pipefail
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
+#   curl -fsSL .../install.sh | bash -s -- --channel canary
+#   curl -fsSL .../install.sh | bash -s -- --version v0.2.0
+#
+# Options:
+#   --channel stable|canary   stable (default) installs the latest stable
+#                             release and never a pre-release; canary installs
+#                             the latest canary build, by direct download
+#   --version <tag>           install exactly this release, for example v0.2.0
+#                             or v0.2.0-rc.1, by direct download. The leading
+#                             "v" is optional. Cannot be combined with --channel
+#   -h, --help                print this help
 #
 # Environment:
 #   VX_INSTALL_DIR   install the direct-download binary here instead of
@@ -19,6 +30,11 @@ BINARY_NAME="vx"          # the executable that gets installed
 OLD_BINARY_NAME="vexillum"  # the executable the v0.1.x formula installed
 BREW_TAP="isaias-alt/tap"
 
+CHANNEL="stable"          # stable | canary
+REQUESTED_VERSION=""      # --version, normalized to a v-prefixed tag
+RELEASE_TAG=""            # the tag being installed
+VERSION_NUMBER=""         # RELEASE_TAG without the leading v
+
 # Where the binary landed, recorded by the install paths so the final check
 # looks there and not only on PATH (a fresh install dir is often not on PATH).
 INSTALL_DIR=""
@@ -29,6 +45,53 @@ info()  { echo "[info]  $*"; }
 ok()    { echo "[ok]    $*"; }
 warn()  { echo "[warn]  $*" >&2; }
 fatal() { echo "[error] $*" >&2; exit 1; }
+
+usage() {
+    cat <<'USAGE'
+Usage: install.sh [--channel stable|canary] [--version <tag>]
+
+  --channel stable|canary   stable (default) installs the latest stable release
+                            and never a pre-release. canary installs the latest
+                            canary build by direct download, without Homebrew
+                            and with no stability promise.
+  --version <tag>           install exactly this release (for example v0.2.0 or
+                            v0.2.0-rc.1) by direct download, without Homebrew.
+                            Cannot be combined with --channel.
+  -h, --help                print this help
+USAGE
+}
+
+parse_args() {
+    local channel="" version=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --channel|--version)
+                [ $# -ge 2 ] || fatal "$1 needs a value (see --help)"
+                if [ "$1" = "--channel" ]; then channel="$2"; else version="$2"; fi
+                shift 2
+                ;;
+            --channel=*) channel="${1#--channel=}"; shift ;;
+            --version=*) version="${1#--version=}"; shift ;;
+            -h|--help) usage; exit 0 ;;
+            *) fatal "Unknown option: $1 (see --help)" ;;
+        esac
+    done
+
+    if [ -n "$channel" ] && [ -n "$version" ]; then
+        fatal "Use --channel or --version, not both: --version already names the exact release"
+    fi
+    if [ -n "$channel" ]; then
+        case "$channel" in
+            stable|canary) CHANNEL="$channel" ;;
+            *) fatal "Unknown channel: ${channel} (want stable or canary)" ;;
+        esac
+    fi
+    if [ -n "$version" ]; then
+        printf '%s' "$version" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
+            || fatal "Invalid version: ${version} (want a release tag such as v0.2.0 or v0.2.0-rc.1)"
+        REQUESTED_VERSION="v${version#v}"
+    fi
+}
 
 detect_platform() {
     local uname_os uname_arch
@@ -71,22 +134,56 @@ install_via_brew() {
     fi
 }
 
-get_latest_version() {
+# Latest stable release. GitHub's releases/latest never returns a pre-release;
+# the suffix check is a second guard in case a pre-release was published as a
+# full release by mistake.
+resolve_stable() {
     local url="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest"
     local body
     body="$(curl -fsSL "$url")" || fatal "Failed to reach GitHub Releases API"
 
-    LATEST_VERSION="$(printf '%s' "$body" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
-    [ -n "$LATEST_VERSION" ] || fatal "Could not determine the latest release tag"
-    VERSION_NUMBER="${LATEST_VERSION#v}"
+    RELEASE_TAG="$(printf '%s' "$body" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    [ -n "$RELEASE_TAG" ] || fatal "Could not determine the latest release tag"
+    case "$RELEASE_TAG" in
+        *-*) fatal "The latest release ${RELEASE_TAG} is a pre-release; refusing to install it on the stable channel. Use --version ${RELEASE_TAG} to install it on purpose." ;;
+    esac
+}
+
+# Latest canary build: the newest release whose tag has a -canary. suffix. The
+# releases list is newest first and includes pre-releases.
+resolve_canary() {
+    local url="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100"
+    local body
+    body="$(curl -fsSL "$url")" || fatal "Failed to reach GitHub Releases API"
+
+    RELEASE_TAG="$(printf '%s' "$body" \
+        | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+        | sed 's/.*"\([^"]*\)"$/\1/' \
+        | grep -E -- '-canary\.' | head -1 || true)"
+    [ -n "$RELEASE_TAG" ] || fatal "No canary release found. Install the stable channel instead (run this script without --channel)."
+}
+
+resolve_release() {
+    if [ -n "$REQUESTED_VERSION" ]; then
+        RELEASE_TAG="$REQUESTED_VERSION"
+    elif [ "$CHANNEL" = "canary" ]; then
+        resolve_canary
+    else
+        resolve_stable
+    fi
+    VERSION_NUMBER="${RELEASE_TAG#v}"
 }
 
 install_via_binary() {
-    get_latest_version
-    ok "Latest version: ${LATEST_VERSION}"
+    resolve_release
+    case "$RELEASE_TAG" in
+        *-canary.*) ok "Canary build: ${RELEASE_TAG} (no stability promise)" ;;
+        *-*)        ok "Pre-release: ${RELEASE_TAG}" ;;
+        *)          ok "Version: ${RELEASE_TAG}" ;;
+    esac
 
     local archive="${PRODUCT_NAME}_${VERSION_NUMBER}_${OS}_${ARCH}.tar.gz"
-    local base_url="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${LATEST_VERSION}"
+    local base_url="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${RELEASE_TAG}"
 
     # Global, not local: the EXIT trap runs after this function's locals are gone.
     TMPDIR_INSTALL="$(mktemp -d)"
@@ -209,10 +306,13 @@ verify_install() {
 }
 
 main() {
+    parse_args "$@"
     detect_platform
     check_existing_binary
 
-    if command -v brew >/dev/null 2>&1; then
+    # Homebrew only carries the latest stable formula, so a canary build or a
+    # pinned version is always a direct download.
+    if [ "$CHANNEL" = "stable" ] && [ -z "$REQUESTED_VERSION" ] && command -v brew >/dev/null 2>&1; then
         install_via_brew
     else
         install_via_binary
