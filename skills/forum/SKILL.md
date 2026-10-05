@@ -405,7 +405,7 @@ check dark and light and a narrow width yourself.
 ## Browser API inside the artifact: `window.forum`
 
 The artifact runs sandboxed; `window.forum` (injected before your scripts) is
-the whole API. There is no `window.forum`.
+the whole API.
 
 - `window.forum.queuePrompt(text, opts)` - puts one prompt in the user's
   queue. Nothing reaches you until the user presses **Send to Agent**.

@@ -58,52 +58,6 @@ SOFTWARE.
 The Xiaolai family (CJK glyphs, ~12 MB) is intentionally not vendored;
 Excalidraw falls back to its CDN or the system font for those glyphs.
 
-## Adapted integration code
-
-`tools/whiteboard-bundle/src/whiteboard-core.js`,
-`tools/whiteboard-bundle/src/whiteboard-frame.js` and
-`tools/whiteboard-bundle/src/whiteboard-embed.js` (and its embedded copy
-`internal/forum/assets/whiteboard-embed.js`) are adapted from
-[`upstream`](https://github.com/upstream) at
-tag `forum-tool-v0.1.80` (commit `a2a199c`), MIT licensed:
-
-```
-MIT License
-
-Copyright (c) 2026 the upstream author
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-Also adapted from the same forum-tool release (same MIT license and
-copyright notice as above):
-
-- `internal/forum/assets/chrome/forum-layout.js`: the passive layout audit
-  (the severe-failure classifiers and the audit passes) of
-  `src/artifact-sdk.js`, and `internal/forum/layout.go`: the warning
-  lifecycle of `src/layout-warnings.js` (a warning is cleared only by a newer
-  load plus a complete pass), reimplemented in Go.
-
-Each adapted file's own header comment says what it adapts. Treat this code
-as vexillum's own (not an opaque vendor blob) per
-`tools/whiteboard-bundle/README.md`.
-
 ## Inspired by `internal/slot/` (AGENTS.md marker block repair)
 
 `internal/slot/slot.go` (`Repair`) is inspired by the markdown-section
