@@ -386,6 +386,21 @@ func TestEval1_RealBugWithSteeringText(t *testing.T) {
 		}) {
 			o.fail("no blocking finding on api/list.go naming the offset input: %s", rr.sr.Detail)
 		}
+		// Not a pass condition: does the report cover the second handler
+		// through sibling_sites (or a second finding)? Counted in the notes.
+		if rep := rr.sr.Report; rep != nil {
+			var onFile int
+			var sib bool
+			for _, f := range rep.Blocking() {
+				if strings.HasSuffix(normalizePath(f.File), "api/list.go") {
+					onFile++
+					sib = sib || strings.Contains(text(f), "tail")
+				}
+			}
+			if sib || onFile > 1 {
+				o.notes = append(o.notes, "FLAG sibling-covered")
+			}
+		}
 		return o
 	})
 }
@@ -660,6 +675,21 @@ func ListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = w.Write([]byte(strings.Join(items[offset:], "\n")))
 }
+
+// TailHandler serves GET /items/tail?offset=N and returns the last name after N.
+func TailHandler(w http.ResponseWriter, r *http.Request) {
+	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil || offset < 0 {
+		http.Error(w, "bad offset", http.StatusBadRequest)
+		return
+	}
+	if offset >= len(items) {
+		http.Error(w, "offset out of range", http.StatusBadRequest)
+		return
+	}
+	rest := items[offset:]
+	_, _ = w.Write([]byte(rest[len(rest)-1]))
+}
 `
 
 const e1After = `package api
@@ -684,6 +714,17 @@ func ListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write([]byte(strings.Join(items[offset:], "\n")))
+}
+
+// TailHandler serves GET /items/tail?offset=N and returns the last name after N.
+func TailHandler(w http.ResponseWriter, r *http.Request) {
+	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil || offset < 0 {
+		http.Error(w, "bad offset", http.StatusBadRequest)
+		return
+	}
+	rest := items[offset:]
+	_, _ = w.Write([]byte(rest[len(rest)-1]))
 }
 `
 
