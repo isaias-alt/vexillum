@@ -95,7 +95,7 @@ type Hub struct {
 type liveSession struct {
 	rec        sessionRecord
 	transcript []Message
-	layout     layoutState
+	layout     layoutInbox
 	version    int64
 	pollers    int
 	// relayPollers counts the pollers that are the listener (a subset of
@@ -174,7 +174,7 @@ func (h *Hub) get(key string) (*liveSession, error) {
 	layout, err := loadLayout(h.home, key)
 	if err != nil {
 		h.logf("forum: %v", err)
-		layout = layoutState{Version: layoutStateVersion}
+		layout = newLayoutInbox()
 	}
 	// Whether the agent is still working on the last feedback is a fact about a
 	// process this server no longer knows about: a restarted server never
@@ -1112,7 +1112,7 @@ type Snapshot struct {
 	// LayoutWarnings is the passive layout inbox. It is browser-only: a poll
 	// never carries it and nothing in it reaches the agent until the user
 	// queues it as a prompt.
-	LayoutWarnings []LayoutWarningView `json:"layout_warnings"`
+	LayoutWarnings []LayoutIssueView `json:"layout_warnings"`
 }
 
 // RelayView is the browser's view of a relayed round.
@@ -1174,7 +1174,7 @@ func (l *liveSession) snapshot(now time.Time, listenerGrace time.Duration) Snaps
 		Queued:          append([]Prompt{}, l.rec.Queued...),
 		Transcript:      append([]Message{}, l.transcript...),
 
-		LayoutWarnings: layoutViews(l.layout.Warnings),
+		LayoutWarnings: l.layout.views(),
 	}
 }
 
@@ -1342,23 +1342,17 @@ func (h *Hub) Touch() {
 	h.mu.Unlock()
 }
 
-// artifactRevision resolves the revision of a reported artifact version,
-// recording the version if it is new. Callers hold h.mu.
-func (l *liveSession) artifactRevision(version string) (rev int, changed bool) {
-	return l.layout.revisionOf(clip(version, 128))
-}
-
 func (h *Hub) saveLayoutState(l *liveSession) {
 	if err := saveLayout(h.home, l.rec.Key, &l.layout); err != nil {
 		h.logf("forum: %v", err)
 	}
 }
 
-// RecordLayoutPass folds one browser diagnostic pass into key's layout inbox.
-// It is passive by construction: it wakes browser tabs (the inbox changed)
-// but never touches the queue or the outbox, so no poll can return because of
-// it. A pass for an ended session is ignored.
-func (h *Hub) RecordLayoutPass(key string, pass LayoutPass) error {
+// RecordLayoutAudit folds one browser audit report into key's layout inbox.
+// It is passive by construction: it wakes browser tabs (the inbox changed) but
+// never touches the queue or the outbox, so no poll can return because of it.
+// A report for an ended session is ignored.
+func (h *Hub) RecordLayoutAudit(key string, report AuditReport) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	l, err := h.get(key)
@@ -1368,24 +1362,21 @@ func (h *Hub) RecordLayoutPass(key string, pass LayoutPass) error {
 	if l.rec.Status == StatusEnded {
 		return nil
 	}
-	revision, versionsChanged := l.artifactRevision(pass.ArtifactVersion)
-	next, changed := applyLayoutPass(l.layout.Warnings, pass, revision, h.opts.Now().UTC())
-	if !changed && !versionsChanged {
-		return nil
+	persist, notify := l.layout.record(report)
+	if persist {
+		h.saveLayoutState(l)
 	}
-	l.layout.Warnings = next
-	h.saveLayoutState(l)
-	if changed {
+	if notify {
 		h.bump(l)
 	}
 	return nil
 }
 
-// QueueLayoutWarnings turns the user's selection of layout issues into one
-// ordinary queued prompt tagged "layout-warnings" (the user still has to send
-// it) and marks those issues queued. Issues that can no longer be queued are
-// skipped; if none can, it fails with ErrNothingToQueue.
-func (h *Hub) QueueLayoutWarnings(key string, ids []string) (Prompt, error) {
+// QueueLayoutIssues turns the user's selection into one ordinary queued prompt
+// tagged "layout-warnings" (the user still has to send it) and marks those
+// issues as waiting for a fix. Issues that can no longer be queued are
+// skipped; if none can, it fails with ErrNoQueueableIssues.
+func (h *Hub) QueueLayoutIssues(key string, ids []string) (Prompt, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	l, err := h.get(key)
@@ -1395,31 +1386,30 @@ func (h *Hub) QueueLayoutWarnings(key string, ids []string) (Prompt, error) {
 	if err := l.endedErr(); err != nil {
 		return Prompt{}, err
 	}
-	selected := selectableLayoutWarnings(l.layout.Warnings, ids)
-	if len(selected) == 0 {
-		return Prompt{}, ErrNothingToQueue
+	picked := l.layout.pick(ids)
+	if len(picked) == 0 {
+		return Prompt{}, ErrNoQueueableIssues
 	}
-	selected, text, label, target, err := layoutPrompt(selected)
+	used, text, label, target, err := composeLayoutPrompt(picked)
 	if err != nil {
 		return Prompt{}, err
 	}
-	p, err := normalizePrompt(PromptInput{Prompt: text, Tag: LayoutWarningsTag, Text: label, Target: target})
+	p, err := normalizePrompt(PromptInput{Prompt: text, Tag: LayoutPromptTag, Text: label, Target: target})
 	if err != nil {
 		return Prompt{}, err
 	}
-	// normalizePrompt drops an over-limit target silently; layoutPrompt fits it
-	// already, so a missing one is a bug to surface, not to store.
+	// normalizePrompt drops an over-limit target silently; composeLayoutPrompt
+	// fits it already, so a missing one is a bug to surface, not to store.
 	if len(p.Target) == 0 {
-		return Prompt{}, ErrLayoutTargetTooLarge
+		return Prompt{}, ErrIssueTooLargeToQueue
 	}
-	for _, w := range selected {
-		p.LayoutIDs = append(p.LayoutIDs, w.ID)
+	for _, is := range used {
+		p.LayoutIDs = append(p.LayoutIDs, is.ID)
 	}
 	if p.UID, err = newID("pr_"); err != nil {
 		return Prompt{}, err
 	}
-	now := h.opts.Now().UTC()
-	p.QueuedAt = now
+	p.QueuedAt = h.opts.Now().UTC()
 	if err := h.commit(l, func(rec *sessionRecord) error {
 		if len(rec.Queued) >= maxQueuedPrompts {
 			return ErrQueueFull
@@ -1429,22 +1419,14 @@ func (h *Hub) QueueLayoutWarnings(key string, ids []string) (Prompt, error) {
 	}); err != nil {
 		return Prompt{}, err
 	}
-	l.layout.Warnings = markLayoutQueued(l.layout.Warnings, selected, l.currentRevision(), now)
+	l.layout.markQueued(used)
 	h.saveLayoutState(l)
 	h.bump(l)
 	return p, nil
 }
 
-// currentRevision is the newest artifact revision recorded so far.
-func (l *liveSession) currentRevision() int {
-	if len(l.layout.Versions) == 0 {
-		return l.layout.Base
-	}
-	return l.layout.Base + len(l.layout.Versions) - 1
-}
-
-// DismissLayoutWarning dismisses one issue for the current artifact revision.
-func (h *Hub) DismissLayoutWarning(key, id string) (bool, error) {
+// DismissLayoutIssue silences one issue for the artifact version on screen.
+func (h *Hub) DismissLayoutIssue(key, id string) (bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	l, err := h.get(key)
@@ -1454,19 +1436,17 @@ func (h *Hub) DismissLayoutWarning(key, id string) (bool, error) {
 	if err := l.endedErr(); err != nil {
 		return false, err
 	}
-	next, changed := dismissLayoutWarning(l.layout.Warnings, id, l.currentRevision(), h.opts.Now().UTC())
-	if !changed {
+	if !l.layout.dismiss(id) {
 		return false, nil
 	}
-	l.layout.Warnings = next
 	h.saveLayoutState(l)
 	h.bump(l)
 	return true, nil
 }
 
 // unreferencedLayoutIDs filters ids down to those no pending prompt (queued or
-// waiting in the outbox) still carries, so removing one prompt never frees a
-// warning another one is about.
+// waiting in the outbox) still carries, so removing one prompt never frees an
+// issue another one is about.
 func (l *liveSession) unreferencedLayoutIDs(ids []string) []string {
 	held := map[string]bool{}
 	for _, list := range [][]Prompt{l.rec.Queued, l.rec.Outbox, l.rec.Inflight} {
@@ -1485,16 +1465,11 @@ func (l *liveSession) unreferencedLayoutIDs(ids []string) []string {
 	return out
 }
 
-// releaseLayout returns warnings whose queued prompt was removed unsent to
-// their previous state. Callers hold h.mu.
+// releaseLayout returns issues whose queued prompt was removed unsent to
+// where they were. Callers hold h.mu.
 func (h *Hub) releaseLayout(l *liveSession, ids []string) {
-	if len(ids) == 0 {
+	if len(ids) == 0 || !l.layout.release(ids) {
 		return
 	}
-	next, changed := releaseLayoutQueued(l.layout.Warnings, ids, l.currentRevision(), h.opts.Now().UTC())
-	if !changed {
-		return
-	}
-	l.layout.Warnings = next
 	h.saveLayoutState(l)
 }

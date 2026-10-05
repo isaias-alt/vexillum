@@ -229,11 +229,11 @@ func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request, 
 // "recorded" and nothing more: a diagnostic pass never produces a prompt, so
 // the agent can neither be woken by it nor see it in a poll.
 func (s *Server) handleLayoutDiagnostics(w http.ResponseWriter, r *http.Request, key string) {
-	var pass LayoutPass
-	if !decodeBody(w, r, &pass) {
+	var report AuditReport
+	if !decodeBody(w, r, &report) {
 		return
 	}
-	if err := s.hub.RecordLayoutPass(key, pass); err != nil {
+	if err := s.hub.RecordLayoutAudit(key, report); err != nil {
 		writeHubError(w, err)
 		return
 	}
@@ -249,7 +249,7 @@ func (s *Server) handleLayoutQueue(w http.ResponseWriter, r *http.Request, key s
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	p, err := s.hub.QueueLayoutWarnings(key, req.IDs)
+	p, err := s.hub.QueueLayoutIssues(key, req.IDs)
 	if err != nil {
 		writeHubError(w, err)
 		return
@@ -265,7 +265,7 @@ func (s *Server) handleLayoutDismiss(w http.ResponseWriter, r *http.Request, key
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	changed, err := s.hub.DismissLayoutWarning(key, req.ID)
+	changed, err := s.hub.DismissLayoutIssue(key, req.ID)
 	if err != nil {
 		writeHubError(w, err)
 		return

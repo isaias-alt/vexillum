@@ -5,9 +5,9 @@ const { makeEnv } = require("./chrome_harness.js");
 
 const boot = { key: "0123456789abcdef", token: "t", file: "/tmp/x/plan.html", name: "plan.html", artifact_src: "/a/x/plan.html" };
 const warning = (id, over = {}) => ({
-  id, rule: "clipped-text", status: "open", status_label: "Open", title: "Text cut off by its container", explanation: "Rendered text crosses its container's right edge by 40px and is hidden.",
-  selector: "div#card > p", component: "p", viewport_class: "desktop", viewport_label: "Desktop", viewport_width: 1200, last_seen_at: "2026-10-01T12:00:00Z",
-  active: true, selectable: true, outstanding: false, history: [], ...over,
+  id, status_label: "", title: "Text cut off by its container", explanation: "Rendered text crosses its container's right edge by 40px and is hidden.",
+  selector: "div#card > p", viewport_label: "Desktop", viewport_width: 1200,
+  active: true, selectable: true, outstanding: false, ...over,
 });
 const snapshot = (over = {}) => ({ version: 1, key: boot.key, file: boot.file, status: "open", listening: true, pending: 0, queued: [], transcript: [], artifact_version: "v1", layout_warnings: [], ...over });
 
@@ -28,7 +28,7 @@ const posts = (env, suffix) => env.calls.filter((c) => c.url.endsWith(suffix));
   await fromFrame(env, pass({ findings: [{ kind: "clipped-text", selector: "p", axis: "horizontal", overflow_px: 12 }] }));
   assert.strictEqual(posts(env, "/layout/diagnostics").length, 0, "nothing is sent before the chrome knows which artifact version it shows");
 
-  env.push(snapshot({ layout_warnings: [warning("a1"), warning("b2", { title: "Control outside the viewport", selector: "button#go" })] }));
+  env.push(snapshot({ layout_warnings: [warning("a1"), warning("b2", { title: "Control cut off by its container", selector: "button#go" })] }));
   await env.tick();
   const sent = posts(env, "/layout/diagnostics");
   assert.strictEqual(sent.length, 1, "the held pass is sent once the version is known");
@@ -62,6 +62,10 @@ const posts = (env, suffix) => env.calls.filter((c) => c.url.endsWith(suffix));
   assert.strictEqual(hostile.findings[0].axis, "horizontal");
   assert.strictEqual(hostile.findings[0].overflow_px, 0);
 
+  // A plain issue has no status label; the title is just the title.
+  const titleOf = (item) => item.children.find((c) => c.className === "layout-item").children[0];
+  assert.strictEqual(titleOf(list.children[0]).children.length, 0, "an empty status_label shows no label");
+
   // Open the tray, select one issue, queue it.
   env.get("layoutBtn").click();
   assert.strictEqual(tray.hidden, false);
@@ -94,9 +98,11 @@ const posts = (env, suffix) => env.calls.filter((c) => c.url.endsWith(suffix));
   assert.strictEqual(env.get("layoutQueue").disabled, true, "select all toggles back to none");
 
   // Queued and closed issues cannot be selected; closed ones do not count.
-  env.push(snapshot({ version: 2, layout_warnings: [warning("a1", { status: "queued", status_label: "Queued for fix", selectable: false, outstanding: true }), warning("c3", { status: "resolved", status_label: "Resolved", active: false, selectable: false })] }));
+  env.push(snapshot({ version: 2, layout_warnings: [warning("a1", { status_label: "Waiting for a fix", selectable: false, outstanding: true }), warning("c3", { status_label: "Resolved", active: false, selectable: false })] }));
   await env.tick();
   assert.strictEqual(count.textContent, "1", "only unresolved issues are counted");
+  assert.strictEqual(titleOf(list.children[0]).children[0].textContent, "Waiting for a fix", "a non-empty status_label is shown next to the title");
+  assert.strictEqual(titleOf(list.children[1]).children[0].textContent, "Resolved");
   assert.strictEqual(list.children.length, 2);
   assert.ok(list.children.every((item) => item.children[0].type !== "checkbox"), "queued and resolved issues have no checkbox");
 

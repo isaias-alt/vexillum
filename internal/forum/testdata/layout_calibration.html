@@ -1,0 +1,150 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>layout audit calibration</title>
+<!--
+  Fixture page behind the thresholds in assets/chrome/forum-layout.js. Open it
+  in headless Chrome at a chosen device pixel ratio, for example:
+
+    chrome --headless=new --dump-dom --virtual-time-budget=4000 \
+      --force-device-scale-factor=1.25 --window-size=1100,800 \
+      file://.../testdata/layout_calibration.html
+
+  It prints one JSON line per measurement into <pre id="out">: the raw reading
+  the audit would compare against a threshold, for benign layouts and for the
+  smallest failures that matter. See the comments above THRESHOLD in the audit.
+-->
+<style>
+  body { margin: 0; font-family: Helvetica, Arial, sans-serif; }
+  .box { overflow: hidden; margin: 6px; }
+  .fx { margin: 6px; }
+</style>
+<body>
+<div id="stage"></div>
+<pre id="out"></pre>
+<script src="../assets/chrome/forum-layout.js"></script>
+<script>
+const kit = window.__forumLayoutKit;
+const stage = document.getElementById("stage");
+const rows = [];
+const add = (html) => { const d = document.createElement("div"); d.className = "fx"; d.innerHTML = html; stage.appendChild(d); return d; };
+const snap = () => kit.readSnapshot(window, document);
+const itemsIn = (s, root, role) => s.items.filter((i) => root.contains(i.ref) && (!role || i.role === role));
+
+// Horizontal text: container sized to the text's own measured width, then shaved by `shave` px.
+function textFx(name, css, text, shave, extra) {
+  const host = add(`<div class="box" style="${css}"><span class="t" style="white-space:nowrap">${text}</span></div>`);
+  const box = host.firstChild, span = box.firstChild;
+  const w = span.getBoundingClientRect().width;
+  box.style.width = (w - shave) + "px";
+  if (extra) extra(box, span);
+  host.dataset.name = name;
+  return { name, host, w, shave };
+}
+const fx = [];
+const sizes = [12, 16, 24, 40];
+const vSizes = [12, 16, 24];
+for (const size of sizes) {
+  fx.push(textFx(`h-exact-${size}`, `font-size:${size}px`, "Quarterly revenue summary", 0));
+  fx.push(textFx(`h-fraction-${size}`, `font-size:${size}px`, "Quarterly revenue summary", 0.3));
+  fx.push(textFx(`h-italic-${size}`, `font-size:${size}px;font-style:italic`, "Offices of fjords", 0));
+  fx.push(textFx(`h-spacing-${size}`, `font-size:${size}px;letter-spacing:0.2em`, "Quarterly revenue", 0.2 * size));
+  for (const shave of [1, 2, 3, 4, 6, 8, 12]) fx.push(textFx(`h-shave${shave}-${size}`, `font-size:${size}px`, "Quarterly revenue summary", shave));
+  fx.push(textFx(`h-lostchar-i-${size}`, `font-size:${size}px`, "Quarterly revenue summary i", size * 0.22));
+  fx.push(textFx(`h-lostchar-m-${size}`, `font-size:${size}px`, "Quarterly revenue summary m", size * 0.83));
+}
+// Vertical text: one line in a box that is `lines` of a line-height tall.
+function vFx(name, size, lh, boxH) {
+  const host = add(`<div class="box" style="font-size:${size}px;line-height:${lh};height:${boxH}px;width:300px"><span>Descending glyphs gjpqy</span></div>`);
+  host.dataset.name = name;
+  return { name, host };
+}
+for (const size of vSizes) {
+  fx.push(vFx(`v-lh0.8-${size}`, size, 0.8, size * 0.8));
+  fx.push(vFx(`v-lh0.9-${size}`, size, 0.9, size * 0.9));
+  fx.push(vFx(`v-lh1-${size}`, size, 1, size));
+  fx.push(vFx(`v-lh1.2-${size}`, size, 1.2, size * 1.2));
+  fx.push(vFx(`v-tight-${size}`, size, 1.5, size * 1.5 - 0.4));
+  fx.push(vFx(`v-halfline-${size}`, size, 1.5, size * 1.5 * 0.5));
+  fx.push(vFx(`v-oneline-short-${size}`, size, 1.5, size * 1.5 - size * 0.9));
+}
+// Controls cut by a container: a button of known width, container shaved.
+function cFx(name, size, shaveShare, shavePx) {
+  const host = add(`<div class="box" style="font-size:${size}px;display:inline-block"><button style="white-space:nowrap;padding:6px 14px">Save changes</button></div>`);
+  const box = host.firstChild, b = box.firstChild;
+  const w = b.getBoundingClientRect().width;
+  box.style.width = (w - (shavePx ?? w * shaveShare)) + "px";
+  host.dataset.name = name;
+  return { name, host, w };
+}
+for (const size of [12, 16, 24]) {
+  fx.push(cFx(`c-exact-${size}`, size, 0, 0));
+  fx.push(cFx(`c-fraction-${size}`, size, 0, 0.3));
+  for (const px of [1, 2, 3, 4, 6, 8]) fx.push(cFx(`c-shave${px}-${size}`, size, 0, px));
+  for (const s of [0.05, 0.1, 0.12, 0.15, 0.25, 0.5, 0.7, 0.95]) fx.push(cFx(`c-share${s}-${size}`, size, s));
+}
+
+const report = [];
+const s0 = snap();
+for (const f of fx) {
+  if (f.name.startsWith("h-")) {
+    for (const it of itemsIn(s0, f.host, "text")) {
+      const clip = it.clips.find((c) => f.host.firstChild === c.ref);
+      if (!clip) continue;
+      report.push({ name: f.name, right: +(it.rect.r - clip.r).toFixed(3), slack: +it.slack.toFixed(3), net: +(it.rect.r - clip.r - it.slack).toFixed(3) });
+    }
+  } else if (f.name.startsWith("v-")) {
+    for (const it of itemsIn(s0, f.host, "text")) {
+      const clip = it.clips.find((c) => f.host.firstChild === c.ref);
+      if (!clip) continue;
+      const cut = it.rect.b - clip.b;
+      report.push({ name: f.name, bottom: +cut.toFixed(3), top: +(clip.t - it.rect.t).toFixed(3), lineH: +it.lineH.toFixed(3), share: +(cut / it.lineH).toFixed(3), topShare: +((clip.t - it.rect.t) / it.lineH).toFixed(3) });
+    }
+  } else if (f.name.startsWith("c-")) {
+    for (const it of itemsIn(s0, f.host, "control")) {
+      const clip = it.clips.find((c) => f.host.firstChild === c.ref);
+      if (!clip) continue;
+      const cut = it.rect.r - clip.r;
+      report.push({ name: f.name, right: +cut.toFixed(3), share: +(cut / (it.rect.r - it.rect.l)).toFixed(3) });
+    }
+  }
+}
+// Page width: scrollbar gutter and rounding. Measured in a margin-free stage,
+// once with the platform's own scrollbars (overlay in headless macOS, so zero
+// gutter) and once with a classic 17px one forced through ::-webkit-scrollbar.
+stage.innerHTML = "";
+const bare = document.createElement("div");
+document.body.insertBefore(bare, document.getElementById("out"));
+const wide = (name, html) => { bare.innerHTML = html; const s = snap(); report.push({ name, overflowX: s.page.overflowX, sideways: s.page.sideways }); bare.innerHTML = ""; };
+const widths = [["100vw", "100vw"], ["half-px", "calc(100% + 0.5px)"], ["one-px", "calc(100% + 1px)"], ["over-8", "calc(100% + 8px)"], ["over-24", "calc(100% + 24px)"], ["over-48", "calc(100% + 48px)"], ["over-200", "calc(100% + 200px)"]];
+for (const [n, w] of widths) wide("page-" + n, `<div style="width:${w};height:20px;background:#eee"></div>`);
+const classic = document.createElement("style");
+classic.textContent = "html::-webkit-scrollbar{width:17px;height:17px}html::-webkit-scrollbar-thumb{background:#999}";
+document.head.appendChild(classic);
+const tall = document.createElement("div"); tall.style.height = "3000px"; bare.after(tall);
+for (const [n, w] of widths) wide("page-classic-" + n, `<div style="width:${w};height:20px;background:#eee"></div>`);
+tall.remove();
+classic.remove();
+// Text pushed past the page start: the reach readings (outside px and share).
+stage.innerHTML = "";
+for (const [n, shift] of [["sub-0.4", 0.4], ["sub-1", 1], ["hang-4", 4], ["fail-24", 24], ["fail-60", 60], ["fail-wholly", 400]]) {
+  const host = add(`<p style="margin:0 0 0 -${shift}px;font-size:16px;white-space:nowrap;width:max-content">Quarterly revenue summary</p>`);
+  host.style.margin = "0";
+  const s = snap();
+  const it = s.items.find((i) => i.ref === host.firstChild);
+  const w = it.rect.r - it.rect.l;
+  const outside = Math.max(0, s.page.reach.l - it.rect.l);
+  report.push({ name: "reach-" + n, outsidePx: +outside.toFixed(3), share: +(outside / w).toFixed(3) });
+  host.remove();
+}
+// Buried text: an opaque box covering a share of a paragraph (top of the page, in view).
+stage.innerHTML = "";
+for (const share of [0, 0.1, 0.25, 0.4, 0.5, 0.6, 0.7, 0.85, 1]) {
+  const host = add(`<div style="position:relative;width:400px"><p style="margin:0;font-size:16px;white-space:nowrap">The quick brown fox jumps over the lazy dog again</p><div class="cov" style="position:absolute;left:0;top:0;height:100%;width:${share * 100}%;background:#fff"></div></div>`);
+  const s = snap();
+  const p = host.querySelector("p");
+  const it = s.items.find((i) => i.ref === p);
+  report.push({ name: `buried-${share}`, cover: it && it.cover ? +it.cover.share.toFixed(3) : null, counted: it && it.cover ? it.cover.counted : 0 });
+  host.remove();
+}
+const result = JSON.stringify({ dpr: window.devicePixelRatio, scrollbar: window.innerWidth - document.documentElement.clientWidth, report }); document.getElementById("out").textContent = result; fetch("/__report", { method: "POST", body: result });
+</script>

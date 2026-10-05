@@ -1286,7 +1286,7 @@
     const body = el(w.selectable ? "label" : "div", "layout-item");
     if (w.selectable) body.htmlFor = "layout-" + w.id;
     const title = el("span", "layout-item-title", w.title);
-    if (w.status !== "open") title.append(el("span", "layout-item-status", w.status_label));
+    if (w.status_label) title.append(el("span", "layout-item-status", w.status_label));
     body.append(title, el("span", "layout-item-text", w.explanation), el("span", "layout-item-where", w.selector || "page"), el("span", "layout-item-meta", w.viewport_label + " (" + Math.round(w.viewport_width) + "px)"));
     item.append(body);
     if (w.selectable) {
@@ -1317,7 +1317,7 @@
     for (const id of [...selectedIssues]) {
       if (!warnings.some((w) => w.id === id && w.selectable)) selectedIssues.delete(id);
     }
-    const signature = JSON.stringify(warnings.map((w) => [w.id, w.status, w.selectable, w.explanation]));
+    const signature = JSON.stringify(warnings.map((w) => [w.id, w.status_label, w.selectable, w.explanation]));
     if (signature !== layoutShown) {
       layoutShown = signature;
       $("layoutEmpty").hidden = warnings.length > 0;

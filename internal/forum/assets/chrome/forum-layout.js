@@ -1,745 +1,713 @@
-// Passive layout audit, injected into every artifact next to the SDK.
+// Passive layout audit. It runs inside the artifact document, looks for layout
+// failures that are provable from rendered geometry, and posts what it finds
+// to the chrome around the iframe as a "forum:layout" message. It never
+// writes to the artifact (no style, class, attribute, scroll or focus change),
+// never listens to hover or animation events, and talks to nobody but
+// window.parent.
 //
-// Once the page has settled it looks for failures that can be proven from the
-// rendered geometry: text cut off by the box that holds it, a control the user
-// cannot reach, text almost entirely covered by another element, content that
-// makes the page scroll sideways. It reports them to the forum chrome, which
-// files them in the "Layout issues" tray. The audit only reports: it never
-// touches the artifact and nothing it finds reaches the agent by itself.
+// Principle: report only when geometry proves a viewer loses something they
+// need, and stay silent on everything that looks deliberate. When a signal is
+// ambiguous the audit says nothing; a missed finding costs the user nothing,
+// a false one costs their trust in the tray.
 //
-// Being wrong is worse than being quiet, so every finding needs evidence. A
-// finding is a measured overlap of real glyph boxes or control boxes with the
-// box that clips or covers them, it has to appear in two samples taken a
-// moment apart, and anything hidden, mid-animation, masked, deliberately
-// truncated or inside an intentional scroller is left alone.
-//
-// The file has two halves. The first is a set of pure classifiers over plain
-// rectangles (no DOM, covered by node tests, exposed as window.forumLayout).
-// The second drives them against the live document and only exists when the
-// artifact runs inside the forum chrome.
+// Layout of this file:
+//   1. thresholds (each one derived from fixtures, see the comments)
+//   2. pure geometry: judge() turns a plain-data snapshot into findings
+//   3. the sampler: readSnapshot() turns a live document into that snapshot
+//   4. selectors for the elements findings point at
+//   5. the scheduler: when to audit, how a finding is confirmed, what is sent
 (function () {
   "use strict";
-  if (window.forumLayout) return;
 
-  // ===================================================================
-  // Classifiers
-  // ===================================================================
+  const framed = window.parent !== window;
 
-  const finiteOrNull = (value) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
+  // ------------------------------------------------------------ 1. thresholds
+  //
+  // Method for every number below: name the symptom, render benign and failing
+  // fixtures in headless Chrome at device pixel ratios 1, 1.25 and 2 (macOS
+  // Chrome, Latin text, 12 to 40 px), record the largest benign reading and the
+  // smallest failing one that matters, then put the threshold at least 2x above
+  // the first and below the second. The fixtures live in
+  // testdata/layout_calibration.html (it prints the raw readings); the
+  // real-Chrome test in layout_chrome_test.go re-checks both sides of the
+  // boundaries that matter.
+  const THRESHOLD = Object.freeze({
+    // Symptom: a reader loses part of a character at the end of a line.
+    // Benign: text in a box sized to it, sub-pixel widths, italic, letter-spacing
+    // (its trailing gap is subtracted first) read at most 0.73 px at every ratio.
+    // Failing: the narrowest glyph (an "i" at 12 px) is 2.7 px. 2 px is 2.7x
+    // the benign reading and under one glyph.
+    hiddenTextPx: 2,
+    // Symptom: a line is no longer readable because its lower or upper part is
+    // cut. Share of one line box. Benign: line-height 1 clips 0.09 of the line
+    // (descender tails), and display headings at line-height 0.8 clip 0.21.
+    // Failing: a box half a line tall clips 0.46 to 0.5. 0.44 is 2.1x the
+    // benign reading and under the smallest failing one.
+    hiddenTextLines: 0.44,
+    // Symptom: a control cannot be operated in full. Benign: a button in a box
+    // sized to it reads 0.7 px (0.006 of its width) at every ratio. Failing: the
+    // label starts to lose glyphs once the cut passes the padding, 13 px
+    // (0.12 of a 110 px button). Floor and share are both required, so a
+    // 20 px icon button needs 4 px and a wide one needs 12 percent.
+    controlCutPx: 4,
+    controlCutMin: 0.12,
+    // Above this share the control is hidden rather than cut (a carousel slide,
+    // a collapsed panel, an off-canvas drawer): a judgement call, not a reading.
+    controlCutMax: 0.6,
+    // Symptom: a horizontal scrollbar for a reason other than rounding. Benign:
+    // sub-pixel overshoot reads 1 px; an element as wide as 100vw next to a
+    // classic 17 px scrollbar reads 17 px (the largest gutter in common use).
+    // Failing: 48 px of real overshoot is a page that visibly slides sideways.
+    // 40 px is 2.4x the gutter and under the failing case.
+    wideByPx: 40,
+    // Symptom: a reader cannot reach what they came to read. Benign: hanging
+    // punctuation pulled out of the page by design reads 4 px (2 percent of the
+    // line). Failing: most of the text is out (60 px of a 200 px line is a
+    // lost first word, the whole line is 400 px). 8 px is 2x the benign
+    // pull; half the text is the line where a word is certainly gone.
+    beyondReachPx: 8,
+    beyondReachShare: 0.5,
+    // Symptom: a reader cannot read a word because something opaque sits on it.
+    // The text is sampled on an 8-column grid per line, so shares move in steps
+    // of 1/8. Benign: a badge over a quarter of a line reads 0.25. Failing: a
+    // cover over 70 percent of a line reads 0.75. 0.6 is 2.4x the benign
+    // reading and means most of the text is gone. Fewer than 6 testable points
+    // (the rest are off screen; the audit never scrolls) prove nothing.
+    buriedShare: 0.6,
+    buriedMinPoints: 6,
+    // Text or controls parked this far beyond an edge are hidden on purpose
+    // (the usual off-screen idioms use 9999 px); real mistakes in the fixtures
+    // reached 400 px. 1000 px is 2.5x the largest mistake and 10x under the idiom.
+    farAwayPx: 1000,
+    // A container whose box is thinner than this is collapsed, not clipping
+    // (visually hidden text sits in a 1 px box, a collapsing panel passes
+    // through 0 to 2 px; no box a person reads text in is that thin).
+    collapsedPx: 3,
+    // Painted opacity at or below this is invisible; at or above `opaque` a
+    // background counts as covering.
+    seeThrough: 0.02,
+    opaque: 0.95,
+  });
+
+  // Budgets that keep one pass cheap and one report small.
+  const BUDGET = Object.freeze({
+    textOwners: 3000,
+    controls: 800,
+    buriedOwners: 400,
+    buriedColumns: 8,
+    buriedLines: 3,
+    findings: 60,
+    selector: 240,
+  });
+
+  // Timing. QUIET: the document must go this long without a mutation before it
+  // counts as settled. SETTLE_CAP: after this long the audit stops waiting and
+  // reports an incomplete pass. PAUSE: gap between the two confirming
+  // observations, after two painted frames; longer than a frame or a typical
+  // 150-300 ms transition tick would be needed to flip a transient state, and
+  // far below the point where a person would wonder what is going on.
+  const TIMING = Object.freeze({ quietMs: 400, settleCapMs: 8000, pauseMs: 300, resizeDebounceMs: 400, frameFallbackMs: 100 });
+
+  const KIND_ORDER = Object.freeze(["wide-page", "clipped-text", "cut-off-control", "unreachable-control", "unreachable-text", "buried-text"]);
+
+  // ------------------------------------------------------------- 2. geometry
+  //
+  // A snapshot is plain data, in client (viewport) coordinates:
+  //   page:  { sideways, overflowX, reach: {l,t,r,b} }  (reach = where scrolling can take a viewer)
+  //   items: [{ role: "text"|"control", ref, rect:{l,t,r,b}, lineH, slack,
+  //             clips:[{ ref, l,t,r,b, x, y, softX, softY }], scrollX, scrollY,
+  //             pinned, cover: {share, px, counted} | null }]
+  // Sides: a positive overflow_px is past the right or bottom edge, a negative
+  // one past the left or top edge.
+
+  const width = (r) => r.r - r.l;
+  const height = (r) => r.b - r.t;
+  const round1 = (n) => Math.round(n * 10) / 10;
+
+  // The part of an item's box that survives every container that clips it.
+  function visibleBox(item) {
+    let box = { l: item.rect.l, t: item.rect.t, r: item.rect.r, b: item.rect.b };
+    for (const c of item.clips) {
+      if (c.x && !item.scrollX) {
+        box.l = Math.max(box.l, c.l);
+        box.r = Math.min(box.r, c.r);
+      }
+      if (c.y && !item.scrollY) {
+        box.t = Math.max(box.t, c.t);
+        box.b = Math.min(box.b, c.b);
+      }
+    }
+    return box;
+  }
+
+  // How far the item crosses its clipping containers, per side, with the
+  // container responsible for the largest crossing.
+  function crossings(item) {
+    const out = { right: { px: 0, ref: null }, left: { px: 0, ref: null }, bottom: { px: 0, ref: null }, top: { px: 0, ref: null } };
+    const note = (side, px, ref) => {
+      if (px > out[side].px) out[side] = { px, ref };
+    };
+    for (const c of item.clips) {
+      if (c.x && !item.scrollX && !c.softX) {
+        note("right", item.rect.r - c.r, c.ref);
+        note("left", c.l - item.rect.l, c.ref);
+      }
+      if (c.y && !item.scrollY && !c.softY) {
+        note("bottom", item.rect.b - c.b, c.ref);
+        note("top", c.t - item.rect.t, c.ref);
+      }
+    }
+    return out;
+  }
+
+  function judgeText(item, out) {
+    const cut = crossings(item);
+    const sides = [
+      ["right", "horizontal", 1, Math.max(0, cut.right.px - item.slack), THRESHOLD.hiddenTextPx],
+      ["left", "horizontal", -1, Math.max(0, cut.left.px - item.slack), THRESHOLD.hiddenTextPx],
+      ["bottom", "vertical", 1, cut.bottom.px, THRESHOLD.hiddenTextLines * item.lineH],
+      ["top", "vertical", -1, cut.top.px, THRESHOLD.hiddenTextLines * item.lineH],
+    ];
+    for (const [side, axis, sign, px, floor] of sides) {
+      if (px < floor || px <= 0) continue;
+      // Text pushed a very long way out of its box to the start side is the
+      // image-replacement idiom (text-indent: -9999px): hidden on purpose.
+      if (sign < 0 && px >= THRESHOLD.farAwayPx) continue;
+      out.push({ kind: "clipped-text", ref: cut[side].ref, axis, overflow_px: sign * px });
+    }
+  }
+
+  function judgeControlCut(item, out) {
+    const cut = crossings(item);
+    const w = width(item.rect);
+    const h = height(item.rect);
+    const sides = [
+      ["right", "horizontal", 1, cut.right.px, w],
+      ["left", "horizontal", -1, cut.left.px, w],
+      ["bottom", "vertical", 1, cut.bottom.px, h],
+      ["top", "vertical", -1, cut.top.px, h],
+    ];
+    for (const [, axis, sign, px, size] of sides) {
+      if (px < THRESHOLD.controlCutPx || size <= 0) continue;
+      const share = px / size;
+      // Hidden past the upper share the control reads as tucked away on
+      // purpose (collapsed panel, carousel slide, off-canvas drawer).
+      if (share < THRESHOLD.controlCutMin || share > THRESHOLD.controlCutMax) continue;
+      out.push({ kind: "cut-off-control", ref: item.ref, axis, overflow_px: sign * px });
+    }
+  }
+
+  // Where scrolling cannot take anyone: the page's start sides, and its end
+  // sides when the viewport does not scroll that way.
+  function judgeReach(item, reach, out) {
+    const kind = item.role === "control" ? "unreachable-control" : "unreachable-text";
+    const axes = [
+      ["horizontal", item.scrollX, item.rect.l, item.rect.r, reach.l, reach.r],
+      ["vertical", item.scrollY, item.rect.t, item.rect.b, reach.t, reach.b],
+    ];
+    for (const [axis, scrolls, lo, hi, reachLo, reachHi] of axes) {
+      if (scrolls) continue;
+      const size = hi - lo;
+      if (size <= 0) continue;
+      const before = Math.max(0, Math.min(size, reachLo - lo));
+      const after = Math.max(0, Math.min(size, hi - reachHi));
+      const outside = Math.max(before, after);
+      if (outside < THRESHOLD.beyondReachPx || outside / size < THRESHOLD.beyondReachShare) continue;
+      // Parked far beyond the edge (the off-screen-for-assistive-tech idiom,
+      // an off-canvas drawer) is hidden on purpose, whichever side it is on.
+      const gap = before >= after ? reachLo - hi : lo - reachHi;
+      if (gap >= THRESHOLD.farAwayPx) continue;
+      out.push({ kind, ref: item.ref, axis, overflow_px: before >= after ? -outside : outside });
+    }
+  }
+
+  function judge(snapshot) {
+    const out = [];
+    const page = snapshot.page;
+    if (page.sideways && page.overflowX >= THRESHOLD.wideByPx) {
+      out.push({ kind: "wide-page", ref: null, axis: "horizontal", overflow_px: page.overflowX });
+    }
+    for (const item of snapshot.items) {
+      const box = visibleBox(item);
+      // Nothing of it survives its containers: tucked away on purpose.
+      if (width(box) <= 0 || height(box) <= 0) continue;
+      if (item.role === "text") judgeText(item, out);
+      else judgeControlCut(item, out);
+      if (!item.pinned) judgeReach(item, page.reach, out);
+      if (item.role === "text" && item.cover && item.cover.counted >= THRESHOLD.buriedMinPoints && item.cover.share >= THRESHOLD.buriedShare) {
+        out.push({ kind: "buried-text", ref: item.ref, axis: "horizontal", overflow_px: item.cover.px });
+      }
+    }
+    return merge(out);
+  }
+
+  // One finding per (kind, element, axis, side): the largest crossing wins.
+  function merge(findings) {
+    const best = new Map();
+    for (const f of findings) {
+      const key = f.kind + "|" + (f.ref === null ? "" : refKey(f.ref)) + "|" + f.axis + "|" + Math.sign(f.overflow_px);
+      const prev = best.get(key);
+      if (!prev || Math.abs(f.overflow_px) > Math.abs(prev.overflow_px)) best.set(key, f);
+    }
+    return [...best.values()];
+  }
+
+  const refIds = new WeakMap();
+  let refCounter = 0;
+  function refKey(ref) {
+    if (typeof ref === "string") return "s:" + ref;
+    if (!refIds.has(ref)) refIds.set(ref, ++refCounter);
+    return "o:" + refIds.get(ref);
+  }
+
+  // Two observations agree on a finding when kind, selector and axis match; the
+  // later observation supplies the magnitude (it is the settled one).
+  function agree(first, second) {
+    const key = (f) => f.kind + "\u0000" + f.selector + "\u0000" + f.axis;
+    const seen = new Set(first.map(key));
+    return second.filter((f) => seen.has(key(f)));
+  }
+
+  // Order and cap a finding list so the same document always yields the same
+  // report. Returns the list and whether it had to be cut.
+  function shape(findings) {
+    const best = new Map();
+    for (const f of findings) {
+      const key = f.kind + "\u0000" + f.selector + "\u0000" + f.axis;
+      const prev = best.get(key);
+      if (!prev || Math.abs(f.overflow_px) > Math.abs(prev.overflow_px)) best.set(key, f);
+    }
+    const ordered = [...best.values()].sort((a, b) => {
+      const k = KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind);
+      if (k !== 0) return k;
+      const m = Math.abs(b.overflow_px) - Math.abs(a.overflow_px);
+      if (m !== 0) return m;
+      return a.selector < b.selector ? -1 : a.selector > b.selector ? 1 : a.axis < b.axis ? -1 : a.axis > b.axis ? 1 : 0;
+    });
+    return { findings: ordered.slice(0, BUDGET.findings), truncated: ordered.length > BUDGET.findings };
+  }
+
+  // ------------------------------------------------------------- 3. sampler
+  const SKIPPED_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "TITLE", "HEAD", "TEXTAREA", "SELECT", "OPTION", "SVG", "CANVAS", "IFRAME", "OBJECT"]);
+  const CONTROL_SELECTOR = [
+    "a[href]", "button", "input:not([type=\"hidden\"])", "select", "textarea", "summary",
+    "[role=\"button\"]", "[role=\"link\"]", "[role=\"tab\"]", "[role=\"switch\"]", "[role=\"checkbox\"]", "[role=\"menuitem\"]", "[onclick]",
+  ].join(",");
+  const REPLACED_TAGS = new Set(["IMG", "VIDEO", "CANVAS", "PICTURE"]);
+
+  const isForumUi = (el) => !!(el.closest && el.closest("[data-forum-ui]"));
+
+  function alphaOf(color) {
+    if (!color || color === "transparent") return 0;
+    const slash = /\/\s*([\d.]+)(%?)\s*\)\s*$/.exec(color);
+    if (slash) return Math.min(1, Number(slash[1]) / (slash[2] ? 100 : 1));
+    const legacy = /^rgba\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*([\d.]+)\s*\)$/.exec(color);
+    return legacy ? Math.min(1, Number(legacy[1])) : 1;
+  }
+
+  // A style value that is present and not its "off" keyword.
+  const isSet = (value, off) => !!value && value !== off;
+
+  const isPureTranslation = (t) => {
+    if (!t || t === "none") return true;
+    const m = /^matrix\(([^)]*)\)$/.exec(t);
+    if (!m) return false;
+    const v = m[1].split(",").map(Number);
+    return Math.abs(v[0] - 1) < 1e-3 && Math.abs(v[3] - 1) < 1e-3 && Math.abs(v[1]) < 1e-3 && Math.abs(v[2]) < 1e-3;
   };
 
-  // The extent of a rect along one axis; null when it has no usable size.
-  function extentOf(rect, axis) {
-    if (!rect) return null;
-    const across = axis === "horizontal";
-    const start = finiteOrNull(across ? rect.left : rect.top);
-    const end = finiteOrNull(across ? rect.right : rect.bottom);
-    if (start === null || end === null) return null;
-    const stated = finiteOrNull(across ? rect.width : rect.height);
-    const size = Math.max(0, stated === null ? end - start : stated);
-    return size > 0 ? { start, end, size } : null;
-  }
-
-  function limitsOf(box, axis) {
-    if (!box) return null;
-    const across = axis === "horizontal";
-    const lo = finiteOrNull(across ? box.left : box.top);
-    const hi = finiteOrNull(across ? box.right : box.bottom);
-    return lo === null || hi === null ? null : { lo, hi };
-  }
-
-  // How far `rect` sticks out of `box` along an axis: pixels past each side,
-  // the share of the rect that is outside, and whether its midpoint is.
-  function protrusion(rect, box, axis) {
-    const extent = extentOf(rect, axis);
-    const limits = limitsOf(box, axis);
-    if (!extent || !limits) return null;
-    const before = Math.max(0, limits.lo - extent.start);
-    const after = Math.max(0, extent.end - limits.hi);
-    const middle = extent.start + extent.size / 2;
-    return {
-      before,
-      after,
-      px: Math.max(before, after),
-      share: Math.min(1, (before + after) / extent.size),
-      middleOut: middle < limits.lo || middle > limits.hi,
+  function readSnapshot(win, doc) {
+    const html = doc.documentElement;
+    const body = doc.body;
+    const cache = new Map();
+    const style = (el) => {
+      if (!cache.has(el)) cache.set(el, win.getComputedStyle(el));
+      return cache.get(el);
     };
-  }
 
-  // Text glyph boxes against the box that is supposed to hold them. Only a
-  // container that clips counts: on the horizontal axis overflow hidden/clip,
-  // on the vertical axis also visible (a fixed-height box whose text spills out
-  // below it). auto/scroll is an intentional scroller. Deliberate truncation
-  // and the screen-reader-only recipe are author intent.
-  function classifySevereTextOverflow(input) {
-    const { fragments, box, overflowX, overflowY, isTruncated = false, isVisuallyHidden = false, minOutsideRatio = 0.2, epsilon = 1 } = input || {};
-    if (isTruncated || isVisuallyHidden || !box || !Array.isArray(fragments)) return null;
-    const cutsAcross = overflowX === "hidden" || overflowX === "clip";
-    const cutsDown = overflowY === "hidden" || overflowY === "clip" || overflowY === "visible";
-    let worst = null;
-    const note = (axis, px) => {
-      if (!worst || px > worst.overflowPx) worst = { axis, kind: "clipped-text", overflowPx: px };
+    // Elements that something is currently moving: their geometry is a frame
+    // of a motion, not a layout.
+    const moving = new Set();
+    for (const a of doc.getAnimations ? doc.getAnimations() : []) {
+      const target = a.effect && a.effect.target;
+      if (target && a.playState === "running") moving.add(target);
+    }
+
+    const se = doc.scrollingElement || html;
+    const overflowX = style(html).overflowX !== "visible" || !body ? style(html).overflowX : style(body).overflowX;
+    const overflowY = style(html).overflowY !== "visible" || !body ? style(html).overflowY : style(body).overflowY;
+    const sideways = overflowX !== "hidden" && overflowX !== "clip";
+    const downwards = overflowY !== "hidden" && overflowY !== "clip";
+    const scrollX = win.scrollX || win.pageXOffset || 0;
+    const scrollY = win.scrollY || win.pageYOffset || 0;
+    const cw = se.clientWidth;
+    const ch = se.clientHeight;
+    const reachR = sideways ? Math.max(se.scrollWidth, cw) : cw;
+    const reachB = downwards ? Math.max(se.scrollHeight, ch) : ch;
+    const page = {
+      sideways,
+      overflowX: Math.max(0, se.scrollWidth - cw),
+      reach: { l: -scrollX, t: -scrollY, r: reachR - scrollX, b: reachB - scrollY },
     };
-    for (const fragment of fragments) {
-      const across = cutsAcross ? protrusion(fragment, box, "horizontal") : null;
-      if (across && across.px > epsilon && (across.middleOut || across.share >= minOutsideRatio)) note("horizontal", across.px);
-      const down = cutsDown ? protrusion(fragment, box, "vertical") : null;
-      if (down && down.px > epsilon && down.middleOut) note("vertical", down.px);
+
+    // What the ancestry of an element says about it, computed once per element.
+    const ancestry = new Map();
+    function about(el) {
+      if (ancestry.has(el)) return ancestry.get(el);
+      const parent = el.parentElement;
+      const up = parent && parent !== html ? about(parent) : { opacity: 1, silent: false, pinned: false, translateOnly: true, hiddenFromTree: false };
+      const cs = style(el);
+      const own = {
+        opacity: up.opacity * (Number(cs.opacity) || 0),
+        silent:
+          up.silent ||
+          moving.has(el) ||
+          isSet(cs.maskImage, "none") ||
+          isSet(cs.webkitMaskImage, "none") ||
+          isSet(cs.clipPath, "none") ||
+          (cs.position === "absolute" && isSet(cs.clip, "auto")) ||
+          cs.visibility !== "visible" ||
+          cs.contentVisibility === "hidden" ||
+          el.getAttribute("aria-hidden") === "true" ||
+          el.hasAttribute("inert") ||
+          !isPureTranslation(cs.transform),
+        pinned: up.pinned || cs.position === "fixed" || cs.position === "sticky" || isSet(cs.transform, "none"),
+      };
+      ancestry.set(el, own);
+      return own;
     }
-    return worst;
-  }
 
-  // A rect leaving a boundary by a visible amount: enough pixels, and either
-  // its midpoint outside or a fifth of it outside.
-  function classifyMaterialRectEscape(input) {
-    const { rect, boundary, axes = ["horizontal", "vertical"], minOutsidePx = 4, minOutsideRatio = 0.2 } = input || {};
-    let worst = null;
-    for (const axis of axes) {
-      const p = protrusion(rect, boundary, axis);
-      if (!p || p.px < minOutsidePx || (!p.middleOut && p.share < minOutsideRatio)) continue;
-      if (!worst || p.px > worst.overflowPx) worst = { axis, side: p.before >= p.after ? "start" : "end", overflowPx: p.px };
+    const makesBlockFor = (cs, position) => {
+      if (position === "fixed") return cs.transform !== "none" || cs.filter !== "none" || cs.willChange === "transform";
+      return cs.position !== "static" || cs.transform !== "none" || cs.filter !== "none" || cs.willChange === "transform";
+    };
+
+    // The containers whose overflow can cut el, nearest first. Overflow clips
+    // what its box contains; a positioned element escapes ancestors that are
+    // not its containing block, so the walk follows containing blocks.
+    function containers(el, includeSelf) {
+      const clips = [];
+      let scrollsX = false;
+      let scrollsY = false;
+      let collapsed = false;
+      let cur = el;
+      let first = true;
+      while (cur && cur !== html && cur !== body) {
+        const position = style(cur).position;
+        let block = null;
+        if (position === "fixed" || position === "absolute") {
+          for (let a = cur.parentElement; a && a !== html; a = a.parentElement) {
+            if (makesBlockFor(style(a), position)) {
+              block = a;
+              break;
+            }
+          }
+        } else {
+          block = cur.parentElement;
+        }
+        const candidates = [];
+        if (first && includeSelf && style(cur).display !== "inline" && style(cur).display !== "contents") candidates.push(cur);
+        if (block && block !== html && block !== body) candidates.push(block);
+        for (const a of candidates) {
+          const cs = style(a);
+          const clipX = cs.overflowX === "hidden" || cs.overflowX === "clip";
+          const clipY = cs.overflowY === "hidden" || cs.overflowY === "clip";
+          if (cs.overflowX === "auto" || cs.overflowX === "scroll") scrollsX = true;
+          if (cs.overflowY === "auto" || cs.overflowY === "scroll") scrollsY = true;
+          if (!clipX && !clipY) continue;
+          const rect = a.getBoundingClientRect();
+          const l = rect.left + a.clientLeft;
+          const t = rect.top + a.clientTop;
+          if (a.clientWidth < THRESHOLD.collapsedPx || a.clientHeight < THRESHOLD.collapsedPx) collapsed = true;
+          const lineClamp = (cs.webkitLineClamp || cs.lineClamp || "none") !== "none";
+          clips.push({
+            ref: a, l, t, r: l + a.clientWidth, b: t + a.clientHeight, x: clipX, y: clipY,
+            softX: clipX && cs.textOverflow === "ellipsis", softY: clipY && lineClamp,
+          });
+        }
+        first = false;
+        cur = block;
+      }
+      return { clips, scrollsX, scrollsY, collapsed };
     }
-    return worst;
+
+    const items = [];
+    const root = body || html;
+
+    // Text: one item per element that directly owns visible text.
+    const owners = new Map();
+    const walker = doc.createTreeWalker(root, 0x1 | 0x4, {
+      acceptNode(node) {
+        if (node.nodeType === 1) {
+          if (SKIPPED_TAGS.has(node.tagName.toUpperCase()) || (node.hasAttribute && node.hasAttribute("data-forum-ui"))) return 2; // REJECT the subtree
+          return 3; // SKIP, but visit children
+        }
+        return /\S/.test(node.nodeValue) ? 1 : 3;
+      },
+    });
+    for (let node = walker.nextNode(); node && owners.size < BUDGET.textOwners; node = walker.nextNode()) {
+      const owner = node.parentElement;
+      if (!owner) continue;
+      if (!owners.has(owner)) owners.set(owner, []);
+      owners.get(owner).push(node);
+    }
+    let buriedChecked = 0;
+    for (const [owner, nodes] of owners) {
+      const info = about(owner);
+      if (info.silent || info.opacity < THRESHOLD.seeThrough) continue;
+      const lines = [];
+      for (const node of nodes) {
+        const range = doc.createRange();
+        range.selectNodeContents(node);
+        for (const r of range.getClientRects()) if (r.width > 0 && r.height > 0) lines.push({ l: r.left, t: r.top, r: r.right, b: r.bottom });
+      }
+      if (lines.length === 0) continue;
+      const rect = { l: Infinity, t: Infinity, r: -Infinity, b: -Infinity };
+      let lineH = Infinity;
+      for (const r of lines) {
+        rect.l = Math.min(rect.l, r.l);
+        rect.t = Math.min(rect.t, r.t);
+        rect.r = Math.max(rect.r, r.r);
+        rect.b = Math.max(rect.b, r.b);
+        lineH = Math.min(lineH, r.b - r.t);
+      }
+      const where = containers(owner, true);
+      if (where.collapsed) continue;
+      const cs = style(owner);
+      const item = {
+        role: "text", ref: owner, rect, lineH,
+        slack: Math.max(0, parseFloat(cs.letterSpacing) || 0),
+        clips: where.clips, scrollX: where.scrollsX, scrollY: where.scrollsY,
+        pinned: info.pinned, cover: null,
+      };
+      const inView = rect.r > 0 && rect.l < win.innerWidth && rect.b > 0 && rect.t < win.innerHeight;
+      if (inView && buriedChecked < BUDGET.buriedOwners) {
+        buriedChecked += 1;
+        item.cover = coverOf(owner, lines, rect, win, doc, style, about);
+      }
+      items.push(item);
+    }
+
+    // Controls.
+    let controls = 0;
+    for (const el of doc.querySelectorAll(CONTROL_SELECTOR)) {
+      if (controls >= BUDGET.controls) break;
+      if (isForumUi(el) || el.disabled) continue;
+      const info = about(el);
+      if (info.silent || info.opacity < THRESHOLD.seeThrough) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      controls += 1;
+      const where = containers(el, false);
+      if (where.collapsed) continue;
+      items.push({
+        role: "control", ref: el, rect: { l: r.left, t: r.top, r: r.right, b: r.bottom }, lineH: r.height, slack: 0,
+        clips: where.clips, scrollX: where.scrollsX, scrollY: where.scrollsY, pinned: info.pinned, cover: null,
+      });
+    }
+    return { page, items };
   }
 
-  // A few pixels of document overshoot are cosmetic: the page only counts as
-  // scrolling sideways when real content is out there and the overshoot is at
-  // least 24px or 5% of the viewport.
-  function isMaterialPageOverflow({ overflowPx, viewportWidth, hasEscapedContent }) {
-    const overshoot = Number(overflowPx);
-    const width = Number(viewportWidth);
-    const floor = Math.max(24, Number.isFinite(width) ? width * 0.05 : 24);
-    return Boolean(hasEscapedContent) && Number.isFinite(overshoot) && overshoot >= floor;
+  // How much of an element's text sits under something opaque. A grid of
+  // points along its lines is hit-tested; points outside the viewport cannot be
+  // tested (the audit never scrolls the page) and do not count either way.
+  function coverOf(owner, lines, rect, win, doc, style, about) {
+    const picked = [];
+    const distinct = lines.slice().sort((a, b) => a.t - b.t || a.l - b.l);
+    const rows = [];
+    for (const l of distinct) if (rows.length === 0 || l.t - rows[rows.length - 1].t > 2) rows.push(l);
+    const take = rows.length <= BUDGET.buriedLines ? rows : [rows[0], rows[Math.floor(rows.length / 2)], rows[rows.length - 1]];
+    for (const l of take) {
+      for (let i = 0; i < BUDGET.buriedColumns; i += 1) picked.push([l.l + ((i + 0.5) / BUDGET.buriedColumns) * (l.r - l.l), (l.t + l.b) / 2]);
+    }
+    let counted = 0;
+    let covered = 0;
+    for (const [x, y] of picked) {
+      if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) continue;
+      counted += 1;
+      const hit = doc.elementFromPoint(x, y);
+      if (!hit || hit === owner || owner.contains(hit) || hit.contains(owner) || isForumUi(hit)) continue;
+      const info = about(hit);
+      if (info.pinned || info.silent || info.opacity < THRESHOLD.opaque) continue;
+      const cs = style(hit);
+      const paints =
+        REPLACED_TAGS.has(hit.tagName.toUpperCase()) ||
+        (alphaOf(cs.backgroundColor) >= THRESHOLD.opaque && cs.backgroundClip !== "text") ||
+        /url\(/.test(cs.backgroundImage || "");
+      if (paints && (cs.mixBlendMode || "normal") === "normal") covered += 1;
+    }
+    return { share: counted ? covered / counted : 0, px: counted ? (covered / counted) * (rect.r - rect.l) : 0, counted };
   }
 
-  // Layout that is still settling is not a failure: keep what the later sample
-  // shares with the earlier one.
-  function findStableLayoutFindings(earlier, later) {
-    const identity = (f) => [f.kind, f.selector, f.axis || ""].join(":");
-    const errors = (list) => (Array.isArray(list) ? list.filter((f) => f && f.severity === "error") : []);
-    const before = new Set(errors(earlier).map(identity));
-    return errors(later).filter((f) => before.has(identity(f)));
+  // ------------------------------------------------------------ 4. selectors
+  //
+  // A path a person or an agent can paste into querySelector: tag names, ids
+  // that look hand-written, and :nth-of-type where siblings share a tag.
+  // Generated ids (digits, hashes, framework colons) change per load, so they
+  // are never used. Classes are left out for the same reason.
+  const STABLE_ID = /^[A-Za-z_][A-Za-z0-9_-]{0,39}$/;
+  const looksGenerated = (id) => /\d{3,}/.test(id) || /^[0-9a-f]{10,}$/i.test(id);
+
+  function selectorFor(el, doc) {
+    if (!el) return "";
+    const parts = [];
+    for (let node = el; node && node.nodeType === 1 && node !== doc.documentElement; node = node.parentElement) {
+      const tag = node.tagName.toLowerCase();
+      const id = node.getAttribute("id");
+      if (id && STABLE_ID.test(id) && !looksGenerated(id) && doc.getElementById(id) === node) {
+        parts.unshift(tag + "#" + id);
+        break;
+      }
+      let segment = tag;
+      const parent = node.parentElement;
+      if (parent && node !== doc.body) {
+        const same = [...parent.children].filter((s) => s.tagName === node.tagName);
+        if (same.length > 1) segment += ":nth-of-type(" + (same.indexOf(node) + 1) + ")";
+      }
+      parts.unshift(segment);
+    }
+    while (parts.length > 1 && parts.join(" > ").length > BUDGET.selector) parts.shift();
+    return parts.join(" > ").slice(0, BUDGET.selector);
   }
 
-  function isNearTotalOcclusion({ occludedSamples, totalSamples, minSamples = 5, minRatio = 0.9 }) {
-    const covered = Number(occludedSamples);
-    const total = Number(totalSamples);
-    return Number.isFinite(covered) && Number.isFinite(total) && total >= minSamples && covered / total >= minRatio;
-  }
-
-  const classifiers = Object.freeze({ classifySevereTextOverflow, classifyMaterialRectEscape, isMaterialPageOverflow, findStableLayoutFindings, isNearTotalOcclusion });
-
-  // Opened directly (nothing to report to) or under a unit test (nothing to
-  // look at): only the classifiers exist.
-  if (window.parent === window || !window.document || !window.document.documentElement) {
-    window.forumLayout = classifiers;
-    return;
-  }
-
-  // ===================================================================
-  // Live audit
-  // ===================================================================
-
-  const doc = window.document;
-
-  // The artifact version this document was served as (see injectSDK). It is
-  // read while the script runs: document.currentScript is gone afterwards.
-  const DOC_VERSION = (() => {
+  // -------------------------------------------------------------- 5. runtime
+  const script = document.currentScript;
+  const artifactVersion = (() => {
     try {
-      return new URL(doc.currentScript.src).searchParams.get("av") || "";
-    } catch {
+      return (script && script.src && new URL(script.src, "http://x.invalid/").searchParams.get("av")) || "";
+    } catch (e) {
       return "";
     }
   })();
 
-  const TIMING = {
-    firstRun: 50, // after the script loads
-    resizeDebounce: 300,
-    calm: 180, // no layout/DOM change for this long counts as settled
-    calmCap: 2000, // give up waiting for calm after this long
-    animationCap: 4000,
-    resample: 120, // gap between the two samples
-    frameFallback: 120, // a hidden tab never paints; do not wait for it
-  };
-  const LIMITS = { elements: 800, findings: 100, coverCandidates: 200, coverMinText: 8 };
+  function start() {
+    let generation = 0; // a new run bumps it; older runs notice and stop
+    let lastSent = "";
+    let mutated = false;
+    let quietTimer = 0;
+    let onQuietBreak = null;
 
-  const selectorFor = (el) => (window.forum && window.forum.__dom ? window.forum.__dom.selectorOf(el) : "");
-  const squash = (text) => String(text || "").trim().replace(/\s+/g, " ");
-  const toPx = (value) => {
-    const n = Number.parseFloat(String(value || "0"));
-    return Number.isFinite(n) ? n : 0;
-  };
-  const tenths = (n) => Math.round(Math.max(0, n) * 10) / 10;
-  const isRoot = (el) => !el || el === doc.body || el === doc.documentElement;
-
-  const CLIPS = new Set(["hidden", "clip"]);
-  const SCROLLS = new Set(["auto", "scroll"]);
-  const PLACED = new Set(["absolute", "fixed", "sticky"]);
-
-  // Elements that answer for the text inside them, descendants included. Any
-  // other element answers only for its own direct text nodes.
-  const TEXT_BLOCKS =
-    "p,h1,h2,h3,h4,h5,h6,button,label,a[href],li,dt,dd,th,td,legend,figcaption,summary,[role='button'],[role='link'],[role='alert'],[role='status']";
-  const CONTROLS = "button,input,select,textarea,a[href],summary,[role]";
-  const CONTROL_ROLES = new Set(["button", "link", "checkbox", "radio", "switch", "textbox", "combobox"]);
-
-  // A control the user has to be able to use.
-  function isControl(el) {
-    if (!el.matches || !el.matches(CONTROLS)) return false;
-    if (el.matches("input[type='hidden'],[disabled],[aria-disabled='true']")) return false;
-    const role = el.getAttribute("role");
-    return role === null || CONTROL_ROLES.has(role.toLowerCase());
-  }
-
-  // ---- style predicates -------------------------------------------------
-
-  const truncatesOnPurpose = (style) => style.textOverflow === "ellipsis" || Number.parseInt(style.webkitLineClamp || style.lineClamp || "0", 10) > 0;
-
-  const masksContent = (style) => {
-    const mask = String(style.maskImage || style.webkitMaskImage || "none").toLowerCase();
-    const path = String(style.clipPath || "none").toLowerCase();
-    return (mask !== "none" && mask !== "") || (path !== "none" && path !== "");
-  };
-
-  // Rounded corners with overflow clipping trim the corners on purpose; the
-  // whole subtree is treated like masked content.
-  const clipsRounded = (style) => {
-    if (!CLIPS.has(style.overflowX) && !CLIPS.has(style.overflowY)) return false;
-    return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius].some((r) => toPx(r) > 0);
-  };
-
-  // The usual screen-reader-only recipe: a tiny, positioned, clipped box.
-  function looksScreenReaderOnly(style, rect) {
-    if (!PLACED.has(style.position) || !CLIPS.has(style.overflowX) || rect.width > 2 || rect.height > 2) return false;
-    const legacyClip = String(style.clip || "").toLowerCase();
-    const path = String(style.clipPath || "").toLowerCase();
-    return style.whiteSpace === "nowrap" || legacyClip !== "auto" || (path !== "none" && path !== "");
-  }
-
-  // Alpha of a computed colour: 0..1, or null when the format is not one we read.
-  function alphaOf(color) {
-    const value = String(color || "").trim().toLowerCase();
-    if (value === "" || value === "transparent") return 0;
-    const match = value.match(/^rgba?\(([^)]+)\)$/);
-    if (!match) return null;
-    const parts = match[1].split(/[\s,/]+/).filter(Boolean);
-    return parts.length < 4 ? 1 : Number(parts[3]);
-  }
-
-  // ---- the scene: memoized facts about one sample ------------------------
-
-  function liveAnimations() {
-    if (typeof doc.getAnimations !== "function") return [];
-    return doc.getAnimations().filter((a) => a.playState === "running" || a.playState === "pending");
-  }
-
-  function animationTarget(animation) {
-    const target = animation.effect && animation.effect.target;
-    if (target instanceof Element) return target;
-    return target && target.element instanceof Element ? target.element : null;
-  }
-
-  // Everything one sample needs to know about the document. Styles, boxes and
-  // text are read at most once per element, and "is any ancestor X" questions
-  // are answered by walking up once and remembering the result per node.
-  function openScene() {
-    const root = doc.documentElement;
-    const view = { width: window.innerWidth || root.clientWidth || 0, height: window.innerHeight || 0 };
-    const viewBox = { left: 0, right: view.width, top: 0, bottom: view.height };
-    const caches = { style: new Map(), rect: new Map(), pad: new Map(), text: new Map(), glyphs: new Map() };
-    const once = (cache, key, make) => {
-      if (!cache.has(key)) cache.set(key, make());
-      return cache.get(key);
-    };
-    const style = (el) => once(caches.style, el, () => window.getComputedStyle(el));
-    const rect = (el) => once(caches.rect, el, () => el.getBoundingClientRect());
-
-    // inherited(test)(el): does `test` hold for el or any ancestor?
-    const inherited = (test) => {
-      const memo = new Map();
-      const walk = (el) => {
-        if (!el || el.nodeType !== 1) return false;
-        if (!memo.has(el)) memo.set(el, test(el) || walk(el.parentElement));
-        return memo.get(el);
-      };
-      return walk;
-    };
-
-    const gone = inherited((el) => {
-      const s = style(el);
-      const opacity = Number.parseFloat(s.opacity || "1");
-      return s.display === "none" || s.contentVisibility === "hidden" || (Number.isFinite(opacity) && opacity <= 0.01);
+    const observer = new MutationObserver((records) => {
+      for (const r of records) {
+        const t = r.target;
+        if (r.type === "attributes" && r.attributeName && r.attributeName.indexOf("data-forum") === 0) continue;
+        const el = t && t.nodeType === 1 ? t : t && t.parentElement;
+        if (el && isForumUi(el)) continue;
+        mutated = true;
+        if (onQuietBreak) onQuietBreak();
+        return;
+      }
     });
-    // Parts of the document the audit never judges: the forum's own overlay,
-    // diagrams that lay themselves out, masked content, screen-reader-only text.
-    const setAside = inherited((el) => {
-      if (el.matches(".mermaid,svg,[data-forum-ui]")) return true;
-      const s = style(el);
-      return masksContent(s) || clipsRounded(s) || looksScreenReaderOnly(s, rect(el));
-    });
-    const scrollsAcross = inherited((el) => !isRoot(el) && SCROLLS.has(style(el).overflowX));
-    const scrollsDown = inherited((el) => !isRoot(el) && SCROLLS.has(style(el).overflowY));
-    const underTextBlock = inherited((el) => el.matches(TEXT_BLOCKS));
+    observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
 
-    // Anything with a running animation (or an ancestor/descendant of it) moves
-    // on purpose.
-    const animated = liveAnimations().map(animationTarget).filter((el) => el && !el.closest("[data-forum-ui]"));
-    const moving = (el) => animated.some((t) => t === el || t.contains(el) || el.contains(t));
-
-    const isBlock = (el) => el.matches(TEXT_BLOCKS);
-
-    // The text this element answers for ("" when an enclosing block owns it).
-    const textOf = (el) =>
-      once(caches.text, el, () => {
-        if (isBlock(el)) return squash(el.innerText || el.textContent);
-        if (underTextBlock(el.parentElement)) return "";
-        return squash([...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" "));
-      });
-
-    // Client rects of the text nodes the element answers for.
-    const glyphs = (el) =>
-      once(caches.glyphs, el, () => {
-        const nodes = [];
-        if (isBlock(el)) {
-          const walker = doc.createTreeWalker(el, 4); // SHOW_TEXT
-          for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
-        } else {
-          nodes.push(...[...el.childNodes].filter((n) => n.nodeType === 3));
-        }
-        const out = [];
-        for (const node of nodes) {
-          if (!String(node.textContent || "").trim()) continue;
-          const range = doc.createRange();
-          range.selectNodeContents(node);
-          for (const r of range.getClientRects()) if (r.width > 0 && r.height > 0) out.push(r);
-          if (range.detach) range.detach();
-        }
-        return out;
-      });
-
-    const padBox = (el) =>
-      once(caches.pad, el, () => {
-        const r = rect(el);
-        const s = style(el);
-        return { left: r.left + toPx(s.borderLeftWidth), right: r.right - toPx(s.borderRightWidth), top: r.top + toPx(s.borderTopWidth), bottom: r.bottom - toPx(s.borderBottomWidth) };
-      });
-
-    // Ancestors that clip their content (overflow hidden/clip), nearest first.
-    // Masked and rounded ones never get here: their subtree is set aside.
-    const clippers = (el) => {
-      const out = [];
-      for (let n = el.parentElement; n && !isRoot(n); n = n.parentElement) {
-        const s = style(n);
-        const axes = [];
-        if (CLIPS.has(s.overflowX)) axes.push("horizontal");
-        if (CLIPS.has(s.overflowY)) axes.push("vertical");
-        if (axes.length > 0) out.push({ el: n, axes, box: padBox(n), truncates: truncatesOnPurpose(s) });
-      }
-      return out;
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    // Painted frames separate the two observations. A page nobody is looking at
+    // (a background tab) paints none, so each wait also ends on its own after
+    // FRAME_FALLBACK_MS: the pause still separates the samples, and the audit
+    // is not held up until the tab comes to the front.
+    const frames = async (n) => {
+      for (let i = 0; i < n; i += 1) await Promise.race([new Promise((resolve) => requestAnimationFrame(resolve)), sleep(TIMING.frameFallbackMs)]);
     };
 
-    const rendered = (el) => {
-      const r = rect(el);
-      return r.width > 0 && r.height > 0 && !gone(el) && style(el).visibility !== "hidden";
-    };
-
-    return {
-      view,
-      viewBox,
-      root,
-      style,
-      rect,
-      padBox,
-      textOf,
-      glyphs,
-      clippers,
-      scrollsAcross,
-      scrollsDown,
-      // Fit to be judged: it renders, is not set aside and is not animating.
-      auditable: (el) => !setAside(el) && !moving(el) && rendered(el),
-      moving,
-      lockedVertically: () => [root, doc.body].some((n) => n && CLIPS.has(style(n).overflowY)),
-      lockedHorizontally: () => [root, doc.body].some((n) => n && CLIPS.has(style(n).overflowX)),
-      elements: () => [...(doc.body ? doc.body.querySelectorAll("*") : [])].filter((el) => el instanceof Element && !el.closest("[data-forum-ui]")).slice(0, LIMITS.elements),
-    };
-  }
-
-  // ---- findings ----------------------------------------------------------
-
-  // Collects findings of one sample. Elements inside a container that already
-  // has a finding are not reported again.
-  function openLedger() {
-    const items = [];
-    const seen = new Set();
-    const roots = [];
-    return {
-      items,
-      add(kind, selector, axis, px) {
-        const direction = axis === "vertical" ? "vertical" : "horizontal";
-        const key = [kind, selector, direction].join(":");
-        if (items.length >= LIMITS.findings || seen.has(key)) return;
-        seen.add(key);
-        items.push({ selector, kind, axis: direction, overflowPx: tenths(px), severity: "error" });
-      },
-      claim: (el) => roots.push(el),
-      covers: (el) => roots.some((r) => r.contains(el)),
-    };
-  }
-
-  // ---- rules ---------------------------------------------------------------
-
-  const materialPx = (scene) => Math.max(24, scene.view.width * 0.05);
-  const pastEdge = (rect, scene, minPx, side) => {
-    const hit = classifyMaterialRectEscape({ rect, boundary: scene.viewBox, axes: ["horizontal"], minOutsidePx: minPx });
-    return hit && hit.side === side ? hit : null;
-  };
-
-  // Does a painted, in-flow box (a fill, a border, an image) run past the right
-  // edge with nothing clipping or scrolling it?
-  function paintsPastRight(scene, el) {
-    const s = scene.style(el);
-    if (PLACED.has(s.position)) return false;
-    const paints =
-      el.matches("img,video,canvas,table,iframe") ||
-      alphaOf(s.backgroundColor) !== 0 ||
-      (s.backgroundImage && s.backgroundImage !== "none") ||
-      ["Top", "Right", "Bottom", "Left"].some((side) => toPx(s["border" + side + "Width"]) > 0 && s["border" + side + "Style"] !== "none");
-    if (!paints || scene.clippers(el).some((c) => c.axes.includes("horizontal"))) return false;
-    return !!pastEdge(scene.rect(el), scene, materialPx(scene), "end");
-  }
-
-  // Is meaningful content sitting past the right edge of the viewport?
-  function reachesPastRight(scene, el) {
-    if (isRoot(el) || scene.scrollsAcross(el) || !scene.auditable(el)) return false;
-    const placed = PLACED.has(scene.style(el).position);
-    if (isControl(el) && pastEdge(scene.rect(el), scene, 4, "end")) return true;
-    if (!placed && scene.textOf(el) && scene.glyphs(el).some((g) => pastEdge(g, scene, materialPx(scene), "end"))) return true;
-    return paintsPastRight(scene, el);
-  }
-
-  function auditPageWidth(scene, ledger, elements) {
-    const overshoot = scene.root.scrollWidth - scene.view.width;
-    const worthChecking = isMaterialPageOverflow({ overflowPx: overshoot, viewportWidth: scene.view.width, hasEscapedContent: true });
-    if (!worthChecking || scene.lockedHorizontally()) return;
-    if (elements.some((el) => reachesPastRight(scene, el))) ledger.add("page-horizontal-overflow", "html", "horizontal", overshoot);
-  }
-
-  function auditControls(scene, ledger, elements) {
-    for (const el of elements) {
-      if (!isControl(el) || !scene.auditable(el)) continue;
-      const box = scene.rect(el);
-
-      // Cut by a clipping ancestor: report the container, once.
-      let cut = null;
-      for (const c of scene.clippers(el)) {
-        const hit = classifyMaterialRectEscape({ rect: box, boundary: c.box, axes: c.axes });
-        if (hit && (!cut || hit.overflowPx > cut.hit.overflowPx)) cut = { c, hit };
-      }
-      if (cut && !ledger.covers(cut.c.el)) {
-        ledger.claim(cut.c.el);
-        ledger.add("clipped-control", selectorFor(cut.c.el), cut.hit.axis, cut.hit.overflowPx);
-      }
-
-      // Left of the viewport: there is no scrolling there.
-      if (!scene.scrollsAcross(el)) {
-        const left = pastEdge(box, scene, 4, "start");
-        if (left) ledger.add("viewport-unreachable-control", selectorFor(el), "horizontal", left.overflowPx);
-      }
-
-      // Above or below everything it could be scrolled into. A control inside a
-      // vertical scroller is reached by scrolling that scroller.
-      if (scene.scrollsDown(el.parentElement)) continue;
-      const position = scene.style(el).position;
-      const pinned = position === "fixed" || position === "sticky" || scene.lockedVertically();
-      const lift = pinned ? 0 : Number(window.scrollY || window.pageYOffset || 0);
-      const hit = classifyMaterialRectEscape({
-        rect: { top: box.top + lift, bottom: box.bottom + lift, height: box.height },
-        boundary: { top: 0, bottom: pinned ? scene.view.height : scene.root.scrollHeight },
-        axes: ["vertical"],
+    // Resolves true when the document stayed quiet, false when the budget ran out.
+    function untilQuiet(budgetMs) {
+      return new Promise((resolve) => {
+        const cap = setTimeout(() => finish(false), Math.max(0, budgetMs));
+        const arm = () => {
+          clearTimeout(quietTimer);
+          quietTimer = setTimeout(() => finish(true), TIMING.quietMs);
+        };
+        const finish = (quiet) => {
+          clearTimeout(cap);
+          clearTimeout(quietTimer);
+          onQuietBreak = null;
+          resolve(quiet);
+        };
+        onQuietBreak = arm;
+        arm();
       });
-      if (hit) ledger.add("viewport-unreachable-control", selectorFor(el), "vertical", hit.overflowPx);
     }
-  }
 
-  // Text that sits left of the viewport can never be scrolled to.
-  function auditStrandedText(scene, ledger, elements) {
-    for (const el of elements) {
-      if (!scene.textOf(el) || scene.scrollsAcross(el) || !scene.auditable(el)) continue;
-      if (PLACED.has(scene.style(el).position) && !isControl(el)) continue;
-      let worst = null;
-      for (const g of scene.glyphs(el)) {
-        const hit = pastEdge(g, scene, materialPx(scene), "start");
-        if (hit && (!worst || hit.overflowPx > worst.overflowPx)) worst = hit;
+    const finiteAnimations = () =>
+      (document.getAnimations ? document.getAnimations() : []).filter((a) => {
+        const timing = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
+        return timing && Number.isFinite(timing.endTime) && a.playState === "running";
+      });
+
+    async function settle(started) {
+      const left = () => TIMING.settleCapMs - (Date.now() - started);
+      const capped = (promise) => Promise.race([promise, sleep(Math.max(0, left())).then(() => false)]);
+      if (document.readyState !== "complete") {
+        await capped(new Promise((resolve) => window.addEventListener("load", () => resolve(true), { once: true })));
       }
-      if (worst) ledger.add("viewport-unreachable-content", selectorFor(el), "horizontal", worst.overflowPx);
+      if (document.fonts && document.fonts.ready) await capped(document.fonts.ready.then(() => true));
+      const running = finiteAnimations();
+      if (running.length) await capped(Promise.all(running.map((a) => a.finished.catch(() => {}))).then(() => true));
+      return untilQuiet(left());
     }
-  }
 
-  // Text crossing the box that clips it: its own, or any clipping ancestor's.
-  function auditCutText(scene, ledger, elements) {
-    for (const el of elements) {
-      if (!scene.textOf(el) || ledger.covers(el) || !scene.auditable(el)) continue;
-      const own = scene.style(el);
-      const fragments = scene.glyphs(el);
-      const deliberate = truncatesOnPurpose(own);
-      let verdict = classifySevereTextOverflow({ fragments, box: scene.padBox(el), overflowX: own.overflowX, overflowY: own.overflowY, isTruncated: deliberate });
-      let culprit = el;
-      for (const c of scene.clippers(el)) {
-        const hit = classifySevereTextOverflow({
-          fragments,
-          box: c.box,
-          overflowX: c.axes.includes("horizontal") ? "hidden" : "auto",
-          overflowY: c.axes.includes("vertical") ? "hidden" : "auto",
-          isTruncated: deliberate || c.truncates,
+    function observe() {
+      const found = judge(readSnapshot(window, document));
+      return found.map((f) => ({
+        kind: f.kind,
+        selector: f.ref === null ? "" : selectorFor(f.ref, document),
+        axis: f.axis,
+        overflow_px: round1(f.overflow_px),
+      }));
+    }
+
+    function send(fields) {
+      const payload = { artifact_version: artifactVersion, viewport_width: window.innerWidth, ...fields };
+      const text = JSON.stringify(payload);
+      if (text === lastSent) return;
+      lastSent = text;
+      window.parent.postMessage({ type: "forum:layout", ...payload }, "*");
+    }
+
+    async function run() {
+      const mine = ++generation;
+      const started = Date.now();
+      try {
+        const quiet = await settle(started);
+        if (mine !== generation) return;
+        mutated = false;
+        const first = observe();
+        await frames(2);
+        await sleep(TIMING.pauseMs);
+        if (mine !== generation) return;
+        const second = observe();
+        const confirmed = shape(agree(first, second));
+        const stillMoving = finiteAnimations().length > 0;
+        const loaded = document.readyState === "complete";
+        const steady = quiet && loaded && !mutated;
+        const fontsDone = !document.fonts || document.fonts.status !== "loading";
+        send({
+          complete: steady && fontsDone && !stillMoving && !confirmed.truncated,
+          target_presence_complete: steady,
+          findings: confirmed.findings,
         });
-        if (hit && (!verdict || hit.overflowPx > verdict.overflowPx)) {
-          verdict = hit;
-          culprit = c.el;
-        }
+      } catch (error) {
+        if (mine !== generation) return;
+        send({ complete: false, target_presence_complete: false, findings: [] });
       }
-      if (!verdict) continue;
-      ledger.claim(culprit);
-      ledger.add(verdict.kind, selectorFor(culprit), verdict.axis, verdict.overflowPx);
     }
+
+    let resizeTimer = 0;
+    window.addEventListener("resize", () => {
+      generation += 1; // whatever is in flight no longer describes this window
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(run, TIMING.resizeDebounceMs);
+    });
+    run();
   }
 
-  // The branch of the tree, painted over `point`, that is a sibling of one of
-  // el's own ancestors and opaque enough to hide el. Null when nothing of the
-  // kind covers the point.
-  function coveringBranch(scene, el, point) {
-    const hit = doc.elementFromPoint(point.x, point.y);
-    if (!(hit instanceof Element) || el.contains(hit) || hit.closest("[data-forum-ui]")) return null;
-    const own = new Set();
-    for (let n = el; n; n = n.parentElement) own.add(n);
-    let opaque = false;
-    let see = 1; // how much of the branch shows through, multiplied up the way
-    for (let n = hit; n && !own.has(n); n = n.parentElement) {
-      if (scene.moving(n)) return null;
-      const s = scene.style(n);
-      const opacity = Number.parseFloat(s.opacity || "1");
-      if (Number.isFinite(opacity)) see *= opacity;
-      const alpha = alphaOf(s.backgroundColor);
-      if (opacity >= 0.95 && alpha !== null && alpha >= 0.95) opaque = true;
-      if (own.has(n.parentElement)) return opaque && see >= 0.95 ? n : null;
-    }
-    return null;
-  }
+  if (framed) start();
 
-  function auditCoveredText(scene, ledger, elements) {
-    let examined = 0;
-    for (const el of elements) {
-      if (examined >= LIMITS.coverCandidates) break;
-      const text = scene.textOf(el);
-      if (text.length < LIMITS.coverMinText && !(text.length > 0 && isControl(el))) continue;
-      if (ledger.covers(el) || scene.style(el).position === "fixed" || !scene.auditable(el)) continue;
-      examined += 1;
-      const covering = new Map();
-      let sampled = 0;
-      for (const g of scene.glyphs(el)) {
-        if (g.width * g.height < 16) continue;
-        for (const fx of [0.2, 0.5, 0.8]) {
-          for (const fy of [0.2, 0.5, 0.8]) {
-            const point = { x: g.left + g.width * fx, y: g.top + g.height * fy };
-            if (point.x < 0 || point.y < 0 || point.x > scene.view.width || point.y > scene.view.height) continue;
-            sampled += 1;
-            const branch = coveringBranch(scene, el, point);
-            if (branch) covering.set(branch, (covering.get(branch) || 0) + 1);
-          }
-        }
-      }
-      const covered = Math.max(0, ...covering.values());
-      if (!isNearTotalOcclusion({ occludedSamples: covered, totalSamples: sampled })) continue;
-      ledger.claim(el);
-      ledger.add("overlapping-text", selectorFor(el), "horizontal", 0);
-    }
-  }
-
-  // One sample of the whole document. Order matters a little: controls and cut
-  // text claim containers first so the same container is not reported twice.
-  function takeSample() {
-    const scene = openScene();
-    const ledger = openLedger();
-    const elements = scene.elements();
-    auditPageWidth(scene, ledger, elements);
-    auditControls(scene, ledger, elements);
-    auditStrandedText(scene, ledger, elements);
-    auditCutText(scene, ledger, elements);
-    auditCoveredText(scene, ledger, elements);
-    return ledger.items;
-  }
-
-  // ===================================================================
-  // Settling, scheduling, reporting
-  // ===================================================================
-
-  const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-  function paintOnce() {
-    return new Promise((resolve) => {
-      let done = false;
-      const go = () => {
-        if (!done) {
-          done = true;
-          resolve();
-        }
-      };
-      if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(go);
-      window.setTimeout(go, TIMING.frameFallback);
+  // Test access to the pure parts, never inside the chrome.
+  if (!framed) {
+    window.__forumLayoutKit = Object.freeze({
+      judge, agree, shape, selectorFor, readSnapshot,
+      thresholds: THRESHOLD, budget: BUDGET, timing: TIMING,
     });
   }
-
-  async function paintFrames(count) {
-    for (let i = 0; i < count; i += 1) await paintOnce();
-  }
-
-  function fontsReady() {
-    const fonts = doc.fonts;
-    try {
-      if (fonts && fonts.ready) return fonts.ready.catch(() => {});
-    } catch {
-      /* the calm wait below is still a safety net */
-    }
-    return Promise.resolve();
-  }
-
-  // Resolves true once `attach`'s signal has been quiet for TIMING.calm, or
-  // false when TIMING.calmCap runs out first. attach(poke) starts watching,
-  // calls poke() on every change and returns a function that stops watching.
-  function untilCalm(attach) {
-    return new Promise((resolve) => {
-      let idle = 0;
-      let cap = 0;
-      let over = false;
-      let stop = () => {};
-      const end = (calm) => {
-        if (over) return;
-        over = true;
-        window.clearTimeout(idle);
-        window.clearTimeout(cap);
-        stop();
-        resolve(calm);
-      };
-      const poke = () => {
-        window.clearTimeout(idle);
-        idle = window.setTimeout(() => end(true), TIMING.calm);
-      };
-      stop = attach(poke) || stop;
-      poke();
-      cap = window.setTimeout(() => end(false), TIMING.calmCap);
-    });
-  }
-
-  const watchLayout = (poke) => {
-    if (typeof ResizeObserver === "undefined") return null;
-    const observer = new ResizeObserver(poke);
-    const targets = [doc.documentElement, doc.body, ...(doc.body ? doc.body.querySelectorAll("*") : [])].filter(Boolean).slice(0, LIMITS.elements);
-    for (const el of targets) observer.observe(el);
-    return () => observer.disconnect();
-  };
-
-  // A document that keeps mutating (a client framework still hydrating) is not
-  // ready to be judged; without the observer there is no way to tell.
-  const settledDom = () =>
-    typeof MutationObserver === "undefined"
-      ? Promise.resolve(false)
-      : untilCalm((poke) => {
-          const observer = new MutationObserver(poke);
-          observer.observe(doc.documentElement, { attributes: true, characterData: true, childList: true, subtree: true });
-          return () => observer.disconnect();
-        });
-
-  // Waits for finite animations to end. Infinite ones keep running: the audit
-  // just ignores what they animate. Returns false when some are still going,
-  // and the audit runs again when they finish.
-  async function finiteAnimationsDone() {
-    const finite = liveAnimations().filter((a) => {
-      const timing = a.effect && a.effect.getComputedTiming && a.effect.getComputedTiming();
-      return timing && Number.isFinite(Number(timing.endTime));
-    });
-    if (finite.length === 0) return true;
-    let done = false;
-    await Promise.race([
-      Promise.all(finite.map((a) => a.finished.catch(() => {}))).then(() => {
-        done = true;
-      }),
-      sleep(TIMING.animationCap),
-    ]);
-    if (!done) for (const a of finite) a.finished.then(requestAudit, requestAudit);
-    return done;
-  }
-
-  let generation = 0;
-  let pending = 0;
-  let lastSent = null;
-
-  // A pass says how complete it is: an incomplete pass is uncertainty, never
-  // proof that an earlier finding went away.
-  function send(findings, complete, presenceComplete) {
-    const width = window.innerWidth || doc.documentElement.clientWidth || 0;
-    const errors = findings.filter((f) => f && f.severity === "error");
-    const signature = JSON.stringify([complete, presenceComplete, width, errors]);
-    if (signature === lastSent) return;
-    lastSent = signature;
-    window.parent.postMessage(
-      {
-        type: "forum:layout",
-        artifact_version: DOC_VERSION,
-        complete,
-        target_presence_complete: presenceComplete === true,
-        viewport_width: width,
-        findings: errors.map((f) => ({ kind: f.kind, selector: f.selector, axis: f.axis, overflow_px: f.overflowPx })),
-      },
-      "*",
-    );
-  }
-
-  async function auditOnce(id) {
-    await fontsReady();
-    await untilCalm(watchLayout);
-    const animationsDone = await finiteAnimationsDone();
-    await paintFrames(2);
-    if (id !== generation) return;
-    const samples = [takeSample()];
-    await sleep(TIMING.resample);
-    await paintFrames(2);
-    if (id !== generation) return;
-    samples.push(takeSample());
-    const hydrated = await settledDom();
-    if (id !== generation) return;
-    if (hydrated) samples.push(takeSample());
-    const presenceComplete = doc.readyState === "complete" && hydrated;
-    const stable = findStableLayoutFindings(samples[samples.length - 2], samples[samples.length - 1]);
-    send(stable, animationsDone && presenceComplete, presenceComplete);
-  }
-
-  // Starting an audit supersedes any audit still in flight.
-  function requestAudit() {
-    window.clearTimeout(pending);
-    const id = ++generation;
-    pending = window.setTimeout(() => {
-      auditOnce(id).catch(() => {
-        if (id === generation) send([], false, false);
-      });
-    }, TIMING.firstRun);
-  }
-
-  // Only what can change layout re-runs the audit: the first settle, the load
-  // event, and the end of a resize. animationend and transitionend are not
-  // listened to (they bubble from every hover and fade in the document);
-  // finite animations re-run it themselves when they finish.
-  let resizing = 0;
-  window.addEventListener("load", requestAudit, { once: true });
-  window.addEventListener(
-    "resize",
-    () => {
-      window.clearTimeout(resizing);
-      resizing = window.setTimeout(requestAudit, TIMING.resizeDebounce);
-    },
-    { passive: true },
-  );
-  requestAudit();
-
-  window.forumLayout = classifiers;
 })();
