@@ -29,7 +29,7 @@ func run(args []string) int {
 		fmt.Print(cli.GeneralUsage())
 		return 0
 	case "-v", "--version":
-		fmt.Printf(cmdname.Name+" %s\n", version)
+		fmt.Println(buildinfo.FormatVersion(cmdname.Name, version, buildinfo.ReadVCS()))
 		return 0
 	case "init":
 		return cli.Init(args[1:])
