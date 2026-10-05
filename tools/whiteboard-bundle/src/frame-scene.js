@@ -43,7 +43,7 @@ export function referencedFiles(elements, files) {
   return used;
 }
 
-// ------------------------------------------------------------- conversion
+// Conversion
 
 // Mermaid text -> {elements, files}. Throws on text the converter rejects.
 export async function convertDiagram(text) {
@@ -63,7 +63,7 @@ export function normalizeElements(elements) {
   return restoreElements(elements, null, { repairBindings: true });
 }
 
-// ---------------------------------------------------------------- measuring
+// Measuring
 
 const FAMILY_NAMES = new Map(Object.entries(FONT_FAMILY).map(([name, id]) => [id, name]));
 const FALLBACKS = "Xiaolai, sans-serif, Segoe UI Emoji";
@@ -106,7 +106,7 @@ export function fitScene(elements) {
   return fitNodesToLabels(elements, measureText);
 }
 
-// ------------------------------------------------------------------- export
+// Export
 
 // PNG for the agent: opaque white background whatever the theme, so the
 // picture is neutral. Resolves a data URL, or "" when there is nothing to draw.
@@ -120,10 +120,18 @@ export async function renderPreview(elements, appState, files) {
     mimeType: "image/png",
     exportPadding: 16,
   });
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error || new Error("could not read the preview"));
-    reader.readAsDataURL(blob);
+  return readAsDataUrl(blob);
+}
+
+// Reads a blob into a data URL, rejecting if the read fails.
+function readAsDataUrl(blob) {
+  const reader = new FileReader();
+  const finished = new Promise((resolve, reject) => {
+    reader.addEventListener("loadend", () => {
+      if (reader.error) reject(reader.error);
+      else resolve(typeof reader.result === "string" ? reader.result : "");
+    });
   });
+  reader.readAsDataURL(blob);
+  return finished;
 }

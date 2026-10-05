@@ -58,7 +58,7 @@ export function createStatus() {
 const FOCUSABLE = "button, [href], input, [tabindex]:not([tabindex='-1'])";
 
 // Asks the reviewer to confirm opening a link; resolves true only on
-// "Open link". A modal dialog: named, focus starts on the safe action
+// "Follow link". A modal dialog: named, focus starts on the safe action
 // (Cancel), Tab cycles inside it, Escape cancels and focus goes back to
 // whatever had it before.
 export function confirmLinkDialog(url) {
@@ -68,7 +68,7 @@ export function confirmLinkDialog(url) {
     const intro = make("p", { id: "vxb-link-intro", class: "vxb-dialog-text", text: "This diagram links to the address below. It opens in a new tab." });
     const target = make("code", { class: "vxb-url", text: url });
     const cancel = make("button", { type: "button", class: "vxb-btn", text: "Cancel" });
-    const open = make("button", { type: "button", class: "vxb-btn vxb-btn-primary", text: "Open link" });
+    const open = make("button", { type: "button", class: "vxb-btn vxb-btn-primary", text: "Follow link" });
     const dialog = make(
       "div",
       { class: "vxb-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "vxb-link-title", "aria-describedby": "vxb-link-intro" },

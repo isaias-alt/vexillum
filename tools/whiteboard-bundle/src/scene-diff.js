@@ -21,8 +21,8 @@ export const ANGLE_TOLERANCE = 0.02;
 // Summary limits chosen for an agent reading a prompt: enough lines to cover a
 // substantial rework, short enough to scan. The server enforces its own,
 // larger ceiling (50 lines x 300 characters).
-export const SUMMARY_MAX_LINES = 40;
-export const SUMMARY_MAX_LINE_CHARS = 160;
+export const EDIT_SUMMARY_LINE_LIMIT = 40;
+export const EDIT_SUMMARY_LINE_WIDTH = 160;
 
 const LINEAR = new Set(["arrow", "line"]);
 const SHAPES = new Set(["rectangle", "ellipse", "diamond"]);
@@ -232,8 +232,8 @@ function describeChange(c, after) {
 // At most maxLines lines; when changes were left out, the last line says how
 // many.
 export function summarizeEdits(referenceElements, currentElements, limits = {}) {
-  const maxLines = limits.maxLines ?? SUMMARY_MAX_LINES;
-  const maxChars = limits.maxLineChars ?? SUMMARY_MAX_LINE_CHARS;
+  const maxLines = limits.maxLines ?? EDIT_SUMMARY_LINE_LIMIT;
+  const maxChars = limits.maxLineChars ?? EDIT_SUMMARY_LINE_WIDTH;
   if (!Array.isArray(referenceElements)) {
     const n = (currentElements || []).filter(isLive).length;
     return [`no converted reference to compare with; the scene holds ${n} element${n === 1 ? "" : "s"}, see the scene file`];

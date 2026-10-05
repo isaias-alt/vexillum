@@ -106,7 +106,7 @@ const remark = make("input", {
   placeholder: "Remark for the agent (optional)",
   "aria-label": "Remark for the agent (optional)",
 });
-const queueButton = make("button", { type: "button", class: "vxb-btn vxb-btn-primary", text: "Queue feedback" });
+const submitButton = make("button", { type: "button", class: "vxb-btn vxb-btn-primary", text: "Queue feedback" });
 const expandButton = make("button", { type: "button", class: "vxb-btn", text: "Fullscreen" });
 const banner = make("p", { class: "vxb-banner", role: "note" });
 banner.hidden = true;
@@ -115,7 +115,7 @@ const overlayHost = make("div", { class: "vxb-overlay-host" });
 const main = make("main", { class: "vxb-main" }, [boardHost, overlayHost, status.root]);
 const header = make("header", { class: "vxb-bar" }, [
   make("div", { class: "vxb-heading" }, [title, badge]),
-  make("div", { class: "vxb-tools" }, [remark, queueButton, expandButton]),
+  make("div", { class: "vxb-tools" }, [remark, submitButton, expandButton]),
 ]);
 
 function applyPalette(palette) {
@@ -132,10 +132,10 @@ function applyMode(mode) {
 
 function refreshControls() {
   const idle = state.ready && !state.frozen;
-  queueButton.disabled = !idle || state.submitting;
+  submitButton.disabled = !idle || state.submitting;
   expandButton.disabled = !idle;
-  queueButton.textContent = state.submitting ? "Queueing..." : "Queue feedback";
-  queueButton.setAttribute("aria-busy", state.submitting ? "true" : "false");
+  submitButton.textContent = state.submitting ? "Sending..." : "Queue feedback";
+  submitButton.setAttribute("aria-busy", state.submitting ? "true" : "false");
 }
 
 document.body.append(header, banner, main);
@@ -234,14 +234,14 @@ function currentRecord() {
 
 const unsaved = () => state.dirty || state.failedSave || state.pendingSaves.size > 0;
 
-function scheduleSave() {
+function persistSoon() {
   clearTimeout(state.saveTimer);
   state.saveTimer = setTimeout(flushSave, SAVE_DELAY_MS);
 }
 
 function markDirty() {
   state.dirty = true;
-  if (!state.frozen) scheduleSave();
+  if (!state.frozen) persistSoon();
 }
 
 function flushSave() {
@@ -263,7 +263,7 @@ function onSaved(message) {
     return;
   }
   state.failedSave = true;
-  status.say(`Your latest changes could not be saved (${message.error || "unknown error"}). They stay on this board and are saved again with your next change.`, {
+  status.say(`Your latest changes could not be saved (${message.error || "no details given"}). They stay on this board and are saved again with your next change.`, {
     tone: "error",
     actions: [{ label: "Retry", run: flushSave }],
   });
@@ -418,11 +418,11 @@ function onQueued(message) {
   entry.resolve({ ok: !!message.ok, error: message.error });
 }
 
-async function queueFeedback() {
+async function sendRemark() {
   if (state.submitting || !state.ready || state.frozen) return;
   state.submitting = true;
   refreshControls();
-  status.say("Queueing feedback...", { tone: "info", sticky: true });
+  status.say("Sending feedback...", { tone: "info", sticky: true });
   try {
     const elements = liveElements();
     const appState = state.api.getAppState();
@@ -443,17 +443,17 @@ async function queueFeedback() {
       remark.value = "";
       status.say("Feedback queued for the agent.", { tone: "ok" });
     } else {
-      status.say(`Feedback was not queued: ${result.error || "unknown error"}.`, { tone: "error", actions: [{ label: "Try again", run: queueFeedback }] });
+      status.say(`Feedback was not queued: ${result.error || "no details given"}.`, { tone: "error", actions: [{ label: "Try again", run: sendRemark }] });
     }
   } catch (error) {
-    status.say(`Feedback was not queued: ${(error && error.message) || error}.`, { tone: "error", actions: [{ label: "Try again", run: queueFeedback }] });
+    status.say(`Feedback was not queued: ${(error && error.message) || error}.`, { tone: "error", actions: [{ label: "Try again", run: sendRemark }] });
   } finally {
     state.submitting = false;
     refreshControls();
   }
 }
 
-queueButton.addEventListener("click", queueFeedback);
+submitButton.addEventListener("click", sendRemark);
 expandButton.addEventListener("click", () => {
   if (state.ready && !state.frozen) post("expand");
 });
@@ -497,17 +497,17 @@ async function onLinkOpen(element, event) {
 
 // ---------------------------------------------------- freeze and final state
 
-function setFrozen(on) {
+function lockBoard(on) {
   if (state.frozen === on) return;
   state.frozen = on;
   if (on) clearTimeout(state.saveTimer);
   refreshControls();
   renderBoard();
-  if (!on && state.dirty) scheduleSave();
+  if (!on && state.dirty) persistSoon();
 }
 
 function answerSnapshot(message) {
-  if (message.freeze) setFrozen(true);
+  if (message.freeze) lockBoard(true);
   const live = state.ready && !state.broken;
   post("final", { reqId: message.reqId, record: live ? currentRecord() : null, unsaved: live ? unsaved() : false });
 }
@@ -537,7 +537,7 @@ window.addEventListener("message", (event) => {
       answerSnapshot(message);
       break;
     case "thaw":
-      setFrozen(false);
+      lockBoard(false);
       break;
     default:
       break;

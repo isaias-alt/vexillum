@@ -69,7 +69,7 @@
   let requestCounter = 0;
 
   const clip = (value, max) => String(value === null || value === undefined ? "" : value).slice(0, max);
-  const errorText = (error) => String((error && error.message) || error || "unknown error");
+  const errorText = (error) => String((error && error.message) || error || "no details given");
 
   // ------------------------------------------------------------------ theme
 

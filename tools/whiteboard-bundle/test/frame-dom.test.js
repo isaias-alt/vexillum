@@ -116,7 +116,7 @@ function openDialog(url) {
   const answer = confirmLinkDialog(url);
   const scrim = document.body.kids[document.body.kids.length - 1];
   const dialog = scrim.kids[0];
-  return { before, answer, scrim, dialog, cancel: buttonLabelled(dialog, "Cancel"), open: buttonLabelled(dialog, "Open link") };
+  return { before, answer, scrim, dialog, cancel: buttonLabelled(dialog, "Cancel"), open: buttonLabelled(dialog, "Follow link") };
 }
 
 test("the link dialog is a named modal that shows the full address and starts on Cancel", () => {
@@ -156,7 +156,7 @@ test("Escape cancels and focus returns to what had it", async () => {
   assert.equal(document.activeElement, before);
 });
 
-test("Cancel answers false and Open link answers true", async () => {
+test("Cancel answers false and Follow link answers true", async () => {
   const one = openDialog("https://example.com/");
   one.cancel.click();
   assert.equal(await one.answer, false);

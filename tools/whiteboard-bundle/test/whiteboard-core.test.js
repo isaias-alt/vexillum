@@ -9,8 +9,8 @@ import {
   OPEN_REOPEN,
   POSITION_TOLERANCE,
   RECORD_FORMAT,
-  SUMMARY_MAX_LINES,
-  SUMMARY_MAX_LINE_CHARS,
+  EDIT_SUMMARY_LINE_LIMIT,
+  EDIT_SUMMARY_LINE_WIDTH,
   breakTagsToNewlines,
   buildRecord,
   cloneScene,
@@ -353,15 +353,15 @@ test("a summary is bounded in lines and in line length, and says when it truncat
     cur.push(shape(`n${i}`, null, { x: i * 10 + 50 }));
   }
   const lines = summarizeEdits(ref, cur);
-  assert.equal(lines.length, SUMMARY_MAX_LINES);
-  assert.ok(SUMMARY_MAX_LINES <= 50 && SUMMARY_MAX_LINE_CHARS <= 300);
+  assert.equal(lines.length, EDIT_SUMMARY_LINE_LIMIT);
+  assert.ok(EDIT_SUMMARY_LINE_LIMIT <= 50 && EDIT_SUMMARY_LINE_WIDTH <= 300);
   assert.match(lines.at(-1), /^\.\.\. and 21 more changes not listed/);
-  assert.ok(lines.every((l) => l.length <= SUMMARY_MAX_LINE_CHARS && !l.includes("\n")));
+  assert.ok(lines.every((l) => l.length <= EDIT_SUMMARY_LINE_WIDTH && !l.includes("\n")));
 
   const long = text("t", "x".repeat(500) + "\nsecond line");
   const out = summarizeEdits([], [long]);
   assert.equal(out.length, 1);
-  assert.ok(out[0].length <= SUMMARY_MAX_LINE_CHARS);
+  assert.ok(out[0].length <= EDIT_SUMMARY_LINE_WIDTH);
   assert.ok(out[0].includes("..."), "the long label is visibly cut");
   assert.equal(summarizeEdits([], [long], { maxLines: 3, maxLineChars: 40 })[0].length <= 40, true);
 });
