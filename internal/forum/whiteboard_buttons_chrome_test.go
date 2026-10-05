@@ -119,3 +119,25 @@ func TestWhiteboard_RealChrome_ButtonsAreSmallForumButtonsInBothThemes(t *testin
 		}
 	}
 }
+
+// Escape pressed inside the fullscreen frame (where the keyboard focus really
+// is) takes the way back through the same safe path, and focus returns to the
+// control that opened fullscreen in the new inline board.
+func TestWhiteboard_RealChrome_EscapeInsideFullscreenGoesBack(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	key := env.open().Key
+	got := runLab(t, env, key, "light", []string{"flowchart LR\n  A --> B"}, `
+const inline = await boardReady(0);
+const opener = inline.contentDocument.querySelector(".vxb-tools .vxb-btn:last-child");
+opener.click();
+const full = await boardReady(overlayFrame);
+full.contentDocument.querySelector(".excalidraw").dispatchEvent(new full.contentWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+await until(() => !document.getElementById("vxb-overlay"), 15000, "the overlay to close");
+const again = await boardReady(0);
+await until(() => again.contentDocument.activeElement && again.contentDocument.activeElement.textContent === "Fullscreen", 10000, "focus to return to the Fullscreen button");
+report("result", JSON.stringify({ newBoard: again !== inline, pageInert: [...document.body.children].some((c) => c.hasAttribute("inert")) }));
+`, 1300, 900, 90*time.Second)
+	if !strings.Contains(got, `"newBoard":true`) || !strings.Contains(got, `"pageInert":false`) {
+		t.Errorf("after Escape: %s", got)
+	}
+}

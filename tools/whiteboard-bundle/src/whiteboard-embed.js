@@ -141,7 +141,7 @@
 .vxb-cover-text { color: var(--fr-text); background: var(--fr-surface); border: 1px solid var(--fr-border); border-radius: var(--fr-radius-sm); padding: var(--fr-space-1) var(--fr-space-3); }
 .vxb-unlock, .vxb-back, .vxb-leave { font: inherit; font-weight: 600; color: var(--fr-accent-contrast); background: var(--fr-accent); border: 1px solid var(--fr-accent); border-radius: var(--fr-radius-sm); padding: 0 var(--fr-space-4); box-sizing: border-box; height: 28px; cursor: pointer; }
 .vxb-unlock:hover, .vxb-back:hover { background: var(--fr-accent-hover); }
-.vxb-leave { color: var(--fr-text); background: var(--fr-surface); border-color: var(--fr-danger); }
+.vxb-leave { color: var(--fr-text); background: var(--fr-surface); border-color: var(--fr-danger); flex: none; white-space: nowrap; }
 .vxb-unlock:focus-visible, .vxb-back:focus-visible, .vxb-leave:focus-visible { outline: 2px solid var(--fr-text); outline-offset: 2px; }
 .vxb-note { margin: 0; padding: var(--fr-space-2) var(--fr-space-3); color: var(--fr-text-secondary); border-top: 1px solid var(--fr-border); background: var(--fr-surface); min-height: 1.5em; }
 .vxb-note:empty { display: none; }
@@ -152,7 +152,7 @@
 #${OVERLAY_ID} { position: fixed; inset: 0; z-index: 2147483000; background: var(--fr-bg); color: var(--fr-text); font: 13px/1.5 var(--fr-font-sans); }
 #${OVERLAY_ID} .vxb-frame { position: absolute; inset: 0; }
 #${OVERLAY_ID} .vxb-way { position: absolute; top: var(--fr-space-2); right: var(--fr-space-3); z-index: 2; }
-#${OVERLAY_ID} .vxb-overlay-note { position: absolute; left: 50%; bottom: var(--fr-space-4); transform: translateX(-50%); z-index: 2; display: flex; gap: var(--fr-space-3); align-items: center; max-width: min(90vw, 640px); padding: var(--fr-space-2) var(--fr-space-3); background: var(--fr-surface); color: var(--fr-text); border: 1px solid var(--fr-danger); border-radius: var(--fr-radius-md); box-shadow: var(--fr-shadow-md); }
+#${OVERLAY_ID} .vxb-overlay-note { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 2; display: flex; gap: var(--fr-space-3); align-items: center; max-width: min(90vw, 640px); padding: var(--fr-space-2) var(--fr-space-3); background: var(--fr-surface); color: var(--fr-text); border: 1px solid var(--fr-danger); border-radius: var(--fr-radius-md); box-shadow: var(--fr-shadow-md); }
 #${OVERLAY_ID} .vxb-overlay-note[hidden] { display: none; }
 @media (prefers-reduced-motion: no-preference) { .vxb-unlock { transition: background-color 120ms ease; } }
 `;

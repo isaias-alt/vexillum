@@ -39,7 +39,7 @@ func (s *Server) handleEmbedScript(w http.ResponseWriter, r *http.Request) {
 // The asset URLs carry the build id, so a browser that kept an earlier
 // bundle under the old URL can never run it against this embed script.
 const whiteboardFrameHTML = `<!doctype html>
-<html>
+<html data-fr-theme="%[2]s">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -58,12 +58,18 @@ const whiteboardFrameHTML = `<!doctype html>
 // Excalidraw editor - both the inline placement and the fullscreen overlay
 // point at this same route. The frame script reads two query parameters at
 // boot: slot (the board's ordinal) and palette (dark or light). The page is
-// blank until that script runs, so the embed paints the iframe's backdrop in
-// the right palette and nothing of the wrong one is ever visible.
+// blank until that script runs, but its <html> already carries the palette,
+// so the tokens and the color-scheme resolve from the first paint: the iframe
+// is transparent over the embed's themed backdrop and nothing of the wrong
+// theme is ever visible. Anything but "light" means dark.
 func (s *Server) handleWhiteboardFrame(w http.ResponseWriter, r *http.Request) {
+	palette := "dark"
+	if r.URL.Query().Get("palette") == "light" {
+		palette = "light"
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = fmt.Fprintf(w, whiteboardFrameHTML, buildID())
+	_, _ = fmt.Fprintf(w, whiteboardFrameHTML, buildID(), palette)
 }
 
 func (s *Server) artifactSources(key string) ([]MermaidSource, error) {

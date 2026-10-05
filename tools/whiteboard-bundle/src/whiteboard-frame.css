@@ -13,6 +13,12 @@
 
 html, body { margin: 0; height: 100%; }
 
+/* The embedder sets the iframe's color-scheme to the palette; when the
+   document's own scheme differs, the browser paints an opaque backdrop (white
+   for light) behind the frame. Declaring the same scheme keeps it transparent. */
+:root { color-scheme: dark; }
+:root[data-fr-theme="light"] { color-scheme: light; }
+
 body {
   display: flex;
   flex-direction: column;
@@ -149,6 +155,11 @@ body .vxb-board .excalidraw.theme--dark {
   --button-hover-bg: var(--fr-accent-soft);
   font-family: var(--fr-font-sans);
 }
+
+/* The editor's hint line under the toolbar is a pale grey of its own, below
+   the 4.5:1 minimum on the forum surfaces. */
+body .vxb-board .excalidraw .HintViewer,
+body .vxb-board .excalidraw.theme--dark .HintViewer { color: var(--fr-text-secondary); }
 
 /* ---- status line: a polite live region floating over the canvas ---- */
 .vxb-status {

@@ -40,7 +40,9 @@ const labPrelude = `<script>
     "board.write": function (p) { return ["PUT", "/boards/" + p.ordinal]; },
     "board.submit": function (p) { return ["POST", "/boards/" + p.ordinal + "/submit"]; }
   };
+  // window.serverDown simulates a server that went away: every call fails.
   window.forum = { __rpc: async function (op, payload) {
+    if (window.serverDown) throw new Error("Failed to fetch");
     var route = routes[op] && routes[op](payload || {});
     if (!route) throw new Error("unsupported operation");
     var init = { method: route[0], headers: { "X-Forum-Token": "__TOKEN__", "Content-Type": "application/json" } };

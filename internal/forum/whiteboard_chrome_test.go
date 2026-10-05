@@ -375,3 +375,51 @@ const outcome = async (op, payload) => {
 		}
 	}
 }
+
+// Every control of a board has an accessible name, in the locked state, in the
+// frame's header and in the fullscreen overlay, and every iframe has a title
+// that tells the boards apart. (The name is computed the simple way: label,
+// text, title or placeholder; that is what the page authors for.)
+func TestWhiteboard_RealChrome_EveryControlHasAnAccessibleName(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	key := env.open().Key
+	got := runLab(t, env, key, "dark", []string{"flowchart LR\n  A --> B", "flowchart LR\n  C --> D"}, `
+const inline = await boardReady(0);
+await boardReady(1);
+const nameOf = (el) => (el.getAttribute("aria-label") || el.textContent || el.getAttribute("title") || el.getAttribute("placeholder") || "").trim();
+const unnamed = [];
+const audit = (root, where) => root.querySelectorAll("button, input, iframe, [role=dialog], [role=button]").forEach((el) => {
+  const name = el.tagName === "IFRAME" ? (el.getAttribute("title") || "") : nameOf(el);
+  if (!name) unnamed.push(where + ": " + el.tagName + "." + el.className);
+});
+// Only the controls the whiteboard owns: its slots, its frames' header, its overlay.
+document.querySelectorAll(".vxb-slot").forEach((slot, i) => audit(slot, "slot " + i));
+audit(inline.contentDocument.querySelector(".vxb-bar"), "frame header");
+inline.contentDocument.querySelector(".vxb-tools .vxb-btn:last-child").click();
+const overlay = await until(() => document.getElementById("vxb-overlay"), 15000, "the overlay");
+const full = await boardReady(overlayFrame);
+audit(overlay, "overlay");
+audit(full.contentDocument.querySelector(".vxb-bar"), "fullscreen header");
+const titles = [...document.querySelectorAll("iframe")].map((f) => f.getAttribute("title"));
+report("result", JSON.stringify({ unnamed, titles, overlayName: overlay.getAttribute("aria-label") }));
+`, 1300, 900, 90*time.Second)
+	t.Logf("%s", got)
+	var r struct {
+		Unnamed []string
+		Titles  []string
+	}
+	if err := json.Unmarshal([]byte(got), &r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Unnamed) != 0 {
+		t.Errorf("controls without an accessible name: %v", r.Unnamed)
+	}
+	seen := map[string]bool{}
+	for _, title := range r.Titles {
+		if title == "" || seen[title] {
+			t.Errorf("iframe titles must be present and tell the boards apart: %v", r.Titles)
+			break
+		}
+		seen[title] = true
+	}
+}

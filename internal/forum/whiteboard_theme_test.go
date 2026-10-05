@@ -62,6 +62,15 @@ func TestWhiteboardCSS_ThemesExcalidrawWithForumTokens(t *testing.T) {
 			t.Errorf("whiteboard.css does not contain %q", want)
 		}
 	}
+	// The frame declares the scheme of its palette, so the iframe stays
+	// transparent over the embed's themed backdrop while it loads.
+	if !strings.Contains(css, `:root[data-fr-theme=light]{color-scheme:light}`) {
+		t.Error("whiteboard.css does not declare the frame's color-scheme per palette")
+	}
+	// Keyboard focus is always visible.
+	if !strings.Contains(css, ":focus-visible") {
+		t.Error("whiteboard.css has no :focus-visible ring")
+	}
 	// The override has to win over both of the editor's theme blocks, so its
 	// selectors are the editor's own, prefixed to be more specific.
 	for _, sel := range []string{"body .vxb-board .excalidraw,", "body .vxb-board .excalidraw.theme--dark{"} {
@@ -227,6 +236,7 @@ report("result", JSON.stringify({
   paper: prop(excalidraw, "--default-bg-color"),
   ink: prop(excalidraw, "--text-primary-color"),
   host: css(q(".vxb-board"), "backgroundColor"),
+  hint: q(".HintViewer") ? css(q(".HintViewer"), "color") : "no hint",
   darkClass: excalidraw.classList.contains("theme--dark"),
 }));
 `
@@ -237,13 +247,13 @@ func TestWhiteboardFrame_RealChrome_UsesForumTokensInBothThemes(t *testing.T) {
 		"dark": {
 			"body": "rgb(21, 23, 26)", "bodyText": "rgb(233, 234, 236)", "bar": "rgb(32, 36, 42)", "barLine": "rgb(41, 45, 51)",
 			"remarkLine": "rgb(58, 63, 71)", "remarkBg": "rgb(28, 31, 36)",
-			"queueBg": "rgb(111, 161, 203)", "queueText": "rgb(15, 34, 51)", "fullBg": "rgb(28, 31, 36)", "fullText": "rgb(233, 234, 236)",
+			"queueBg": "rgb(111, 161, 203)", "queueText": "rgb(15, 34, 51)", "fullBg": "rgb(28, 31, 36)", "fullText": "rgb(233, 234, 236)", "hint": "rgb(160, 163, 169)",
 			"primary": "#6fa1cb", "island": "#1c1f24", "paper": "#15171a", "ink": "#e9eaec",
 		},
 		"light": {
 			"body": "rgb(242, 241, 236)", "bodyText": "rgb(26, 29, 34)", "bar": "rgb(236, 235, 228)", "barLine": "rgb(218, 218, 212)",
 			"remarkLine": "rgb(194, 192, 184)", "remarkBg": "rgb(255, 255, 255)",
-			"queueBg": "rgb(31, 78, 121)", "queueText": "rgb(255, 255, 255)", "fullBg": "rgb(255, 255, 255)", "fullText": "rgb(26, 29, 34)",
+			"queueBg": "rgb(31, 78, 121)", "queueText": "rgb(255, 255, 255)", "fullBg": "rgb(255, 255, 255)", "fullText": "rgb(26, 29, 34)", "hint": "rgb(90, 94, 102)",
 			"primary": "#1f4e79", "island": "#ffffff", "paper": "#f2f1ec", "ink": "#1a1d22",
 		},
 	} {

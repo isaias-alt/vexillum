@@ -471,10 +471,16 @@ function nothingToCancel() {
   return !open && Object.keys(app.selectedElementIds || {}).length === 0 && !app.selectedLinearElement;
 }
 
-window.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape" || event.defaultPrevented || state.mode !== "fullscreen") return;
-  if (nothingToCancel()) post("leave");
-});
+// Captured, because the editor stops the key before it bubbles; the state it
+// is judged on is therefore the one from before the editor handles the key.
+window.addEventListener(
+  "keydown",
+  (event) => {
+    if (event.key !== "Escape" || state.mode !== "fullscreen" || event.isComposing) return;
+    if (nothingToCancel()) post("leave");
+  },
+  true,
+);
 
 // -------------------------------------------------------------------- links
 

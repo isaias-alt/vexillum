@@ -348,3 +348,17 @@ func TestWhiteboardBundle_TalksToItsParentNotTheTop(t *testing.T) {
 		t.Error("the whiteboard frame never posts to window.parent")
 	}
 }
+
+// The frame page carries the palette in its own <html> from the server, so the
+// iframe never paints the wrong theme while the bundle is still loading.
+func TestWhiteboardFrame_CarriesThePaletteFromTheFirstByte(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	for query, want := range map[string]string{
+		"slot=0&palette=light": "light", "slot=0&palette=dark": "dark", "slot=0": "dark", "slot=0&palette=%3Cscript%3E": "dark",
+	} {
+		_, body := env.get("/whiteboard-frame?" + query)
+		if !strings.Contains(body, `<html data-fr-theme="`+want+`">`) {
+			t.Errorf("?%s: frame page does not start in %s:\n%s", query, want, body)
+		}
+	}
+}
