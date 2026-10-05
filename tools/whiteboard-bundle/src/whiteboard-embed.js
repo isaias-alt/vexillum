@@ -1,99 +1,124 @@
-// Adapted from upstream (MIT License, Copyright (c) 2026 Kun
-// Chen), the whiteboard block of src/chrome-client.js at v0.1.80 (commit
-// a2a199c, lines ~3255-3750). See THIRD-PARTY-NOTICES.md at the vexillum
-// repo root.
+// The whiteboard embed. The forum server injects this script into an artifact
+// that contains at least one `.mermaid` block (see internal/forum/server_pages.go);
+// build.js copies it to internal/forum/assets/whiteboard-embed.js, which is the
+// copy the binary serves.
 //
-// Structural changes from upstream (beyond forum-whiteboard: -> vx-whiteboard:
-// message types and dropping the channelToken HTTP handshake, see
-// whiteboard-frame.js's header for why):
-//   - Upstream's chrome hosts a *separate* artifact iframe and reaches into it
-//     to find `.mermaid` containers, so inline whiteboard iframes are two
-//     levels deep and it validates senders via
-//     `source.parent === artifactFrame.contentWindow`. Here this script is
-//     injected into the artifact page itself, so whiteboard iframes are
-//     direct children of `window`, and the sender check is
-//     `source.parent === window`.
-//   - The artifact runs in a sandboxed iframe (an opaque origin) under the
-//     forum chrome, and the whiteboard iframes are direct children of it.
-//     This script holds no server credentials: every round trip goes through
-//     window.forum.__rpc (forum-sdk.js), which asks the chrome to call the
-//     session-scoped, token-guarded API on its behalf.
-//   - "Queue feedback" persists the edited scene plus a `.excalidraw`/PNG
-//     snapshot to disk and the server queues a prompt tagged "whiteboard"
-//     (a bounded edit summary and those two paths) into the same queue as
-//     every other feedback, for the user to send to the agent.
-//   - No live-reload / chrome-restart flushing: the forum chrome reloads the
-//     artifact iframe itself when the file changes, and closing the
-//     fullscreen overlay reloads the inline iframe from disk so it picks up
-//     whatever the overlay just saved.
+// It runs inside the artifact page, which is itself a sandboxed iframe under the
+// forum chrome. It replaces every `.mermaid` block, in document order, with a
+// sandboxed iframe on /whiteboard-frame (the editable Excalidraw view of that
+// block's Mermaid source), and it is the only party that talks to the server:
+// every request goes through window.forum.__rpc, which asks the chrome to make
+// it with the session credentials. The frames themselves are given nothing but
+// postMessage.
 //
-// Runs inside the artifact page (injected by internal/forum's server before
-// </body> when the page contains at least one `.mermaid` container). Finds
-// every `.mermaid` container, in document order, and replaces it with a
-// sandboxed iframe pointing at /whiteboard-frame - the editable Excalidraw
-// view of that diagram's Mermaid source. Owns every server round trip
-// (through the chrome); the frames themselves have no server access (see
-// whiteboard-frame.js).
+// Each board the embed manages is a "placement": an iframe, the channel id its
+// frame announced, and a little state. Inline boards live in the page; at most
+// one fullscreen placement exists at a time, drawn over everything by the
+// overlay. Both kinds are driven by the same message handling.
+//
+//   frame -> embed:  ready, save, queueFeedback, maximize, teardownReady,
+//                    teardownFailed, flushComplete        ("vx-whiteboard:" prefix)
+//   embed -> frame:  init, theme, prepareTeardown, flush, saveResult, queueResult
 
 (function () {
   "use strict";
 
-  const MERMAID_SELECTOR = ".mermaid";
+  const PREFIX = "vx-whiteboard:";
   const OVERLAY_ID = "vxWhiteboardOverlay";
-  const TEARDOWN_TIMEOUT_MS = 1500;
+  const CLOSE_LABEL = "× Close";
+  const CLOSE_ANYWAY_LABEL = "× Close anyway";
+  const TEARDOWN_WAIT_MS = 1500;
+  const START_WAIT_MS = 20000;
+  const SUMMARY_LINES = 50;
+  const SUMMARY_LINE_CHARS = 300;
 
-  /** @type {Map<number, { iframe: HTMLIFrameElement, channelId: string, ready: boolean, suspended: boolean }>} */
-  const inlineFrames = new Map();
-  /** @type {Map<number, { source: string, hash: string }>} */
-  const sourceCache = new Map();
-  const teardowns = new Map();
-  let nextFlushId = 0;
+  // ------------------------------------------------------------------- theme
 
-  let overlay = null;
-  let overlayIframe = null;
-  let overlayCloseButton = null;
-  let overlayIndex = null;
-  let overlayChannelId = "";
-  let overlayReady = false;
+  // The design system's own values, used when an artifact carries no --fr-*
+  // tokens of its own (artifacts bring their styles; the embed must still look
+  // right in one that does not).
+  const PALETTE = {
+    dark: {
+      bg: "#15171A",
+      surface: "#1C1F24",
+      text: "#E9EAEC",
+      "text-secondary": "#A0A3A9",
+      "border-strong": "#3A3F47",
+      danger: "#E08268",
+      scrim: "rgba(0,0,0,0.6)",
+    },
+    light: {
+      bg: "#F2F1EC",
+      surface: "#FFFFFF",
+      text: "#1A1D22",
+      "text-secondary": "#5A5E66",
+      "border-strong": "#C2C0B8",
+      danger: "#A8341F",
+      scrim: "rgba(26,29,34,0.45)",
+    },
+  };
 
-  // Every colour below is a forum --fr-* token with the design system's own
-  // value as the fallback, because the embed runs in artifacts that bring
-  // their own styles and may carry no tokens at all.
-  function themed(name, darkValue, lightValue) {
-    return "var(--fr-" + name + ", " + (theme() === "dark" ? darkValue : lightValue) + ")";
-  }
-
-  function frameUrl(index) {
-    return "/whiteboard-frame?diagramIndex=" + encodeURIComponent(String(index)) + "&theme=" + theme();
-  }
-
-  function theme() {
-    // The chrome's theme switch wins (the server renders it on <html>); the
-    // OS preference only decides when the artifact carries no forum theme.
+  // The chrome's choice wins: the SDK keeps <html data-fr-theme> in step with
+  // the switch in the chrome. The OS preference only decides for a page that
+  // has no forum theme at all.
+  function currentTheme() {
     const forced = document.documentElement.getAttribute("data-fr-theme");
     if (forced === "dark" || forced === "light") return forced;
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return dark ? "dark" : "light";
   }
 
-  const rpc = (op, payload) => window.forum.__rpc(op, payload);
+  const token = (name) => `var(--fr-${name}, ${PALETTE[currentTheme()][name]})`;
 
-  async function fetchMermaidSources() {
-    const data = await rpc("whiteboard.sources");
-    return Array.isArray(data.sources) ? data.sources : [];
+  // Styling is registered as a function from theme to style values, applied
+  // now and again on every theme switch.
+  const painters = [];
+  function skin(node, styles) {
+    const paint = () => Object.assign(node.style, styles());
+    paint();
+    painters.push(paint);
   }
 
-  async function fetchSavedScene(index) {
+  // ------------------------------------------------------------ server calls
+
+  function ask(op, payload) {
+    if (!window.forum || typeof window.forum.__rpc !== "function") {
+      return Promise.reject(new Error("window.forum is missing: the whiteboard needs the forum chrome"));
+    }
+    return window.forum.__rpc(op, payload);
+  }
+
+  const describeError = (error) => String((error && error.message) || error);
+
+  // One request serves every board's source lookup.
+  let sourcesRequest = null;
+  const sources = new Map();
+  async function sourceOf(index) {
+    if (!sources.size) {
+      sourcesRequest = sourcesRequest || ask("whiteboard.sources");
+      try {
+        const reply = await sourcesRequest;
+        for (const item of Array.isArray(reply.sources) ? reply.sources : []) sources.set(item.index, item);
+      } finally {
+        sourcesRequest = null;
+      }
+    }
+    const entry = sources.get(index);
+    if (!entry) throw new Error("this diagram's Mermaid source was not found on the page");
+    return entry;
+  }
+
+  async function savedSceneOf(index) {
     try {
-      const data = await rpc("whiteboard.load", { index });
-      return data.whiteboard || null;
+      return (await ask("whiteboard.load", { index })).whiteboard || null;
     } catch {
       return null;
     }
   }
 
-  async function persistScene(index, message) {
-    await rpc("whiteboard.save", {
-      index,
+  function persist(placement, message) {
+    return ask("whiteboard.save", {
+      index: placement.index,
       body: {
         source_hash: String(message.sourceHash || ""),
         text_metrics_version: Number(message.textMetricsVersion) || 0,
@@ -103,240 +128,228 @@
     });
   }
 
-  async function publishFeedback(index, scene, pngDataUrl, summaryLines) {
-    return rpc("whiteboard.feedback", {
-      index,
-      body: { scene: scene || null, pngDataUrl: String(pngDataUrl || ""), summaryLines: boundedLines(summaryLines) },
-    });
-  }
-
-  function post(record, message) {
-    if (!record || !record.iframe.contentWindow) return;
-    record.iframe.contentWindow.postMessage({ ...message, channelId: record.channelId }, "*");
-  }
-
-  function postOverlay(message) {
-    if (overlayIframe?.contentWindow && overlayChannelId) {
-      overlayIframe.contentWindow.postMessage({ ...message, channelId: overlayChannelId }, "*");
-    }
-  }
-
-  // A frame that has not rendered yet is an empty box, which is
-  // indistinguishable from a broken one. Every inline frame therefore sits in a
-  // wrapper with a status line over it: "Loading", or the reason it did not
-  // start (the frame never reported ready, or the init round trip failed).
-  const START_TIMEOUT_MS = 20000;
-  const statusTimers = new Map();
-
-  function setStatus(index, text, isError) {
-    const record = inlineFrames.get(index);
-    if (!record || !record.status) return;
-    window.clearTimeout(statusTimers.get(index));
-    statusTimers.delete(index);
-    record.status.textContent = text || "";
-    record.status.style.display = text ? "flex" : "none";
-    record.status.style.color = isError ? themed("danger", "#E08268", "#A8341F") : themed("text-secondary", "#A0A3A9", "#5A5E66");
-  }
-
-  function watchStart(index) {
-    setStatus(index, "Loading whiteboard...", false);
-    statusTimers.set(
-      index,
-      window.setTimeout(() => {
-        const record = inlineFrames.get(index);
-        if (record && !record.ready) {
-          setStatus(
-            index,
-            "The whiteboard did not start: its frame never reported ready. Reload the page; if it persists, run `vx forum stop` and open the session again so the server restarts with the current build.",
-            true,
-          );
-        }
-      }, START_TIMEOUT_MS),
-    );
-  }
-
-  function makeIframe(index) {
-    const iframe = document.createElement("iframe");
-    iframe.src = frameUrl(index);
-    iframe.sandbox = "allow-scripts allow-popups";
-    iframe.style.width = "100%";
-    iframe.style.height = "480px";
-    iframe.style.border = "1px solid " + themed("border-strong", "#3A3F47", "#C2C0B8");
-    iframe.style.borderRadius = "var(--fr-radius-lg, 12px)";
-    iframe.style.background = themed("bg", "#15171A", "#F2F1EC");
-    iframe.style.colorScheme = theme();
-    iframe.title = "Whiteboard · diagram " + (index + 1);
-    return iframe;
-  }
-
-  function replaceMermaidContainers() {
-    const containers = Array.from(document.querySelectorAll(MERMAID_SELECTOR));
-    containers.forEach((container, index) => {
-      const iframe = makeIframe(index);
-      const wrapper = document.createElement("div");
-      wrapper.style.position = "relative";
-      const status = document.createElement("div");
-      status.setAttribute("role", "status");
-      Object.assign(status.style, {
-        position: "absolute",
-        inset: "0",
-        display: "none",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-        textAlign: "center",
-        font: "14px/1.5 system-ui, sans-serif",
-        pointerEvents: "none",
-      });
-      wrapper.append(iframe, status);
-      container.replaceWith(wrapper);
-      inlineFrames.set(index, { iframe, status, channelId: "", ready: false, suspended: false });
-      watchStart(index);
-    });
-    return containers.length;
-  }
-
-  async function initFrame(index, record, mode, channelId) {
-    try {
-      let cached = sourceCache.get(index);
-      if (!cached) {
-        const sources = await fetchMermaidSources();
-        for (const item of sources) sourceCache.set(item.index, { source: item.source, hash: item.hash });
-        cached = sourceCache.get(index);
-      }
-      if (!cached) throw new Error("this diagram's Mermaid source was not found on the page");
-      const saved = await fetchSavedScene(index);
-      const target = mode === "overlay" ? null : record;
-      const message = {
-        type: "vx-whiteboard:init",
-        mode,
-        diagramIndex: index,
-        diagramId: "",
-        source: cached.source,
-        sourceHash: cached.hash,
-        saved,
-        theme: theme(),
-        channelId,
-      };
-      if (mode === "overlay") postOverlay(message);
-      else {
-        post(target, message);
-        setStatus(index, "", false);
-      }
-      return true;
-    } catch (error) {
-      if (mode === "overlay") showOverlayError(describeError(error));
-      else setStatus(index, "Could not start the whiteboard: " + describeError(error), true);
-      return false;
-    }
-  }
-
-  function describeError(error) {
-    return error instanceof Error ? error.message : String(error);
-  }
-
-  function teardownKey(index, placement) {
-    return placement + ":" + index;
-  }
-
-  function beginTeardown(index, placement) {
-    const tkey = teardownKey(index, placement);
-    const pending = teardowns.get(tkey);
-    if (pending) return pending.promise;
-    const flushId = "wb-teardown-" + ++nextFlushId;
-    let resolve;
-    const promise = new Promise((complete) => {
-      resolve = complete;
-    });
-    teardowns.set(tkey, { flushId, resolve });
-    const message = { type: "vx-whiteboard:prepareTeardown", flushId };
-    if (placement === "overlay") postOverlay(message);
-    else post(inlineFrames.get(index), message);
-    const timeout = window.setTimeout(() => finishTeardown(index, { flushId }, placement, false), TEARDOWN_TIMEOUT_MS);
-    teardowns.get(tkey).timeout = timeout;
-    return promise;
-  }
-
-  function finishTeardown(index, message, placement, ok) {
-    const tkey = teardownKey(index, placement);
-    const pending = teardowns.get(tkey);
-    if (!pending || pending.flushId !== String(message.flushId || "")) return;
-    window.clearTimeout(pending.timeout);
-    teardowns.delete(tkey);
-    pending.resolve(ok);
-  }
-
-  function handleSave(index, message, placement) {
-    const flushId = String(message.flushId || "");
-    persistScene(index, message).then(
-      () => {
-        if (flushId) {
-          const target = placement === "overlay" ? null : inlineFrames.get(index);
-          const result = { type: "vx-whiteboard:saveResult", flushId, ok: true };
-          if (placement === "overlay") postOverlay(result);
-          else post(target, result);
-        }
-      },
-      (error) => {
-        if (!flushId) return;
-        const result = { type: "vx-whiteboard:saveResult", flushId, ok: false, error: describeError(error) };
-        if (placement === "overlay") postOverlay(result);
-        else post(inlineFrames.get(index), result);
-      },
-    );
-  }
-
   function boundedLines(lines) {
     return (Array.isArray(lines) ? lines : [])
       .filter((line) => typeof line === "string")
-      .slice(0, 50)
-      .map((line) => line.slice(0, 300));
+      .slice(0, SUMMARY_LINES)
+      .map((line) => line.slice(0, SUMMARY_LINE_CHARS));
   }
 
-  async function handleQueueFeedback(index, message, placement) {
-    const reply = (result) => {
-      if (placement === "overlay") postOverlay(result);
-      else post(inlineFrames.get(index), result);
+  // -------------------------------------------------------------- placements
+
+  /** @type {Array<ReturnType<typeof newPlacement>>} */
+  const boards = []; // inline placements, indexed by diagram
+  let fullscreen = null; // the open fullscreen placement, if any
+  let overlayHost = null; // { root, iframe, close }, built on first use
+
+  function newPlacement(kind, index, iframe) {
+    return {
+      kind, // "inline" | "overlay"
+      index,
+      iframe,
+      channel: "", // bound on the frame's first "ready"
+      ready: false, // the init message has been delivered
+      suspended: false, // an inline board hidden behind the overlay
+      closing: null, // a teardown in flight
+      dead: false,
+      statusNode: null,
+      statusError: false,
+      startTimer: 0,
     };
+  }
+
+  const frameUrl = (index) => `/whiteboard-frame?diagramIndex=${encodeURIComponent(String(index))}&theme=${currentTheme()}`;
+
+  function send(placement, type, fields) {
+    const target = placement.iframe.contentWindow;
+    if (!target || !placement.channel || placement.dead) return;
+    target.postMessage({ ...fields, type: PREFIX + type, channelId: placement.channel }, "*");
+  }
+
+  // An empty box looks the same as a broken one, so every inline board has a
+  // status line laid over it: "Loading", or why the board did not start.
+  function say(placement, text, isError) {
+    const node = placement.statusNode;
+    if (!node) return;
+    window.clearTimeout(placement.startTimer);
+    placement.statusError = Boolean(isError);
+    node.textContent = text || "";
+    node.style.display = text ? "flex" : "none";
+    node.style.color = statusColor(placement);
+  }
+
+  const statusColor = (placement) => (placement.statusError ? token("danger") : token("text-secondary"));
+
+  function awaitReady(placement) {
+    say(placement, "Loading whiteboard...", false);
+    placement.startTimer = window.setTimeout(() => {
+      if (placement.ready) return;
+      say(
+        placement,
+        "The whiteboard did not start: its frame never reported ready. Reload the page; if it persists, run `vx forum stop` and open the session again so the server restarts with the current build.",
+        true,
+      );
+    }, START_WAIT_MS);
+  }
+
+  function buildInline(index) {
+    const iframe = document.createElement("iframe");
+    iframe.src = frameUrl(index);
+    iframe.sandbox = "allow-scripts allow-popups";
+    iframe.title = `Whiteboard · diagram ${index + 1}`;
+    skin(iframe, () => ({
+      width: "100%",
+      height: "480px",
+      border: `1px solid ${token("border-strong")}`,
+      borderRadius: "var(--fr-radius-lg, 12px)",
+      background: token("bg"),
+      colorScheme: currentTheme(),
+    }));
+
+    const placement = newPlacement("inline", index, iframe);
+    const status = document.createElement("div");
+    status.setAttribute("role", "status");
+    Object.assign(status.style, {
+      position: "absolute",
+      inset: "0",
+      display: "none",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "16px",
+      textAlign: "center",
+      font: "14px/1.5 system-ui, sans-serif",
+      pointerEvents: "none",
+    });
+    placement.statusNode = status;
+    skin(status, () => ({ color: statusColor(placement) }));
+
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.append(iframe, status);
+    return { placement, wrapper };
+  }
+
+  let mounted = false;
+  function mountBoards() {
+    if (mounted) return;
+    mounted = true;
+    document.querySelectorAll(".mermaid").forEach((container, index) => {
+      const { placement, wrapper } = buildInline(index);
+      container.replaceWith(wrapper);
+      boards[index] = placement;
+      awaitReady(placement);
+    });
+  }
+
+  // Once a frame has announced itself, hand it the diagram: source, its hash,
+  // whatever scene was saved, and the theme as it is right now.
+  async function handshake(placement) {
     try {
-      await persistScene(index, message);
-      await publishFeedback(index, message.scene, message.pngDataUrl, message.summaryLines);
-      reply({ type: "vx-whiteboard:queueResult", ok: true });
+      const entry = await sourceOf(placement.index);
+      const saved = await savedSceneOf(placement.index);
+      if (placement.dead) return;
+      send(placement, "init", {
+        mode: placement.kind,
+        diagramIndex: placement.index,
+        diagramId: "",
+        source: entry.source,
+        sourceHash: entry.hash,
+        saved,
+        theme: currentTheme(),
+      });
+      placement.ready = true;
+      if (placement.kind === "inline") say(placement, "", false);
     } catch (error) {
-      reply({ type: "vx-whiteboard:queueResult", ok: false, error: describeError(error) });
+      if (placement.kind === "inline") say(placement, `Could not start the whiteboard: ${describeError(error)}`, true);
+      else showOverlayFailure(describeError(error));
     }
   }
 
-  function ensureOverlay() {
-    if (overlay) return;
-    overlay = document.createElement("div");
-    overlay.id = OVERLAY_ID;
-    Object.assign(overlay.style, {
+  // ----------------------------------------------------- saving and feedback
+
+  function onSave(placement, message) {
+    const flushId = String(message.flushId || "");
+    persist(placement, message).then(
+      () => flushId && send(placement, "saveResult", { flushId, ok: true }),
+      (error) => flushId && send(placement, "saveResult", { flushId, ok: false, error: describeError(error) }),
+    );
+  }
+
+  async function onQueueFeedback(placement, message) {
+    try {
+      await persist(placement, message);
+      await ask("whiteboard.feedback", {
+        index: placement.index,
+        body: {
+          scene: message.scene || null,
+          pngDataUrl: String(message.pngDataUrl || ""),
+          summaryLines: boundedLines(message.summaryLines),
+        },
+      });
+      send(placement, "queueResult", { ok: true });
+    } catch (error) {
+      send(placement, "queueResult", { ok: false, error: describeError(error) });
+    }
+  }
+
+  // ---------------------------------------------------------------- teardown
+
+  // Asks a frame to lock itself and save one last time. Resolves "saved" when
+  // it confirms, "failed" when its save was refused, "timeout" when it said
+  // nothing in time.
+  let teardownCount = 0;
+  function requestTeardown(placement) {
+    if (placement.closing) return placement.closing.promise;
+    const flushId = `wb-teardown-${++teardownCount}`;
+    const closing = { flushId };
+    closing.promise = new Promise((resolve) => {
+      closing.resolve = resolve;
+    });
+    closing.timer = window.setTimeout(() => settleTeardown(placement, flushId, "timeout"), TEARDOWN_WAIT_MS);
+    placement.closing = closing;
+    send(placement, "prepareTeardown", { flushId });
+    return closing.promise;
+  }
+
+  function settleTeardown(placement, flushId, outcome) {
+    const closing = placement.closing;
+    if (!closing || closing.flushId !== String(flushId || "")) return;
+    window.clearTimeout(closing.timer);
+    placement.closing = null;
+    closing.resolve(outcome);
+  }
+
+  // -------------------------------------------------------------- the overlay
+
+  function buildOverlay() {
+    const root = document.createElement("div");
+    root.id = OVERLAY_ID;
+    skin(root, () => ({
       position: "fixed",
       inset: "0",
       zIndex: "2147483000",
-      background: themed("scrim", "rgba(0,0,0,0.6)", "rgba(26,29,34,0.45)"),
-      display: "none",
-    });
-    overlayIframe = document.createElement("iframe");
-    overlayIframe.sandbox = "allow-scripts allow-popups";
-    overlayIframe.title = "Whiteboard (fullscreen)";
-    Object.assign(overlayIframe.style, {
+      background: token("scrim"),
+      display: root.style.display || "none",
+    }));
+
+    const iframe = document.createElement("iframe");
+    iframe.sandbox = "allow-scripts allow-popups";
+    iframe.title = "Whiteboard (fullscreen)";
+    skin(iframe, () => ({
       position: "absolute",
       inset: "0",
       width: "100%",
       height: "100%",
       border: "0",
-      background: themed("bg", "#15171A", "#F2F1EC"),
-    });
-    overlayCloseButton = document.createElement("button");
-    overlayCloseButton.type = "button";
-    overlayCloseButton.textContent = "\u00d7 Close";
-    // Looks like a forum secondary button: the --fr-* design tokens when the
-    // artifact has them, the same palette values otherwise (the embed runs in
-    // artifacts that bring their own styles and no tokens).
-    const color = themed;
-    Object.assign(overlayCloseButton.style, {
+      background: token("bg"),
+      colorScheme: currentTheme(),
+    }));
+
+    // Looks like a forum secondary button, on the tokens when present.
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = CLOSE_LABEL;
+    skin(close, () => ({
       position: "absolute",
       top: "8px",
       right: "10px",
@@ -344,153 +357,155 @@
       padding: "4px 10px",
       font: "500 13px/1.3 var(--fr-font-sans, system-ui, sans-serif)",
       cursor: "pointer",
-      color: color("text", "#E9EAEC", "#1A1D22"),
-      background: color("surface", "#1C1F24", "#FFFFFF"),
-      border: "1px solid " + color("border-strong", "#3A3F47", "#C2C0B8"),
+      color: token("text"),
+      background: token("surface"),
+      border: `1px solid ${token("border-strong")}`,
       borderRadius: "var(--fr-radius-sm, 4px)",
-    });
-    overlayCloseButton.onclick = closeOverlay;
-    overlay.append(overlayIframe, overlayCloseButton);
-    document.body.append(overlay);
+    }));
+    close.onclick = closeFullscreen;
+
+    root.append(iframe, close);
+    document.body.append(root);
+    return { root, iframe, close };
   }
 
-  function showOverlayError(text) {
-    ensureOverlay();
-    overlay.style.display = "block";
-    overlayIframe.srcdoc =
-      '<p style="font-family:sans-serif;padding:16px;color:' +
-      themed("danger", "#E08268", "#A8341F") +
-      ';">Could not open the whiteboard: ' +
-      String(text || "unknown error").replace(/</g, "&lt;") +
-      "</p>";
+  function overlayShell() {
+    overlayHost = overlayHost || buildOverlay();
+    return overlayHost;
   }
 
-  function openOverlay(index) {
-    if (overlayIndex !== null) return;
-    const record = inlineFrames.get(index);
-    if (!record || !record.ready) return;
-    beginTeardown(index, "inline").then((flushed) => {
-      if (!flushed) return;
-      record.suspended = true;
-      record.iframe.style.pointerEvents = "none";
-      ensureOverlay();
-      overlayIndex = index;
-      overlayReady = false;
-      overlayChannelId = "";
-      overlay.style.display = "block";
-      overlayIframe.src = frameUrl(index);
-    });
+  function showOverlayFailure(text) {
+    const host = overlayShell();
+    host.root.style.display = "block";
+    host.iframe.srcdoc =
+      `<p style="font-family:sans-serif;padding:16px;color:${token("danger")};">Could not open the whiteboard: ` +
+      `${String(text || "unknown error").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`;
   }
 
-  function closeOverlay() {
-    const index = overlayIndex;
-    if (index === null) return;
-    if (!overlayReady) {
-      finishCloseOverlay(index);
-      return;
-    }
-    beginTeardown(index, "overlay").then((flushed) => {
-      if (flushed) finishCloseOverlay(index);
+  function openFullscreen(origin) {
+    if (fullscreen || origin.kind !== "inline" || !origin.ready || origin.suspended) return;
+    requestTeardown(origin).then((outcome) => {
+      if (outcome !== "saved" || fullscreen) return;
+      const host = overlayShell();
+      origin.suspended = true;
+      origin.iframe.style.pointerEvents = "none";
+      fullscreen = newPlacement("overlay", origin.index, host.iframe);
+      fullscreen.origin = origin;
+      host.close.textContent = CLOSE_LABEL;
+      host.root.style.display = "block";
+      host.iframe.removeAttribute("srcdoc");
+      host.iframe.src = frameUrl(origin.index);
     });
   }
 
-  function finishCloseOverlay(index) {
-    overlay.style.display = "none";
-    overlayIframe.src = "about:blank";
-    overlayIndex = null;
-    overlayReady = false;
-    overlayChannelId = "";
-    const record = inlineFrames.get(index);
-    if (record) {
-      record.suspended = false;
-      record.iframe.style.pointerEvents = "";
-      // Reload the inline iframe fresh so it picks up whatever the overlay
-      // just saved, instead of trying to reconcile two live in-memory scenes.
-      record.ready = false;
-      record.channelId = "";
-      watchStart(index);
-      record.iframe.src = record.iframe.src;
-    }
-  }
-
-  function isDirectChild(source, iframe) {
-    if (!source || !iframe?.contentWindow) return false;
-    try {
-      return source === iframe.contentWindow;
-    } catch {
-      return false;
-    }
-  }
-
-  function handleInlineMessage(event, message) {
-    const index = Number(message.diagramIndex);
-    if (!Number.isInteger(index) || index < 0) return;
-    const record = inlineFrames.get(index);
-    if (!record || !isDirectChild(event.source, record.iframe)) return;
-
-    if (message.type === "vx-whiteboard:ready") {
-      if (record.channelId) return;
-      record.channelId = String(message.channelId || "");
-      if (!record.channelId) return;
-      initFrame(index, record, "inline", record.channelId).then((ok) => {
-        record.ready = ok;
-      });
+  function closeFullscreen() {
+    const placement = fullscreen;
+    if (!placement) return;
+    // A frame that never started has nothing to save; a frame that would not
+    // answer last time may be closed on the second press.
+    if (!placement.ready || placement.forceClose) {
+      finishFullscreen(placement);
       return;
     }
-    if (!record.channelId || message.channelId !== record.channelId) return;
-    if (message.type === "vx-whiteboard:save") handleSave(index, message, "inline");
-    else if (message.type === "vx-whiteboard:queueFeedback") handleQueueFeedback(index, message, "inline");
-    else if (message.type === "vx-whiteboard:maximize") openOverlay(index);
-    else if (message.type === "vx-whiteboard:teardownReady") finishTeardown(index, message, "inline", true);
-    else if (message.type === "vx-whiteboard:teardownFailed") finishTeardown(index, message, "inline", false);
+    requestTeardown(placement).then((outcome) => {
+      if (outcome === "saved") {
+        finishFullscreen(placement);
+      } else if (outcome === "timeout" && fullscreen === placement) {
+        placement.forceClose = true;
+        overlayHost.close.textContent = CLOSE_ANYWAY_LABEL;
+      }
+    });
   }
 
-  function handleOverlayMessage(event, message) {
-    if (overlayIndex === null || !isDirectChild(event.source, overlayIframe)) return;
-    const index = Number(message.diagramIndex);
-    if (index !== overlayIndex) return;
+  function finishFullscreen(placement) {
+    placement.dead = true;
+    fullscreen = null;
+    overlayHost.root.style.display = "none";
+    overlayHost.iframe.removeAttribute("srcdoc");
+    overlayHost.iframe.src = "about:blank";
 
-    if (message.type === "vx-whiteboard:ready") {
-      if (overlayChannelId) return;
-      overlayChannelId = String(message.channelId || "");
-      if (!overlayChannelId) return;
-      initFrame(index, null, "overlay", overlayChannelId).then((ok) => {
-        overlayReady = ok;
-      });
+    // Two live in-memory scenes are not reconciled: the inline board simply
+    // loads again, from whatever the overlay just saved.
+    const origin = placement.origin;
+    origin.suspended = false;
+    origin.iframe.style.pointerEvents = "";
+    origin.ready = false;
+    origin.channel = "";
+    awaitReady(origin);
+    origin.iframe.src = frameUrl(origin.index);
+  }
+
+  // ----------------------------------------------------------------- routing
+
+  function placementFor(source) {
+    if (!source) return null;
+    if (fullscreen && fullscreen.iframe.contentWindow === source) return fullscreen;
+    return boards.find((placement) => placement.iframe.contentWindow === source) || null;
+  }
+
+  function route(placement, type, message) {
+    if (Number(message.diagramIndex) !== placement.index) return;
+    if (type === "ready") {
+      const channel = String(message.channelId || "");
+      if (placement.channel || !channel) return;
+      placement.channel = channel;
+      handshake(placement);
       return;
     }
-    if (!overlayReady || message.channelId !== overlayChannelId) return;
-    if (message.type === "vx-whiteboard:save") handleSave(index, message, "overlay");
-    else if (message.type === "vx-whiteboard:queueFeedback") handleQueueFeedback(index, message, "overlay");
-    else if (message.type === "vx-whiteboard:teardownReady") finishTeardown(index, message, "overlay", true);
-    else if (message.type === "vx-whiteboard:teardownFailed") finishTeardown(index, message, "overlay", false);
+    if (!placement.channel || message.channelId !== placement.channel) return;
+
+    const live = !placement.suspended;
+    if (type === "save" && live) onSave(placement, message);
+    else if (type === "queueFeedback" && live) onQueueFeedback(placement, message);
+    else if (type === "maximize") openFullscreen(placement);
+    else if (type === "teardownReady") settleTeardown(placement, message.flushId, "saved");
+    else if (type === "teardownFailed") settleTeardown(placement, message.flushId, "failed");
   }
 
   window.addEventListener("message", (event) => {
     const message = event.data || {};
-    if (typeof message.type !== "string" || !message.type.startsWith("vx-whiteboard:")) return;
-    if (overlayIndex !== null && isDirectChild(event.source, overlayIframe)) {
-      handleOverlayMessage(event, message);
-      return;
-    }
-    handleInlineMessage(event, message);
+    if (typeof message.type !== "string" || !message.type.startsWith(PREFIX)) return;
+    const placement = placementFor(event.source);
+    if (placement) route(placement, message.type.slice(PREFIX.length), message);
   });
 
-  // Best-effort autosave flush - a page unload mid-debounce should not lose
-  // the last few seconds of edits. Not guaranteed to complete (browsers do
-  // not wait for async work in this handler), but the frame's own 800ms
-  // debounce already keeps the window small.
+  // Best effort only: a page that is going away may not wait for the round trip
+  // to the server, but the frame's own autosave debounce keeps the window small.
   window.addEventListener("beforeunload", () => {
-    for (const [index, record] of inlineFrames) {
-      if (record.ready && !record.suspended) {
-        post(record, { type: "vx-whiteboard:flush", flushId: "wb-unload-" + index });
+    for (const placement of boards) {
+      if (placement && placement.ready && !placement.suspended) {
+        send(placement, "flush", { flushId: `wb-unload-${placement.index}` });
       }
     }
-    if (overlayIndex !== null && overlayReady) {
-      postOverlay({ type: "vx-whiteboard:flush", flushId: "wb-unload-overlay" });
-    }
+    if (fullscreen && fullscreen.ready) send(fullscreen, "flush", { flushId: "wb-unload-overlay" });
   });
 
-  document.addEventListener("DOMContentLoaded", replaceMermaidContainers);
-  if (document.readyState !== "loading") replaceMermaidContainers();
+  // ------------------------------------------------------------- live theming
+
+  // Repaint what the embed draws itself and tell every running frame, so the
+  // boards follow the chrome's theme switch without a reload.
+  let paintedTheme = currentTheme();
+  function followTheme() {
+    const theme = currentTheme();
+    if (theme === paintedTheme) return;
+    paintedTheme = theme;
+    painters.forEach((paint) => paint());
+    for (const placement of [...boards, fullscreen]) {
+      if (placement && placement.ready) send(placement, "theme", { theme });
+    }
+  }
+
+  if (typeof MutationObserver === "function") {
+    new MutationObserver(followTheme).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-fr-theme"],
+    });
+  }
+  const colorScheme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+  if (colorScheme && typeof colorScheme.addEventListener === "function") {
+    colorScheme.addEventListener("change", followTheme);
+  }
+
+  document.addEventListener("DOMContentLoaded", mountBoards);
+  if (document.readyState !== "loading") mountBoards();
 })();

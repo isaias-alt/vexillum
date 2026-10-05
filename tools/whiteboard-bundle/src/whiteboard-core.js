@@ -1,518 +1,440 @@
-// Adapted from upstream (MIT License, Copyright (c) 2026 Kun
-// Chen), src/whiteboard-core.js at v0.1.80 (commit a2a199c). See
-// THIRD-PARTY-NOTICES.md at the vexillum repo root. Ported unchanged: this
-// file is pure data-in/data-out logic with no server or endpoint
-// dependencies, so nothing here needed adaptation for vexillum's own Go
-// server. Diff against a newer forum-tool tag before assuming a conversion
-// bug is vexillum-specific - see tools/whiteboard-bundle/README.md.
-// Pure whiteboard helpers shared by the whiteboard frame bundle (esbuild), the
-// server, and the session store. Everything here is plain data-in/data-out so
-// it unit tests under node:test without a DOM and ships to the browser through
-// normal module imports in the bundled whiteboard frame (unlike mermaid-node.js
-// helpers, these are never serialized with `.toString()`).
+// Pure helpers behind the whiteboard frame: data in, data out, no DOM and no
+// Excalidraw import, so the node test-suite under ../test can run them as they
+// are. whiteboard-frame.js imports them through esbuild.
+//
+// Vocabulary: a "scene" is Excalidraw's { elements, appState, files }; a
+// "skeleton" is the loose element description the Mermaid converter emits
+// before Excalidraw turns it into real elements; a "saved record" is what the
+// Go store keeps per diagram: { source_hash, text_metrics_version, scene,
+// baseline: { elements } }. The baseline is the scene as it was converted, so
+// later edits can be described as a difference against it.
 
-export const WHITEBOARD_PROMPT_TAG = "whiteboard";
-export const EXCALIDRAW_SCENE_TARGET_TYPE = "excalidraw-scene";
-export const WHITEBOARD_TEXT_METRICS_VERSION = 1;
+export const TEXT_METRICS_VERSION = 1;
+export const SUMMARY_LINE_LIMIT = 40;
+export const SUMMARY_LINE_WIDTH = 200;
 
-export const SUMMARY_MAX_LINES = 40;
-export const SUMMARY_MAX_LINE_CHARS = 200;
-const SUMMARY_MOVE_EPSILON_PX = 2;
-const STAT_KEYS = ["added", "removed", "moved", "relabeled", "drawn"];
+// Distances (scene units) below this are treated as noise, not as an edit.
+const GEOMETRY_TOLERANCE = 2;
+const ANGLE_TOLERANCE = 0.01;
 
-export function sanitizeWhiteboardAppState(appState) {
-  if (!appState || typeof appState !== "object" || Array.isArray(appState)) return {};
-  const safeAppState = { ...appState };
-  delete safeAppState.theme;
-  delete safeAppState.viewBackgroundColor;
-  return safeAppState;
+const TEXT_PADDING = 16;
+const NODE_SHAPES = new Set(["rectangle", "ellipse", "diamond"]);
+
+const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const asNumber = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+const listOf = (value) => (Array.isArray(value) ? value : []);
+
+function clip(text, limit) {
+  const value = String(text);
+  return value.length > limit ? `${value.slice(0, limit - 3)}...` : value;
 }
 
-export function sanitizeWhiteboardScene(scene) {
-  if (!scene || typeof scene !== "object" || Array.isArray(scene)) return scene ?? null;
-  if (!Object.hasOwn(scene, "appState")) return { ...scene };
-  return { ...scene, appState: sanitizeWhiteboardAppState(scene.appState) };
+// ---------------------------------------------------------------- app state
+
+// Theme and canvas colour always come from the live frame, never from a saved
+// scene: persisting them would make an old scene fight the current theme.
+export function withoutThemeFields(appState) {
+  if (!isRecord(appState)) return {};
+  const { theme: _theme, viewBackgroundColor: _background, ...rest } = appState;
+  return rest;
 }
 
-// Mermaid node labels use `<br>` / `<br/>` and a two-character `\n` sequence as
-// line breaks. parseMermaidToExcalidraw copies vertex.text onto skeleton
-// `label.text` unchanged, and convertToExcalidrawElements then treats those
-// characters as part of a single line - so "classify<br>checks" renders as the
-// fused "classifychecks" instead of two lines. Excalidraw stores multiline
-// labels as real `\n` in `text` / `originalText`.
-const MERMAID_HTML_BREAK_RE = /<br\s*\/?\s*>/gi;
-const MERMAID_ESCAPED_NEWLINE_RE = /\\n/g;
-const LABEL_CHAR_WIDTH_RATIO = 0.62;
-const LABEL_LINE_HEIGHT = 1.25;
-const BOUND_TEXT_PADDING_X = 16;
-const BOUND_TEXT_PADDING_Y = 16;
-const NODE_LABEL_CONTAINER_TYPES = new Set(["rectangle", "ellipse", "diamond"]);
+// ------------------------------------------------------------ label cleanup
 
-// Node boxes only. Labelled arrows keep independently placed path-midpoint
-// labels; growing or recentering those containers would move the arrow.
-function isNodeLabelContainer(element) {
-  return NODE_LABEL_CONTAINER_TYPES.has(element?.type);
+// Mermaid writes a line break inside a label as <br>, <br/> or a literal
+// backslash-n. Excalidraw wants a real newline in the text, otherwise
+// "a<br>b" is drawn as the single word "a<br>b".
+export function labelWithRealBreaks(text) {
+  if (typeof text !== "string") return text;
+  return text.replace(/<br\s*\/?\s*>/gi, "\n").replace(/\\n/g, "\n");
 }
 
-export function normalizeMermaidLabelLineBreaks(text) {
-  if (typeof text !== "string" || text.length === 0) return text;
-  return text.replace(MERMAID_HTML_BREAK_RE, "\n").replace(MERMAID_ESCAPED_NEWLINE_RE, "\n");
+// Rewrites every text-bearing field of the converter's skeletons. Objects are
+// copied only when something actually changes.
+export function fixSkeletonLabels(skeletons) {
+  return listOf(skeletons).map((skeleton) => {
+    if (!isRecord(skeleton)) return skeleton;
+    let out = skeleton;
+    const set = (patch) => {
+      out = { ...out, ...patch };
+    };
+    for (const field of ["text", "originalText"]) {
+      const fixed = labelWithRealBreaks(skeleton[field]);
+      if (fixed !== skeleton[field]) set({ [field]: fixed });
+    }
+    if (isRecord(skeleton.label)) {
+      const fixed = labelWithRealBreaks(skeleton.label.text);
+      if (fixed !== skeleton.label.text) set({ label: { ...skeleton.label, text: fixed } });
+    }
+    return out;
+  });
 }
 
-function splitLabelLines(text) {
-  return String(text || "")
-    .replace(/\r\n?/g, "\n")
-    .split("\n");
-}
-
-function estimateMultilineLabelBox(text, fontSize) {
-  const size = Number(fontSize) || 16;
-  const lines = splitLabelLines(text);
-  const width = Math.max(
-    20,
-    ...lines.map((line) => Math.ceil(Math.max(String(line).length, 1) * size * LABEL_CHAR_WIDTH_RATIO)),
-  );
-  const height = Math.max(1, lines.length) * size * LABEL_LINE_HEIGHT;
-  return { width, height, lineCount: lines.length };
-}
-
-function expandBoxToFit(element, minWidth, minHeight) {
-  const width = Number(element.width) || 0;
-  const height = Number(element.height) || 0;
+function growAroundCenter(element, minWidth, minHeight) {
+  const width = asNumber(element.width);
+  const height = asNumber(element.height);
+  if (width >= minWidth && height >= minHeight) return element;
   const nextWidth = Math.max(width, minWidth);
   const nextHeight = Math.max(height, minHeight);
-  if (nextWidth === width && nextHeight === height) return element;
-  const next = { ...element, width: nextWidth, height: nextHeight };
-  if (nextWidth > width) next.x = (Number(element.x) || 0) - (nextWidth - width) / 2;
-  if (nextHeight > height) next.y = (Number(element.y) || 0) - (nextHeight - height) / 2;
-  return next;
-}
-
-function positionBoundTextInContainer(container, text) {
-  const align = String(text.textAlign || "center");
-  const valign = String(text.verticalAlign || "middle");
-  const cx = Number(container.x) || 0;
-  const cy = Number(container.y) || 0;
-  const cw = Number(container.width) || 0;
-  const ch = Number(container.height) || 0;
-  const tw = Number(text.width) || 0;
-  const th = Number(text.height) || 0;
-  const x = align === "left" ? cx : align === "right" ? cx + cw - tw : cx + (cw - tw) / 2;
-  const y = valign === "top" ? cy : valign === "bottom" ? cy + ch - th : cy + (ch - th) / 2;
-  if (x === (Number(text.x) || 0) && y === (Number(text.y) || 0)) return text;
-  return { ...text, x, y };
-}
-
-function fitContainersToBoundText(elements) {
-  if (!Array.isArray(elements)) return [];
-  const byId = new Map();
-  for (const element of elements) {
-    if (element?.id) byId.set(element.id, element);
-  }
-  for (const element of elements) {
-    if (!element || element.type !== "text" || element.isDeleted || !element.containerId) continue;
-    const container = byId.get(element.containerId);
-    if (!container || !isNodeLabelContainer(container)) continue;
-    const fitted = expandBoxToFit(
-      container,
-      (Number(element.width) || 0) + BOUND_TEXT_PADDING_X,
-      (Number(element.height) || 0) + BOUND_TEXT_PADDING_Y,
-    );
-    if (fitted !== container) byId.set(container.id, fitted);
-  }
-  // Bound text keeps its own x/y. Growing the container from the center (or
-  // growing the text box independently) leaves that label at the old coords,
-  // so it sits off-center until something like restore() recomputes it.
-  for (const element of elements) {
-    if (!element || element.type !== "text" || element.isDeleted || !element.containerId) continue;
-    const current = byId.get(element.id) ?? element;
-    const container = byId.get(current.containerId);
-    if (!container || !isNodeLabelContainer(container)) continue;
-    const positioned = positionBoundTextInContainer(container, current);
-    if (positioned !== current) byId.set(current.id, positioned);
-  }
-  return elements.map((element) => (element?.id && byId.has(element.id) ? byId.get(element.id) : element));
-}
-
-function withNormalizedLabelText(element) {
-  if (!element || typeof element !== "object") return element;
-  let next = element;
-  const write = (key, value) => {
-    if (next === element) next = { ...element };
-    next[key] = value;
+  return {
+    ...element,
+    width: nextWidth,
+    height: nextHeight,
+    x: asNumber(element.x) - (nextWidth - width) / 2,
+    y: asNumber(element.y) - (nextHeight - height) / 2,
   };
-  if (typeof element.text === "string") {
-    const text = normalizeMermaidLabelLineBreaks(element.text);
-    if (text !== element.text) write("text", text);
-  }
-  if (typeof element.originalText === "string") {
-    const originalText = normalizeMermaidLabelLineBreaks(element.originalText);
-    if (originalText !== element.originalText) {
-      write("originalText", originalText);
-      // Drop leftover `<br>` from the wrapped `text` field; convertToExcalidrawElements
-      // can re-wrap from originalText on the next pass. Do not overwrite when
-      // originalText was already clean - that would discard legitimate wrapping.
-      if (typeof next.text === "string") write("text", originalText);
-    }
-  }
-  if (element.label && typeof element.label === "object" && typeof element.label.text === "string") {
-    const text = normalizeMermaidLabelLineBreaks(element.label.text);
-    if (text !== element.label.text) {
-      if (next === element) next = { ...element };
-      next.label = { ...element.label, text };
-    }
-  }
-  const labelText = next.label?.text || next.originalText || next.text;
-  if (typeof labelText === "string" && labelText.includes("\n") && isNodeLabelContainer(next)) {
-    const fontSize = next.label?.fontSize || next.fontSize;
-    const estimated = estimateMultilineLabelBox(labelText, fontSize);
-    next = expandBoxToFit(next, estimated.width + BOUND_TEXT_PADDING_X, estimated.height + BOUND_TEXT_PADDING_Y);
-  }
-  return next;
 }
 
-/**
- * @param {any[]} elements
- * @param {{ measure?: (element: any) => { width: number, height: number } }} [adapters]
- * @returns {any[]}
- */
-export function restoreMermaidLabelLineBreaks(elements, { measure } = {}) {
-  const restored = (Array.isArray(elements) ? elements : []).map((element) => withNormalizedLabelText(element));
-  const sized = measure
-    ? restored.map((element) => {
-        const candidate = /** @type {Record<string, any>} */ (element);
-        if (!candidate || candidate.type !== "text" || candidate.isDeleted) return element;
-        const metrics = measure(element);
-        return expandBoxToFit(element, Number(metrics?.width) || 0, Number(metrics?.height) || 0);
-      })
-    : restored;
-  return fitContainersToBoundText(sized);
+function centerInside(container, text) {
+  const spare = (outer, inner) => asNumber(outer) - asNumber(inner);
+  const horizontal = text.textAlign || "center";
+  const vertical = text.verticalAlign || "middle";
+  const x =
+    horizontal === "left"
+      ? asNumber(container.x)
+      : asNumber(container.x) + spare(container.width, text.width) / (horizontal === "right" ? 1 : 2);
+  const y =
+    vertical === "top"
+      ? asNumber(container.y)
+      : asNumber(container.y) + spare(container.height, text.height) / (vertical === "bottom" ? 1 : 2);
+  return x === asNumber(text.x) && y === asNumber(text.y) ? text : { ...text, x, y };
 }
 
-// Only plain web/mail links may leave the whiteboard. Everything else -
-// javascript:, data:, file:, vbscript:, chrome:, about:, or relative noise
-// coming from untrusted Mermaid `click` directives - is dropped.
-export function sanitizeSceneLink(url) {
+// After conversion (and once the fonts are in), makes node labels fit: a text
+// box is never smaller than its measured size, the node box around it never
+// smaller than the text plus padding, and the label sits centred in its node.
+// Only node shapes are touched; the labels of arrows float on their own and
+// resizing those containers would drag the arrow.
+export function fitLabelsToNodes(elements, { measure } = {}) {
+  const list = listOf(elements);
+  const current = new Map();
+  for (const element of list) if (element && element.id) current.set(element.id, element);
+
+  const texts = list.filter((element) => element && element.id && element.type === "text" && !element.isDeleted);
+  const bound = texts.filter((text) => text.containerId);
+
+  if (measure) {
+    for (const text of texts) {
+      const size = measure(text);
+      current.set(text.id, growAroundCenter(text, asNumber(size && size.width), asNumber(size && size.height)));
+    }
+  }
+
+  for (const text of bound) {
+    const node = current.get(text.containerId);
+    if (!node || !NODE_SHAPES.has(node.type)) continue;
+    const label = current.get(text.id);
+    current.set(
+      node.id,
+      growAroundCenter(node, asNumber(label.width) + TEXT_PADDING, asNumber(label.height) + TEXT_PADDING),
+    );
+  }
+
+  for (const text of bound) {
+    const node = current.get(text.containerId);
+    if (node && NODE_SHAPES.has(node.type)) current.set(text.id, centerInside(node, current.get(text.id)));
+  }
+
+  return list.map((element) => (element && element.id && current.has(element.id) ? current.get(element.id) : element));
+}
+
+// How much bigger than its label a node must be, per shape, for the label to
+// sit inside without wrapping: a diamond's usable area is half its width and
+// height, an ellipse's roughly 70% of it.
+const LABEL_ROOM = { rectangle: 1, ellipse: 1.45, diamond: 2 };
+
+// Sizes node skeletons to their measured labels BEFORE Excalidraw builds
+// elements from them, then drags the ends of every arrow that touches a resized
+// node along with it. Both halves matter: the converter keeps the arrow paths it
+// was handed, so a box that grew without them would leave arrow tips floating
+// inside or beside it.
+export function sizeNodeSkeletons(skeletons, measure) {
+  const list = listOf(skeletons);
+  const resized = new Map(); // node id -> { before, after }
+
+  const sized = list.map((skeleton) => {
+    const room = isRecord(skeleton) ? LABEL_ROOM[skeleton.type] : undefined;
+    if (!room || !isRecord(skeleton.label) || typeof skeleton.label.text !== "string") return skeleton;
+    if (!Number.isFinite(skeleton.width) || !Number.isFinite(skeleton.height)) return skeleton;
+    const size = measure({ ...skeleton.label });
+    const grown = growAroundCenter(
+      skeleton,
+      (asNumber(size && size.width) + TEXT_PADDING) * room,
+      (asNumber(size && size.height) + TEXT_PADDING) * room,
+    );
+    if (grown !== skeleton && skeleton.id !== undefined) resized.set(skeleton.id, { before: skeleton, after: grown });
+    return grown;
+  });
+  if (resized.size === 0) return sized;
+  return sized.map((skeleton) => followResizedNodes(skeleton, resized));
+}
+
+// Scaling a shape about its centre maps its old outline onto the new one, so an
+// arrow tip keeps its place on the outline when its coordinates inside the
+// shape are scaled the same way.
+function movedWithNode(point, { before, after }) {
+  const cx = asNumber(before.x) + asNumber(before.width) / 2;
+  const cy = asNumber(before.y) + asNumber(before.height) / 2;
+  const halfW = asNumber(before.width) / 2 || 1;
+  const halfH = asNumber(before.height) / 2 || 1;
+  return [
+    cx + ((point[0] - cx) / halfW) * (asNumber(after.width) / 2),
+    cy + ((point[1] - cy) / halfH) * (asNumber(after.height) / 2),
+  ];
+}
+
+function followResizedNodes(skeleton, resized) {
+  if (!isRecord(skeleton) || skeleton.type !== "arrow" || !Array.isArray(skeleton.points) || skeleton.points.length < 2) {
+    return skeleton;
+  }
+  const startNode = skeleton.start && resized.get(skeleton.start.id);
+  const endNode = skeleton.end && resized.get(skeleton.end.id);
+  if (!startNode && !endNode) return skeleton;
+
+  const origin = [asNumber(skeleton.x), asNumber(skeleton.y)];
+  const absolute = skeleton.points.map((point) => [origin[0] + asNumber(point[0]), origin[1] + asNumber(point[1])]);
+  if (startNode) absolute[0] = movedWithNode(absolute[0], startNode);
+  if (endNode) absolute[absolute.length - 1] = movedWithNode(absolute[absolute.length - 1], endNode);
+  // Excalidraw wants the first point at (0, 0) relative to the arrow's x/y.
+  const [x, y] = absolute[0];
+  return { ...skeleton, x, y, points: absolute.map((point) => [point[0] - x, point[1] - y]) };
+}
+
+// Text boxes of scenes saved before the current metrics version may be too
+// small for the glyphs now drawn; grow them to the measured size. Returns the
+// new list and how many boxes changed.
+export function remeasureText(elements, measure) {
+  let changed = 0;
+  const next = listOf(elements).map((element) => {
+    if (!element || element.type !== "text" || element.isDeleted || element.autoResize === false) return element;
+    const measured = measure(element);
+    const width = Math.max(asNumber(element.width), asNumber(measured && measured.width));
+    const height = Math.max(asNumber(element.height), asNumber(measured && measured.height));
+    if (width === asNumber(element.width) && height === asNumber(element.height)) return element;
+    changed += 1;
+    return { ...element, width, height };
+  });
+  return { elements: next, changed };
+}
+
+// --------------------------------------------------------- conversion pieces
+
+// Only plain web and mail links may leave the whiteboard. Anything else
+// (javascript:, data:, file:, relative paths, ...) can arrive through the
+// untrusted Mermaid `click` directive and is refused with an empty string.
+export function safeLinkTarget(url) {
   const value = String(url || "").trim();
-  if (!value) return "";
   if (/^https?:\/\//i.test(value)) return value;
-  if (/^mailto:[^\s]+$/i.test(value)) return value;
+  if (/^mailto:\S+$/i.test(value)) return value;
   return "";
 }
 
-// True when a conversion produced the converter's image fallback (an
-// unsupported diagram type, or a parser error caught in-library): the scene is
-// one or more image elements and nothing else. The whiteboard stays usable -
-// the user draws on top - but edits can't be tied to diagram node identity.
-export function sceneIsImageFallback(elements) {
-  const list = Array.isArray(elements) ? elements.filter((el) => el && !el.isDeleted) : [];
-  if (list.length === 0) return false;
-  return list.every((el) => el.type === "image");
+// True when the converter gave up on a diagram type and returned only
+// pictures: the board is then something to draw on, not nodes to edit.
+export function isImageOnly(elements) {
+  const live = listOf(elements).filter((element) => element && !element.isDeleted);
+  return live.length > 0 && live.every((element) => element.type === "image");
 }
 
-// `convertToExcalidrawElements(..., { regenerateIds: false })` preserves the
-// Mermaid node/edge ids we want for edit summaries, but upstream can emit the
-// same id twice for parallel edges (mermaid-to-excalidraw#110). Excalidraw
-// requires unique ids, so callers regenerate ids for the whole scene when this
-// returns a non-empty list, trading summary quality for correctness.
-export function findDuplicateElementIds(elements) {
+// Ids that appear more than once. Parallel edges make the converter reuse an
+// id, which Excalidraw cannot represent.
+export function repeatedIds(elements) {
   const seen = new Set();
-  const duplicates = new Set();
-  for (const el of Array.isArray(elements) ? elements : []) {
-    const id = String(el?.id || "");
+  const repeated = new Set();
+  for (const element of listOf(elements)) {
+    const id = element && element.id ? String(element.id) : "";
     if (!id) continue;
-    if (seen.has(id)) duplicates.add(id);
+    if (seen.has(id)) repeated.add(id);
     seen.add(id);
   }
-  return [...duplicates];
+  return [...repeated];
 }
 
-// Excalidraw measures text synchronously while materializing skeletons. Its
-// bundled fonts load asynchronously, so the first pass also gives the caller
-// the concrete text elements needed to request exactly those fonts. Always
-// materialize again after that request so the second pass records the real
-// glyph metrics before anything reaches the visible editor.
-/**
- * @template T
- * @template E
- * @param {T[]} skeletons
- * @param {{ convert: (skeletons: T[]) => E[], loadFonts: (elements: E[]) => Promise<unknown> }} adapters
- * @returns {Promise<E[]>}
- */
-export async function convertExcalidrawSkeletonsAfterFontsLoad(skeletons, { convert, loadFonts }) {
-  const fallbackElements = convert(skeletons);
-  await loadFonts(fallbackElements);
-  return convert(skeletons);
+// Excalidraw measures text while it builds elements, but its fonts arrive
+// asynchronously. The first pass tells us which glyphs are needed, `preload`
+// fetches those fonts, and the second pass builds the elements again with the
+// real metrics. The result of the first pass is never shown.
+//
+// `refine`, when given, rewrites the skeletons between the passes (see
+// sizeNodeSkeletons): at that point the fonts are in, so text can be measured.
+export async function convertTwice(skeletons, { materialize, preload, refine }) {
+  await preload(materialize(skeletons));
+  return materialize(refine ? refine(skeletons) : skeletons);
 }
 
-/**
- * @template E
- * @param {E[]} elements
- * @param {{ measure: (element: E) => { width: number, height: number } }} adapters
- * @returns {{ elements: E[], repaired: number }}
- */
-export function repairSavedSceneTextMetrics(elements, { measure }) {
-  let repaired = 0;
-  const repairedElements = (Array.isArray(elements) ? elements : []).map((element) => {
-    const candidate = /** @type {Record<string, any>} */ (element);
-    if (!candidate || candidate.type !== "text" || candidate.isDeleted || candidate.autoResize === false)
-      return element;
-    const metrics = measure(element);
-    const width = Math.max(Number(candidate.width) || 0, Number(metrics?.width) || 0);
-    const height = Math.max(Number(candidate.height) || 0, Number(metrics?.height) || 0);
-    if (width <= Number(candidate.width) && height <= Number(candidate.height)) return element;
-    repaired += 1;
-    return { ...element, width, height };
-  });
-  return { elements: repairedElements, repaired };
-}
+// -------------------------------------------------------------- persistence
 
-export function createWhiteboardPersistencePayload(state, scene) {
+// The body of a "save" message (and the scene half of "queueFeedback").
+export function persistenceFields(session, scene) {
   return {
-    sourceHash: String(state?.sceneSourceHash || ""),
-    textMetricsVersion: Math.max(0, Math.floor(Number(state?.textMetricsVersion) || 0)),
-    scene: scene ?? null,
-    baseline: { elements: Array.isArray(state?.baselineElements) ? state.baselineElements : [] },
+    sourceHash: String(session.sceneSourceHash || ""),
+    textMetricsVersion: Math.max(0, Math.floor(asNumber(session.textMetricsVersion))),
+    scene: scene === undefined ? null : scene,
+    baseline: { elements: listOf(session.baselineElements) },
   };
 }
 
-// Conversion always autosaves on view, so a sidecar's presence is not proof of
-// user edits. When the Mermaid source hash changes, prompt only if the saved
-// scene actually differs from its conversion baseline.
-const BENIGN_ELEMENT_CHANGE_KEYS = new Set([
-  "backgroundColor",
-  "fillStyle",
-  "fontFamily",
-  "fontSize",
-  "index",
-  "lineHeight",
-  "opacity",
-  "roughness",
-  "roundness",
-  "seed",
-  "strokeColor",
-  "strokeSharpness",
-  "strokeStyle",
-  "strokeWidth",
-  "textAlign",
-  "updated",
-  "version",
-  "versionNonce",
-  "verticalAlign",
-]);
-const JITTER_ELEMENT_KEYS = new Set(["height", "width", "x", "y"]);
+const liveById = (elements) => {
+  const map = new Map();
+  for (const element of listOf(elements)) {
+    if (isRecord(element) && element.id && !element.isDeleted) map.set(element.id, element);
+  }
+  return map;
+};
 
-function valuesDiffer(before, after, key, elementProperty = false) {
-  if (elementProperty && BENIGN_ELEMENT_CHANGE_KEYS.has(key)) return false;
-  if (elementProperty && JITTER_ELEMENT_KEYS.has(key)) {
-    return Math.abs((Number(after) || 0) - (Number(before) || 0)) > SUMMARY_MOVE_EPSILON_PX;
+const samePoints = (a, b) =>
+  a.length === b.length &&
+  a.every((point, i) => Math.abs(asNumber(point[0]) - asNumber(b[i][0])) <= GEOMETRY_TOLERANCE &&
+    Math.abs(asNumber(point[1]) - asNumber(b[i][1])) <= GEOMETRY_TOLERANCE);
+
+// Style (colours, strokes, fonts), version counters and timestamps are not
+// edits: the converter and `restore()` rewrite them freely. What counts is
+// identity, wording, placement, shape and wiring.
+function contentChanged(was, now) {
+  if (was.type !== now.type) return true;
+  if (String(was.text || "") !== String(now.text || "")) return true;
+  if ((was.containerId || null) !== (now.containerId || null)) return true;
+  if ((was.link || null) !== (now.link || null)) return true;
+  if ((was.fileId || null) !== (now.fileId || null)) return true;
+  for (const key of ["x", "y", "width", "height"]) {
+    if (Math.abs(asNumber(now[key]) - asNumber(was[key])) > GEOMETRY_TOLERANCE) return true;
   }
-  if (Object.is(before, after)) return false;
-  if (!before || !after || typeof before !== "object" || typeof after !== "object") return true;
-  if (Array.isArray(before) || Array.isArray(after)) {
-    if (!Array.isArray(before) || !Array.isArray(after) || before.length !== after.length) return true;
-    return before.some((value, index) => valuesDiffer(value, after[index], String(index)));
+  if (Math.abs(asNumber(now.angle) - asNumber(was.angle)) > ANGLE_TOLERANCE) return true;
+  for (const side of ["startBinding", "endBinding"]) {
+    if ((was[side]?.elementId || null) !== (now[side]?.elementId || null)) return true;
   }
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  for (const childKey of keys) {
-    if (valuesDiffer(before[childKey], after[childKey], childKey)) return true;
+  if (Array.isArray(was.points) || Array.isArray(now.points)) {
+    if (!samePoints(listOf(was.points), listOf(now.points))) return true;
   }
   return false;
 }
 
-function elementHasMeaningfulDifference(before, after) {
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  for (const key of keys) {
-    if (key === "isDeleted") continue;
-    if (valuesDiffer(before[key], after[key], key, true)) return true;
-  }
-  return false;
-}
-
-export function savedSceneHasPreservableEdits(saved) {
-  const sceneElements = saved?.scene?.elements;
-  const baselineElements = saved?.baseline?.elements;
+// Did the reviewer change anything in this saved scene, compared with the
+// scene it was converted into?
+export function savedSceneWasEdited(saved) {
+  const sceneElements = saved && saved.scene && saved.scene.elements;
+  const baselineElements = saved && saved.baseline && saved.baseline.elements;
   if (!Array.isArray(baselineElements)) return Array.isArray(sceneElements);
   if (!Array.isArray(sceneElements)) return true;
-  const baseline = byId(liveElements(baselineElements));
-  const scene = byId(liveElements(sceneElements));
-  if (baseline.size !== scene.size) return true;
-  for (const [id, element] of scene) {
-    const original = baseline.get(id);
-    if (!original || elementHasMeaningfulDifference(original, element)) return true;
+  const was = liveById(baselineElements);
+  const now = liveById(sceneElements);
+  if (was.size !== now.size) return true;
+  for (const [id, element] of now) {
+    const original = was.get(id);
+    if (!original || contentChanged(original, element)) return true;
   }
   return false;
 }
 
-/**
- * @param {object | null | undefined} saved
- * @param {string} currentSourceHash
- * @returns {"convert" | "restore" | "prompt"}
- */
-export function resolveWhiteboardInitAction(saved, currentSourceHash) {
-  const record = saved && typeof saved === "object" && saved.scene ? saved : null;
-  if (!record) return "convert";
-  if (String(record.source_hash || "") === String(currentSourceHash || "")) return "restore";
-  return savedSceneHasPreservableEdits(record) ? "prompt" : "convert";
+// What to do when a board opens: "convert" the Mermaid source afresh,
+// "restore" the saved scene, or "ask" the reviewer. Every conversion is
+// autosaved, so a saved record alone proves nothing; it only matters when the
+// source changed underneath AND the reviewer had really edited the scene.
+export function chooseStartMode(saved, sourceHash) {
+  if (!isRecord(saved) || !saved.scene) return "convert";
+  if (String(saved.source_hash || "") === String(sourceHash || "")) return "restore";
+  return savedSceneWasEdited(saved) ? "ask" : "convert";
 }
 
-function liveElements(elements) {
-  return (Array.isArray(elements) ? elements : []).filter(
-    (el) => el && typeof el === "object" && el.id && !el.isDeleted,
-  );
-}
+// ------------------------------------------------------------- edit summary
 
-function byId(elements) {
+function labelsByContainer(live) {
   const map = new Map();
-  for (const el of elements) map.set(el.id, el);
-  return map;
-}
-
-function boundTextByContainer(elements) {
-  const map = new Map();
-  for (const el of elements) {
-    if (el.type === "text" && el.containerId) map.set(el.containerId, el);
+  for (const element of live.values()) {
+    if (element.type === "text" && element.containerId) map.set(element.containerId, element);
   }
   return map;
 }
 
-function elementLabel(el, boundText) {
-  const text = String(el.text || boundText.get(el.id)?.text || "")
+function visibleText(element, labels) {
+  return String(element.text || (labels.get(element.id) || {}).text || "")
     .replace(/\s+/g, " ")
     .trim();
-  return text;
 }
 
-function describeElement(el, boundText) {
-  const label = elementLabel(el, boundText);
-  const type = String(el.type || "element");
-  return label ? `${type} "${truncate(label, 60)}" (${el.id})` : `${type} (${el.id})`;
+function nameOf(element, labels) {
+  const text = visibleText(element, labels);
+  const kind = String(element.type || "element");
+  return text ? `${kind} "${clip(text, 60)}" (${element.id})` : `${kind} (${element.id})`;
 }
 
-function truncate(text, max) {
-  const value = String(text);
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+function connectionOf(arrow, live, labels) {
+  const from = arrow.startBinding?.elementId && live.get(arrow.startBinding.elementId);
+  const to = arrow.endBinding?.elementId && live.get(arrow.endBinding.elementId);
+  if (!from && !to) return "";
+  const end = (element) => (element ? nameOf(element, labels) : "(unattached)");
+  return ` from ${end(from)} to ${end(to)}`;
 }
 
-function clampLine(line) {
-  return truncate(line, SUMMARY_MAX_LINE_CHARS);
-}
+const upperFirst = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+const isBoundLabel = (element) => element.type === "text" && Boolean(element.containerId);
 
-function arrowEndpoints(el, elementsMap, boundText) {
-  const start = el.startBinding?.elementId ? elementsMap.get(el.startBinding.elementId) : null;
-  const end = el.endBinding?.elementId ? elementsMap.get(el.endBinding.elementId) : null;
-  if (!start && !end) return "";
-  const name = (endpoint) => (endpoint ? describeElement(endpoint, boundText) : "(unattached)");
-  return ` from ${name(start)} to ${name(end)}`;
-}
-
-// Diff a baseline (freshly converted) scene against the edited scene using
-// stable element ids, producing a bounded human/agent-readable summary plus
-// counts. Bound label text elements are folded into their containers so a
-// renamed node reads as one "relabeled" change, not a moved text element.
-export function summarizeSceneEdits(baselineElements, editedElements, { maxLines = SUMMARY_MAX_LINES } = {}) {
-  const baseline = liveElements(baselineElements);
-  const edited = liveElements(editedElements);
-  const baselineMap = byId(baseline);
-  const editedMap = byId(edited);
-  const baselineText = boundTextByContainer(baseline);
-  const editedText = boundTextByContainer(edited);
-
-  const stats = { added: 0, removed: 0, moved: 0, relabeled: 0, drawn: 0 };
+// Describes how `edited` differs from `baseline`: a bounded list of
+// human-readable lines plus a tally. Text bound to a shape is reported through
+// the shape, so renaming a node is one "relabeled" line instead of a moved
+// text element.
+export function summarizeEdits(baseline, edited, { maxLines = SUMMARY_LINE_LIMIT } = {}) {
+  const before = liveById(baseline);
+  const after = liveById(edited);
+  const beforeLabels = labelsByContainer(before);
+  const afterLabels = labelsByContainer(after);
+  const tally = { added: 0, removed: 0, moved: 0, relabeled: 0, drawn: 0 };
   const lines = [];
-
-  for (const el of edited) {
-    if (baselineMap.has(el.id)) continue;
-    if (el.type === "text" && el.containerId && !baselineText.has(el.containerId) && editedMap.has(el.containerId)) {
-      // Label of a newly added container - reported with the container itself.
-      continue;
-    }
-    if (el.type === "freedraw") {
-      stats.drawn += 1;
-      lines.push(clampLine(`Drew a freehand mark near (${Math.round(el.x)}, ${Math.round(el.y)})`));
-      continue;
-    }
-    stats.added += 1;
-    const endpoints = el.type === "arrow" || el.type === "line" ? arrowEndpoints(el, editedMap, editedText) : "";
-    lines.push(clampLine(`Added ${describeElement(el, editedText)}${endpoints}`));
-  }
-
-  for (const el of baseline) {
-    if (editedMap.has(el.id)) continue;
-    if (el.type === "text" && el.containerId && baselineMap.has(el.containerId)) {
-      // Bound label removal surfaces through its container's relabel/remove.
-      continue;
-    }
-    stats.removed += 1;
-    lines.push(clampLine(`Removed ${describeElement(el, baselineText)}`));
-  }
-
-  for (const el of edited) {
-    const before = baselineMap.get(el.id);
-    if (!before) continue;
-
-    const beforeLabel = elementLabel(before, baselineText);
-    const afterLabel = elementLabel(el, editedText);
-    if (beforeLabel !== afterLabel && !(el.type === "text" && el.containerId)) {
-      stats.relabeled += 1;
-      lines.push(
-        clampLine(`Relabeled ${el.type} (${el.id}): "${truncate(beforeLabel, 50)}" -> "${truncate(afterLabel, 50)}"`),
-      );
-    }
-
-    if (el.type === "text" && el.containerId) continue; // container reports geometry
-
-    const dx = Math.round((el.x ?? 0) - (before.x ?? 0));
-    const dy = Math.round((el.y ?? 0) - (before.y ?? 0));
-    const dw = Math.round((el.width ?? 0) - (before.width ?? 0));
-    const dh = Math.round((el.height ?? 0) - (before.height ?? 0));
-    const movedFar = Math.abs(dx) > SUMMARY_MOVE_EPSILON_PX || Math.abs(dy) > SUMMARY_MOVE_EPSILON_PX;
-    const resized = Math.abs(dw) > SUMMARY_MOVE_EPSILON_PX || Math.abs(dh) > SUMMARY_MOVE_EPSILON_PX;
-    if (movedFar || resized) {
-      stats.moved += 1;
-      const parts = [];
-      if (movedFar) parts.push(`moved by (${dx}, ${dy})`);
-      if (resized) parts.push(`resized by (${dw}, ${dh})`);
-      lines.push(clampLine(`${capitalize(parts.join(" and "))}: ${describeElement(el, editedText)}`));
-    }
-  }
-
-  const total = STAT_KEYS.reduce((sum, key) => sum + stats[key], 0);
-  const bounded = lines.slice(0, maxLines);
-  if (lines.length > bounded.length) {
-    bounded.push(
-      `...and ${lines.length - bounded.length} more change${lines.length - bounded.length === 1 ? "" : "s"}`,
-    );
-  }
-  if (total === 0) bounded.push("No element changes detected (view-only or style-only edits).");
-  return { lines: bounded, stats, totalChanges: total };
-}
-
-function capitalize(text) {
-  return text ? text[0].toUpperCase() + text.slice(1) : text;
-}
-
-function boundedInt(value, max = 10_000) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) return 0;
-  return Math.min(Math.round(number), max);
-}
-
-// Validate and canonicalize an excalidraw-scene target coming back from the
-// browser, mirroring `normalizeMermaidNodeTarget`: unknown or hostile fields
-// are stripped to a fixed shape before the target reaches state.json and the
-// agent. Paths are produced server-side, but re-normalizing keeps the store
-// safe against arbitrary POSTed prompt bodies.
-export function normalizeExcalidrawSceneTarget(target) {
-  const stats = target.stats && typeof target.stats === "object" && !Array.isArray(target.stats) ? target.stats : {};
-  return {
-    type: EXCALIDRAW_SCENE_TARGET_TYPE,
-    diagramIndex: boundedInt(target.diagramIndex, 999),
-    diagramId: String(target.diagramId || ""),
-    sourceHash: String(target.sourceHash || ""),
-    scenePath: String(target.scenePath || ""),
-    previewPath: String(target.previewPath || ""),
-    imageFallback: Boolean(target.imageFallback),
-    stats: Object.fromEntries(STAT_KEYS.map((key) => [key, boundedInt(stats[key])])),
+  const record = (kind, line) => {
+    tally[kind] += 1;
+    lines.push(clip(line, SUMMARY_LINE_WIDTH));
   };
+
+  for (const [id, element] of after) {
+    if (before.has(id)) continue;
+    // The label of a brand-new shape is described by the shape.
+    if (isBoundLabel(element) && after.has(element.containerId) && !before.has(element.containerId)) continue;
+    if (element.type === "freedraw") {
+      record("drawn", `Drew a freehand mark near (${Math.round(element.x)}, ${Math.round(element.y)})`);
+      continue;
+    }
+    const linked = element.type === "arrow" || element.type === "line" ? connectionOf(element, after, afterLabels) : "";
+    record("added", `Added ${nameOf(element, afterLabels)}${linked}`);
+  }
+
+  for (const [id, element] of before) {
+    if (after.has(id)) continue;
+    if (isBoundLabel(element) && before.has(element.containerId)) continue;
+    record("removed", `Removed ${nameOf(element, beforeLabels)}`);
+  }
+
+  for (const [id, element] of after) {
+    const original = before.get(id);
+    if (!original) continue;
+    const bound = isBoundLabel(element);
+
+    const wasText = visibleText(original, beforeLabels);
+    const nowText = visibleText(element, afterLabels);
+    if (wasText !== nowText && !bound) {
+      record("relabeled", `Relabeled ${element.type} (${id}): "${clip(wasText, 50)}" -> "${clip(nowText, 50)}"`);
+    }
+    if (bound) continue;
+
+    const dx = Math.round(asNumber(element.x) - asNumber(original.x));
+    const dy = Math.round(asNumber(element.y) - asNumber(original.y));
+    const dw = Math.round(asNumber(element.width) - asNumber(original.width));
+    const dh = Math.round(asNumber(element.height) - asNumber(original.height));
+    const shifted = Math.max(Math.abs(dx), Math.abs(dy)) > GEOMETRY_TOLERANCE;
+    const resized = Math.max(Math.abs(dw), Math.abs(dh)) > GEOMETRY_TOLERANCE;
+    if (!shifted && !resized) continue;
+    const parts = [];
+    if (shifted) parts.push(`moved by (${dx}, ${dy})`);
+    if (resized) parts.push(`resized by (${dw}, ${dh})`);
+    record("moved", `${upperFirst(parts.join(" and "))}: ${nameOf(element, afterLabels)}`);
+  }
+
+  const total = Object.values(tally).reduce((sum, count) => sum + count, 0);
+  const kept = lines.slice(0, maxLines);
+  const dropped = lines.length - kept.length;
+  if (dropped > 0) kept.push(`...and ${dropped} more change${dropped === 1 ? "" : "s"}`);
+  if (total === 0) kept.push("No element changes detected (view-only or style-only edits).");
+  return { lines: kept, stats: tally, totalChanges: total };
 }
+
+// Deep copy through JSON: the form in which scenes are persisted and posted.
+export const plainCopy = (value) => JSON.parse(JSON.stringify(value));
