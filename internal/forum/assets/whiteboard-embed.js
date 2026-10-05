@@ -20,6 +20,7 @@
 //     vxb1.save     {seq, record}                     debounced autosave
 //     vxb1.submit   {reqId, current, png, editLines, remark}   Queue feedback
 //     vxb1.expand                                      wants fullscreen
+//     vxb1.leave                                       Escape pressed in the fullscreen frame
 //     vxb1.final    {reqId, record, unsaved}          answer to vxb1.snap
 //   embed -> frame
 //     vxb1.start    {mode, text, digest, record, palette, total, restoreFocus}
@@ -297,6 +298,9 @@
         break;
       case "expand":
         if (placement === placement.board.inline) openFullscreen(placement.board);
+        break;
+      case "leave":
+        if (placement === placement.board.full) leaveFullscreen(false);
         break;
       case "final":
         if (placement.outstanding && placement.outstanding.id === data.reqId) placement.outstanding.answer(data);

@@ -5,8 +5,10 @@ package forum_test
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"image"
 	"image/png"
+	"math"
 	"net/http"
 	"os/exec"
 	"regexp"
@@ -43,7 +45,8 @@ func TestWhiteboardAssets_NoUpstreamColourRemains(t *testing.T) {
 }
 
 // The whiteboard stylesheet must repoint Excalidraw's own accent and surfaces
-// at the forum tokens, in both of its theme blocks.
+// at the forum tokens, in both of its theme blocks, and must not carry the
+// converter-era hard-coded accent of the editor's own palette.
 func TestWhiteboardCSS_ThemesExcalidrawWithForumTokens(t *testing.T) {
 	env := newEnv(t, time.Minute)
 	_, css := env.get("/whiteboard-assets/whiteboard.css")
@@ -53,13 +56,18 @@ func TestWhiteboardCSS_ThemesExcalidrawWithForumTokens(t *testing.T) {
 		"--default-bg-color: var(--fr-bg)",
 		"--color-selection: var(--fr-accent)",
 		"--link-color: var(--fr-accent)",
+		"--text-primary-color: var(--fr-text)",
 	} {
 		if !strings.Contains(css, want) {
 			t.Errorf("whiteboard.css does not contain %q", want)
 		}
 	}
-	if !strings.Contains(css, "body .excalidraw.theme--dark") {
-		t.Error("the dark Excalidraw block is not overridden")
+	// The override has to win over both of the editor's theme blocks, so its
+	// selectors are the editor's own, prefixed to be more specific.
+	for _, sel := range []string{"body .vxb-board .excalidraw,", "body .vxb-board .excalidraw.theme--dark{"} {
+		if !strings.Contains(css, sel) {
+			t.Errorf("whiteboard.css does not override the editor with %q", sel)
+		}
 	}
 }
 
@@ -193,67 +201,73 @@ const report = (k, v) => fetch("/__report?k=" + k + "&v=" + encodeURIComponent(v
 	}
 }
 
-// Computed styles in real Chrome for everything the whiteboard frame draws
-// around the diagram: the frame page itself, the note field, the "Click to
-// edit" hint, the banners, and Excalidraw's own accent and surfaces. They
-// have to be the forum tokens of the active theme.
-const whiteboardThemeArtifact = `<!doctype html><html data-fr-theme="__THEME__"><head><meta charset="utf-8"><title>wb</title>
-<link rel="stylesheet" href="/forum-assets/forum-tokens.css">
-<link rel="stylesheet" href="/whiteboard-assets/whiteboard.css">
-</head><body style="margin:0">
-<div id="wbHeader"><input id="wbNote" value="x"></div>
-<div class="wb-banner" id="b1">banner</div>
-<div class="wb-status" id="b2">status</div>
-<span class="wb-activate-label" id="hint">Click to edit</span>
-<div class="excalidraw __DARK__" id="ex"><i id="primary" style="color:var(--color-primary);background:var(--island-bg-color)">p</i><b id="surface" style="background:var(--default-bg-color);color:var(--text-primary-color)">s</b></div>
-<script>
-const report = (k, v) => fetch("/__report?k=" + k + "&v=" + encodeURIComponent(v), { mode: "no-cors" });
-const cs = (id) => getComputedStyle(document.getElementById(id));
-setTimeout(() => report("styles", JSON.stringify({
-  body: getComputedStyle(document.body).backgroundColor,
-  bodyText: getComputedStyle(document.body).color,
-  noteBorder: cs("wbNote").borderTopColor, noteBg: cs("wbNote").backgroundColor,
-  header: cs("wbHeader").backgroundColor,
-  banner: cs("b1").backgroundColor, status: cs("b2").backgroundColor,
-  hintBg: cs("hint").backgroundColor, hintBorder: cs("hint").borderTopColor,
-  primary: cs("primary").color, island: cs("primary").backgroundColor,
-  exBg: cs("surface").backgroundColor, exText: cs("surface").color,
-})), 800);
-</script></body></html>`
+// Computed styles, in real Chrome, of everything the frame draws around the
+// diagram and of Excalidraw's own accent and surfaces: they have to be the
+// forum tokens of the active theme.
+const frameStylesScript = `
+const boardFrame0 = await boardReady(0);
+const d = boardFrame0.contentDocument, w = boardFrame0.contentWindow;
+const q = (sel) => d.querySelector(sel);
+const css = (el, name) => w.getComputedStyle(el)[name];
+const prop = (el, name) => w.getComputedStyle(el).getPropertyValue(name).trim().toLowerCase();
+const excalidraw = q(".excalidraw");
+report("result", JSON.stringify({
+  body: css(d.body, "backgroundColor"),
+  bodyText: css(d.body, "color"),
+  bar: css(q(".vxb-bar"), "backgroundColor"),
+  barLine: css(q(".vxb-bar"), "borderBottomColor"),
+  remarkLine: css(q(".vxb-remark"), "borderTopColor"),
+  remarkBg: css(q(".vxb-remark"), "backgroundColor"),
+  queueBg: css(q(".vxb-btn-primary"), "backgroundColor"),
+  queueText: css(q(".vxb-btn-primary"), "color"),
+  fullBg: css(q(".vxb-btn:not(.vxb-btn-primary)"), "backgroundColor"),
+  fullText: css(q(".vxb-btn:not(.vxb-btn-primary)"), "color"),
+  primary: prop(excalidraw, "--color-primary"),
+  island: prop(excalidraw, "--island-bg-color"),
+  paper: prop(excalidraw, "--default-bg-color"),
+  ink: prop(excalidraw, "--text-primary-color"),
+  host: css(q(".vxb-board"), "backgroundColor"),
+  darkClass: excalidraw.classList.contains("theme--dark"),
+}));
+`
 
 func TestWhiteboardFrame_RealChrome_UsesForumTokensInBothThemes(t *testing.T) {
-	chrome := headlessChrome(t)
-	for theme, want := range map[string]map[string]string{
+	type want = map[string]string
+	for theme, expect := range map[string]want{
 		"dark": {
-			"body": "rgb(21, 23, 26)", "bodyText": "rgb(233, 234, 236)", "noteBorder": "rgb(58, 63, 71)", "noteBg": "rgb(28, 31, 36)",
-			"header": "rgb(32, 36, 42)", "hintBg": "rgb(28, 31, 36)", "primary": "rgb(111, 161, 203)", "island": "rgb(28, 31, 36)",
-			"exBg": "rgb(21, 23, 26)", "exText": "rgb(233, 234, 236)",
+			"body": "rgb(21, 23, 26)", "bodyText": "rgb(233, 234, 236)", "bar": "rgb(32, 36, 42)", "barLine": "rgb(41, 45, 51)",
+			"remarkLine": "rgb(58, 63, 71)", "remarkBg": "rgb(28, 31, 36)",
+			"queueBg": "rgb(111, 161, 203)", "queueText": "rgb(15, 34, 51)", "fullBg": "rgb(28, 31, 36)", "fullText": "rgb(233, 234, 236)",
+			"primary": "#6fa1cb", "island": "#1c1f24", "paper": "#15171a", "ink": "#e9eaec",
 		},
 		"light": {
-			"body": "rgb(242, 241, 236)", "bodyText": "rgb(26, 29, 34)", "noteBorder": "rgb(194, 192, 184)", "noteBg": "rgb(255, 255, 255)",
-			"header": "rgb(236, 235, 228)", "hintBg": "rgb(255, 255, 255)", "primary": "rgb(31, 78, 121)", "island": "rgb(255, 255, 255)",
-			"exBg": "rgb(242, 241, 236)", "exText": "rgb(26, 29, 34)",
+			"body": "rgb(242, 241, 236)", "bodyText": "rgb(26, 29, 34)", "bar": "rgb(236, 235, 228)", "barLine": "rgb(218, 218, 212)",
+			"remarkLine": "rgb(194, 192, 184)", "remarkBg": "rgb(255, 255, 255)",
+			"queueBg": "rgb(31, 78, 121)", "queueText": "rgb(255, 255, 255)", "fullBg": "rgb(255, 255, 255)", "fullText": "rgb(26, 29, 34)",
+			"primary": "#1f4e79", "island": "#ffffff", "paper": "#f2f1ec", "ink": "#1a1d22",
 		},
 	} {
 		t.Run(theme, func(t *testing.T) {
 			env := newEnv(t, time.Minute)
 			key := env.open().Key
-			dark := ""
-			if theme == "dark" {
-				dark = "theme--dark"
-			}
-			env.setArtifact(strings.NewReplacer("__THEME__", theme, "__DARK__", dark).Replace(whiteboardThemeArtifact))
-			reports := captureReports(t, env)
-			got := reportFromChrome(t, chrome, env.ts.URL+"/a/"+key+"/artifact.html?theme="+theme, reports, "styles")
+			got := runLab(t, env, key, theme, []string{"flowchart LR\n  A --> B"}, frameStylesScript, 1300, 900, 90*time.Second)
 			t.Logf("%s styles: %s", theme, got)
-			for name, value := range want {
+			for name, value := range expect {
 				if !strings.Contains(got, `"`+name+`":"`+value+`"`) {
 					t.Errorf("%s: %s is not %s in %s", theme, name, value, got)
 				}
 			}
-			for _, cream := range []string{"rgb(255, 251, 243)", "rgb(244, 201, 93)", "rgb(105, 101, 219)", "rgb(168, 165, 255)"} {
-				if strings.Contains(got, cream) {
-					t.Errorf("%s: an old upstream/Excalidraw colour %s is still drawn: %s", theme, cream, got)
+			wantDark := "false"
+			if theme == "dark" {
+				wantDark = "true"
+			}
+			if !strings.Contains(got, `"darkClass":`+wantDark) {
+				t.Errorf("%s: the editor is in the wrong theme: %s", theme, got)
+			}
+			// The editor's own accent (and the forum's old gold) must be gone.
+			for _, old := range []string{"rgb(105, 101, 219)", "rgb(168, 165, 255)", "#6965db", "#a8a5ff", "rgb(244, 201, 93)"} {
+				if strings.Contains(strings.ToLower(got), old) {
+					t.Errorf("%s: the editor's own colour %s is still drawn: %s", theme, old, got)
 				}
 			}
 		})
@@ -301,4 +315,89 @@ func reportFromChrome(t *testing.T, chrome, url string, get func(string) (string
 	}
 	t.Fatalf("never got the %q report", key)
 	return ""
+}
+
+// Every text/background pairing the whiteboard CSS and the embed use, computed
+// from the shipped tokens of each theme: at least 4.5:1 (WCAG AA for normal
+// text). Soft (translucent) fills are composited over the surface they sit on.
+func TestWhiteboardTextContrast_MeetsAAInBothThemes(t *testing.T) {
+	env := newEnv(t, time.Minute)
+	_, css := env.get("/forum-assets/forum-tokens.css")
+	lightAt := strings.Index(css, `:root[data-fr-theme="light"]`)
+	if lightAt < 0 {
+		t.Fatal("no light token block")
+	}
+	themes := map[string]map[string][4]float64{"dark": parseColourTokens(css[:lightAt]), "light": parseColourTokens(css[lightAt:])}
+	// The light block only redefines what differs from dark; the fonts and
+	// radii are not colours, and every colour is redefined, so no fallback.
+	pairs := []struct{ fg, bg, over string }{
+		{"text", "bg", ""}, {"text", "surface", ""}, {"text", "surface-sunken", ""},
+		{"text-secondary", "bg", ""}, {"text-secondary", "surface", ""},
+		{"accent-contrast", "accent", ""}, {"accent-contrast", "accent-hover", ""},
+		{"danger", "surface", ""}, {"danger", "bg", ""},
+		{"success", "surface", ""},
+		{"text", "bronze-soft", "bg"}, {"text", "bronze-soft", "surface-sunken"},
+		{"text", "accent-soft", "bg"},
+	}
+	for theme, tokens := range themes {
+		for _, p := range pairs {
+			fg, bg := tokens[p.fg], tokens[p.bg]
+			if fg == ([4]float64{}) || bg == ([4]float64{}) {
+				t.Fatalf("%s: token --fr-%s or --fr-%s not found", theme, p.fg, p.bg)
+			}
+			if p.over != "" {
+				bg = compositeOver(bg, tokens[p.over])
+			}
+			if ratio := contrastRatio(fg, bg); ratio < 4.5 {
+				t.Errorf("%s: --fr-%s on --fr-%s %s is %.2f:1, want at least 4.5:1", theme, p.fg, p.bg, p.over, ratio)
+			}
+		}
+	}
+}
+
+var colourToken = regexp.MustCompile(`--fr-([a-z-]+):\s*(#[0-9A-Fa-f]{6}|rgba\([^)]*\))`)
+
+// parseColourTokens reads "--fr-name: #RRGGBB" and "rgba(r,g,b,a)" values into
+// [r g b a] with r, g, b in 0..255.
+func parseColourTokens(block string) map[string][4]float64 {
+	out := map[string][4]float64{}
+	for _, m := range colourToken.FindAllStringSubmatch(block, -1) {
+		v := m[2]
+		var c [4]float64
+		if strings.HasPrefix(v, "#") {
+			var r, g, b int
+			_, _ = fmt.Sscanf(v[1:], "%02x%02x%02x", &r, &g, &b)
+			c = [4]float64{float64(r), float64(g), float64(b), 1}
+		} else {
+			var r, g, b, a float64
+			_, _ = fmt.Sscanf(strings.NewReplacer(" ", "", "rgba(", "", ")", "").Replace(v), "%f,%f,%f,%f", &r, &g, &b, &a)
+			c = [4]float64{r, g, b, a}
+		}
+		out[m[1]] = c
+	}
+	return out
+}
+
+func compositeOver(top, below [4]float64) [4]float64 {
+	a := top[3]
+	return [4]float64{top[0]*a + below[0]*(1-a), top[1]*a + below[1]*(1-a), top[2]*a + below[2]*(1-a), 1}
+}
+
+func luminance(c [4]float64) float64 {
+	lin := func(v float64) float64 {
+		v /= 255
+		if v <= 0.03928 {
+			return v / 12.92
+		}
+		return math.Pow((v+0.055)/1.055, 2.4)
+	}
+	return 0.2126*lin(c[0]) + 0.7152*lin(c[1]) + 0.0722*lin(c[2])
+}
+
+func contrastRatio(a, b [4]float64) float64 {
+	la, lb := luminance(a), luminance(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
 }

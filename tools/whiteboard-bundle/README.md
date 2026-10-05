@@ -27,22 +27,37 @@ other vendor update.
 
 Everything under `src/` and `build.js` is vexillum's own code:
 
-- `src/whiteboard-core.js` - pure logic (edit summaries, the convert/restore/ask
-  decision, label and node sizing, link filtering). No DOM, no Excalidraw.
+- `src/whiteboard-core.js` - the DOM-free surface the frame and the tests
+  import; it re-exports three modules:
+  - `scene-fit.js` - what a reviewer sees right after conversion: line-break
+    tags, unique ids, node sizing from the measured label (growing around the
+    node's centre, inscribed rectangle for ellipses and diamonds), attached
+    arrows following grown nodes, image-board detection. Text measurement is
+    injected, so none of it needs a browser.
+  - `scene-diff.js` - edit detection and the edit summary the agent receives
+    (one change list serves both, so they cannot disagree).
+  - `scene-record.js` - the stored record (`format` 2), the opening decision
+    (convert, reopen or ask) and the link filter.
+- `src/frame-scene.js` - the parts of the frame that need Excalidraw or the
+  Mermaid converter: conversion, restoring, font-aware measuring, the PNG
+  export.
+- `src/frame-dom.js` - plain-DOM pieces of the frame page: the status line, the
+  link confirmation dialog, the opening choice and the failure panel.
 - `src/whiteboard-frame.js` - the page inside each whiteboard iframe: mounts
-  Excalidraw on one diagram and speaks the `vx-whiteboard:*` postMessage
-  protocol with the embedder.
+  Excalidraw on one board and speaks the `vxb1.` postMessage protocol with the
+  embedder (the message list is documented at the top of the embed).
 - `src/whiteboard-embed.js` - injected into artifacts that contain `.mermaid`
-  blocks; replaces them with frames, runs fullscreen and teardown, follows the
-  forum's live theme switch. `build.js` copies it to
-  `internal/forum/assets/whiteboard-embed.js`.
+  blocks; replaces them with frames, owns the lock cover, fullscreen overlay,
+  persistence (through the artifact SDK's internal bridge, never the network)
+  and the live theme switch. `build.js` copies it to
+  `internal/forum/assets/whiteboard-embed.js`; the two must stay identical.
 - `src/whiteboard-frame.css` - the frame's styling, all on the forum `--fr-*`
   tokens.
 
-Tests: `node --test "test/*.test.js"` here runs the core suite; `go test
-./internal/forum/` runs it too, plus the embed against a fake DOM
+Tests: `node --test "test/*.test.js"` here runs the core and frame-DOM suites;
+`go test ./internal/forum/` runs them too, plus the embed against a fake DOM
 (`internal/forum/testdata/whiteboard_embed_dom_test.js`) and the real-Chrome
-whiteboard tests.
+whiteboard tests (skipped when no Chrome is found).
 
 What is vendored is the set of npm packages the bundle inlines, used through
 their public APIs and pinned exactly: `mermaid@11.12.1`,

@@ -556,6 +556,7 @@ locally. **Queue feedback** writes a `.excalidraw` scene and a PNG preview to
       Whiteboard feedback for diagram 1 of 2.
       Edit summary:
       - Added node "Cache"
+      Reviewer remark: also rename the queue to "Jobs"
       Scene (.excalidraw JSON): /.../whiteboards/0.excalidraw
       Preview (PNG): /.../whiteboards/0.png
       Read the summary first ...
@@ -563,9 +564,11 @@ locally. **Queue feedback** writes a `.excalidraw` scene and a PNG preview to
     target: {"whiteboard":1,"scenePath":"...","previewPath":"..."}
 ```
 
-Read the summary first, open the files only if you need more, then apply the
-edits by **updating the Mermaid source in the artifact** - never try to write
-the scene back.
+The `Reviewer remark:` line carries the optional note the reviewer typed next to
+Queue feedback, and is present only when they typed one. Read the summary and
+the remark first, open the files only if you need more, then apply the edits by
+**updating the Mermaid source in the artifact** - never try to write the scene
+back.
 
 ## Playbooks
 

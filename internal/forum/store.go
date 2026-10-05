@@ -108,7 +108,13 @@ func (s *Store) SaveScene(key string, index int, digest string, measureGen int, 
 	if err := os.MkdirAll(s.dir(key), 0o755); err != nil {
 		return fmt.Errorf("creating whiteboard dir for %s: %w", key, err)
 	}
-	if err := atomicfile.WriteJSON(s.workingFile(key, index), record); err != nil {
+	// Compact on purpose: the scene is opaque to Go and can be hundreds of
+	// KB, so it is neither re-indented nor padded on every autosave.
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("encoding whiteboard scene %s/%d: %w", key, index, err)
+	}
+	if err := atomicfile.Write(s.workingFile(key, index), append(data, '\n')); err != nil {
 		return fmt.Errorf("saving whiteboard scene %s/%d: %w", key, index, err)
 	}
 	return nil

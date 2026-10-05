@@ -95,7 +95,6 @@ const state = {
 
 // ------------------------------------------------------------- page shell
 
-window.__vxbDebug = () => ({ state, appState: state.api && state.api.getAppState() }); // DEBUG-REMOVE
 const status = createStatus();
 const title = make("span", { class: "vxb-name" });
 const badge = make("span", { class: "vxb-badge", text: "Image diagram", title: "This diagram type could not be turned into shapes, so it is an image you can draw on." });
@@ -457,6 +456,24 @@ async function queueFeedback() {
 queueButton.addEventListener("click", queueFeedback);
 expandButton.addEventListener("click", () => {
   if (state.ready && !state.frozen) post("expand");
+});
+
+// ------------------------------------------------------------- Escape key
+
+// In fullscreen, Escape is also the way back (the embed owns the overlay and
+// handles it when focus is outside this frame). Inside the frame Escape first
+// belongs to the editor: it cancels a selection, a text edit, a menu or a
+// dialog. Only a press with nothing of that to cancel asks to leave.
+function nothingToCancel() {
+  if (!state.api || document.querySelector(".vxb-scrim, .vxb-choice")) return false;
+  const app = state.api.getAppState();
+  const open = app.openMenu || app.openPopup || app.openDialog || app.contextMenu || app.editingTextElement || app.newElement || app.editingLinearElement;
+  return !open && Object.keys(app.selectedElementIds || {}).length === 0 && !app.selectedLinearElement;
+}
+
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || event.defaultPrevented || state.mode !== "fullscreen") return;
+  if (nothingToCancel()) post("leave");
 });
 
 // -------------------------------------------------------------------- links

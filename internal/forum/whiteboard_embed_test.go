@@ -3,14 +3,16 @@ package forum_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 // The embed script is browser JS with no Go counterpart, so it is driven under
-// node against a fake DOM and a scripted chrome (testdata/whiteboard_embed_dom_test.js):
-// the ready/init handshake, saving, queue feedback, fullscreen teardown and the
-// live theme switch. Skipped where node is not installed: node is a test-time
+// node against a fake DOM, a hand-advanced clock and a scripted artifact bridge
+// (testdata/whiteboard_embed_dom_test.js): the start handshake and its token
+// rules, autosave, the final-state exchange, fullscreen, unload, the live theme
+// and Queue feedback. Skipped where node is not installed: node is a test-time
 // convenience, never a runtime dependency.
 func TestWhiteboardEmbed_ProtocolAgainstAFakeDOM(t *testing.T) {
 	node, err := exec.LookPath("node")
@@ -23,17 +25,22 @@ func TestWhiteboardEmbed_ProtocolAgainstAFakeDOM(t *testing.T) {
 	}
 }
 
-// The pure logic behind the frame (edit summaries, start decisions, label
-// fixing) is a plain ES module with its own node:test suite next to the bundle
-// sources.
+// The DOM-free logic behind the frame (record, opening decision, edit
+// detection and summaries, node fitting, link filter) and the plain-DOM
+// pieces of the frame page are ES modules with their own node:test suites next
+// to the bundle sources.
 func TestWhiteboardCore_NodeSuite(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node not installed")
 	}
-	out, err := exec.Command(node, "--test", "../../tools/whiteboard-bundle/test/whiteboard-core.test.js").CombinedOutput()
+	files, err := filepath.Glob("../../tools/whiteboard-bundle/test/*.test.js")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no whiteboard node test files found: %v", err)
+	}
+	out, err := exec.Command(node, append([]string{"--test"}, files...)...).CombinedOutput()
 	if err != nil {
-		t.Fatalf("whiteboard core tests failed: %v\n%s", err, out)
+		t.Fatalf("whiteboard node tests failed: %v\n%s", err, out)
 	}
 }
 

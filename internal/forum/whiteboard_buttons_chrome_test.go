@@ -3,134 +3,119 @@
 package forum_test
 
 import (
-	"net/http"
-	"os/exec"
+	"encoding/json"
+	"fmt"
 	"strings"
-	"sync"
-	"syscall"
 	"testing"
 	"time"
 )
 
-// The whiteboard's buttons are forum buttons: small, on the --fr-* tokens, in
-// both themes. Measured as computed styles in real Chrome, on the two surfaces
-// the user sees: the fullscreen "Close" button the embed puts in the artifact,
-// and the frame's own header buttons (Queue feedback, Fullscreen), whose
-// stylesheet is the one the frame page loads. The old behaviour was a ~34px
-// yellow (#f4c95d) button in both places.
-const whiteboardButtonsArtifact = `<!doctype html><html data-fr-theme="__THEME__"><head><meta charset="utf-8"><title>wb</title>
-<link rel="stylesheet" href="/forum-assets/forum-tokens.css">
-<link rel="stylesheet" href="/whiteboard-assets/whiteboard.css">
-</head><body data-vexillum-whiteboard-theme="__THEME__">
-<div class="mermaid">flowchart LR
-  A --> B
-</div>
-<div id="wbHeader" style="padding-right:12px"><button id="wbQueue" type="button">Queue feedback</button><button id="wbFullscreen" type="button">Fullscreen</button><button id="wbPlain" type="button" disabled>Plain</button></div>
-<script>
-const report = (v) => fetch("/__report?v=" + encodeURIComponent(v), { mode: "no-cors" });
-const box = (el) => { const r = el.getBoundingClientRect(), c = getComputedStyle(el); return { h: Math.round(r.height), w: Math.round(r.width), bg: c.backgroundColor, color: c.color, fs: c.fontSize, fw: c.fontWeight }; };
-setTimeout(() => report("frame " + JSON.stringify({ queue: box(document.getElementById("wbQueue")), full: box(document.getElementById("wbFullscreen")) })), 1500);
-let ready = null;
-window.addEventListener("message", (e) => { if (e.data && e.data.type === "vx-whiteboard:ready" && !ready) ready = { id: e.data.channelId, source: e.source }; });
-const timer = setInterval(() => {
-  if (!ready) return;
-  clearInterval(timer);
-  setTimeout(() => {
-    window.dispatchEvent(new MessageEvent("message", { data: { type: "vx-whiteboard:maximize", diagramIndex: 0, channelId: ready.id }, source: ready.source }));
-    const poll = setInterval(() => {
-      const o = document.getElementById("vxWhiteboardOverlay");
-      if (!o || o.style.display !== "block") return;
-      clearInterval(poll);
-      report("close " + JSON.stringify(box(o.querySelector("button"))));
-    }, 200);
-  }, 2500);
-}, 200);
-</script></body></html>`
+// The whiteboard's buttons are small forum buttons on the --fr-* tokens, in
+// both themes, and in fullscreen nothing in the frame's header sits under the
+// embed's floating way-back control. Measured in real Chrome on the real frame
+// and the real overlay, at a normal and at a narrow window.
+const buttonsScript = `
+const inline = await boardReady(0);
+const box = (el) => {
+  const r = el.getBoundingClientRect(), c = getComputedStyle(el);
+  return { x: r.left, y: r.top, w: r.width, h: r.height, bg: c.backgroundColor, color: c.color, fs: c.fontSize };
+};
+const inFrame = (iframe, sel) => {
+  const el = iframe.contentDocument.querySelector(sel);
+  const w = iframe.contentWindow, r = el.getBoundingClientRect(), c = w.getComputedStyle(el);
+  const f = iframe.getBoundingClientRect();
+  return { x: f.left + r.left, y: f.top + r.top, w: r.width, h: r.height, bg: c.backgroundColor, color: c.color, fs: c.fontSize, hidden: r.width === 0 };
+};
+const inlineQueue = inFrame(inline, ".vxb-btn-primary");
+const inlineFull = inFrame(inline, ".vxb-tools .vxb-btn:last-child");
+
+inline.contentDocument.querySelector(".vxb-tools .vxb-btn:last-child").click();
+const overlay = await until(() => document.getElementById("vxb-overlay"), 15000, "the overlay");
+const full = await boardReady(overlayFrame);
+const back = overlay.querySelector("button");
+const controls = {
+  remark: inFrame(full, ".vxb-remark"),
+  queue: inFrame(full, ".vxb-btn-primary"),
+};
+const hits = {};
+for (const [name, c] of Object.entries(controls)) {
+  const hit = document.elementFromPoint(c.x + c.w / 2, c.y + c.h / 2);
+  hits[name] = hit === full ? "frame" : (hit ? hit.tagName + "." + hit.className : "nothing");
+}
+const backBox = box(back);
+const overlaps = Object.entries(controls).filter(([, c]) => c.x < backBox.x + backBox.w && c.x + c.w > backBox.x && c.y < backBox.y + backBox.h && c.y + c.h > backBox.y).map(([n]) => n);
+report("result", JSON.stringify({
+  inlineQueue, inlineFull, back: backBox, controls, hits, overlaps,
+  backFirst: overlay.querySelector("button") === overlay.querySelectorAll("button")[0] && overlay.children[0].contains(back),
+  fullscreenButtonHidden: inFrame(full, ".vxb-tools .vxb-btn:last-child").hidden,
+  scrollable: document.documentElement.scrollWidth <= window.innerWidth,
+}));
+`
 
 func TestWhiteboard_RealChrome_ButtonsAreSmallForumButtonsInBothThemes(t *testing.T) {
-	chrome := headlessChrome(t)
-	type sample struct {
-		Queue, Full, Close struct {
-			H, W      int
-			Bg, Color string
-		}
+	type rect struct {
+		X, Y, W, H float64
+		Bg, Color  string
+		Hidden     bool
 	}
-	for theme, want := range map[string]struct{ surface, accent, text string }{
-		"dark":  {"rgb(28, 31, 36)", "rgb(111, 161, 203)", "rgb(233, 234, 236)"},
-		"light": {"rgb(255, 255, 255)", "rgb(31, 78, 121)", "rgb(26, 29, 34)"},
+	type report struct {
+		InlineQueue, InlineFull, Back rect
+		Controls                      map[string]rect
+		Hits                          map[string]string
+		Overlaps                      []string
+		BackFirst                     bool
+		FullscreenButtonHidden        bool
+	}
+	for theme, want := range map[string]struct{ surface, accent, accentText, text string }{
+		"dark":  {"rgb(28, 31, 36)", "rgb(111, 161, 203)", "rgb(15, 34, 51)", "rgb(233, 234, 236)"},
+		"light": {"rgb(255, 255, 255)", "rgb(31, 78, 121)", "rgb(255, 255, 255)", "rgb(26, 29, 34)"},
 	} {
-		t.Run(theme, func(t *testing.T) {
-			env := newEnv(t, time.Minute)
-			key := env.open().Key
-			env.setArtifact(strings.ReplaceAll(whiteboardButtonsArtifact, "__THEME__", theme))
-			var mu sync.Mutex
-			reports := map[string]string{}
-			env.wrap(func(inner http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path == "/forum-assets/forum-theme.js" {
-						// The chrome keeps its theme in localStorage, so seed the choice
-						// the way the user's toggle would, before the real script reads it.
-						w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-						_, _ = w.Write([]byte(`try { localStorage.setItem("forum-theme", "` + theme + `"); } catch (e) {}` + "\n"))
-						inner.ServeHTTP(w, r)
-						return
+		for _, width := range []int{1300, 640} {
+			t.Run(fmt.Sprintf("%s/%dpx", theme, width), func(t *testing.T) {
+				env := newEnv(t, time.Minute)
+				key := env.open().Key
+				got := runLab(t, env, key, theme, []string{"flowchart LR\n  A --> B"}, buttonsScript, width, 900, 120*time.Second)
+				t.Logf("buttons: %s", got)
+				var r report
+				if err := json.Unmarshal([]byte(got), &r); err != nil {
+					t.Fatalf("bad report: %v\n%s", err, got)
+				}
+				// Small: the forum's 28px control, not a 34px+ slab.
+				for name, b := range map[string]rect{"Queue feedback": r.InlineQueue, "Fullscreen": r.InlineFull, "Back to page": r.Back} {
+					if b.H < 24 || b.H > 30 {
+						t.Errorf("%s is %.1fpx tall, want the forum's small button (about 28px)", name, b.H)
 					}
-					if r.URL.Path == "/__report" {
-						v := r.URL.Query().Get("v")
-						name, body, _ := strings.Cut(v, " ")
-						mu.Lock()
-						reports[name] = body
-						mu.Unlock()
-						return
+				}
+				if r.InlineQueue.Bg != want.accent || r.InlineQueue.Color != want.accentText {
+					t.Errorf("Queue feedback is not the accent primary button: %+v", r.InlineQueue)
+				}
+				if r.InlineFull.Bg != want.surface || r.InlineFull.Color != want.text {
+					t.Errorf("Fullscreen is not a plain surface button: %+v", r.InlineFull)
+				}
+				if r.Back.Bg != want.accent || r.Back.Color != want.accentText {
+					t.Errorf("Back to page is not on the accent tokens: %+v", r.Back)
+				}
+				for name, c := range map[string]rect{"Queue feedback": r.InlineQueue, "Back to page": r.Back} {
+					if strings.Contains(c.Bg, "244, 201, 93") {
+						t.Errorf("%s still paints the old gold", name)
 					}
-					inner.ServeHTTP(w, r)
-				})
+				}
+				if !r.FullscreenButtonHidden {
+					t.Error("the Fullscreen button is still offered inside fullscreen")
+				}
+				if !r.BackFirst {
+					t.Error("the way back is not the first button of the overlay")
+				}
+				// The way back never covers a control of the frame's header.
+				if len(r.Overlaps) != 0 {
+					t.Errorf("the way-back control overlaps %v: back %+v controls %+v", r.Overlaps, r.Back, r.Controls)
+				}
+				for name, hit := range r.Hits {
+					if hit != "frame" {
+						t.Errorf("the point at the middle of %q hits %s, not the frame: it is covered", name, hit)
+					}
+				}
 			})
-			cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--window-size=1500,900",
-				"--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+key)
-			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-			if err := cmd.Start(); err != nil {
-				t.Fatalf("chrome: %v", err)
-			}
-			t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); _ = cmd.Wait() })
-			get := func(name string) string {
-				for deadline := time.Now().Add(45 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
-					mu.Lock()
-					v, ok := reports[name]
-					mu.Unlock()
-					if ok {
-						return v
-					}
-				}
-				t.Fatalf("never got the %q measurement", name)
-				return ""
-			}
-			frame, closeBtn := get("frame"), get("close")
-			t.Logf("frame buttons: %s", frame)
-			t.Logf("fullscreen Close: %s", closeBtn)
-			for name, got := range map[string]string{"frame buttons": frame, "Close": closeBtn} {
-				if strings.Contains(got, "244, 201, 93") {
-					t.Errorf("%s still use the old upstream yellow colour: %s", name, got)
-				}
-			}
-			if strings.Contains(frame, `"h":0`) {
-				t.Fatalf("the frame buttons were never laid out: %s", frame)
-			}
-			// Height (px) of a 13px button with 4px padding is ~27; the old ones were ~34-36.
-			for _, h := range []string{`"h":3`, `"h":4`} {
-				if strings.Contains(frame, h) || strings.Contains(closeBtn, h) {
-					t.Errorf("a button is %s tall, the old big size: frame %s close %s", h, frame, closeBtn)
-				}
-			}
-			if !strings.Contains(closeBtn, `"bg":"`+want.surface+`"`) || !strings.Contains(closeBtn, `"color":"`+want.text+`"`) {
-				t.Errorf("Close is not on the %s surface/text tokens: %s", theme, closeBtn)
-			}
-			if !strings.Contains(frame, `"queue":{"h":`) || !strings.Contains(frame, `"bg":"`+want.accent+`"`) {
-				t.Errorf("Queue feedback is not the accent primary button: %s", frame)
-			}
-			if !strings.Contains(frame, `"full":{`) || strings.Count(frame, `"bg":"`+want.surface+`"`) != 1 {
-				t.Errorf("Fullscreen is not a plain surface button like Close: %s", frame)
-			}
-		})
+		}
 	}
 }
