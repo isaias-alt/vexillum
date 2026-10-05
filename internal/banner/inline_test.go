@@ -296,14 +296,6 @@ func TestInlineLocalAssetsSrcset(t *testing.T) {
 	}
 }
 
-func TestParseSrcsetCandidatesKeepsDataURIPayloadComma(t *testing.T) {
-	v := "data:image/png;base64,AAAA 1x, b.png 2x"
-	got := parseSrcsetCandidates(v)
-	if len(got) != 2 || v[got[0].start:got[0].end] != "data:image/png;base64,AAAA" || v[got[1].start:got[1].end] != "b.png" {
-		t.Errorf("unexpected candidates: %+v", got)
-	}
-}
-
 // B5
 func TestInlineLocalAssetsRedactsFileRefs(t *testing.T) {
 	dir := t.TempDir()

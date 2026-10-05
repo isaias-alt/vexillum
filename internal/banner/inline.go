@@ -259,69 +259,6 @@ func (in *inliner) inlineSrcset(n *html.Node) {
 	setAttr(n, "srcset", out.String())
 }
 
-type srcsetCandidate struct{ start, end int }
-
-// parseSrcsetCandidates returns the byte span of each candidate URL in a
-// srcset value. A data: URL's own payload comma doesn't end the candidate
-func parseSrcsetCandidates(value string) []srcsetCandidate {
-	var out []srcsetCandidate
-	i := 0
-	for i < len(value) {
-		for i < len(value) && (isHTMLSpace(value[i]) || value[i] == ',') {
-			i++
-		}
-		if i >= len(value) {
-			break
-		}
-		start := i
-		dataURL := len(value) >= i+5 && strings.EqualFold(value[i:i+5], "data:")
-		sawPayloadComma := false
-		for i < len(value) {
-			ch := value[i]
-			if isHTMLSpace(ch) {
-				break
-			}
-			if ch == ',' {
-				if !dataURL {
-					break
-				}
-				if !sawPayloadComma {
-					sawPayloadComma = true
-				} else if isSrcsetSeparator(value, i) {
-					break
-				}
-			}
-			i++
-		}
-		end := i
-		for end > start && value[end-1] == ',' {
-			end--
-		}
-		if end > start {
-			out = append(out, srcsetCandidate{start, end})
-		}
-		for i < len(value) && value[i] != ',' {
-			i++
-		}
-		if i < len(value) {
-			i++
-		}
-	}
-	return out
-}
-
-func isSrcsetSeparator(value string, comma int) bool {
-	cur := comma + 1
-	for cur < len(value) && isHTMLSpace(value[cur]) {
-		cur++
-	}
-	return cur >= len(value) || cur > comma+1
-}
-
-func isHTMLSpace(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\f' || b == '\r'
-}
-
 // cssURLPattern matches CSS url(...) references, double-quoted,
 // single-quoted, or bare. RE2 (unlike PCRE) has no backreferences, so
 // quoted and unquoted forms are three separate alternatives rather than
