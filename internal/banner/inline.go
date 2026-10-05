@@ -235,7 +235,7 @@ func (in *inliner) inlineSrcset(n *html.Node) {
 	}
 	var out strings.Builder
 	last := 0
-	for _, c := range parseSrcsetCandidates(value) {
+	for _, c := range srcsetURLSpans(value) {
 		out.WriteString(value[last:c.start])
 		ref := value[c.start:c.end]
 		switch {
@@ -257,6 +257,63 @@ func (in *inliner) inlineSrcset(n *html.Node) {
 	}
 	out.WriteString(value[last:])
 	setAttr(n, "srcset", out.String())
+}
+
+// urlSpan is the half-open byte range [start, end) of one candidate URL
+// inside a srcset value.
+type urlSpan struct{ start, end int }
+
+// srcsetURLSpans returns the span of every candidate URL in a srcset value,
+// in order, following the candidate-collection steps of the WHATWG "parse a
+// srcset attribute" algorithm. Descriptors are walked only to find where the
+// candidate ends; their text is not returned.
+func srcsetURLSpans(value string) []urlSpan {
+	var spans []urlSpan
+	pos := 0
+	for {
+		for pos < len(value) && (isASCIISpace(value[pos]) || value[pos] == ',') {
+			pos++
+		}
+		if pos == len(value) {
+			return spans
+		}
+
+		// The URL is a run of non-whitespace bytes.
+		start := pos
+		for pos < len(value) && !isASCIISpace(value[pos]) {
+			pos++
+		}
+		end := pos
+		for end > start && value[end-1] == ',' {
+			end--
+		}
+		spans = append(spans, urlSpan{start, end})
+		if end != pos {
+			// Trailing commas close the candidate: there are no descriptors.
+			continue
+		}
+
+		// Otherwise skip descriptors up to a comma that is not inside
+		// parentheses.
+		inParens := false
+		for pos < len(value) {
+			c := value[pos]
+			pos++
+			if c == '(' {
+				inParens = true
+			} else if c == ')' {
+				inParens = false
+			} else if c == ',' && !inParens {
+				break
+			}
+		}
+	}
+}
+
+// isASCIISpace reports the characters the HTML standard calls ASCII
+// whitespace: tab, line feed, form feed, carriage return and space.
+func isASCIISpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\f' || b == '\r'
 }
 
 // cssURLPattern matches CSS url(...) references, double-quoted,

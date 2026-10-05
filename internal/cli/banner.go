@@ -36,10 +36,11 @@ Inlining details:
     inlined. Override the caps, in bytes, with:
       VEXILLUM_BANNER_MAX_ASSET_BYTES   per-asset cap (default 10485760)
       VEXILLUM_BANNER_MAX_BUNDLE_BYTES  whole-page cap (default 26214400)
-  - A page that never paints its own background (no background on
-    html/body/:root, no bg-* class, no data-theme, no stylesheet) gets a
-    warning, since text can be invisible over the host's own surface. It
-    never blocks publishing.
+  - A page where nothing sets the page background (no background on
+    html, body or :root, no bg-* class, color-scheme or theme attribute,
+    and no external stylesheet or script) gets an advisory warning,
+    because the host draws it over a color you did not choose. It never
+    blocks publishing.
 
 update_key is the ONLY credential that can ever touch that page again -
 it is printed once, right after publishing, and vexillum never stores
@@ -356,11 +357,11 @@ func resolveBannerPassword(opts bannerArgs) (password string, shown bool, err er
 	return opts.password, false, nil
 }
 
-// withSelfPaintWarning appends the self-paint warning when html never paints
-// its own background. It never blocks the publish.
+// withSelfPaintWarning appends the no-surface warning when nothing in html
+// sets the page background. It never blocks the publish.
 func withSelfPaintWarning(html string, warnings []string) []string {
-	if painted, _ := banner.AnalyzeSelfPaint(html); !painted {
-		return append(warnings, banner.SelfPaintWarning)
+	if defines, _ := banner.DefinesOwnSurface(html); !defines {
+		return append(warnings, banner.NoSurfaceWarning)
 	}
 	return warnings
 }

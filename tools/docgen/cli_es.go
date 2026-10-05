@@ -804,10 +804,11 @@ Detalles de la incrustación:
     incrustarse. Los topes, en bytes, se cambian con:
       VEXILLUM_BANNER_MAX_ASSET_BYTES   tope por asset (por defecto 10485760)
       VEXILLUM_BANNER_MAX_BUNDLE_BYTES  tope de la página completa (por defecto 26214400)
-  - Una página que nunca pinta su propio fondo (sin background en
-    html/body/:root, sin clase bg-*, sin data-theme, sin hoja de estilos)
-    recibe una advertencia, ya que el texto puede quedar invisible sobre la
-    superficie propia del host. Nunca bloquea la publicación.
+  - Una página donde nada define el fondo de la página (sin background en
+    html, body o :root, sin clase bg-*, color-scheme ni atributo de tema,
+    y sin hoja de estilos ni script externos) recibe una advertencia
+    informativa, porque el host la dibuja sobre un color que no elegiste.
+    Nunca bloquea la publicación.
 
 update_key es la ÚNICA credencial que puede volver a tocar esa página: se
 imprime una sola vez, justo después de publicar, y vexillum no la guarda en

@@ -259,7 +259,7 @@ func TestRunBannerPublishWarnsOnUnpaintedPage(t *testing.T) {
 	if code := runBanner(bannerArgs{file: file}, client, &stdout, &stderr); code != 0 {
 		t.Fatalf("a self-paint warning must not block publishing, got exit %d: %s", code, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "never paints its own surface") {
+	if !strings.Contains(stderr.String(), "sets a background for the page itself") {
 		t.Errorf("expected the self-paint warning, got: %s", stderr.String())
 	}
 
@@ -267,7 +267,7 @@ func TestRunBannerPublishWarnsOnUnpaintedPage(t *testing.T) {
 	stderr.Reset()
 	file = writeBannerFixture(t, `<html><body style="background:#000">hi</body></html>`)
 	runBanner(bannerArgs{file: file}, client, &stdout, &stderr)
-	if strings.Contains(stderr.String(), "never paints") {
+	if strings.Contains(stderr.String(), "sets a background for the page itself") {
 		t.Errorf("painted page must not warn, got: %s", stderr.String())
 	}
 }
