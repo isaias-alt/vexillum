@@ -56,6 +56,24 @@ gofmt -l .        # must print nothing
 go test ./... -race
 ```
 
+## Installing your own build
+
+Maintainers can install a build of the current checkout as their local `vx`
+with `scripts/install-local.sh`. It refuses a dirty checkout or a branch other
+than `canary` (install only after landing with green tests), checks that the
+fresh binary's `vx --version` reports HEAD, keeps the old binary as `vx.prev`
+next to it for a one-step rollback, and replaces `vx` atomically. A dev build
+prints its identity, for example `vx dev (a1b2c3d, 2026-10-05, dirty)`.
+
+```sh
+scripts/install-local.sh            # installs to ~/.local/bin
+VX_INSTALL_DIR=/tmp/vx-bin scripts/install-local.sh
+scripts/install-local.sh --force    # skip the clean and branch guards
+```
+
+`VX_INSTALL_DIR` sets the destination, `VX_INSTALL_BASE` the base branch and
+`VX_INSTALL_FORCE=1` is the same as `--force`.
+
 ## Docs checks
 
 Changes to `site/`, `tools/docgen`, `skills/`, `internal/cli` or the docs

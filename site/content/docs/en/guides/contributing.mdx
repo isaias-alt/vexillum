@@ -47,6 +47,10 @@ The repository's `CONTRIBUTING.md` lists the full set of checks, including the l
 
 A pull request that changes commands, behavior, configuration or skills must also update the documentation, in both English and Spanish, on the same pages and in the same menu position. The CLI reference pages are generated from the binary: regenerate them instead of editing them by hand, and commit the result. `CONTRIBUTING.md` has the exact command. A pull request that changes the core without touching the docs is not complete.
 
+## Install your own build
+
+Maintainers can install the current checkout as their local `vx` with `scripts/install-local.sh`. It refuses a dirty checkout or a branch other than `canary`, checks that the fresh binary's `vx --version` reports `HEAD`, keeps the old binary as `vx.prev` next to it for a one-step rollback, and replaces `vx` atomically. Set `VX_INSTALL_DIR` to change the destination (default `~/.local/bin`), or pass `--force` to skip the clean and branch guards. A dev build prints its identity, for example `vx dev (a1b2c3d, 2026-10-05, dirty)`.
+
 ## Scope
 
 vexillum supports Claude Code only, for now. Support for another agent is not a pull request to open cold: discuss it in an issue first, so the direction is agreed before anyone writes code.
