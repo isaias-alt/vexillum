@@ -10,8 +10,8 @@ import (
 
 var buildID = sync.OnceValue(func() string {
 	h := sha256.New()
-	// The whiteboard frame bundle is large but its postMessage protocol has to
-	// match whiteboard-embed.js, so a stale server serving an old bundle breaks
+	// The whiteboard frame bundle is large but its message protocol (the vxb1.
+	// kinds) has to match whiteboard-embed.js, so a stale server serving an old bundle breaks
 	// the whiteboard silently; the fonts never do, so skip those. The css is in: a stale server
 	// serving the old stylesheet is how the whiteboard kept its old colours.
 	for _, root := range []string{"assets/chrome", "assets/whiteboard-embed.js", "assets/whiteboard/whiteboard.js.gz", "assets/whiteboard/whiteboard.css", "assets/favicon.svg", "assets/favicon.ico"} {

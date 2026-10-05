@@ -795,7 +795,8 @@
     onQueueChange,
     isQueued,
     sentStatus,
-    // Internal: lets the whiteboard embed reach the server through the chrome.
+    // Internal: lets the whiteboard embed reach the server through the chrome
+    // (the board.* operations in forum-chrome.js).
     __rpc: call,
     // Internal: the pure DOM helpers, exposed for tests.
     __dom: { selectorOf, textOf, elementContext, selectionContext },

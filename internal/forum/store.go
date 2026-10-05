@@ -11,20 +11,25 @@ import (
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 )
 
-// SavedScene is the on-disk sidecar for one diagram's whiteboard state:
-// source_hash pins it to the Mermaid source it was converted from (or last
-// diverged from), so a later restore/prompt/reconvert decision can be made
-// without re-parsing anything (see resolveWhiteboardInitAction in
-// whiteboard-core.js, ported unchanged into the browser bundle). Scene and
-// Baseline are opaque Excalidraw JSON as produced by the whiteboard frame;
-// vexillum's Go side never needs to interpret their structure, only persist
-// and hand them back.
+// sceneRecordFormat is the only record format the server keeps. A file in
+// any other format (or none) loads as "no record": the record is a local
+// autosave cache, so there is no migration.
+const sceneRecordFormat = 2
+
+// SavedScene is the on-disk record for one board: the digest pins it to the
+// Mermaid text it derives from, measure_gen names the text-measurement scheme
+// that sized its nodes, Current is the scene the reviewer is editing and
+// Pristine the elements as first converted (the reference for edit detection
+// and summaries). Current and Pristine are opaque Excalidraw JSON produced by
+// the whiteboard frame (see tools/whiteboard-bundle/src/scene-record.js);
+// Go only persists and returns them.
 type SavedScene struct {
-	SourceHash         string          `json:"source_hash"`
-	TextMetricsVersion int             `json:"text_metrics_version"`
-	UpdatedAt          time.Time       `json:"updated_at"`
-	Scene              json.RawMessage `json:"scene"`
-	Baseline           json.RawMessage `json:"baseline"`
+	Format     int             `json:"format"`
+	Digest     string          `json:"digest"`
+	MeasureGen int             `json:"measure_gen"`
+	SavedAt    time.Time       `json:"saved_at"`
+	Current    json.RawMessage `json:"current"`
+	Pristine   json.RawMessage `json:"pristine"`
 }
 
 // FeedbackFiles are the paths written by WriteFeedbackFiles.
@@ -77,26 +82,25 @@ func (s *Store) FeedbackPaths(key string, index int) (FeedbackFiles, error) {
 	}, nil
 }
 
-// SaveScene persists the working state for (key, index): the editable
-// scene, the conversion baseline used for edit summaries, and the hash of
-// the Mermaid source the scene was converted from. appState's theme and
-// viewBackgroundColor are stripped before writing - the frame always
-// derives those from its own init message, and persisting a stale one
-// would fight a future restore that opens in a different theme.
-func (s *Store) SaveScene(key string, index int, sourceHash string, textMetricsVersion int, scene, baseline json.RawMessage) error {
+// SaveScene persists the record for (key, index). appState's theme and
+// viewBackgroundColor are stripped from current before writing - the frame
+// always derives those from its start message, and persisting a stale one
+// would fight a later reopen in a different theme.
+func (s *Store) SaveScene(key string, index int, digest string, measureGen int, current, pristine json.RawMessage) error {
 	if err := validateRef(key, index); err != nil {
 		return err
 	}
-	sanitizedScene, err := sanitizeSceneAppState(scene)
+	sanitizedCurrent, err := sanitizeSceneAppState(current)
 	if err != nil {
 		return fmt.Errorf("sanitizing scene for %s/%d: %w", key, index, err)
 	}
 	record := SavedScene{
-		SourceHash:         sourceHash,
-		TextMetricsVersion: textMetricsVersion,
-		UpdatedAt:          time.Now().UTC(),
-		Scene:              sanitizedScene,
-		Baseline:           baseline,
+		Format:     sceneRecordFormat,
+		Digest:     digest,
+		MeasureGen: measureGen,
+		SavedAt:    time.Now().UTC(),
+		Current:    sanitizedCurrent,
+		Pristine:   pristine,
 	}
 
 	s.mu.Lock()
@@ -110,8 +114,8 @@ func (s *Store) SaveScene(key string, index int, sourceHash string, textMetricsV
 	return nil
 }
 
-// LoadScene returns the saved state for (key, index), or nil if none has
-// been saved yet.
+// LoadScene returns the stored record for (key, index), or nil when there is
+// none, when it is of another format, or when the file cannot be parsed.
 func (s *Store) LoadScene(key string, index int) (*SavedScene, error) {
 	if err := validateRef(key, index); err != nil {
 		return nil, err
@@ -126,8 +130,8 @@ func (s *Store) LoadScene(key string, index int) (*SavedScene, error) {
 		return nil, fmt.Errorf("loading whiteboard scene %s/%d: %w", key, index, err)
 	}
 	var record SavedScene
-	if err := json.Unmarshal(data, &record); err != nil {
-		return nil, fmt.Errorf("parsing whiteboard scene %s/%d: %w", key, index, err)
+	if err := json.Unmarshal(data, &record); err != nil || record.Format != sceneRecordFormat {
+		return nil, nil //nolint:nilerr // an unreadable cache entry is an absent one
 	}
 	return &record, nil
 }
@@ -166,7 +170,7 @@ func (s *Store) WriteFeedbackFiles(key string, index int, scene json.RawMessage,
 }
 
 // excalidrawSceneEnvelope is the shape excalidraw.com (and vexillum's own
-// whiteboard frame) recognizes as a standalone `.excalidraw` document.
+// whiteboard) recognizes as a standalone `.excalidraw` document.
 type excalidrawSceneEnvelope struct {
 	Type     string          `json:"type"`
 	Version  int             `json:"version"`
@@ -212,8 +216,8 @@ func excalidrawDocument(scene json.RawMessage) (excalidrawSceneEnvelope, error) 
 }
 
 // sanitizeSceneAppState strips appState.theme and appState.viewBackgroundColor
-// from scene, mirroring sanitizeWhiteboardScene/sanitizeWhiteboardAppState in
-// whiteboard-core.js. A nil or non-object scene passes through unchanged.
+// from scene, as scrubThemeFields does on the frame side
+// (tools/whiteboard-bundle/src/scene-record.js). A nil or non-object scene passes through unchanged.
 func sanitizeSceneAppState(scene json.RawMessage) (json.RawMessage, error) {
 	if len(scene) == 0 || string(scene) == "null" {
 		return scene, nil

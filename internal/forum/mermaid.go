@@ -9,13 +9,14 @@ import (
 )
 
 // MermaidSource is one `<div class="mermaid">...</div>` container found in
-// the served artifact, in document order. Index is that document order -
-// the same index the whiteboard frame's URL and the on-disk sidecar
-// (store.go) key off.
+// the served artifact, in document order. Index is that document order (the
+// board ordinal the frame URL, the routes and the on-disk record in store.go
+// all key off), Source is the decoded diagram text and Hash its digest. The
+// JSON names are the whiteboard's wire names.
 type MermaidSource struct {
-	Index  int    `json:"index"`
-	Source string `json:"source"`
-	Hash   string `json:"hash"`
+	Index  int    `json:"ordinal"`
+	Source string `json:"text"`
+	Hash   string `json:"digest"`
 }
 
 // divWithClassPattern matches any <div class="...">...</div>, capturing its
@@ -36,9 +37,9 @@ var divWithClassPattern = regexp.MustCompile(`(?is)<div[^>]*\bclass\s*=\s*["']([
 // ExtractMermaidSources scans an artifact's HTML for `.mermaid` containers
 // and returns their decoded inner text (the Mermaid source each holds) in
 // document order, along with a stable hash of that source. The hash is
-// what the whiteboard frame compares against a saved scene's source_hash to
-// decide whether to restore, prompt, or reconvert - see
-// resolveWhiteboardInitAction in whiteboard-core.js.
+// what the whiteboard compares against a stored record's digest to decide
+// whether to reopen the saved scene, ask the reviewer, or convert again (see
+// decideOpening in tools/whiteboard-bundle/src/scene-record.js).
 func ExtractMermaidSources(artifactHTML string) []MermaidSource {
 	matches := divWithClassPattern.FindAllStringSubmatch(artifactHTML, -1)
 	sources := make([]MermaidSource, 0, len(matches))

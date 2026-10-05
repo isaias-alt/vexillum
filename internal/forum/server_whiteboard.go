@@ -14,14 +14,14 @@ func (s *Server) whiteboardRoutes() {
 	s.mux.Handle("GET /whiteboard-assets/", whiteboardAssetsHandler())
 	s.mux.HandleFunc("GET /whiteboard-embed.js", s.handleEmbedScript)
 	s.mux.HandleFunc("GET /whiteboard-frame", s.handleWhiteboardFrame)
-	s.mux.HandleFunc("GET /api/s/{key}/mermaid-sources", s.browserAPI(s.handleMermaidSources))
-	s.mux.HandleFunc("GET /api/s/{key}/whiteboard/{index}", s.browserAPI(s.handleGetWhiteboard))
-	s.mux.HandleFunc("PUT /api/s/{key}/whiteboard/{index}", s.browserAPI(s.handlePutWhiteboard))
-	s.mux.HandleFunc("POST /api/s/{key}/whiteboard/{index}/feedback-files", s.browserAPI(s.handleFeedbackFiles))
+	s.mux.HandleFunc("GET /api/s/{key}/diagrams", s.browserAPI(s.handleDiagrams))
+	s.mux.HandleFunc("GET /api/s/{key}/boards/{ordinal}", s.browserAPI(s.handleGetBoard))
+	s.mux.HandleFunc("PUT /api/s/{key}/boards/{ordinal}", s.browserAPI(s.handlePutBoard))
+	s.mux.HandleFunc("POST /api/s/{key}/boards/{ordinal}/submit", s.browserAPI(s.handleSubmitBoard))
 }
 
-// maxSceneBytes bounds a whiteboard scene or feedback body: Excalidraw
-// scenes embed images, so they legitimately dwarf every other request.
+// maxSceneBytes bounds a stored record or a submit body: Excalidraw scenes
+// embed images, so they legitimately dwarf every other request.
 const maxSceneBytes = 32 << 20
 
 func (s *Server) handleEmbedScript(w http.ResponseWriter, r *http.Request) {
@@ -55,9 +55,11 @@ const whiteboardFrameHTML = `<!doctype html>
 
 // handleWhiteboardFrame serves the frame page hosted inside the sandboxed
 // iframe (allow-scripts allow-popups, no allow-same-origin) that runs the
-// Excalidraw editor - both the inline embed and the fullscreen overlay
-// point at this same route, differing only in the diagramIndex query
-// parameter whiteboard-frame.js reads at boot.
+// Excalidraw editor - both the inline placement and the fullscreen overlay
+// point at this same route. The frame script reads two query parameters at
+// boot: slot (the board's ordinal) and palette (dark or light). The page is
+// blank until that script runs, so the embed paints the iframe's backdrop in
+// the right palette and nothing of the wrong one is ever visible.
 func (s *Server) handleWhiteboardFrame(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -76,66 +78,75 @@ func (s *Server) artifactSources(key string) ([]MermaidSource, error) {
 	return ExtractMermaidSources(html), nil
 }
 
-func (s *Server) handleMermaidSources(w http.ResponseWriter, r *http.Request, key string) {
-	sources, err := s.artifactSources(key)
+func (s *Server) handleDiagrams(w http.ResponseWriter, r *http.Request, key string) {
+	diagrams, err := s.artifactSources(key)
 	if err != nil {
 		writeHubError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sources": sources})
+	writeJSON(w, http.StatusOK, map[string]any{"diagrams": diagrams})
 }
 
-func parseDiagramIndex(r *http.Request) (int, error) {
-	raw := r.PathValue("index")
-	index, err := strconv.Atoi(raw)
-	if err != nil || !ValidDiagramIndex(index) {
-		return 0, fmt.Errorf("invalid diagram index %q", raw)
+func parseOrdinal(r *http.Request) (int, error) {
+	raw := r.PathValue("ordinal")
+	ordinal, err := strconv.Atoi(raw)
+	if err != nil || !ValidDiagramIndex(ordinal) {
+		return 0, fmt.Errorf("invalid board ordinal %q", raw)
 	}
-	return index, nil
+	return ordinal, nil
 }
 
-func (s *Server) handleGetWhiteboard(w http.ResponseWriter, r *http.Request, key string) {
-	index, err := parseDiagramIndex(r)
+// handleGetBoard returns the stored record, or null when there is none or it
+// is of another format (see Store.LoadScene).
+func (s *Server) handleGetBoard(w http.ResponseWriter, r *http.Request, key string) {
+	ordinal, err := parseOrdinal(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	scene, err := s.store.LoadScene(key, index)
+	record, err := s.store.LoadScene(key, ordinal)
 	if err != nil {
 		writeHubError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"whiteboard": scene})
+	writeJSON(w, http.StatusOK, map[string]any{"record": record})
 }
 
-type putWhiteboardRequest struct {
-	SourceHash         string          `json:"source_hash"`
-	TextMetricsVersion int             `json:"text_metrics_version"`
-	Scene              json.RawMessage `json:"scene"`
-	Baseline           json.RawMessage `json:"baseline"`
+// putBoardRequest is the record the frame stores; saved_at is the server's.
+type putBoardRequest struct {
+	Format     int             `json:"format"`
+	Digest     string          `json:"digest"`
+	MeasureGen int             `json:"measure_gen"`
+	Current    json.RawMessage `json:"current"`
+	Pristine   json.RawMessage `json:"pristine"`
 }
 
-func (s *Server) handlePutWhiteboard(w http.ResponseWriter, r *http.Request, key string) {
-	index, err := parseDiagramIndex(r)
+func (s *Server) handlePutBoard(w http.ResponseWriter, r *http.Request, key string) {
+	ordinal, err := parseOrdinal(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	var req putWhiteboardRequest
+	var req putBoardRequest
 	if !decodeBodyLimit(w, r, &req, maxSceneBytes) {
 		return
 	}
-	if err := s.store.SaveScene(key, index, req.SourceHash, req.TextMetricsVersion, req.Scene, req.Baseline); err != nil {
+	if req.Format != sceneRecordFormat {
+		writeError(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("unsupported record format %d", req.Format))
+		return
+	}
+	if err := s.store.SaveScene(key, ordinal, req.Digest, req.MeasureGen, req.Current, req.Pristine); err != nil {
 		writeHubError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 }
 
-type feedbackFilesRequest struct {
-	Scene        json.RawMessage `json:"scene"`
-	PngDataURL   string          `json:"pngDataUrl"`
-	SummaryLines []string        `json:"summaryLines"`
+type submitBoardRequest struct {
+	Current   json.RawMessage `json:"current"`
+	PNG       string          `json:"png"`
+	EditLines []string        `json:"edit_lines"`
+	Remark    string          `json:"remark"`
 }
 
 const pngDataURLPrefix = "data:image/png;base64,"
@@ -150,23 +161,23 @@ func decodePNGDataURL(dataURL string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(strings.TrimPrefix(dataURL, pngDataURLPrefix))
 }
 
-// handleFeedbackFiles is "Queue feedback" on a whiteboard: it keeps writing
-// the .excalidraw scene and PNG preview to disk, and now also queues a
-// prompt tagged "whiteboard" carrying a bounded summary of the edits and
-// those two paths, so the whiteboard's feedback travels the same queue (and
-// the same Send to Agent) as everything else. A newer queue of the same
-// diagram replaces the unsent earlier one.
-func (s *Server) handleFeedbackFiles(w http.ResponseWriter, r *http.Request, key string) {
-	index, err := parseDiagramIndex(r)
+// handleSubmitBoard is "Queue feedback" on a whiteboard: it writes the
+// .excalidraw scene and PNG preview to disk and queues a prompt tagged
+// "whiteboard" carrying a bounded summary of the edits, the reviewer's
+// optional remark and those two paths, so the whiteboard's feedback travels
+// the same queue (and the same Send to Agent) as everything else. A newer
+// queue of the same diagram replaces the unsent earlier one.
+func (s *Server) handleSubmitBoard(w http.ResponseWriter, r *http.Request, key string) {
+	index, err := parseOrdinal(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	var req feedbackFilesRequest
+	var req submitBoardRequest
 	if !decodeBodyLimit(w, r, &req, maxSceneBytes) {
 		return
 	}
-	png, err := decodePNGDataURL(req.PngDataURL)
+	png, err := decodePNGDataURL(req.PNG)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
@@ -181,7 +192,7 @@ func (s *Server) handleFeedbackFiles(w http.ResponseWriter, r *http.Request, key
 		writeHubError(w, err)
 		return
 	}
-	paths, err := s.store.WriteFeedbackFiles(key, index, req.Scene, png)
+	paths, err := s.store.WriteFeedbackFiles(key, index, req.Current, png)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", err.Error())
 		return
@@ -193,7 +204,7 @@ func (s *Server) handleFeedbackFiles(w http.ResponseWriter, r *http.Request, key
 		"previewPath": paths.PreviewPath,
 	})
 	prompt, err := s.hub.QueuePrompt(key, PromptInput{
-		Prompt:   whiteboardPrompt(index, len(sources), req.SummaryLines, paths),
+		Prompt:   whiteboardPrompt(index, len(sources), req.EditLines, req.Remark, paths),
 		Tag:      "whiteboard",
 		Text:     fmt.Sprintf("Whiteboard: diagram %d", index+1),
 		Selector: fmt.Sprintf(".mermaid:nth-of-type(%d)", index+1),
@@ -219,13 +230,15 @@ func (s *Server) handleFeedbackFiles(w http.ResponseWriter, r *http.Request, key
 const (
 	maxSummaryLines     = 50
 	maxSummaryLineChars = 300
+	maxRemarkChars      = 1000
 )
 
 // whiteboardPrompt is the text the agent receives for a whiteboard: which
-// diagram, a bounded summary of what the reviewer changed, and where the
-// full scene and preview are. The agent reads the summary first and opens
+// diagram, a bounded summary of what the reviewer changed, the reviewer's
+// remark on its own labeled line (when they typed one), and where the full
+// scene and preview are. The agent reads the summary first and opens
 // the files only when it needs to.
-func whiteboardPrompt(index, total int, summary []string, paths FeedbackFiles) string {
+func whiteboardPrompt(index, total int, summary []string, remark string, paths FeedbackFiles) string {
 	var b strings.Builder
 	if total > 0 {
 		fmt.Fprintf(&b, "Whiteboard feedback for diagram %d of %d.\n", index+1, total)
@@ -247,6 +260,9 @@ func whiteboardPrompt(index, total int, summary []string, paths FeedbackFiles) s
 		b.WriteString("\n")
 	} else {
 		b.WriteString("No edit summary was provided.\n")
+	}
+	if remark = strings.Join(strings.Fields(remark), " "); remark != "" {
+		fmt.Fprintf(&b, "Reviewer remark: %s\n", clip(remark, maxRemarkChars))
 	}
 	fmt.Fprintf(&b, "Scene (.excalidraw JSON): %s\n", paths.ScenePath)
 	if paths.PreviewPath != "" {

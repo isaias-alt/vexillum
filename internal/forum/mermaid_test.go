@@ -1,6 +1,7 @@
 package forum_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/forum"
@@ -97,5 +98,31 @@ func TestExtractMermaidSources_DifferentSourceDifferentHash(t *testing.T) {
 	}
 	if sources[0].Hash == sources[1].Hash {
 		t.Errorf("different sources produced the same hash: %q", sources[0].Hash)
+	}
+}
+
+// The listing is the whiteboard's wire format: ordinal, text, digest.
+func TestExtractMermaidSources_JSONShape(t *testing.T) {
+	sources := forum.ExtractMermaidSources(`<div class="mermaid">graph TD; A--&gt;B</div>`)
+	raw, err := json.Marshal(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded []map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil || len(decoded) != 1 {
+		t.Fatalf("decode %s: %v", raw, err)
+	}
+	if len(decoded[0]) != 3 || decoded[0]["ordinal"] != float64(0) || decoded[0]["text"] != "graph TD; A-->B" || decoded[0]["digest"] != forum.HashMermaidSource("graph TD; A-->B") {
+		t.Errorf("listing entry = %v, want exactly ordinal, text and digest", decoded[0])
+	}
+}
+
+// The digest is stored in records on disk, so its value must not drift.
+func TestHashMermaidSource_IsStable(t *testing.T) {
+	if got := forum.HashMermaidSource("graph TD; A-->B"); got != "c18237e0a535bdb7" {
+		t.Errorf("digest = %q", got)
+	}
+	if forum.HashMermaidSource("x") != forum.HashMermaidSource("x") || len(forum.HashMermaidSource("x")) != 16 {
+		t.Error("digest must be deterministic and 16 hex characters")
 	}
 }

@@ -51,9 +51,9 @@ func ValidSessionKey(key string) bool {
 }
 
 // ValidDiagramIndex reports whether index is in the range vx forum
-// accepts for a diagram's position in the artifact (0-999, matching the
-// hard cap encoded in the whiteboard frame's own URL parsing - see
-// whiteboard-frame.js's `main()`).
+// accepts for a diagram's position in the artifact, the board ordinal
+// (0-999; the whiteboard embed and the chrome's artifact bridge apply the same
+// cap).
 func ValidDiagramIndex(index int) bool {
 	return index >= 0 && index <= 999
 }

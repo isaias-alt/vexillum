@@ -844,10 +844,10 @@
 
   // ----------------------------------------------------- artifact bridge
 
-  function sceneIndex(payload) {
-    const index = Number(payload.index);
-    if (!Number.isInteger(index) || index < 0 || index > 999) throw new Error("invalid diagram index");
-    return index;
+  function boardOrdinal(payload) {
+    const ordinal = Number(payload.ordinal);
+    if (!Number.isInteger(ordinal) || ordinal < 0 || ordinal > 999) throw new Error("invalid board ordinal");
+    return ordinal;
   }
 
   // The only operations the sandboxed artifact may ask for. Anything else is
@@ -860,13 +860,13 @@
       return prompt;
     },
     send: async () => api("POST", "/send", { end: false }),
-    "whiteboard.sources": async () => api("GET", "/mermaid-sources"),
-    "whiteboard.load": async (payload) => api("GET", "/whiteboard/" + sceneIndex(payload)),
-    "whiteboard.save": async (payload) => {
-      await api("PUT", "/whiteboard/" + sceneIndex(payload), payload.body);
+    "board.list": async () => api("GET", "/diagrams"),
+    "board.read": async (payload) => api("GET", "/boards/" + boardOrdinal(payload)),
+    "board.write": async (payload) => {
+      await api("PUT", "/boards/" + boardOrdinal(payload), payload.body);
       return {};
     },
-    "whiteboard.feedback": async (payload) => api("POST", "/whiteboard/" + sceneIndex(payload) + "/feedback-files", payload.body),
+    "board.submit": async (payload) => api("POST", "/boards/" + boardOrdinal(payload) + "/submit", payload.body),
   };
 
   window.addEventListener("message", async (event) => {
