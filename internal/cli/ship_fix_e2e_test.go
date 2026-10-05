@@ -44,7 +44,7 @@ var fixLoopBasePaths = []string{"change.txt", "package.json", "test.sh"}
 const claudeRoleScript = `#!/bin/sh
 d='%s'
 case "$2" in
-  *"You are repairing a change after an adversarial review"*) role=fix ;;
+  *"Fixer task: repair the findings listed below."*) role=fix ;;
   *) role=review ;;
 esac
 n=$(cat "$d/n.$role" 2>/dev/null || echo 0)
@@ -304,8 +304,8 @@ func TestShipFixLoop_FixedInOneRoundThenApproved(t *testing.T) {
 	}
 	// The re-review is a fresh reviewer that is told the fixer's commits are
 	// unreviewed code.
-	if p := e.prompt("review", 2); !strings.Contains(p, "Fix-round provenance") {
-		t.Error("expected the re-review prompt to carry the fix-round provenance clause")
+	if p := e.prompt("review", 2); !strings.Contains(p, "This is a re-review") {
+		t.Error("expected the re-review prompt to carry the repair-commit clause")
 	}
 	if p := e.prompt("fix", 1); !strings.Contains(p, "SOMETHING_WRONG") {
 		t.Errorf("expected the fixer to be handed the finding, got:\n%s", p)

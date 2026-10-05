@@ -205,8 +205,7 @@ func buildReviewPrompt(in reviewInput) string {
 	intent := strings.TrimSpace(in.Intent)
 
 	fmt.Fprintf(&b, "Independent check of branch %s against %s before it merges. "+
-		"You are starting cold: judge the change from the code, its tests and the written guidance kept in the repository "+
-		"(AGENTS.md, README, contributing notes, docs). Nothing about how the author reasoned is available to you, and you should not look for it.\n\n",
+		"Judge the change from the code, its tests and the written guidance kept in the repository (AGENTS.md, README, contributing notes, docs).\n\n",
 		in.Branch, in.BaseBranch)
 
 	if intent != "" {
@@ -219,8 +218,7 @@ func buildReviewPrompt(in reviewInput) string {
 		"Do not check out, edit, stage or format anything, and do not run builds, tests or linters. Leave the working tree exactly as you found it.\n\n",
 		in.BaseSHA, in.TargetSHA)
 
-	fmt.Fprintf(&b, "Changed files (%d). Open every one of them. List each file you actually examined in reviewed_paths: "+
-		"a file missing from that list counts as not examined, and the review is rejected.\n", len(in.Files))
+	fmt.Fprintf(&b, "Changed files (%d). Open every one and list each file you examined in reviewed_paths; a file missing from that list counts as not examined and fails the review.\n", len(in.Files))
 	for _, f := range in.Files {
 		b.WriteString("  " + f + "\n")
 	}
