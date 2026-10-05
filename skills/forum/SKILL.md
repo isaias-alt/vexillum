@@ -386,7 +386,7 @@ the top bar (with a count) and **nowhere else**:
     tag: layout-warnings
     prompt: |
       Fix these 2 layout issues the browser detected in this artifact:
-      1. [42eb3759445106dc] Text cut off by its container - Rendered text crosses its container's right edge by 550px and is hidden. Target: div#bad-clip. Viewport: Desktop (1106px). Status: Open.
+      1. [42eb3759445106dc] Text cut off by its container - Rendered text crosses its container's right edge by 550px and is hidden. Selector: "div#bad-clip". Viewport: Desktop (1106px). Status: Open.
       2. ...
       Apply every listed fix in one pass before saving ...
     text: Layout issues: 2 selected
