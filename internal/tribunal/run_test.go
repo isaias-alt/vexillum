@@ -105,11 +105,11 @@ func TestRun_FixLoopFixesThenPasses(t *testing.T) {
 		t.Errorf("expected the fixer prompt to carry the findings and not a diff, got:\n%s", stub.prompt(2))
 	}
 	rereview := stub.prompt(3)
-	if !strings.Contains(rereview, "Fix-round provenance") || !strings.Contains(rereview, startHead) {
-		t.Errorf("expected the re-review to carry the provenance clause naming the pre-fix head, got:\n%s", rereview)
+	if !strings.Contains(rereview, phraseReReview) || !strings.Contains(rereview, startHead) {
+		t.Errorf("expected the re-review to carry the repair-commit clause naming the pre-fix head, got:\n%s", rereview)
 	}
-	if strings.Contains(stub.prompt(1), "Fix-round provenance") {
-		t.Error("the first review must not carry the provenance clause")
+	if strings.Contains(stub.prompt(1), phraseReReview) {
+		t.Error("the first review must not carry the repair-commit clause")
 	}
 	if strings.Contains(stub.args(3), "--resume") {
 		t.Error("the re-review must be a fresh process, never a resumed session")

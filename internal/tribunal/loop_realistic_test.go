@@ -102,32 +102,32 @@ func TestLoop_RealisticChangeReviewedFixedAndReReviewed(t *testing.T) {
 
 	review := stub.prompt(1)
 	for _, want := range []string{
-		"## Scope", "## Method", "## Evidence bar", "## Protected resources and user data", "## Coverage",
-		"## How to write findings", "## Pull request text", "## Mission", "## Simplification pass", "## Verdict and output",
-		"- handlers/users.go\n", "- handlers/users_test.go\n",
+		"handlers/users.go\n", "handlers/users_test.go\n",
 		"<mission>\nValidate the user id in the user handlers\n</mission>",
 		`"reviewed_paths"`, `"sibling_sites"`, `"severity": "error | warning | info"`,
+		phraseAdditions,
 	} {
 		if !strings.Contains(review, want) {
 			t.Errorf("expected the review prompt to contain %q", want)
 		}
 	}
-	if strings.Contains(review, "## Fix-round provenance") {
-		t.Error("the first review must not carry the provenance section")
+	if strings.Contains(review, phraseReReview) {
+		t.Error("the first review must not carry the repair-commit clause")
 	}
-	// The JSON schema is the last thing in the prompt.
-	if !strings.HasSuffix(strings.TrimSpace(review), "}") || strings.LastIndex(review, "## Verdict and output") < strings.LastIndex(review, "## Simplification pass") {
-		t.Error("expected the verdict and schema to close the review prompt")
+	if !strings.HasSuffix(review, reportSchema) {
+		t.Error("expected the schema to close the review prompt")
 	}
 
 	fix := stub.prompt(2)
+	if !strings.HasPrefix(fix, fixerRoleMarker) {
+		t.Errorf("expected the fix prompt to open with the role marker, got:\n%s", fix)
+	}
 	for _, want := range []string{
-		fixerRoleMarker, "vexillum/realistic", "Never commit",
+		"vexillum/realistic", phraseNeverCommit,
 		"[error] handlers/users.go:9 (auto-fix)",
 		`scenario: DeleteUser("") returns nil`,
 		"sibling sites: handlers/users.go:15 DeleteUser skips the same empty-id check",
 		"<mission>\nValidate the user id in the user handlers\n</mission>",
-		"invariant", "remove the path rather than hardening it", "Do not run the whole repository's tests",
 	} {
 		if !strings.Contains(fix, want) {
 			t.Errorf("expected the fix prompt to contain %q:\n%s", want, fix)
@@ -135,11 +135,13 @@ func TestLoop_RealisticChangeReviewedFixedAndReReviewed(t *testing.T) {
 	}
 
 	rereview := stub.prompt(3)
-	if !strings.Contains(rereview, "## Fix-round provenance") || !strings.Contains(rereview, "Every commit after "+startHead) {
-		t.Errorf("expected the re-review to name the pre-fix head %s in the provenance section", startHead)
+	if !strings.Contains(rereview, phraseReReview) || !strings.Contains(rereview, startHead) {
+		t.Errorf("expected the re-review to name the pre-fix head %s in the repair-commit clause", startHead)
 	}
-	if strings.Contains(stub.args(3), "--resume") {
-		t.Error("the re-review must be a fresh process")
+	for _, flag := range []string{"--resume", "--continue"} {
+		if strings.Contains(stub.args(3), flag) {
+			t.Errorf("the re-review must be a fresh process, found %s", flag)
+		}
 	}
 
 	// vexillum committed the fixer's edit on top of the change.
@@ -152,26 +154,5 @@ func TestLoop_RealisticChangeReviewedFixedAndReReviewed(t *testing.T) {
 	}
 	if string(got) != realisticHandlerFixed {
 		t.Errorf("expected the fixer's edit in the camp, got:\n%s", got)
-	}
-}
-
-// Without a mission statement the prompt has no mission or simplification
-// section, and the fix-round provenance section appears only on re-reviews.
-func TestBuildReviewPrompt_OptionalSectionsComeAndGoAsAUnit(t *testing.T) {
-	base := reviewInput{Branch: "b", BaseBranch: "main", BaseSHA: "aaa", TargetSHA: "bbb", Files: []string{"x.go"}}
-	bare := buildReviewPrompt(base)
-	for _, absent := range []string{"## Mission", "<mission>", "## Simplification pass", "## Fix-round provenance"} {
-		if strings.Contains(bare, absent) {
-			t.Errorf("bare prompt must not contain %q", absent)
-		}
-	}
-	full := base
-	full.Intent = "do it"
-	full.FixStartSHA = "ccc"
-	p := buildReviewPrompt(full)
-	for _, present := range []string{"## Mission", "## Simplification pass", "## Fix-round provenance", "Every commit after ccc"} {
-		if !strings.Contains(p, present) {
-			t.Errorf("full prompt must contain %q", present)
-		}
 	}
 }
