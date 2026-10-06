@@ -45,6 +45,8 @@ export interface BrowserCopy {
   queueLabel: string;
   /** What the picked option sends: the queued card and the "You" message. */
   decision: string;
+  /** The message typed in the box and queued before the pick. */
+  message: string;
 }
 
 export interface DemoStep {
@@ -99,22 +101,23 @@ const FORUM_OUT = [
 ];
 const FORUM_HOOK_HEADER = "Forum feedback is waiting for you:";
 const FORUM_HOOK_LINE =
-  "forum session /Users/dev/project/.vexillum/forum/leak-fix.html: 1 new message (ended: false). Run vx forum inbox.";
+  "forum session /Users/dev/project/.vexillum/forum/leak-fix.html: 2 new messages (ended: false). Run vx forum inbox.";
 const INBOX_CMD = "Bash(vx forum inbox)";
-const INBOX_FIRST = [
-  "unread_prompts: 1",
-  "status: feedback",
-  "prompts[1]:",
-  "  - uid: pr_5d2a91c40be3f817",
-  "    tag: decision",
-  "    prompt: |",
-];
-
-// What `vx forum inbox` prints for the pick: the prompt block carries the
-// decision text, then "Context data:" and the pretty-printed JSON of the form.
-function inboxOut(decision: string, answer: string) {
+// What `vx forum inbox` prints for the two queued prompts: the typed message
+// first (tag "message"), then the decision (tag "decision"), whose prompt block
+// carries the decision text, "Context data:" and the pretty-printed JSON of
+// the form. Shortened: the note and shown_prompts lines are left out.
+function inboxOut(message: string, decision: string, answer: string) {
   return [
-    ...INBOX_FIRST,
+    "unread_prompts: 2",
+    "status: feedback",
+    "prompts[2]:",
+    "  - uid: pr_a41c7e02d93b6f58",
+    "    tag: message",
+    `    prompt: ${message}`,
+    "  - uid: pr_5d2a91c40be3f817",
+    "    tag: decision",
+    "    prompt: |",
     `      ${decision}`,
     "      Context data:",
     "      {",
@@ -123,11 +126,14 @@ function inboxOut(decision: string, answer: string) {
     "      }",
   ];
 }
+
 const inboxEn = inboxOut(
+  "keep the change as small as possible",
   "Fix for the leak: Close the sockets in a finally block",
   "Close the sockets in a finally block",
 );
 const inboxEs = inboxOut(
+  "que el cambio sea lo más chico posible",
   "Arreglo para la fuga: Cerrar los sockets en un bloque finally",
   "Cerrar los sockets en un bloque finally",
 );
@@ -210,17 +216,17 @@ const en: DemoCopy = {
           "The scout traced the leak to <code>PaymentClient</code>: on a retry it opens a new socket and never closes the old one. Three ways to fix it, from smallest to largest.",
         cards: [
           {
-            title: "A. Close in a finally block",
+            title: "A. Close in finally",
             badge: "recommended",
-            text: "Close the previous socket in a finally on the retry path.",
+            text: "Close the old socket in a finally.",
           },
           {
-            title: "B. Pool with a max age",
-            text: "Route requests through a small pool that retires sockets after a fixed age.",
+            title: "B. Pool with max age",
+            text: "A small pool that retires old sockets.",
           },
           {
             title: "C. Reuse one session",
-            text: "Rewrite the retry loop to keep a single session for every attempt.",
+            text: "One session for every retry.",
           },
         ],
         question: "Which fix should the soldier build?",
@@ -231,6 +237,7 @@ const en: DemoCopy = {
         ],
         queueLabel: "Queue my pick",
         decision: "Fix for the leak: Close the sockets in a finally block",
+        message: "keep the change as small as possible",
       },
       frames: [
         {
@@ -253,33 +260,41 @@ const en: DemoCopy = {
           text: "The page is open, general. Pick one there and press Send to Agent.",
         },
         { t: 5800, kind: "view", text: "browser" },
-        { t: 6600, kind: "act", text: "move:option" },
-        { t: 7700, kind: "act", text: "click:option" },
-        { t: 8500, kind: "act", text: "move:queue" },
-        { t: 9600, kind: "act", text: "click:queue" },
-        { t: 10400, kind: "act", text: "move:send" },
-        { t: 11500, kind: "act", text: "click:send" },
-        { t: 12200, kind: "view", text: "terminal" },
-        { t: 13000, kind: "hook", text: WAKE_HOOK },
-        { t: 13600, kind: "out", text: FORUM_HOOK_HEADER },
-        { t: 13800, kind: "out", text: FORUM_HOOK_LINE },
-        { t: 14800, kind: "tool", text: INBOX_CMD },
-        { t: 15500, kind: "out", text: inboxEn[0] },
-        { t: 15700, kind: "out", text: inboxEn[1] },
-        { t: 15900, kind: "out", text: inboxEn[2] },
-        { t: 16100, kind: "out", text: inboxEn[3] },
-        { t: 16300, kind: "out", text: inboxEn[4] },
-        { t: 16500, kind: "out", text: inboxEn[5] },
-        { t: 16700, kind: "out", text: inboxEn[6] },
-        { t: 16900, kind: "out", text: inboxEn[7] },
-        { t: 17100, kind: "out", text: inboxEn[8] },
-        { t: 17300, kind: "out", text: inboxEn[9] },
-        { t: 17500, kind: "out", text: inboxEn[10] },
-        { t: 17700, kind: "out", text: inboxEn[11] },
+        { t: 6500, kind: "act", text: "move:input" },
+        { t: 7500, kind: "act", text: "click:input" },
+        { t: 7700, kind: "act", text: "type:input" },
+        { t: 9000, kind: "act", text: "move:addq" },
+        { t: 10000, kind: "act", text: "click:addq" },
+        { t: 10900, kind: "act", text: "move:option" },
+        { t: 11900, kind: "act", text: "click:option" },
+        { t: 12700, kind: "act", text: "move:queue" },
+        { t: 13700, kind: "act", text: "click:queue" },
+        { t: 14600, kind: "act", text: "move:send" },
+        { t: 15600, kind: "act", text: "click:send" },
+        { t: 17000, kind: "view", text: "terminal" },
+        { t: 17800, kind: "hook", text: WAKE_HOOK },
+        { t: 18400, kind: "out", text: FORUM_HOOK_HEADER },
+        { t: 18600, kind: "out", text: FORUM_HOOK_LINE },
+        { t: 19600, kind: "tool", text: INBOX_CMD },
+        { t: 20300, kind: "out", text: inboxEn[0] },
+        { t: 20500, kind: "out", text: inboxEn[1] },
+        { t: 20700, kind: "out", text: inboxEn[2] },
+        { t: 20900, kind: "out", text: inboxEn[3] },
+        { t: 21100, kind: "out", text: inboxEn[4] },
+        { t: 21300, kind: "out", text: inboxEn[5] },
+        { t: 21500, kind: "out", text: inboxEn[6] },
+        { t: 21700, kind: "out", text: inboxEn[7] },
+        { t: 21900, kind: "out", text: inboxEn[8] },
+        { t: 22100, kind: "out", text: inboxEn[9] },
+        { t: 22300, kind: "out", text: inboxEn[10] },
+        { t: 22500, kind: "out", text: inboxEn[11] },
+        { t: 22700, kind: "out", text: inboxEn[12] },
+        { t: 22900, kind: "out", text: inboxEn[13] },
+        { t: 23100, kind: "out", text: inboxEn[14] },
         {
-          t: 18700,
+          t: 24200,
           kind: "reply",
-          text: "Got it, general, the finally block. Sending a mission to camp 3.",
+          text: "Got it, general: the finally block, kept as small as possible. Sending a mission to camp 3.",
         },
       ],
     },
@@ -419,17 +434,17 @@ const es: DemoCopy = {
           "El scout rastreó la fuga hasta <code>PaymentClient</code>: en un reintento abre un socket nuevo y nunca cierra el anterior. Tres formas de arreglarlo, de la más chica a la más grande.",
         cards: [
           {
-            title: "A. Cerrar en un bloque finally",
+            title: "A. Cerrar en finally",
             badge: "recomendada",
-            text: "Cerrar el socket anterior en un finally del camino de reintento.",
+            text: "Cerrar el socket viejo en un finally.",
           },
           {
             title: "B. Pool con edad máxima",
-            text: "Pasar los pedidos por un pool chico que retira los sockets pasada una edad fija.",
+            text: "Un pool chico que retira los sockets viejos.",
           },
           {
-            title: "C. Reusar una sola sesión",
-            text: "Reescribir el bucle de reintentos para mantener una sola sesión en cada intento.",
+            title: "C. Reusar una sesión",
+            text: "Una sola sesión en cada reintento.",
           },
         ],
         question: "¿Qué arreglo tiene que construir el soldier?",
@@ -441,6 +456,7 @@ const es: DemoCopy = {
         queueLabel: "Poner mi elección en cola",
         decision:
           "Arreglo para la fuga: Cerrar los sockets en un bloque finally",
+        message: "que el cambio sea lo más chico posible",
       },
       frames: [
         {
@@ -463,33 +479,41 @@ const es: DemoCopy = {
           text: "La página está abierta, general. Elegí una ahí y apretá Send to Agent.",
         },
         { t: 6000, kind: "view", text: "browser" },
-        { t: 6800, kind: "act", text: "move:option" },
-        { t: 7900, kind: "act", text: "click:option" },
-        { t: 8700, kind: "act", text: "move:queue" },
-        { t: 9800, kind: "act", text: "click:queue" },
-        { t: 10600, kind: "act", text: "move:send" },
-        { t: 11700, kind: "act", text: "click:send" },
-        { t: 12400, kind: "view", text: "terminal" },
-        { t: 13200, kind: "hook", text: WAKE_HOOK },
-        { t: 13800, kind: "out", text: FORUM_HOOK_HEADER },
-        { t: 14000, kind: "out", text: FORUM_HOOK_LINE },
-        { t: 15000, kind: "tool", text: INBOX_CMD },
-        { t: 15700, kind: "out", text: inboxEs[0] },
-        { t: 15900, kind: "out", text: inboxEs[1] },
-        { t: 16100, kind: "out", text: inboxEs[2] },
-        { t: 16300, kind: "out", text: inboxEs[3] },
-        { t: 16500, kind: "out", text: inboxEs[4] },
-        { t: 16700, kind: "out", text: inboxEs[5] },
-        { t: 16900, kind: "out", text: inboxEs[6] },
-        { t: 17100, kind: "out", text: inboxEs[7] },
-        { t: 17300, kind: "out", text: inboxEs[8] },
-        { t: 17500, kind: "out", text: inboxEs[9] },
-        { t: 17700, kind: "out", text: inboxEs[10] },
-        { t: 17900, kind: "out", text: inboxEs[11] },
+        { t: 6700, kind: "act", text: "move:input" },
+        { t: 7700, kind: "act", text: "click:input" },
+        { t: 7900, kind: "act", text: "type:input" },
+        { t: 9200, kind: "act", text: "move:addq" },
+        { t: 10200, kind: "act", text: "click:addq" },
+        { t: 11100, kind: "act", text: "move:option" },
+        { t: 12100, kind: "act", text: "click:option" },
+        { t: 12900, kind: "act", text: "move:queue" },
+        { t: 13900, kind: "act", text: "click:queue" },
+        { t: 14800, kind: "act", text: "move:send" },
+        { t: 15800, kind: "act", text: "click:send" },
+        { t: 17200, kind: "view", text: "terminal" },
+        { t: 18000, kind: "hook", text: WAKE_HOOK },
+        { t: 18600, kind: "out", text: FORUM_HOOK_HEADER },
+        { t: 18800, kind: "out", text: FORUM_HOOK_LINE },
+        { t: 19800, kind: "tool", text: INBOX_CMD },
+        { t: 20500, kind: "out", text: inboxEs[0] },
+        { t: 20700, kind: "out", text: inboxEs[1] },
+        { t: 20900, kind: "out", text: inboxEs[2] },
+        { t: 21100, kind: "out", text: inboxEs[3] },
+        { t: 21300, kind: "out", text: inboxEs[4] },
+        { t: 21500, kind: "out", text: inboxEs[5] },
+        { t: 21700, kind: "out", text: inboxEs[6] },
+        { t: 21900, kind: "out", text: inboxEs[7] },
+        { t: 22100, kind: "out", text: inboxEs[8] },
+        { t: 22300, kind: "out", text: inboxEs[9] },
+        { t: 22500, kind: "out", text: inboxEs[10] },
+        { t: 22700, kind: "out", text: inboxEs[11] },
+        { t: 22900, kind: "out", text: inboxEs[12] },
+        { t: 23100, kind: "out", text: inboxEs[13] },
+        { t: 23300, kind: "out", text: inboxEs[14] },
         {
-          t: 18900,
+          t: 24400,
           kind: "reply",
-          text: "Entendido, general, el bloque finally. Mando una mission al camp 3.",
+          text: "Entendido, general: el bloque finally, con el cambio lo más chico posible. Mando una mission al camp 3.",
         },
       ],
     },

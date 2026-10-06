@@ -12,14 +12,25 @@ import type { BrowserCopy, DemoFrame } from "@/lib/demo-strings";
 // below 900px. It is driven entirely by `MockState`, which `deriveMock` reads
 // off the step's frames at a given time of the demo clock.
 
-export type MockTarget = "option" | "queue" | "send";
+export type MockTarget = "input" | "addq" | "option" | "queue" | "send";
 
 export interface MockState {
   /** Where the pointer is heading (null: not on screen yet). */
   target: MockTarget | null;
+  /** How many characters of the message are typed in the box. */
+  typed: number;
+  /** The box has focus (clicked, not yet queued). */
+  focus: boolean;
+  /** Add to queue was clicked: the message sits in the queue. */
+  messageQueued: boolean;
+  /** Option A is selected. */
   picked: boolean;
-  queued: boolean;
+  /** Queue my pick was clicked: the decision sits in the queue. */
+  decisionQueued: boolean;
+  /** Send to Agent was clicked: the queue became round 1. */
   sent: boolean;
+  /** The listener's "Received" line has landed. */
+  received: boolean;
   /** The control being pressed right now (a click's short feedback). */
   pressed: MockTarget | null;
   /** How many clicks happened so far (re-triggers the ripple). */
@@ -29,15 +40,17 @@ export interface MockState {
 }
 
 const PRESS_MS = 220;
+const TYPE_MS = 1000;
+const RECEIVED_MS = 300;
 // The native width each layout is designed at, and the least native height its
 // content needs. The mock scales by whichever limit is tighter, then takes the
 // rest of the box as extra native width and height.
 const WIDE = 760;
 const COMPACT = 400;
-const WIDE_MIN_H = 470;
+const WIDE_MIN_H = 520;
+const COMPACT_MIN_H = 900;
 // The browser bar, the forum top bar and the stage padding around the artifact.
 const CHROME_H = 32 + 44 + 24;
-const COMPACT_MIN_H = 880;
 
 export function hasBrowserPhase(frames: DemoFrame[]) {
   return frames.some((f) => f.kind === "view");
@@ -56,40 +69,61 @@ export function viewAt(frames: DemoFrame[], elapsed: number) {
 export function deriveMock(
   frames: DemoFrame[],
   elapsed: number | null,
+  messageLength: number,
 ): MockState {
-  const acts = frames.filter((f) => f.kind === "act");
-  if (elapsed === null) {
-    return {
-      target: null,
-      picked: true,
-      queued: true,
-      sent: true,
-      pressed: null,
-      clicks: 0,
-      live: false,
-    };
-  }
   const state: MockState = {
     target: null,
+    typed: 0,
+    focus: false,
+    messageQueued: false,
     picked: false,
-    queued: false,
+    decisionQueued: false,
     sent: false,
+    received: false,
     pressed: null,
     clicks: 0,
     live: true,
   };
-  for (const act of acts) {
-    if (act.t > elapsed) break;
+  if (elapsed === null) {
+    return {
+      ...state,
+      messageQueued: true,
+      picked: true,
+      decisionQueued: true,
+      sent: true,
+      received: true,
+      live: false,
+    };
+  }
+  let typingFrom: number | null = null;
+  for (const act of frames) {
+    if (act.kind !== "act" || act.t > elapsed) continue;
     const [verb, target] = act.text.split(":") as [string, MockTarget];
     if (verb === "move") {
       state.target = target;
+    } else if (verb === "type") {
+      typingFrom = act.t;
     } else {
       state.clicks++;
-      if (target === "option") state.picked = true;
-      if (target === "queue") state.queued = true;
-      if (target === "send") state.sent = true;
       if (elapsed - act.t < PRESS_MS) state.pressed = target;
+      if (target === "input") state.focus = true;
+      if (target === "addq") {
+        state.messageQueued = true;
+        state.focus = false;
+      }
+      if (target === "option") state.picked = true;
+      if (target === "queue") state.decisionQueued = true;
+      if (target === "send") {
+        state.sent = true;
+        state.received = elapsed - act.t >= RECEIVED_MS;
+      }
     }
+  }
+  if (typingFrom !== null && !state.messageQueued) {
+    state.typed = Math.min(
+      messageLength,
+      Math.floor(((elapsed - typingFrom) / TYPE_MS) * messageLength),
+    );
   }
   return state;
 }
@@ -126,6 +160,8 @@ function Switch({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
+const TIME = "04:47 PM";
+
 export function ForumMock({
   copy,
   state,
@@ -135,6 +171,8 @@ export function ForumMock({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
+  const addqRef = useRef<HTMLSpanElement>(null);
   const optionRef = useRef<HTMLDivElement>(null);
   const queueRef = useRef<HTMLSpanElement>(null);
   const sendRef = useRef<HTMLSpanElement>(null);
@@ -174,32 +212,40 @@ export function ForumMock({
   const native = size.w / scale;
   const height = size.h / scale;
 
-  // Where the pointer goes, in native pixels: measured off the live layout so
-  // it lands on the real control whatever the box size. It is moved straight on
-  // the DOM (the glide is a CSS transition), not through React state.
+  const { typed, focus, messageQueued, picked, decisionQueued, sent } = state;
+  const { pressed } = state;
+  const queuedCount = (messageQueued ? 1 : 0) + (decisionQueued ? 1 : 0);
+  const inQueue = queuedCount > 0 && !sent;
+  const typing = typed > 0 && !messageQueued;
+  const [first, ...others] = copy.choices;
+
+  // Where the pointer goes, in native pixels: the center of the target,
+  // measured off the live layout so it lands on the real control whatever the
+  // box size. It is moved straight on the DOM (the glide is a CSS transition),
+  // not through React state.
   useLayoutEffect(() => {
     const pointer = pointerRef.current;
-    const base = root.current;
-    if (!pointer || !base) return;
+    const frame = root.current;
+    if (!pointer || !frame) return;
     const el = {
+      input: inputRef.current,
+      addq: addqRef.current,
       option: optionRef.current,
       queue: queueRef.current,
       send: sendRef.current,
-    }[state.target ?? "option"];
+    }[state.target ?? "input"];
     if (!state.target || !el) {
       pointer.style.transition = "none";
       pointer.style.transform = `translate(${native * (compact ? 0.82 : 0.7)}px, ${height * 0.22}px)`;
       return;
     }
     const r = el.getBoundingClientRect();
-    const b = base.getBoundingClientRect();
+    const b = frame.getBoundingClientRect();
+    // The arrow's tip is at (3, 2) in its own box.
     pointer.style.transition =
       "transform 780ms cubic-bezier(0.45, 0.05, 0.25, 1)";
-    pointer.style.transform = `translate(${(r.left - b.left) / scale + (r.width / scale) * 0.5}px, ${(r.top - b.top) / scale + (r.height / scale) * 0.6}px)`;
-  }, [state.target, state.queued, state.sent, scale, compact, native, height]);
-
-  const { picked, queued, sent, pressed } = state;
-  const [first, ...others] = copy.choices;
+    pointer.style.transform = `translate(${(r.left - b.left + r.width / 2) / scale - 3}px, ${(r.top - b.top + r.height / 2) / scale - 2}px)`;
+  }, [state.target, inQueue, sent, scale, compact, native, height]);
 
   return (
     <div ref={box} className="absolute inset-0 overflow-hidden">
@@ -286,8 +332,8 @@ export function ForumMock({
                   <span
                     ref={queueRef}
                     className="fm-btn"
-                    data-primary={queued ? undefined : ""}
-                    data-off={queued ? "" : undefined}
+                    data-primary={decisionQueued ? undefined : ""}
+                    data-off={decisionQueued ? "" : undefined}
                     data-pressed={pressed === "queue" ? "" : undefined}
                   >
                     {copy.queueLabel}
@@ -305,48 +351,104 @@ export function ForumMock({
               </span>
             </div>
             <div className="fm-scroll">
-              {!queued && !sent && (
+              {queuedCount === 0 && !sent && (
                 <p className="fm-empty">
                   Nothing here yet. Write a message or use the controls in the
                   artifact, then press Send to Agent.
                 </p>
               )}
-              {queued && !sent && (
+              {inQueue && (
                 <div className="fm-queued">
                   <p className="fm-qtitle">
-                    Queued (1) <span>for round 1</span>
+                    Queued <span>({queuedCount}) for round 1</span>
                   </p>
-                  <div className="fm-qitem">
-                    <div className="fm-qbody">
-                      <span className="fm-qtag">decision</span>
-                      {copy.decision}
-                      <span className="fm-qwhere">
-                        form[data-forum-question=&quot;leak-fix&quot;]
-                      </span>
-                    </div>
-                    <span className="fm-qx" aria-hidden>
-                      &times;
-                    </span>
+                  <div className="fm-qlist">
+                    {messageQueued && (
+                      <div className="fm-qitem">
+                        <div className="fm-qbody">
+                          <span className="fm-qstate">queued</span>
+                          {copy.message}
+                        </div>
+                        <span className="fm-qx" aria-hidden>
+                          &times;
+                        </span>
+                      </div>
+                    )}
+                    {decisionQueued && (
+                      <div className="fm-qitem">
+                        <div className="fm-qbody">
+                          <span className="fm-qstate">queued</span>
+                          <span className="fm-qtag">decision</span>
+                          {copy.decision}
+                          <span className="fm-qwhere">
+                            form[data-forum-question=&quot;leak-fix&quot;]
+                          </span>
+                        </div>
+                        <span className="fm-qx" aria-hidden>
+                          &times;
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
               {sent && (
-                <div>
-                  <p className="fm-round">Round 1</p>
+                <div className="fm-group">
+                  <p className="fm-round">
+                    Round 1 <span>waiting for the agent</span>
+                  </p>
                   <div className="fm-msgs">
-                    <div className="fm-msg">
+                    <div className="fm-msg" data-user>
                       <div className="fm-meta">
                         <b>You</b>
-                        <span>decision</span>
+                        <span>{TIME}</span>
+                        <i>sent</i>
+                      </div>
+                      {copy.message}
+                    </div>
+                    <div className="fm-msg" data-user>
+                      <div className="fm-meta">
+                        <b>You</b>
+                        <em>decision</em>
+                        <span>{TIME}</span>
+                        <i>sent</i>
                       </div>
                       {copy.decision}
                     </div>
+                    {state.received && (
+                      <div className="fm-msg" data-notice>
+                        <div className="fm-meta">
+                          <b>Listener</b>
+                          <span>{TIME}</span>
+                        </div>
+                        Received. Forwarded to the commander, who will answer
+                        here.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
             <div className="fm-composer">
-              <div className="fm-input">Write a message for the agent...</div>
+              <div
+                ref={inputRef}
+                className="fm-input"
+                data-focus={focus || typing ? "" : undefined}
+                data-pressed={pressed === "input" ? "" : undefined}
+              >
+                {typing ? (
+                  <>
+                    {copy.message.slice(0, typed)}
+                    <i className="fm-caret" />
+                  </>
+                ) : focus ? (
+                  <i className="fm-caret" />
+                ) : (
+                  <span className="fm-ph">
+                    Write a message for the agent...
+                  </span>
+                )}
+              </div>
               <span className="fm-attach">
                 <svg
                   viewBox="0 0 24 24"
@@ -366,21 +468,22 @@ export function ForumMock({
                 Attach image
               </span>
               <div className="fm-send">
-                <span
-                  className="fm-btn"
-                  data-danger=""
-                  data-off={sent ? "" : undefined}
-                >
+                <span className="fm-btn" data-danger="">
                   Send &amp; End
                 </span>
-                <span className="fm-btn" data-off="">
+                <span
+                  ref={addqRef}
+                  className="fm-btn"
+                  data-off={typing ? undefined : ""}
+                  data-pressed={pressed === "addq" ? "" : undefined}
+                >
                   Add to queue
                 </span>
                 <span
                   ref={sendRef}
                   className="fm-btn"
-                  data-primary={queued && !sent ? "" : undefined}
-                  data-off={queued && !sent ? undefined : ""}
+                  data-primary={inQueue ? "" : undefined}
+                  data-off={inQueue ? undefined : ""}
                   data-pressed={pressed === "send" ? "" : undefined}
                 >
                   Send to Agent

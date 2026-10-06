@@ -200,7 +200,9 @@ export function InAction({
     stepNow.browser && hasBrowserPhase(stepNow.frames) ? stepNow.browser : null;
   const view =
     !browser || elapsed === null ? staticView : viewAt(stepNow.frames, elapsed);
-  const mock = browser ? deriveMock(stepNow.frames, elapsed) : null;
+  const mock = browser
+    ? deriveMock(stepNow.frames, elapsed, browser.message.length)
+    : null;
   // Keep the newest printed line at the bottom of the terminal; the oldest
   // lines scroll out at the top, fading under the header (data-scrolled). It
   // re-follows
