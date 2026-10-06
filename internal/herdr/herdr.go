@@ -131,6 +131,21 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.Code == "agent_not_found"
 }
 
+// IsTabGone reports whether err says the tab or pane being closed no longer
+// exists in herdr ("tab_not_found", "pane_not_found", "agent_not_found"):
+// closing it has nothing left to do.
+func IsTabGone(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.Code {
+	case "tab_not_found", "pane_not_found", "agent_not_found":
+		return true
+	}
+	return false
+}
+
 // IsNotRunning reports whether err is the "agent_not_running" APIError
 // herdr returns from a "--wait" call (agent prompt/wait) specifically
 // when the target pane closes while herdr was waiting on it - confirmed

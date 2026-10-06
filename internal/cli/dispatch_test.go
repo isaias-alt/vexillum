@@ -479,14 +479,11 @@ func TestRunLand_AutoStrikesCamp(t *testing.T) {
 	}
 
 	// The camp is already struck - a second, independent strike call
-	// for the same task must find nothing left to do.
+	// for the same task is idempotent: nothing to release, no refusal.
 	out.Reset()
 	code := runStrike(project, home, task.ID, strikeOptions{}, &fakeHerdr{}, &out, &out)
-	if code == 0 {
-		t.Fatalf("expected a follow-up 'vx strike' to fail, camp was already struck; got exit 0: %s", out.String())
-	}
-	if !strings.Contains(out.String(), "not leased") {
-		t.Errorf("expected the refusal to say the slot is no longer leased, got: %s", out.String())
+	if code != 0 || strings.Contains(out.String(), "not leased") {
+		t.Fatalf("expected a follow-up 'vx strike' to be a no-op success, got exit %d: %s", code, out.String())
 	}
 }
 

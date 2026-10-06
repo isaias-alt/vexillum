@@ -1,6 +1,7 @@
 package soldier
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -487,19 +488,33 @@ func StrikeInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
 
 // StrikeInHerdrWith is StrikeInHerdr with camp.StrikeOptions, returning
 // what a Discard strike threw away.
+//
+// Closing the tab is best effort for a tab herdr no longer has (a soldier
+// stopped by hand): that never fails the strike. A slot already released by
+// an earlier strike (camp.ErrNotLeased) is not an error either, the strike
+// just carries on to the pane; a slot leased to another task still is. Any
+// other herdr error comes back as a *PaneCloseError, after the slot was
+// released, so the caller can still close the task record.
 func StrikeInHerdrWith(task state.Task, c camp.Camp, client herdr.Client, opts camp.StrikeOptions) (camp.StrikeReport, error) {
 	report, err := camp.StrikeWith(c, task.ID, opts)
-	if err != nil {
+	if err != nil && !errors.Is(err, camp.ErrNotLeased) {
 		return report, err
 	}
 	if task.HerdrTabID == "" {
 		return report, nil
 	}
-	if err := client.TabClose(task.HerdrTabID); err != nil {
-		return report, fmt.Errorf("closing soldier pane: %w", err)
+	if err := client.TabClose(task.HerdrTabID); err != nil && !herdr.IsTabGone(err) {
+		return report, &PaneCloseError{Err: err}
 	}
 	return report, nil
 }
+
+// PaneCloseError is a strike whose camp was already returned to the pool but
+// whose herdr tab could not be closed. Striking again retries the close.
+type PaneCloseError struct{ Err error }
+
+func (e *PaneCloseError) Error() string { return "closing soldier pane: " + e.Err.Error() }
+func (e *PaneCloseError) Unwrap() error { return e.Err }
 
 // DiscardInHerdr is StrikeInHerdr's destructive counterpart (PRD v2,
 // A.2): it throws away c (camp.Discard - a dead soldier's dirty,

@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
@@ -42,8 +44,15 @@ base has been pulled, the refusal says so.
 uncommitted changes. It prints exactly what it threw away: the unlanded
 commits (hash and subject) and the uncommitted changes, which are reset. Use
 it only when the general has confirmed that the camp's work is already on the
-base or is abandoned - never on your own judgment. The discarded commits
-stay reachable from the camp's branch until the slot is reused.
+base or is abandoned - never on your own judgment. The worktree is detached
+from the task branch, which is kept with the discarded commits: the output
+says how many are unlanded and that it can be deleted by hand.
+
+A herdr tab that is already gone (a soldier stopped by hand) never fails a
+strike. Any other herdr error is reported after the camp was returned and the
+task closed (an interrupted or failed task becomes struck); striking again
+retries closing the pane, and on a task whose camp is already back in the pool
+it only cleans up the record. A camp leased to another task is never touched.
 
 On success, returns the worktree to the pool for reuse and closes the
 herdr pane, then prunes: it deletes the task's local branch
@@ -158,20 +167,41 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 	}
 	report, err := soldier.StrikeInHerdrWith(task, c, client, campOpts)
 	printDiscarded(stdout, c.Branch, report)
-	if err != nil {
+	var paneErr *soldier.PaneCloseError
+	if err != nil && !errors.As(err, &paneErr) {
 		fmt.Fprintf(stderr, cmdname.Name+": strike refused: %v\n", err)
 		return 1
 	}
-	fmt.Fprintln(stdout, "struck: camp returned to the pool, herdr pane closed.")
+
+	// The camp is back in the pool at this point, so the task record is
+	// closed even when the herdr pane could not be: a half state would leave
+	// the task interrupted with nothing left to strike.
+	if task.Status == state.StatusInterrupted || task.Status == state.StatusFailed {
+		task.Status = state.StatusStruck
+		task.UpdatedAt = time.Now().UTC()
+		if err := state.Save(projectRoot, task); err != nil {
+			fmt.Fprintf(stderr, cmdname.Name+": camp struck, but recording task %s as struck failed: %v\n", taskID, err)
+			fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' again to finish the cleanup\n", taskID)
+			return 1
+		}
+	}
+	code := 0
+	if paneErr != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": struck, but %v\n", paneErr)
+		fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' again to retry closing the pane\n", taskID)
+		code = 1
+	} else {
+		fmt.Fprintln(stdout, "struck: camp returned to the pool, herdr pane closed.")
+	}
 	// Pruning is housekeeping after a strike that already happened, so a
 	// failure here is reported but never turns the strike into a failure.
 	pruned, err := camp.Prune(c, campOpts)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": struck, but pruning failed: %v\n", err)
-		return 0
+		return code
 	}
 	printPruned(stdout, pruned)
-	return 0
+	return code
 }
 
 // printPruned says in one short line what was pruned, and why a branch was

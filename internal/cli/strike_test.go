@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/herdr"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -352,5 +354,162 @@ func TestRunStrike_LandedBranchIsDeleted(t *testing.T) {
 
 	if code != 0 || projectHasBranch(t, m) || !strings.Contains(out, "pruned: deleted branch "+task.CampBranch) {
 		t.Fatalf("expected the landed branch deleted, got %d: %s", code, out)
+	}
+}
+
+// interruptedMissionWithGonePane is a mission stopped by hand: its task is
+// interrupted, its herdr tab no longer exists, and its camp holds one
+// unlanded commit plus an uncommitted file.
+func interruptedMissionWithGonePane(t *testing.T) (remotelyMergedMission, *fakeHerdr) {
+	t.Helper()
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	task.Status = state.StatusInterrupted
+	task.HerdrTabID = "w11:t1F"
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(task.CampPath, "scratch.txt"), []byte("wip\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeHerdr{tabCloseErr: &herdr.APIError{Code: "tab_not_found", Message: "tab w11:t1F not found"}}
+	return remotelyMergedMission{project: project, home: home, task: task}, client
+}
+
+func strikeWith(t *testing.T, m remotelyMergedMission, client *fakeHerdr, opts strikeOptions) (int, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	code := runStrike(m.project, m.home, m.task.ID, opts, client, &buf, &buf)
+	return code, buf.String()
+}
+
+func loadTask(t *testing.T, m remotelyMergedMission) state.Task {
+	t.Helper()
+	projectRoot, err := vxproject.Root(m.home, m.project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := state.Load(projectRoot, m.task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return task
+}
+
+// The general's report: --discard on an interrupted task whose tab is gone
+// reset the camp, then aborted on the missing tab and left a half state.
+func TestRunStrike_DiscardWithGonePaneClosesTheTask(t *testing.T) {
+	m, client := interruptedMissionWithGonePane(t)
+
+	code, out := strikeWith(t, m, client, strikeOptions{Discard: true})
+
+	if code != 0 || !strings.Contains(out, "struck:") {
+		t.Fatalf("expected the strike to complete despite the missing tab, got %d: %s", code, out)
+	}
+	if campLeased(t, m) {
+		t.Error("expected the slot released")
+	}
+	if got := loadTask(t, m).Status; got != state.StatusStruck {
+		t.Errorf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+	if !projectHasBranch(t, m) {
+		t.Error("the strike must never delete an unlanded branch")
+	}
+	if branch := strikeGitT(t, m.task.CampPath, "branch", "--show-current"); branch != "" {
+		t.Errorf("expected the pool worktree detached, still on %q", branch)
+	}
+	want := "kept branch " + m.task.CampBranch + " with 1 unlanded commit(s)"
+	if !strings.Contains(out, want) {
+		t.Errorf("expected the branch hint %q, got: %s", want, out)
+	}
+}
+
+// A second strike after the first one finished (or half finished) must
+// clean up instead of refusing with "not leased".
+func TestRunStrike_SecondStrikeIsIdempotent(t *testing.T) {
+	m, client := interruptedMissionWithGonePane(t)
+	if code, out := strikeWith(t, m, client, strikeOptions{Discard: true}); code != 0 {
+		t.Fatalf("first strike: %d: %s", code, out)
+	}
+	// Simulate the half state the general hit: slot free, task not closed.
+	projectRoot, err := vxproject.Root(m.home, m.project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := loadTask(t, m)
+	task.Status = state.StatusInterrupted
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out := strikeWith(t, m, client, strikeOptions{Discard: true})
+
+	if code != 0 || strings.Contains(out, "not leased") {
+		t.Fatalf("expected the second strike to succeed, got %d: %s", code, out)
+	}
+	if got := loadTask(t, m).Status; got != state.StatusStruck {
+		t.Errorf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+}
+
+// A slot now leased to another task is never reset, detached or released.
+func TestRunStrike_SecondStrikeNeverTouchesACampLeasedToAnotherTask(t *testing.T) {
+	m, client := interruptedMissionWithGonePane(t)
+	if code, out := strikeWith(t, m, client, strikeOptions{Discard: true}); code != 0 {
+		t.Fatalf("first strike: %d: %s", code, out)
+	}
+	other, err := state.New(state.KindMission, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := camp.Acquire(m.project, m.home, other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(c.Path, "other.txt"), []byte("keep\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	branchBefore := strikeGitT(t, c.Path, "branch", "--show-current")
+
+	strikeWith(t, m, client, strikeOptions{Discard: true})
+
+	if _, err := os.Stat(filepath.Join(c.Path, "other.txt")); err != nil {
+		t.Errorf("another task's camp was reset: %v", err)
+	}
+	if got := strikeGitT(t, c.Path, "branch", "--show-current"); got != branchBefore {
+		t.Errorf("another task's camp moved from %q to %q", branchBefore, got)
+	}
+	projectRoot, _ := vxproject.Root(m.home, m.project)
+	leased, err := camp.LeasedTasks(projectRoot)
+	if err != nil || !leased[other.ID] {
+		t.Errorf("another task's lease was released: %v %v", leased, err)
+	}
+}
+
+// Other herdr errors still fail the strike, but never leave a half state:
+// the slot is free and the task is closed, and the error says so.
+func TestRunStrike_OtherHerdrErrorLeavesACoherentState(t *testing.T) {
+	m, client := interruptedMissionWithGonePane(t)
+	client.tabCloseErr = errors.New("herdr socket closed")
+
+	code, out := strikeWith(t, m, client, strikeOptions{Discard: true})
+
+	if code == 0 || !strings.Contains(out, "closing soldier pane") {
+		t.Fatalf("expected the pane error reported, got %d: %s", code, out)
+	}
+	if campLeased(t, m) {
+		t.Error("expected the slot released")
+	}
+	if got := loadTask(t, m).Status; got != state.StatusStruck {
+		t.Errorf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+	client.tabCloseErr = nil
+	if code, out := strikeWith(t, m, client, strikeOptions{}); code != 0 {
+		t.Errorf("expected a retry to close the pane, got %d: %s", code, out)
 	}
 }

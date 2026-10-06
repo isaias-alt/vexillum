@@ -98,6 +98,12 @@ func pruneBranch(c Camp, opts StrikeOptions, report *PruneReport) error {
 		merged, _ = verifyMerged(c, base, *opts.PRMerged)
 	}
 	if !ancestor && !merged {
+		if out, err := runGit(c.ProjectDir, "rev-list", "--count", base+".."+ref); err == nil {
+			if n := strings.TrimSpace(out); n != "" && n != "0" {
+				report.Kept = fmt.Sprintf("kept branch %s with %s unlanded commit(s) not merged into %s (no merged pull request confirmed); once sure, delete it by hand with git branch -D %s", c.Branch, n, base, c.Branch)
+				return nil
+			}
+		}
 		report.Kept = fmt.Sprintf("kept branch %s: it is not merged into %s (no merged pull request confirmed); once sure, run git branch -D %s", c.Branch, base, c.Branch)
 		return nil
 	}

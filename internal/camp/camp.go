@@ -287,6 +287,11 @@ type StrikeReport struct {
 	DiscardedChanges []string
 }
 
+// ErrNotLeased is what StrikeWith wraps when the slot is not leased to
+// anyone: the strike already released it, so only the task record and the
+// herdr pane may be left to clean up.
+var ErrNotLeased = errors.New("is not leased")
+
 // Strike strikes the camp: it returns c's slot to the pool for reuse, but
 // only when it's safe: taskID must be the slot's recorded owner, the worktree must have no
 // uncommitted changes, and its branch must already be landed (merged) on
@@ -328,7 +333,7 @@ func StrikeWith(c Camp, taskID string, opts StrikeOptions) (StrikeReport, error)
 
 	slot := pool.Slots[idx]
 	if slot.LeasedBy == "" {
-		return report, fmt.Errorf("camp slot %d is not leased, nothing to strike", c.Slot)
+		return report, fmt.Errorf("camp slot %d: %w, nothing to strike", c.Slot, ErrNotLeased)
 	}
 	if slot.LeasedBy != taskID {
 		return report, fmt.Errorf("camp slot %d is leased by task %s, not %s, refusing to strike", c.Slot, slot.LeasedBy, taskID)
@@ -380,6 +385,15 @@ func StrikeWith(c Camp, taskID string, opts StrikeOptions) (StrikeReport, error)
 		}
 		if _, err := runGit(c.Path, "clean", "-fd"); err != nil {
 			return report, fmt.Errorf("cleaning camp worktree: %w", err)
+		}
+	}
+
+	if opts.Discard {
+		// The slot goes back to the pool like the idle ones, detached,
+		// never parked on a branch whose commits were just discarded. The
+		// branch itself stays (Prune never force deletes an unmerged one).
+		if _, err := runGit(c.Path, "checkout", "--detach", base); err != nil {
+			return report, fmt.Errorf("detaching camp worktree from %s: %w", c.Branch, err)
 		}
 	}
 

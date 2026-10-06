@@ -32,8 +32,15 @@ base has been pulled, the refusal says so.
 uncommitted changes. It prints exactly what it threw away: the unlanded
 commits (hash and subject) and the uncommitted changes, which are reset. Use
 it only when the general has confirmed that the camp's work is already on the
-base or is abandoned - never on your own judgment. The discarded commits
-stay reachable from the camp's branch until the slot is reused.
+base or is abandoned - never on your own judgment. The worktree is detached
+from the task branch, which is kept with the discarded commits: the output
+says how many are unlanded and that it can be deleted by hand.
+
+A herdr tab that is already gone (a soldier stopped by hand) never fails a
+strike. Any other herdr error is reported after the camp was returned and the
+task closed (an interrupted or failed task becomes struck); striking again
+retries closing the pane, and on a task whose camp is already back in the pool
+it only cleans up the record. A camp leased to another task is never touched.
 
 On success, returns the worktree to the pool for reuse and closes the
 herdr pane, then prunes: it deletes the task's local branch

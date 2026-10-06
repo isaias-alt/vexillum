@@ -625,9 +625,15 @@ Mientras no se haya hecho pull de la base, el rechazo lo dice.
 camp tiene cambios sin commitear. Imprime exactamente qué descartó: los
 commits sin aterrizar (hash y asunto) y los cambios sin commitear, que se
 resetean. Usalo solo cuando el general confirmó que el trabajo del camp ya
-está en la base o se abandona: nunca por tu propio criterio. Los commits
-descartados siguen siendo alcanzables desde la rama del camp hasta que se
-reutilice el slot.
+está en la base o se abandona: nunca por tu propio criterio. El worktree se
+desacopla de la rama de la tarea, que se conserva con los commits descartados:
+la salida dice cuántos quedan sin aterrizar y que se puede borrar a mano.
+
+Un tab de herdr que ya no existe (un soldier detenido a mano) nunca hace fallar
+un strike. Cualquier otro error de herdr se reporta después de devolver el camp
+y cerrar la tarea (una tarea interrupted o failed pasa a struck); volver a
+hacer strike reintenta cerrar el pane, y en una tarea cuyo camp ya volvió al
+pool solo limpia el registro. Un camp arrendado a otra tarea nunca se toca.
 
 Si tiene éxito, devuelve el worktree al pool para reutilizarlo y cierra el
 pane de herdr, y después poda: borra la rama local vexillum/<task-id> de la
