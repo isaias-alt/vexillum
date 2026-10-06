@@ -99,5 +99,9 @@ release:
   # Tags with a pre-release suffix (-rc.N, -canary.<date>.<sha>) are published
   # as GitHub pre-releases, so releases/latest keeps pointing at the last stable.
   prerelease: auto
+  header: |
+    Install: `brew install isaias-alt/tap/vexillum`, or the curl command in the [README](https://github.com/isaias-alt/vexillum#install). Requires Claude Code (logged in), herdr and git.
+    Soldiers run unsandboxed with full access to your machine, see the [warning in the README](https://github.com/isaias-alt/vexillum#install).
+
   footer: |
     {{ if .PreviousTag }}**Full changelog**: https://github.com/isaias-alt/vexillum/compare/{{ .PreviousTag }}...{{ .Tag }}{{ end }}
