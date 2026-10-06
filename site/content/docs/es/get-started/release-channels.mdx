@@ -52,6 +52,8 @@ El primer stable es `v0.1.0` y los rc aparecen más adelante. Correr el script s
 
 Un canary es un build de lo último que se trabajó. Se hace uno cada noche, y solo cuando hay algo nuevo desde el anterior, así que una semana tranquila no produce builds. Un canary nunca se convierte en un release stable por sí solo, y nunca llega a Homebrew.
 
+La ejecución nocturna es opt-in. Solo corre cuando la variable de repositorio `CANARY_NIGHTLY` vale `true` (Settings, Secrets and variables, Actions, Variables). Si la variable no existe, o tiene cualquier valor distinto de `true`, el job nocturno se saltea. Una ejecución manual del workflow Canary siempre funciona, sin importar la variable. Esto importa si hacés un fork del repositorio: no se publica nada hasta que lo activás.
+
 Instalá el último canary con la opción `--channel`:
 
 ```bash

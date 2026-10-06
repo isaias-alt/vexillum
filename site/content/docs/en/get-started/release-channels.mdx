@@ -52,6 +52,8 @@ The first stable is `v0.1.0` and rc builds appear later. Running the script with
 
 A canary is a build of the latest work. One is made every night, and only when there is something new since the previous one, so a quiet week produces no builds. A canary never turns into a stable release by itself, and it never reaches Homebrew.
 
+The nightly run is opt-in. It only runs when the `CANARY_NIGHTLY` repository variable is set to `true` (Settings, Secrets and variables, Actions, Variables). If the variable is unset, or has any value other than `true`, the nightly job is skipped. A manual run of the Canary workflow always works, whatever the variable says. This matters if you fork the repository: nothing is published until you turn it on.
+
 Install the latest canary with the `--channel` option:
 
 ```bash
