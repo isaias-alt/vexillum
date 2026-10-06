@@ -1,4 +1,5 @@
 name: Canary
+# Nightly runs need the CANARY_NIGHTLY repository variable set to true.
 
 # Publishes a canary pre-release of the tip of canary: every night, and only
 # when canary has commits since the last canary tag (a manual run can force a

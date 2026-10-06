@@ -1,4 +1,5 @@
 name: Stable release
+# Manual only: it runs when dispatched from the Actions tab.
 
 # Cuts a stable release (or an rc) by hand. It validates the ref, requires
 # green CI for its tip, computes the next tag, creates an annotated tag and

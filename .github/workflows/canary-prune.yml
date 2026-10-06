@@ -1,4 +1,5 @@
 name: Prune canary
+# Manual only: it runs when dispatched from the Actions tab.
 
 # Deletes old canary pre-releases and their tags. A build is kept when it is
 # among the newest keep_count builds or younger than keep_days days. Only

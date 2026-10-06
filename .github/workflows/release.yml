@@ -1,4 +1,5 @@
 name: Release
+# Starts only when a v* tag is pushed by hand.
 
 # Releases a tag that was pushed by hand. The canary and stable-release
 # workflows tag and release in their own job: a tag pushed with GITHUB_TOKEN
