@@ -38,7 +38,7 @@ export interface PageSeo {
   lang: Lang;
   /** Title without the site suffix; the root layout's template adds it. */
   title: string;
-  /** Replaces the "%s · vexillum" template when set (the landing). */
+  /** Replaces the "%s - vexillum" template when set (the landing). */
   absoluteTitle?: string;
   description: string;
   /**
@@ -74,7 +74,7 @@ export function pageMetadata(seo: PageSeo): Metadata {
     );
   }
 
-  const socialTitle = seo.absoluteTitle ?? `${title} · ${SITE_NAME}`;
+  const socialTitle = seo.absoluteTitle ?? `${title} - ${SITE_NAME}`;
   const image = {
     url: absoluteUrl(seo.image.path),
     width: OG_WIDTH,

@@ -12,7 +12,7 @@ const SITE_URL = readFileSync(new URL("../lib/site.ts", import.meta.url), "utf8"
   /SITE_URL = "([^"]+)"/,
 )[1];
 const LANGS = ["en", "es"];
-const SUFFIX = " · vexillum";
+const SUFFIX = " - vexillum";
 const MAX_DESCRIPTION = 160;
 
 const argUrl = process.argv.includes("--url")
@@ -105,10 +105,10 @@ function checkPage(url, p, sitemap) {
   if (p.lang !== lang) fail(url, `<html lang="${p.lang}"> should be "${lang}"`);
 
   const isLanding = new URL(url).pathname === "/" || new URL(url).pathname === "/es";
-  const titleOk = isLanding ? p.title?.startsWith("vexillum \u00b7 ") : p.title?.endsWith(SUFFIX);
+  const titleOk = isLanding ? p.title?.startsWith("vexillum - ") : p.title?.endsWith(SUFFIX);
   if (!p.title) fail(url, "missing <title>");
   else if (!titleOk) {
-    fail(url, `title "${p.title}" breaks the pattern (landing "vexillum · ...", docs "... · vexillum")`);
+    fail(url, `title "${p.title}" breaks the pattern (landing "vexillum - ...", docs "... - vexillum")`);
   }
   if (!p.description) fail(url, "missing meta description");
   else if (p.description.length > MAX_DESCRIPTION) {
