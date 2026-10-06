@@ -230,7 +230,7 @@ export function InAction({
           return (
             <li key={step.title} className="relative">
               {/* The line through the markers, drawn per step so it always
-                  meets the marker centers (see MinuteSteps). */}
+                  meets the marker centers. */}
               <span
                 aria-hidden
                 className="absolute left-[31px] w-px bg-border"

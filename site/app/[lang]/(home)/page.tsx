@@ -6,7 +6,6 @@ import { landingOgImagePath, pageMetadata, softwareApplicationLd } from "@/lib/s
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { InstallCommand } from "@/components/InstallCommand";
-import { MinuteSteps } from "@/components/MinuteSteps";
 import { DispatchTranscript } from "@/components/DispatchTranscript";
 import { CommandLoop } from "@/components/CommandLoop";
 import { LandVsShip, RestartProof } from "@/components/DetailDiagrams";
@@ -82,21 +81,7 @@ export default async function Home({
           <p className="mx-auto mb-8 max-w-[480px] text-sm leading-[1.7] text-text-secondary">
             {t.hero.sub}
           </p>
-          <div className="mx-auto mb-5 max-w-[640px] text-left text-[13px] leading-[1.7] text-text-secondary">
-            <div className="mb-1.5 text-[11px] tracking-[0.08em] text-text-muted uppercase">
-              {t.hero.requirementsTitle}
-            </div>
-            <ul className="mb-2 list-disc pl-5">
-              {t.hero.requirements.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-            <p>{t.hero.requirementsNote}</p>
-          </div>
-          <InstallCommand className="mb-3" />
-          <p className="mx-auto mb-5 max-w-[640px] text-left text-[13px] leading-[1.7] text-text-muted">
-            {t.hero.safety}
-          </p>
+          <InstallCommand className="mb-5" />
           <Link
             href={`${prefix}/docs`}
             className="btn btn-primary"
@@ -105,25 +90,22 @@ export default async function Home({
           </Link>
         </section>
 
-        {/* a minute with vexillum */}
-        <section className="site-container pb-(--section-space)">
-          <div className="mx-auto mb-14 max-w-[min(100%,52rem)] text-center">
-            <Eyebrow>{t.minute.eyebrow}</Eyebrow>
-            <h2 className="section-title mb-5">
-              {t.minute.title}
-            </h2>
-            <p className="text-sm leading-[1.7] text-text-secondary">
-              {t.minute.sub}
-            </p>
-            <p className="mt-2.5 font-serif text-[13px] text-text-muted italic">
-              {t.minute.motto}
-            </p>
+        {/* see it in action */}
+        <section className="border-t border-border">
+          <div className="site-container py-(--section-space)">
+            <div className="mx-auto mb-14 max-w-[min(100%,52rem)] text-center">
+              <Eyebrow>{t.demo.eyebrow}</Eyebrow>
+              <h2 className="section-title mb-5">{t.demo.title}</h2>
+              <p className="text-sm leading-[1.7] text-text-secondary">
+                {t.demo.sub}
+              </p>
+            </div>
+            <InAction
+              copy={t.demo}
+              docsLabel={t.docsLink}
+              docsRoot={`${prefix}/docs`}
+            />
           </div>
-          <MinuteSteps
-            steps={t.minute.steps}
-            docsLabel={t.minute.docsLink}
-            docsRoot={`${prefix}/docs`}
-          />
         </section>
 
         {/* vocabulary */}
@@ -185,24 +167,6 @@ export default async function Home({
             <DispatchTranscript
               t={t.dispatching}
               className="mx-auto max-w-(--content-narrow)"
-            />
-          </div>
-        </section>
-
-        {/* see it in action */}
-        <section className="border-t border-border">
-          <div className="site-container py-(--section-space)">
-            <div className="mx-auto mb-14 max-w-[min(100%,52rem)] text-center">
-              <Eyebrow>{t.demo.eyebrow}</Eyebrow>
-              <h2 className="section-title mb-5">{t.demo.title}</h2>
-              <p className="text-sm leading-[1.7] text-text-secondary">
-                {t.demo.sub}
-              </p>
-            </div>
-            <InAction
-              copy={t.demo}
-              docsLabel={t.minute.docsLink}
-              docsRoot={`${prefix}/docs`}
             />
           </div>
         </section>

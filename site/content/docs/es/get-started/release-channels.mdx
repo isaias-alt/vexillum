@@ -29,7 +29,7 @@ brew install isaias-alt/tap/vexillum
   </CodeBlockTab>
   <CodeBlockTab value="curl">
 ```bash
-curl -fsSL https://vx.lucasco.dev/install | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
 ```
   </CodeBlockTab>
 </CodeBlockTabs>
@@ -41,7 +41,7 @@ El script de instalación nunca instala un pre-release por su cuenta: sin opcion
 Un rc (release candidate) se publica antes de un release stable para poder probar el release en sí. Es un pre-release de GitHub y no se ofrece por Homebrew ni en la instalación por defecto. Para instalar uno en particular, nombrá su versión:
 
 ```bash
-curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.1.1-rc.1
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --version v0.1.1-rc.1
 ```
 
 Las versiones disponibles están en la [página de releases de GitHub](https://github.com/isaias-alt/vexillum/releases).
@@ -55,7 +55,7 @@ Un canary es un build de lo último que se trabajó. Se hace uno cada noche, y s
 Instalá el último canary con la opción `--channel`:
 
 ```bash
-curl -fsSL https://vx.lucasco.dev/install | bash -s -- --channel canary
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --channel canary
 ```
 
 La instalación de un canary es siempre una descarga directa, aunque Homebrew esté en tu PATH. El script verifica el checksum sha256 del archivo, instala `vx` en `/usr/local/bin` (o en `~/.local/bin` cuando no podés escribir ahí) e imprime el build exacto que instaló:
@@ -76,7 +76,7 @@ Borrá el `vx` del canary del directorio que imprimió el mensaje de la instalac
 
 ```bash
 rm /usr/local/bin/vx
-curl -fsSL https://vx.lucasco.dev/install | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
 ```
 
 Si antes instalaste con Homebrew, asegurate de que el `vx` que corre sea el que querés: `vx doctor` avisa cuando otro `vx` anterior en tu PATH tapa al que acabás de instalar.

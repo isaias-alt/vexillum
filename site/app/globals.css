@@ -312,15 +312,6 @@ body {
   outline-offset: 2px;
 }
 
-@keyframes step-progress {
-  from {
-    width: 0%;
-  }
-  to {
-    width: 100%;
-  }
-}
-
 /* ---------------------------------------------------------------------------
    Docs: the re-theme of Fumadocs' notebook layout to design/Vexillum
    Docs.dc.html. Structure and behaviour (sidebar, toc, search, mobile

@@ -2,15 +2,6 @@ import { i18n, type Lang } from "@/lib/i18n";
 import { demoCopy, type DemoCopy } from "@/lib/demo-strings";
 import { loopCopy, type LoopCopy } from "@/lib/loop-strings";
 
-export interface Step {
-  title: string;
-  command: string;
-  description: string;
-  output: string[];
-  /** Docs page the step links to, relative to the docs root. */
-  docs: string;
-}
-
 export interface Dictionary {
   meta: { description: string };
   nav: { docs: string; github: string; theme: string };
@@ -19,19 +10,9 @@ export interface Dictionary {
     title: string;
     sub: string;
     cta: string;
-    requirementsTitle: string;
-    requirements: string[];
-    requirementsNote: string;
-    safety: string;
   };
-  minute: {
-    eyebrow: string;
-    title: string;
-    sub: string;
-    motto: string;
-    steps: Step[];
-    docsLink: string;
-  };
+  /** Label of the "Docs" link on the install demo steps. */
+  docsLink: string;
   vocab: {
     eyebrow: string;
     title: string;
@@ -72,83 +53,8 @@ const en: Dictionary = {
     title: "One commander. Many soldiers.",
     sub: "vexillum orchestrates coding agents from your terminal. A commander dispatches soldiers into isolated camps, a sentinel watches for what needs your attention.",
     cta: "read the docs",
-    requirementsTitle: "Requirements",
-    requirements: [
-      "macOS or Linux, amd64 or arm64 (Windows is not supported)",
-      "Claude Code, installed and logged in (subscription or API key)",
-      "herdr (brew install herdr works)",
-      "a git repository for your project",
-      "optional: gh (for vx ship) and tmux",
-    ],
-    requirementsNote:
-      "vx doctor checks all of it. vx dispatch only works inside a herdr pane.",
-    safety:
-      "Soldiers run unsandboxed, as you. Landing a mission is the approval gate: nothing reaches your project's history until you approve it.",
   },
-  minute: {
-    eyebrow: "a minute with vexillum",
-    title: "One CLI for the whole chain of command.",
-    sub: "Install, dispatch, watch and check in - every step below is a real command. Click one, or just watch.",
-    motto: "gradus cursusque - the steps and the course",
-    docsLink: "Docs",
-    steps: [
-      {
-        title: "Install vexillum",
-        command: "curl -fsSL https://vx.lucasco.dev/install | bash",
-        description:
-          "One binary, no runtime dependencies. Works the same over brew or curl.",
-        output: [
-          "[ok]    Checksum verified",
-          "[ok]    Installed vx to /usr/local/bin/vx",
-        ],
-        docs: "/get-started/install",
-      },
-      {
-        title: "Dispatch a mission",
-        command: 'vx dispatch "refactor the payment module" --kind mission',
-        description:
-          "A soldier spins up in its own camp and executes the work end to end.",
-        output: [
-          `task_id=${TASK_A} kind=mission camp_slot=1 camp_branch=vexillum/${TASK_A}`,
-          "status=running",
-        ],
-        docs: "/concepts/missions-and-scouts",
-      },
-      {
-        title: "Dispatch a scout",
-        command: 'vx dispatch "trace the memory leak" --kind scout',
-        description:
-          "Scouts investigate and report back - they never commit or push anything.",
-        output: [
-          `task_id=${TASK_B} kind=scout camp_slot=2 camp_branch=vexillum/${TASK_B}`,
-          "status=running",
-        ],
-        docs: "/concepts/missions-and-scouts",
-      },
-      {
-        title: "Hear from the sentinel",
-        command: "vx sentinel drain",
-        description:
-          "The sentinel only wakes the commander when a soldier actually settles - done or blocked.",
-        output: [
-          `{"decision":"block","reason":"A vexillum soldier's status changed:`,
-          `- mission ${TASK_A}: running -> done ..."}`,
-        ],
-        docs: "/concepts/sentinel",
-      },
-      {
-        title: "Check the troop",
-        command: "vx status",
-        description:
-          "Every mission and scout in this project, most recently updated first.",
-        output: [
-          `${TASK_A}  mission running     vexillum/${TASK_A} refactor the payment module`,
-          `${TASK_B}  scout   done        vexillum/${TASK_B} trace the memory leak`,
-        ],
-        docs: "/reference/cli/status",
-      },
-    ],
-  },
+  docsLink: "Docs",
   vocab: {
     eyebrow: "the vocabulary",
     title: "Every part of vexillum maps to a role in the field.",
@@ -215,56 +121,8 @@ const es: Dictionary = {
     title: "Un commander. Muchos soldiers.",
     sub: "vexillum orquesta agentes de código desde tu terminal. Un commander despacha soldiers a camps aislados y un sentinel vigila lo que necesita tu atención.",
     cta: "leer la documentación",
-    requirementsTitle: "Requisitos",
-    requirements: [
-      "macOS o Linux, amd64 o arm64 (Windows no está soportado)",
-      "Claude Code, instalado y con sesión iniciada (suscripción o API key)",
-      "herdr (brew install herdr funciona)",
-      "un repositorio git para tu proyecto",
-      "opcional: gh (para vx ship) y tmux",
-    ],
-    requirementsNote:
-      "vx doctor verifica todo esto. vx dispatch solo funciona dentro de un pane de herdr.",
-    safety:
-      "Los soldiers corren sin sandbox, como vos. Aterrizar una mission es la puerta de aprobación: nada llega al historial de tu proyecto hasta que lo aprobás.",
   },
-  minute: {
-    eyebrow: "un minuto con vexillum",
-    title: "Un CLI para toda la cadena de mando.",
-    sub: "Instalar, despachar, vigilar y consultar - cada paso es un comando real. Hacé clic en uno, o simplemente mirá.",
-    motto: "gradus cursusque - los pasos y el rumbo",
-    docsLink: "Documentación",
-    steps: en.minute.steps.map((s, i) => ({
-      ...s,
-      ...[
-        {
-          title: "Instalá vexillum",
-          description:
-            "Un solo binario, sin dependencias de runtime. Funciona igual con brew o con curl.",
-        },
-        {
-          title: "Despachá una mission",
-          description:
-            "Un soldier arranca en su propio camp y ejecuta el trabajo de punta a punta.",
-        },
-        {
-          title: "Despachá un scout",
-          description:
-            "Los scouts investigan y reportan - nunca hacen commit ni push de nada.",
-        },
-        {
-          title: "Escuchá al sentinel",
-          description:
-            "El sentinel solo despierta al commander cuando un soldier realmente termina o queda bloqueado.",
-        },
-        {
-          title: "Revisá la tropa",
-          description:
-            "Todas las missions y scouts de este proyecto, la más reciente primero.",
-        },
-      ][i],
-    })),
-  },
+  docsLink: "Documentación",
   vocab: {
     eyebrow: "el vocabulario",
     title: "Cada parte de vexillum tiene un rol en el campo.",
