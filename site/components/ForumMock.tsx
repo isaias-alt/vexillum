@@ -12,7 +12,8 @@ import type { BrowserCopy, DemoFrame } from "@/lib/demo-strings";
 // below 900px. It is driven entirely by `MockState`, which `deriveMock` reads
 // off the step's frames at a given time of the demo clock.
 
-export type MockTarget = "input" | "addq" | "option" | "queue" | "send";
+export type MockTarget =
+  "input" | "addq" | "card" | "annotadd" | "option" | "queue" | "send";
 
 export interface MockState {
   /** Where the pointer is heading (null: not on screen yet). */
@@ -23,6 +24,14 @@ export interface MockState {
   focus: boolean;
   /** Add to queue was clicked: the message sits in the queue. */
   messageQueued: boolean;
+  /** How many characters of the annotation note are typed in its popover. */
+  noteTyped: number;
+  /** The annotation popover is open on the card's title. */
+  annotOpen: boolean;
+  /** The annotation was added to the queue. */
+  annotQueued: boolean;
+  /** The outline on the annotated element: hovered, held (clicked) or none. */
+  ring: "hover" | "held" | null;
   /** Option A is selected. */
   picked: boolean;
   /** Queue my pick was clicked: the decision sits in the queue. */
@@ -40,7 +49,9 @@ export interface MockState {
 }
 
 const PRESS_MS = 220;
-const TYPE_MS = 1000;
+const TYPE_MS = 800;
+// The held outline stays a moment after the note is queued, then fades.
+const RING_HOLD_MS = 350;
 const RECEIVED_MS = 300;
 // The native width each layout is designed at, and the least native height its
 // content needs. The mock scales by whichever limit is tighter, then takes the
@@ -70,12 +81,17 @@ export function deriveMock(
   frames: DemoFrame[],
   elapsed: number | null,
   messageLength: number,
+  noteLength: number,
 ): MockState {
   const state: MockState = {
     target: null,
     typed: 0,
     focus: false,
     messageQueued: false,
+    noteTyped: 0,
+    annotOpen: false,
+    annotQueued: false,
+    ring: null,
     picked: false,
     decisionQueued: false,
     sent: false,
@@ -88,6 +104,7 @@ export function deriveMock(
     return {
       ...state,
       messageQueued: true,
+      annotQueued: true,
       picked: true,
       decisionQueued: true,
       sent: true,
@@ -95,14 +112,15 @@ export function deriveMock(
       live: false,
     };
   }
-  let typingFrom: number | null = null;
+  const typingFrom: Partial<Record<MockTarget, number>> = {};
+  let annotAddedAt: number | null = null;
   for (const act of frames) {
     if (act.kind !== "act" || act.t > elapsed) continue;
     const [verb, target] = act.text.split(":") as [string, MockTarget];
     if (verb === "move") {
       state.target = target;
     } else if (verb === "type") {
-      typingFrom = act.t;
+      typingFrom[target] = act.t;
     } else {
       state.clicks++;
       if (elapsed - act.t < PRESS_MS) state.pressed = target;
@@ -110,6 +128,12 @@ export function deriveMock(
       if (target === "addq") {
         state.messageQueued = true;
         state.focus = false;
+      }
+      if (target === "card") state.annotOpen = true;
+      if (target === "annotadd") {
+        state.annotOpen = false;
+        state.annotQueued = true;
+        annotAddedAt = act.t;
       }
       if (target === "option") state.picked = true;
       if (target === "queue") state.decisionQueued = true;
@@ -119,11 +143,21 @@ export function deriveMock(
       }
     }
   }
-  if (typingFrom !== null && !state.messageQueued) {
-    state.typed = Math.min(
-      messageLength,
-      Math.floor(((elapsed - typingFrom) / TYPE_MS) * messageLength),
-    );
+  const typedOf = (target: MockTarget, length: number) => {
+    const from = typingFrom[target];
+    return from === undefined
+      ? 0
+      : Math.min(length, Math.floor(((elapsed - from) / TYPE_MS) * length));
+  };
+  if (!state.messageQueued) state.typed = typedOf("input", messageLength);
+  if (state.annotOpen) state.noteTyped = typedOf("card", noteLength);
+  if (
+    state.annotOpen ||
+    (annotAddedAt !== null && elapsed - annotAddedAt < RING_HOLD_MS)
+  ) {
+    state.ring = "held";
+  } else if (state.target === "card" && !state.annotQueued) {
+    state.ring = "hover";
   }
   return state;
 }
@@ -161,6 +195,7 @@ function Switch({ icon, label }: { icon: React.ReactNode; label: string }) {
 }
 
 const TIME = "04:47 PM";
+const ANNOTATION_SELECTOR = "article:nth-of-type(2) > h3";
 
 export function ForumMock({
   copy,
@@ -176,6 +211,11 @@ export function ForumMock({
   const optionRef = useRef<HTMLDivElement>(null);
   const queueRef = useRef<HTMLSpanElement>(null);
   const sendRef = useRef<HTMLSpanElement>(null);
+  const cardRef = useRef<HTMLHeadingElement>(null);
+  const annotAddRef = useRef<HTMLSpanElement>(null);
+  const ringRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef<HTMLSpanElement>(null);
   const artRef = useRef<HTMLDivElement>(null);
   const [artHeight, setArtHeight] = useState(0);
@@ -213,8 +253,9 @@ export function ForumMock({
   const height = size.h / scale;
 
   const { typed, focus, messageQueued, picked, decisionQueued, sent } = state;
-  const { pressed } = state;
-  const queuedCount = (messageQueued ? 1 : 0) + (decisionQueued ? 1 : 0);
+  const { pressed, annotOpen, annotQueued, ring } = state;
+  const queuedCount =
+    (messageQueued ? 1 : 0) + (annotQueued ? 1 : 0) + (decisionQueued ? 1 : 0);
   const inQueue = queuedCount > 0 && !sent;
   const typing = typed > 0 && !messageQueued;
   const [first, ...others] = copy.choices;
@@ -230,6 +271,8 @@ export function ForumMock({
     const el = {
       input: inputRef.current,
       addq: addqRef.current,
+      card: cardRef.current,
+      annotadd: annotAddRef.current,
       option: optionRef.current,
       queue: queueRef.current,
       send: sendRef.current,
@@ -243,9 +286,37 @@ export function ForumMock({
     const b = frame.getBoundingClientRect();
     // The arrow's tip is at (3, 2) in its own box.
     pointer.style.transition =
-      "transform 780ms cubic-bezier(0.45, 0.05, 0.25, 1)";
+      "transform 700ms cubic-bezier(0.45, 0.05, 0.25, 1)";
     pointer.style.transform = `translate(${(r.left - b.left + r.width / 2) / scale - 3}px, ${(r.top - b.top + r.height / 2) / scale - 2}px)`;
-  }, [state.target, inQueue, sent, scale, compact, native, height]);
+  }, [state.target, inQueue, sent, annotOpen, scale, compact, native, height]);
+
+  // The outline on the annotated title and the popover under it, placed in
+  // native pixels from the live layout (DOM writes only, like the pointer).
+  useLayoutEffect(() => {
+    const frame = root.current;
+    const title = cardRef.current;
+    const ringEl = ringRef.current;
+    const pop = popRef.current;
+    if (!frame || !title || !ringEl || !pop) return;
+    const b = frame.getBoundingClientRect();
+    const r = title.getBoundingClientRect();
+    const x = (r.left - b.left) / scale;
+    const y = (r.top - b.top) / scale;
+    const w = r.width / scale;
+    const h = r.height / scale;
+    ringEl.style.cssText += `;left:${x - 4}px;top:${y - 2}px;width:${w + 8}px;height:${h + 4}px`;
+    const popH = pop.offsetHeight;
+    pop.style.left = `${Math.max(8, Math.min(x - 4, native - 282))}px`;
+    pop.style.top = `${Math.max(8, Math.min(y + h + 12, height - popH - 8))}px`;
+  });
+
+  // The queue follows its newest item, like the real panel.
+  useLayoutEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+    node.dataset.scrolled = String(node.scrollTop > 0);
+  }, [queuedCount, sent, state.received]);
 
   return (
     <div ref={box} className="absolute inset-0 overflow-hidden">
@@ -295,13 +366,13 @@ export function ForumMock({
                 </h1>
                 <p className="fm-intro">{rich(copy.intro)}</p>
                 <div className="fm-cards">
-                  {copy.cards.map((card) => (
+                  {copy.cards.map((card, i) => (
                     <div
                       key={card.title}
                       className="fm-card"
                       data-rec={card.badge ? "" : undefined}
                     >
-                      <h3>
+                      <h3 ref={i === 1 ? cardRef : undefined}>
                         {card.title}
                         {card.badge && (
                           <span className="fm-pill">{card.badge}</span>
@@ -350,7 +421,7 @@ export function ForumMock({
                 Forwarding to the commander
               </span>
             </div>
-            <div className="fm-scroll">
+            <div ref={scrollRef} className="fm-scroll">
               {queuedCount === 0 && !sent && (
                 <p className="fm-empty">
                   Nothing here yet. Write a message or use the controls in the
@@ -368,6 +439,24 @@ export function ForumMock({
                         <div className="fm-qbody">
                           <span className="fm-qstate">queued</span>
                           {copy.message}
+                        </div>
+                        <span className="fm-qx" aria-hidden>
+                          &times;
+                        </span>
+                      </div>
+                    )}
+                    {annotQueued && (
+                      <div className="fm-qitem">
+                        <div className="fm-qbody">
+                          <span className="fm-qstate">queued</span>
+                          <span className="fm-qtag">h3</span>
+                          {copy.note}
+                          <span className="fm-qquote">
+                            {copy.cards[1].title}
+                          </span>
+                          <span className="fm-qwhere">
+                            {ANNOTATION_SELECTOR}
+                          </span>
                         </div>
                         <span className="fm-qx" aria-hidden>
                           &times;
@@ -405,6 +494,16 @@ export function ForumMock({
                         <i>sent</i>
                       </div>
                       {copy.message}
+                    </div>
+                    <div className="fm-msg" data-user>
+                      <div className="fm-meta">
+                        <b>You</b>
+                        <em>h3</em>
+                        <span>{TIME}</span>
+                        <i>sent</i>
+                      </div>
+                      {copy.note}
+                      <span className="fm-where">{ANNOTATION_SELECTOR}</span>
                     </div>
                     <div className="fm-msg" data-user>
                       <div className="fm-meta">
@@ -494,6 +593,50 @@ export function ForumMock({
               </p>
             </div>
           </aside>
+        </div>
+        <div
+          ref={ringRef}
+          aria-hidden
+          className="fm-ring"
+          data-ring={ring ?? undefined}
+        />
+        <div
+          ref={popRef}
+          aria-hidden
+          className="fm-pop"
+          data-open={annotOpen ? "" : undefined}
+        >
+          <p className="fm-pop-title">Annotate &lt;h3&gt;</p>
+          <p className="fm-pop-quote">{copy.cards[1].title}</p>
+          <span className="fm-pop-where">{ANNOTATION_SELECTOR}</span>
+          <div className="fm-pop-input">
+            {state.noteTyped > 0 ? (
+              <>
+                {copy.note.slice(0, state.noteTyped)}
+                <i className="fm-caret" />
+              </>
+            ) : (
+              <>
+                <i className="fm-caret" />
+                <span className="fm-ph">Tell the agent what to change...</span>
+              </>
+            )}
+          </div>
+          <p className="fm-hint">
+            Enter queues, Shift+Enter for a new line, Esc cancels.
+          </p>
+          <div className="fm-pop-actions">
+            <span className="fm-btn">Cancel</span>
+            <span
+              ref={annotAddRef}
+              className="fm-btn"
+              data-primary={state.noteTyped > 0 ? "" : undefined}
+              data-off={state.noteTyped > 0 ? undefined : ""}
+              data-pressed={pressed === "annotadd" ? "" : undefined}
+            >
+              Add to queue
+            </span>
+          </div>
         </div>
         {state.live && (
           <span
