@@ -35,7 +35,7 @@ export async function generateMetadata({
   const t = dictionary(lang);
   return {
     metadataBase: new URL(SITE_URL),
-    title: { default: "vexillum", template: "%s · vexillum" },
+    title: { default: "vexillum", template: "%s - vexillum" },
     description: t.meta.description,
   };
 }

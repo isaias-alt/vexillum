@@ -24,8 +24,8 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 const TITLE: Record<Lang, string> = {
-  en: "vexillum · orchestrate coding agents from your terminal",
-  es: "vexillum · orquestá agentes de código desde tu terminal",
+  en: "vexillum - orchestrate coding agents from your terminal",
+  es: "vexillum - orquestá agentes de código desde tu terminal",
 };
 
 const OG_ALT: Record<Lang, string> = {
