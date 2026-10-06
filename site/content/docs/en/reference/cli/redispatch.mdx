@@ -16,5 +16,7 @@ re-dispatch, not resumption: the task's dirty camp (working tree and any
 commits it never landed) is discarded, a fresh camp is created, and the
 mission is relaunched from its original prompt as if freshly dispatched -
 none of the dead soldier's partial work or agent session is recovered.
-Requires HERDR_WORKSPACE_ID - run this from inside a herdr-managed pane.
+Requires HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) and
+both herdr and claude on PATH; if any is missing it says so and exits before
+creating anything.
 ```

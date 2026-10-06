@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
@@ -42,8 +43,10 @@ worktree only bounds where its commits land, not what it can read,
 write, or exfiltrate elsewhere on the machine. Nothing reaches the
 project's real history until '` + cmdname.Name + ` land' is explicitly approved;
 never dispatch against a prompt, repository, or machine where reading
-sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID -
-run this from inside a herdr-managed pane.
+sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID (run
+this from inside a herdr-managed pane) and both herdr and claude on PATH; if
+any is missing it says so and exits before creating anything ('` + cmdname.Name + ` doctor'
+checks your setup).
 
 Returns quickly: it only waits out a short quick-settle probe, not the
 soldier's whole task. A trivial prompt may finish within that window and
@@ -81,9 +84,9 @@ func Dispatch(args []string) int {
 		return 1
 	}
 
-	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
-	if workspaceID == "" {
-		fmt.Fprintln(os.Stderr, cmdname.Name+": HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane")
+	workspaceID, err := herdrPreconditions("dispatch", os.Getenv, exec.LookPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 

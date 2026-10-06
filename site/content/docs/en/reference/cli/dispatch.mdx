@@ -34,8 +34,10 @@ worktree only bounds where its commits land, not what it can read,
 write, or exfiltrate elsewhere on the machine. Nothing reaches the
 project's real history until 'vx land' is explicitly approved;
 never dispatch against a prompt, repository, or machine where reading
-sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID -
-run this from inside a herdr-managed pane.
+sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID (run
+this from inside a herdr-managed pane) and both herdr and claude on PATH; if
+any is missing it says so and exits before creating anything ('vx doctor'
+checks your setup).
 
 Returns quickly: it only waits out a short quick-settle probe, not the
 soldier's whole task. A trivial prompt may finish within that window and

@@ -12,6 +12,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
+	"github.com/isaias-alt/vexillum/internal/doctorcheck"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
@@ -63,6 +64,35 @@ func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
 		return fmt.Errorf("running from inside %s, which looks like a vexillum-managed camp, not a project root - cd back to the real project and try again", absProject)
 	}
 	return nil
+}
+
+// herdrPreconditions checks, before anything is created, that a command which
+// starts a soldier can work here: it runs inside a herdr pane
+// (HERDR_WORKSPACE_ID set) and both herdr and claude are on PATH. command
+// names the caller in the message ("dispatch", "redispatch"). It returns the
+// workspace id, or one error naming everything that is missing and how to fix
+// it, so the user sees it once and nothing (task, camp lease, sentinel) has
+// been left behind. getenv and lookPath are injected so tests control them.
+func herdrPreconditions(command string, getenv func(string) string, lookPath func(string) (string, error)) (string, error) {
+	workspaceID := getenv("HERDR_WORKSPACE_ID")
+
+	var problems []string
+	if workspaceID == "" {
+		problems = append(problems, "HERDR_WORKSPACE_ID is not set - "+command+" must run from inside a herdr-managed pane")
+	}
+	for _, tool := range []string{"herdr", "claude"} {
+		if _, err := lookPath(tool); err != nil {
+			problem := tool + " is not on PATH"
+			if hint := doctorcheck.InstallHint(tool); hint != "" {
+				problem += " (" + hint + ")"
+			}
+			problems = append(problems, problem)
+		}
+	}
+	if len(problems) == 0 {
+		return workspaceID, nil
+	}
+	return "", fmt.Errorf("cannot %s from here, nothing was started:\n  - %s\nRun '%s doctor' to check your setup", command, strings.Join(problems, "\n  - "), cmdname.Name)
 }
 
 // ensureSentinelRunning best-effort auto-starts "vx sentinel"

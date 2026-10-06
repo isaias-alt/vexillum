@@ -39,6 +39,12 @@ var installHints = map[string]string{
 	"gh":     "install it with 'brew install gh' or from https://cli.github.com",
 }
 
+// InstallHint says how to install binaryName, or "" for a tool doctor has no
+// hint for.
+func InstallHint(binaryName string) string {
+	return installHints[binaryName]
+}
+
 // Binary checks whether binaryName is on PATH.
 func Binary(label, binaryName string, required bool) Result {
 	if _, err := exec.LookPath(binaryName); err != nil {

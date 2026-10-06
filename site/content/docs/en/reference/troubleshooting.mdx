@@ -10,7 +10,7 @@ Start with `vx doctor`: it names what is missing.
 | `project not initialized, run 'vx init' first` | `dispatch` found no `.vexillum/config.json`. Run `vx init` at the project root. |
 | `current directory is not a git repository` | `init` needs a git repository. |
 | `git is not installed or not on PATH (install it from https://git-scm.com)` | `init` and `doctor` could not run `git` at all. Install git, or fix the `PATH` of this shell. |
-| `HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane` | Start Claude Code in a pane herdr manages; `dispatch` and `redispatch` refuse elsewhere. |
+| `cannot dispatch from here, nothing was started:` followed by `HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane`, `herdr is not on PATH` or `claude is not on PATH` | `dispatch` and `redispatch` check this before creating a task, a camp or the sentinel, and list everything that is missing at once. Start Claude Code in a pane herdr manages, and install what is listed (`vx doctor` shows the same hints). |
 | `running from inside ... which looks like a vexillum-managed camp` | You are in a path under `~/.vexillum`. `cd` back to the real project root. |
 | `not running in a terminal, so nothing was changed.` | `init` or `upgrade` found no terminal to ask in. Re-run with `--yes` (add `--skills` or `--no-skills` to decide about the skills). |
 | `no answer (input closed or not understood) - nothing further was changed; re-run with --yes to accept without questions` | A question got no usable answer, so the run stopped. Re-run, or pass `--yes`. |

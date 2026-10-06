@@ -208,8 +208,9 @@ sandbox); el worktree solo acota dónde caen sus commits, no lo que puede leer,
 escribir o exfiltrar en otro lugar de la máquina. Nada llega al historial real
 del proyecto hasta que 'vx land' se aprueba explícitamente; nunca despaches
 contra un prompt, un repositorio o una máquina donde leer estado sensible del
-host sería un problema. Requiere HERDR_WORKSPACE_ID: corré esto desde un pane
-administrado por herdr.
+host sería un problema. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane
+administrado por herdr) y que herdr y claude estén en el PATH; si falta alguno
+lo dice y termina antes de crear nada ('vx doctor' revisa tu configuración).
 
 Vuelve rápido: solo espera una breve sonda de arranque, no la tarea
 completa del soldier. Un prompt trivial puede terminar dentro de esa ventana e
@@ -278,8 +279,9 @@ re-dispatch, no una reanudación: el camp sucio de la tarea (el árbol de trabaj
 y los commits que nunca aterrizó) se descarta, se crea un camp nuevo y la
 mission se relanza desde su prompt original como si se acabara de despachar:
 no se recupera nada del trabajo parcial ni de la sesión de agente del soldier
-muerto. Requiere HERDR_WORKSPACE_ID: corré esto desde un pane administrado por
-herdr.
+muerto. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane administrado por
+herdr) y que herdr y claude estén en el PATH; si falta alguno lo dice y termina
+antes de crear nada.
 `,
 	},
 

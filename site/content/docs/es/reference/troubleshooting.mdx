@@ -10,7 +10,7 @@ Empezá con `vx doctor`: te dice qué falta. Los mensajes de error de vexillum e
 | `project not initialized, run 'vx init' first` | `dispatch` no encontró `.vexillum/config.json`. Corré `vx init` en la raíz del proyecto. |
 | `current directory is not a git repository` | `init` necesita un repositorio git. |
 | `git is not installed or not on PATH (install it from https://git-scm.com)` | `init` y `doctor` no pudieron ejecutar `git`. Instalá git, o arreglá el `PATH` de esta shell. |
-| `HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane` | Iniciá Claude Code en un pane que herdr administre; `dispatch` y `redispatch` se niegan en otro lado. |
+| `cannot dispatch from here, nothing was started:` seguido de `HERDR_WORKSPACE_ID is not set - dispatch must run from inside a herdr-managed pane`, `herdr is not on PATH` o `claude is not on PATH` | `dispatch` y `redispatch` lo revisan antes de crear una tarea, un camp o el sentinel, y listan todo lo que falta de una vez. Iniciá Claude Code en un pane que herdr administre e instalá lo que figure (`vx doctor` muestra las mismas indicaciones). |
 | `running from inside ... which looks like a vexillum-managed camp` | Estás en una ruta bajo `~/.vexillum`. Volvé con `cd` a la raíz real del proyecto. |
 | `not running in a terminal, so nothing was changed.` | `init` o `upgrade` no encontró una terminal donde preguntar. Volvé a correr con `--yes` (sumá `--skills` o `--no-skills` para decidir sobre las skills). |
 | `no answer (input closed or not understood) - nothing further was changed; re-run with --yes to accept without questions` | Una pregunta no tuvo una respuesta utilizable, así que la corrida se detuvo. Volvé a correr, o pasá `--yes`. |

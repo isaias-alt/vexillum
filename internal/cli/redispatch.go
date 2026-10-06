@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
@@ -26,7 +27,9 @@ re-dispatch, not resumption: the task's dirty camp (working tree and any
 commits it never landed) is discarded, a fresh camp is created, and the
 mission is relaunched from its original prompt as if freshly dispatched -
 none of the dead soldier's partial work or agent session is recovered.
-Requires HERDR_WORKSPACE_ID - run this from inside a herdr-managed pane.
+Requires HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) and
+both herdr and claude on PATH; if any is missing it says so and exits before
+creating anything.
 `
 
 // Redispatch runs the "vx redispatch" command.
@@ -46,9 +49,9 @@ func Redispatch(args []string) int {
 		return 1
 	}
 
-	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
-	if workspaceID == "" {
-		fmt.Fprintln(os.Stderr, cmdname.Name+": HERDR_WORKSPACE_ID is not set - redispatch must run from inside a herdr-managed pane")
+	workspaceID, err := herdrPreconditions("redispatch", os.Getenv, exec.LookPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
 
