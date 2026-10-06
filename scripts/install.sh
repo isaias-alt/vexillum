@@ -5,7 +5,7 @@ set -euo pipefail
 # vexillum - install script (installs the `vx` command)
 #
 # Usage:
-#   curl -fsSL https://vx.lucasco.dev/install | bash
+#   curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --channel canary
 #   curl -fsSL .../install.sh | bash -s -- --version v0.1.0
 #

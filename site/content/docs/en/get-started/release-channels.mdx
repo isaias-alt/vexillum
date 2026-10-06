@@ -29,7 +29,7 @@ brew install isaias-alt/tap/vexillum
   </CodeBlockTab>
   <CodeBlockTab value="curl">
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash
 ```
   </CodeBlockTab>
 </CodeBlockTabs>
@@ -41,7 +41,7 @@ The install script never installs a pre-release on its own: without options it i
 An rc (release candidate) is published before a stable release so the release itself can be tried. It is a GitHub pre-release and is not offered through Homebrew or by the default install. To install a specific one, name its version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --version v0.1.1-rc.1
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --version v0.1.1-rc.1
 ```
 
 Find the available versions on the [GitHub releases page](https://github.com/isaias-alt/vexillum/releases).
@@ -55,7 +55,7 @@ A canary is a build of the latest work. One is made every night, and only when t
 Install the latest canary with the `--channel` option:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --channel canary
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --channel canary
 ```
 
 Canary installs are always a direct download, even when Homebrew is on your PATH. The script verifies the sha256 checksum of the archive, installs `vx` into `/usr/local/bin` (or `~/.local/bin` when you cannot write there) and prints the exact build it installed:
@@ -76,7 +76,7 @@ Remove the canary `vx` from the directory the install message printed (for examp
 
 ```bash
 rm /usr/local/bin/vx
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash
 ```
 
 If you installed with Homebrew before, make sure the `vx` that runs is the one you want: `vx doctor` warns when another `vx` earlier in your PATH shadows the one you just installed.

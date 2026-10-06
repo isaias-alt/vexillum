@@ -23,8 +23,9 @@ const (
 	// productName is the Homebrew formula and the release archive prefix, as
 	// in scripts/install.sh.
 	productName = "vexillum"
-	// InstallCommand reinstalls vx from scratch.
-	InstallCommand = "curl -fsSL https://vx.lucasco.dev/install | bash"
+	// InstallCommand reinstalls vx from scratch. It tracks the canary branch,
+	// not a release tag, so the hint stays valid for every release.
+	InstallCommand = "curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash"
 	// CanaryInstallCommand installs the latest canary build.
 	CanaryInstallCommand = InstallCommand + " -s -- --channel canary"
 	// devVersion is what a build outside the release pipeline reports.
