@@ -114,6 +114,9 @@ func TestDoctor_MissingClaudeCode(t *testing.T) {
 	if !bytes.Contains(out.Bytes(), []byte("[missing] Claude Code")) {
 		t.Errorf("expected Claude Code to be reported missing, got:\n%s", out.String())
 	}
+	if !bytes.Contains(out.Bytes(), []byte("https://claude.com/claude-code")) {
+		t.Errorf("expected an install hint for Claude Code, got:\n%s", out.String())
+	}
 }
 
 // L1-09: herdr missing, rest ok, exit != 0.
@@ -131,6 +134,9 @@ func TestDoctor_MissingHerdr(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte("[missing] herdr")) {
 		t.Errorf("expected herdr to be reported missing, got:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("brew install herdr")) || !bytes.Contains(out.Bytes(), []byte("https://herdr.dev")) {
+		t.Errorf("expected an install hint for herdr, got:\n%s", out.String())
 	}
 }
 
@@ -150,6 +156,9 @@ func TestDoctor_MissingTmuxIsWarningOnly(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte("[missing] tmux")) {
 		t.Errorf("expected tmux to be reported missing, got:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("brew install tmux")) {
+		t.Errorf("expected an install hint for tmux, got:\n%s", out.String())
 	}
 }
 
@@ -350,6 +359,9 @@ func TestDoctor_GitHubCLINotInstalled(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte("[missing] GitHub CLI (gh) - not found in PATH")) {
 		t.Errorf("expected gh reported not found, got:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("brew install gh")) {
+		t.Errorf("expected an install hint for gh, got:\n%s", out.String())
 	}
 }
 
@@ -712,5 +724,25 @@ func TestDoctor_WarnsWhenMoreThanOneSentinelIsAlive(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("expected %q in output, got: %s", want, out.String())
 		}
+	}
+}
+
+// git itself missing from PATH is reported as that, not as the directory
+// being outside a repository.
+func TestDoctor_GitNotInstalled(t *testing.T) {
+	projectDir := initializedProject(t)
+	t.Setenv("PATH", t.TempDir())
+
+	var out bytes.Buffer
+	code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+
+	if code == 0 {
+		t.Fatalf("expected non-zero exit, got 0\noutput:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("[missing] git repository - git is not installed or not on PATH")) {
+		t.Errorf("expected the git-not-installed message, got:\n%s", out.String())
+	}
+	if bytes.Contains(out.Bytes(), []byte("not a git repository")) {
+		t.Errorf("must not claim the directory is not a repository, got:\n%s", out.String())
 	}
 }

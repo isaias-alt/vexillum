@@ -418,6 +418,10 @@ func runInit(e *setupEnv, projectDir, vexillumHome string) int {
 	if err := refuseInsideVexillumHome(projectDir, vexillumHome); err != nil {
 		return e.fail("%v", err)
 	}
+	if !scaffold.GitInstalled() {
+		fmt.Fprintln(e.stderr, cmdname.Name+": "+scaffold.GitMissingMessage)
+		return 1
+	}
 	if !scaffold.IsGitRepo(projectDir) {
 		fmt.Fprintln(e.stderr, cmdname.Name+": current directory is not a git repository")
 		fmt.Fprintln(e.stderr, cmdname.Name+" requires git; run 'git init' first.")

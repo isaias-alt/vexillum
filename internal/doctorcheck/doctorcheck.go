@@ -30,12 +30,24 @@ type Result struct {
 	Required bool
 }
 
+// installHints says how to get the tools doctor checks for, shown on their
+// [missing] line.
+var installHints = map[string]string{
+	"claude": "install it from https://claude.com/claude-code",
+	"herdr":  "install it with 'brew install herdr' or from https://herdr.dev",
+	"tmux":   "install it with your package manager (for example 'brew install tmux')",
+	"gh":     "install it with 'brew install gh' or from https://cli.github.com",
+}
+
 // Binary checks whether binaryName is on PATH.
 func Binary(label, binaryName string, required bool) Result {
 	if _, err := exec.LookPath(binaryName); err != nil {
 		detail := fmt.Sprintf("%s not found in PATH", binaryName)
 		if !required {
 			detail += " (optional control backend)"
+		}
+		if hint, ok := installHints[binaryName]; ok {
+			detail += " - " + hint
 		}
 		return Result{Name: label, OK: false, Detail: detail, Required: required}
 	}
@@ -51,7 +63,7 @@ func Binary(label, binaryName string, required bool) Result {
 func GitHubCLI() Result {
 	const name = "GitHub CLI (gh)"
 	if _, err := exec.LookPath("gh"); err != nil {
-		return Result{Name: name, Detail: "not found in PATH (optional - only needed for '" + cmdname.Name + " ship'/'" + cmdname.Name + " land' on a shipped mission)"}
+		return Result{Name: name, Detail: "not found in PATH (optional - only needed for '" + cmdname.Name + " ship'/'" + cmdname.Name + " land' on a shipped mission) - " + installHints["gh"]}
 	}
 	return Result{Name: name, OK: true}
 }
@@ -178,6 +190,9 @@ func ProjectInitialized(projectDir string) Result {
 func GitRepo(projectDir string) Result {
 	const name = "git repository"
 
+	if !scaffold.GitInstalled() {
+		return Result{Name: name, OK: false, Detail: scaffold.GitMissingMessage, Required: true}
+	}
 	if scaffold.IsGitRepo(projectDir) {
 		return Result{Name: name, OK: true, Required: true}
 	}

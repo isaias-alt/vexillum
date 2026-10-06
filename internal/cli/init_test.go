@@ -993,3 +993,36 @@ func TestEnsureSentinelHook_RefusesMalformedSettings(t *testing.T) {
 		t.Errorf("expected the malformed file to be left untouched, got: %s", data)
 	}
 }
+
+// With git itself missing, init says so instead of claiming the directory is
+// not a repository, and writes nothing.
+func TestInit_GitNotInstalled(t *testing.T) {
+	projectDir, home := newProject(t)
+	t.Setenv("PATH", t.TempDir())
+
+	res := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
+
+	if res.code == 0 {
+		t.Fatalf("expected non-zero exit, got 0\n%s", res.errOut)
+	}
+	if !strings.Contains(res.errOut, "git is not installed or not on PATH") {
+		t.Errorf("expected the git-not-installed message, got:\n%s", res.errOut)
+	}
+	if strings.Contains(res.errOut, "not a git repository") {
+		t.Errorf("must not claim the directory is not a repository, got:\n%s", res.errOut)
+	}
+	notExist(t, filepath.Join(projectDir, ".vexillum"))
+	notExist(t, home)
+}
+
+// Inside a plain directory (git present) the original message stays.
+func TestInit_NotAGitRepository(t *testing.T) {
+	res := doInit(t.TempDir(), filepath.Join(t.TempDir(), ".vexillum"), setupOptions{Yes: true}, "", false)
+
+	if res.code == 0 {
+		t.Fatalf("expected non-zero exit, got 0")
+	}
+	if !strings.Contains(res.errOut, "current directory is not a git repository") {
+		t.Errorf("expected the not-a-repository message, got:\n%s", res.errOut)
+	}
+}

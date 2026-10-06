@@ -112,7 +112,19 @@ func WriteFileIfMissing(dir, name, content string) (created bool, err error) {
 	return true, nil
 }
 
-// IsGitRepo reports whether dir is inside a git working tree.
+// GitMissingMessage is what to tell the user when git itself cannot be run,
+// as opposed to the directory simply not being a repository.
+const GitMissingMessage = "git is not installed or not on PATH (install it from https://git-scm.com)"
+
+// GitInstalled reports whether a git executable is on PATH.
+func GitInstalled() bool {
+	_, err := exec.LookPath("git")
+	return err == nil
+}
+
+// IsGitRepo reports whether dir is inside a git working tree. It is false
+// both for a plain directory and when git is not installed; callers that
+// tell the user why check GitInstalled first.
 func IsGitRepo(dir string) bool {
 	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
 	cmd.Dir = dir
