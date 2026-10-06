@@ -70,6 +70,10 @@ Abrí un pane de herdr, hacé `cd` al proyecto e iniciá Claude Code. `vx dispat
 
 ## 4. Pedir trabajo
 
+<Callout type="warn" title="Los soldiers tienen acceso total al host">
+  Un soldier corre Claude Code con `--dangerously-skip-permissions`, con tu usuario del sistema, sin contenedor ni sandbox. Aterrizar una mission es la puerta de aprobación: nada llega al historial real de tu proyecto hasta que lo aprobás. Nunca despaches contra un repositorio o una máquina donde leer credenciales sería un problema.
+</Callout>
+
 ```text
 > dispatch a soldier to fix the flaky login test
 ```

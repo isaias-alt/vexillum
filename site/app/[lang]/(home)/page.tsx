@@ -82,7 +82,21 @@ export default async function Home({
           <p className="mx-auto mb-8 max-w-[480px] text-sm leading-[1.7] text-text-secondary">
             {t.hero.sub}
           </p>
-          <InstallCommand className="mb-5" />
+          <div className="mx-auto mb-5 max-w-[640px] text-left text-[13px] leading-[1.7] text-text-secondary">
+            <div className="mb-1.5 text-[11px] tracking-[0.08em] text-text-muted uppercase">
+              {t.hero.requirementsTitle}
+            </div>
+            <ul className="mb-2 list-disc pl-5">
+              {t.hero.requirements.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+            <p>{t.hero.requirementsNote}</p>
+          </div>
+          <InstallCommand className="mb-3" />
+          <p className="mx-auto mb-5 max-w-[640px] text-left text-[13px] leading-[1.7] text-text-muted">
+            {t.hero.safety}
+          </p>
           <Link
             href={`${prefix}/docs`}
             className="btn btn-primary"

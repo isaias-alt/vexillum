@@ -70,6 +70,10 @@ Open a herdr pane, `cd` into the project and start Claude Code. `vx dispatch` ne
 
 ## 4. Ask for work
 
+<Callout type="warn" title="Soldiers have full host access">
+  A soldier runs Claude Code with `--dangerously-skip-permissions`, as your OS user, with no container or sandbox. Landing a mission is the approval gate: nothing reaches your project's real history until you approve it. Never dispatch against a repository or machine where reading credentials would be a problem.
+</Callout>
+
 ```text
 > dispatch a soldier to fix the flaky login test
 ```

@@ -19,6 +19,10 @@ export interface Dictionary {
     title: string;
     sub: string;
     cta: string;
+    requirementsTitle: string;
+    requirements: string[];
+    requirementsNote: string;
+    safety: string;
   };
   minute: {
     eyebrow: string;
@@ -68,6 +72,18 @@ const en: Dictionary = {
     title: "One commander. Many soldiers.",
     sub: "vexillum orchestrates coding agents from your terminal. A commander dispatches soldiers into isolated camps, a sentinel watches for what needs your attention.",
     cta: "read the docs",
+    requirementsTitle: "Requirements",
+    requirements: [
+      "macOS or Linux, amd64 or arm64 (Windows is not supported)",
+      "Claude Code, installed and logged in (subscription or API key)",
+      "herdr (brew install herdr works)",
+      "a git repository for your project",
+      "optional: gh (for vx ship) and tmux",
+    ],
+    requirementsNote:
+      "vx doctor checks all of it. vx dispatch only works inside a herdr pane.",
+    safety:
+      "Soldiers run unsandboxed, as you. Landing a mission is the approval gate: nothing reaches your project's history until you approve it.",
   },
   minute: {
     eyebrow: "a minute with vexillum",
@@ -199,6 +215,18 @@ const es: Dictionary = {
     title: "Un commander. Muchos soldiers.",
     sub: "vexillum orquesta agentes de código desde tu terminal. Un commander despacha soldiers a camps aislados y un sentinel vigila lo que necesita tu atención.",
     cta: "leer la documentación",
+    requirementsTitle: "Requisitos",
+    requirements: [
+      "macOS o Linux, amd64 o arm64 (Windows no está soportado)",
+      "Claude Code, instalado y con sesión iniciada (suscripción o API key)",
+      "herdr (brew install herdr funciona)",
+      "un repositorio git para tu proyecto",
+      "opcional: gh (para vx ship) y tmux",
+    ],
+    requirementsNote:
+      "vx doctor verifica todo esto. vx dispatch solo funciona dentro de un pane de herdr.",
+    safety:
+      "Los soldiers corren sin sandbox, como vos. Aterrizar una mission es la puerta de aprobación: nada llega al historial de tu proyecto hasta que lo aprobás.",
   },
   minute: {
     eyebrow: "un minuto con vexillum",

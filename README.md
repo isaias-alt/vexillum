@@ -10,6 +10,21 @@ See `AGENTS.md` for how vexillum itself is built.
 
 ## Install
 
+Requirements:
+
+- macOS or Linux, amd64 or arm64 (Windows is not supported)
+- Claude Code, installed and logged in (subscription or API key)
+- [herdr](https://herdr.dev) (`brew install herdr` works)
+- a git repository for your project
+- optional: `gh` (for `vx ship`) and `tmux`
+
+`vx doctor` checks all of it. `vx dispatch` only works inside a herdr pane.
+
+> **Warning:** soldiers run Claude Code with `--dangerously-skip-permissions`, as
+> your OS user, with no container or sandbox. Landing a mission is the approval
+> gate: nothing reaches your project's real history until you approve it. Never
+> dispatch against a repository or machine where reading credentials would be a problem.
+
 macOS / Linux, via Homebrew:
 
 ```sh

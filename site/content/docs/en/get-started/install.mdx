@@ -5,6 +5,20 @@ description: Install the vexillum binary with Homebrew or the curl script, pick 
 
 vexillum supports macOS and Linux, on amd64 and arm64.
 
+## Requirements
+
+- macOS or Linux, amd64 or arm64 (Windows is not supported)
+- [Claude Code](https://claude.com/claude-code), installed and logged in (subscription or API key)
+- [herdr](https://herdr.dev) (`brew install herdr` works)
+- a git repository for your project
+- optional: `gh` (for `vx ship`) and `tmux`
+
+`vx doctor` checks all of it. `vx dispatch` only works inside a herdr pane.
+
+<Callout type="warn" title="Soldiers have full host access">
+  A soldier runs Claude Code with `--dangerously-skip-permissions`, as your OS user, with no container or sandbox. Landing a mission is the approval gate: nothing reaches your project's real history until you approve it. Never dispatch against a repository or machine where reading credentials would be a problem.
+</Callout>
+
 ## Install the binary
 
 <CodeBlockTabs defaultValue="brew">
@@ -71,3 +85,13 @@ vx doctor
 ```
 
 It exits non-zero when a required check fails. A `Stop` hook that cannot find vx is a `[warn]` with the fix, never a failure.
+
+## Troubleshooting: macOS quarantine
+
+A tarball downloaded in a browser and extracted by double-click gets a quarantine attribute, and the first run may be blocked ("cannot verify the developer"). Clear it with:
+
+```bash
+xattr -d com.apple.quarantine "$(command -v vx)"
+```
+
+Homebrew and the curl installer do not hit this.
