@@ -88,7 +88,7 @@ const state = {
   version: 0,
   seq: 0,
   pendingSaves: new Set(),
-  saveTimer: null,
+  saveTimeoutId: null,
   submitting: false,
   restoreFocus: false,
 };
@@ -209,7 +209,7 @@ function renderBoard() {
 function fail(headline, error) {
   state.broken = true;
   state.ready = false;
-  clearTimeout(state.saveTimer);
+  clearTimeout(state.saveTimeoutId);
   boardHost.hidden = true;
   showFailure(overlayHost, headline, error, state.text);
   status.clear();
@@ -218,12 +218,12 @@ function fail(headline, error) {
 
 // ------------------------------------------------------------ saving
 
-function liveElements() {
+function sceneLiveElements() {
   return state.api.getSceneElementsIncludingDeleted().filter(isLive);
 }
 
 function currentRecord() {
-  const elements = liveElements();
+  const elements = sceneLiveElements();
   return buildRecord({
     scene: { elements, appState: pickAppState(state.api.getAppState()), files: referencedFiles(elements, state.api.getFiles()) },
     referenceElements: state.pristine,
@@ -235,8 +235,8 @@ function currentRecord() {
 const unsaved = () => state.dirty || state.failedSave || state.pendingSaves.size > 0;
 
 function persistSoon() {
-  clearTimeout(state.saveTimer);
-  state.saveTimer = setTimeout(flushSave, SAVE_DELAY_MS);
+  clearTimeout(state.saveTimeoutId);
+  state.saveTimeoutId = setTimeout(flushSave, SAVE_DELAY_MS);
 }
 
 function markDirty() {
@@ -245,7 +245,7 @@ function markDirty() {
 }
 
 function flushSave() {
-  clearTimeout(state.saveTimer);
+  clearTimeout(state.saveTimeoutId);
   if (!state.ready || state.frozen || state.broken) return;
   state.seq += 1;
   state.pendingSaves.add(state.seq);
@@ -424,7 +424,7 @@ async function sendRemark() {
   refreshControls();
   status.say("Sending feedback...", { tone: "info", sticky: true });
   try {
-    const elements = liveElements();
+    const elements = sceneLiveElements();
     const appState = state.api.getAppState();
     const files = referencedFiles(elements, state.api.getFiles());
     let png = "";
@@ -500,7 +500,7 @@ async function onLinkOpen(element, event) {
 function lockBoard(on) {
   if (state.frozen === on) return;
   state.frozen = on;
-  if (on) clearTimeout(state.saveTimer);
+  if (on) clearTimeout(state.saveTimeoutId);
   refreshControls();
   renderBoard();
   if (!on && state.dirty) persistSoon();

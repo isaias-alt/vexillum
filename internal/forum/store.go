@@ -65,7 +65,7 @@ func (s *Store) dir(key string) string {
 	return filepath.Join(sessionDir(s.home, key), "whiteboards")
 }
 
-func (s *Store) workingFile(key string, index int) string {
+func (s *Store) liveSceneFile(key string, index int) string {
 	return filepath.Join(s.dir(key), fmt.Sprintf("%d.json", index))
 }
 
@@ -114,7 +114,7 @@ func (s *Store) SaveScene(key string, index int, digest string, measureGen int, 
 	if err != nil {
 		return fmt.Errorf("encoding whiteboard scene %s/%d: %w", key, index, err)
 	}
-	if err := atomicfile.Write(s.workingFile(key, index), append(data, '\n')); err != nil {
+	if err := atomicfile.Write(s.liveSceneFile(key, index), append(data, '\n')); err != nil {
 		return fmt.Errorf("saving whiteboard scene %s/%d: %w", key, index, err)
 	}
 	return nil
@@ -128,7 +128,7 @@ func (s *Store) LoadScene(key string, index int) (*SavedScene, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data, err := os.ReadFile(s.workingFile(key, index))
+	data, err := os.ReadFile(s.liveSceneFile(key, index))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

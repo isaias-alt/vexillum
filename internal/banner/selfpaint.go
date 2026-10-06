@@ -76,7 +76,7 @@ func elementSignal(n *html.Node) string {
 			}
 		}
 	case "script":
-		if hasAttr(n, "src") {
+		if attrPresent(n, "src") {
 			return reasonScript
 		}
 	case "meta":
@@ -146,12 +146,12 @@ func isBackgroundUtility(token string) bool {
 }
 
 func relOf(n *html.Node) string {
-	v, _ := getAttr(n, "rel")
+	v, _ := attrValue(n, "rel")
 	return v
 }
 
 func nameOf(n *html.Node) string {
-	v, _ := getAttr(n, "name")
+	v, _ := attrValue(n, "name")
 	return v
 }
 

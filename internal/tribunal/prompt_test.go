@@ -13,7 +13,7 @@ import (
 // the matching sentence in review.go or fix.go.
 const (
 	phraseReReview    = "This is a re-review"
-	phraseAdditions   = "nothing in the request calls for"
+	phraseAdditions   = "no part of the request asked for"
 	phraseNeverCommit = "Never commit"
 )
 

@@ -28,7 +28,7 @@ const posts = (env, suffix) => env.calls.filter((c) => c.url.endsWith(suffix));
   await fromFrame(env, pass({ findings: [{ kind: "clipped-text", selector: "p", axis: "horizontal", overflow_px: 12 }] }));
   assert.strictEqual(posts(env, "/layout/diagnostics").length, 0, "nothing is sent before the chrome knows which artifact version it shows");
 
-  env.push(snapshot({ layout_warnings: [warning("a1"), warning("b2", { title: "Control cut off by its container", selector: "button#go" })] }));
+  env.push(snapshot({ layout_warnings: [warning("a1"), warning("b2", { title: "Control hidden by its container", selector: "button#go" })] }));
   await env.tick();
   const sent = posts(env, "/layout/diagnostics");
   assert.strictEqual(sent.length, 1, "the held pass is sent once the version is known");

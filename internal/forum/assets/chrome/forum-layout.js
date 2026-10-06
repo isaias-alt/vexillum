@@ -387,8 +387,8 @@
     // not its containing block, so the walk follows containing blocks.
     function containers(el, includeSelf) {
       const clips = [];
-      let scrollsX = false;
-      let scrollsY = false;
+      let scrollableX = false;
+      let scrollableY = false;
       let collapsed = false;
       let cur = el;
       let first = true;
@@ -412,8 +412,8 @@
           const cs = style(a);
           const clipX = cs.overflowX === "hidden" || cs.overflowX === "clip";
           const clipY = cs.overflowY === "hidden" || cs.overflowY === "clip";
-          if (cs.overflowX === "auto" || cs.overflowX === "scroll") scrollsX = true;
-          if (cs.overflowY === "auto" || cs.overflowY === "scroll") scrollsY = true;
+          if (cs.overflowX === "auto" || cs.overflowX === "scroll") scrollableX = true;
+          if (cs.overflowY === "auto" || cs.overflowY === "scroll") scrollableY = true;
           if (!clipX && !clipY) continue;
           const rect = a.getBoundingClientRect();
           const l = rect.left + a.clientLeft;
@@ -428,7 +428,7 @@
         first = false;
         cur = block;
       }
-      return { clips, scrollsX, scrollsY, collapsed };
+      return { clips, scrollableX, scrollableY, collapsed };
     }
 
     const items = [];
@@ -477,7 +477,7 @@
       const item = {
         role: "text", ref: owner, rect, lineH,
         slack: Math.max(0, parseFloat(cs.letterSpacing) || 0),
-        clips: where.clips, scrollX: where.scrollsX, scrollY: where.scrollsY,
+        clips: where.clips, scrollX: where.scrollableX, scrollY: where.scrollableY,
         pinned: info.pinned, cover: null,
       };
       const inView = rect.r > 0 && rect.l < win.innerWidth && rect.b > 0 && rect.t < win.innerHeight;
@@ -502,7 +502,7 @@
       if (where.collapsed) continue;
       items.push({
         role: "control", ref: el, rect: { l: r.left, t: r.top, r: r.right, b: r.bottom }, lineH: r.height, slack: 0,
-        clips: where.clips, scrollX: where.scrollsX, scrollY: where.scrollsY, pinned: info.pinned, cover: null,
+        clips: where.clips, scrollX: where.scrollableX, scrollY: where.scrollableY, pinned: info.pinned, cover: null,
       });
     }
     return { page, items };

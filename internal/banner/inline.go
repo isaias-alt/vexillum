@@ -83,9 +83,9 @@ const (
 // maxImportDepth bounds nested CSS @import chains.
 const maxImportDepth = 8
 
-// redactedFileRef replaces a file: reference so a local path never reaches
+// localRefPlaceholder replaces a file: reference so a local path never reaches
 // a public page.
-const redactedFileRef = "about:blank"
+const localRefPlaceholder = "about:blank"
 
 // bytesFromEnv returns the positive integer in env var name, or def when
 // it's unset or not a positive integer.
@@ -125,7 +125,7 @@ func (in *inliner) visitElement(n *html.Node) {
 	case atom.Img, atom.Script, atom.Source, atom.Track, atom.Audio, atom.Video, atom.Embed:
 		in.inlineAttrAsData(n, "src", in.root)
 		if n.DataAtom == atom.Img || (n.DataAtom == atom.Source && n.Parent != nil && n.Parent.DataAtom == atom.Picture) {
-			in.inlineSrcset(n)
+			in.embedSrcsetImages(n)
 		}
 	case atom.Link:
 		if linkIsInlinable(n) {
@@ -133,14 +133,14 @@ func (in *inliner) visitElement(n *html.Node) {
 		}
 	case atom.Style:
 		if n.FirstChild != nil && n.FirstChild.Type == html.TextNode {
-			n.FirstChild.Data = in.inlineCSS(n.FirstChild.Data, in.root, 0)
+			n.FirstChild.Data = in.embedStylesheetRefs(n.FirstChild.Data, in.root, 0)
 		}
 	}
-	if hasAttr(n, "poster") {
+	if attrPresent(n, "poster") {
 		in.inlineAttrAsData(n, "poster", in.root)
 	}
-	if style, ok := getAttr(n, "style"); ok && style != "" {
-		setAttr(n, "style", in.inlineCSS(style, in.root, 0))
+	if style, ok := attrValue(n, "style"); ok && style != "" {
+		setAttr(n, "style", in.embedStylesheetRefs(style, in.root, 0))
 	}
 }
 
@@ -149,7 +149,7 @@ func (in *inliner) visitElement(n *html.Node) {
 // alternate, manifest, preconnect, dns-prefetch, ...) aren't local
 // assets in the sense this command cares about, so they're left as-is.
 func linkIsInlinable(n *html.Node) bool {
-	rel, _ := getAttr(n, "rel")
+	rel, _ := attrValue(n, "rel")
 	for _, token := range strings.Fields(strings.ToLower(rel)) {
 		if token == "stylesheet" || token == "icon" {
 			return true
@@ -159,7 +159,7 @@ func linkIsInlinable(n *html.Node) bool {
 }
 
 func (in *inliner) inlineStylesheetOrIconLink(n *html.Node) {
-	href, ok := getAttr(n, "href")
+	href, ok := attrValue(n, "href")
 	if !ok {
 		return
 	}
@@ -178,7 +178,7 @@ func (in *inliner) inlineStylesheetOrIconLink(n *html.Node) {
 			return
 		}
 		css := in.withImportGuard(full, func() string {
-			return in.inlineCSS(string(data), filepath.Dir(full), 1)
+			return in.embedStylesheetRefs(string(data), filepath.Dir(full), 1)
 		})
 		encoded := base64.StdEncoding.EncodeToString([]byte(css))
 		setAttr(n, "href", "data:text/css;base64,"+encoded)
@@ -196,7 +196,7 @@ func isCSSPath(ref string) bool {
 }
 
 func (in *inliner) inlineAttrAsData(n *html.Node, key, dir string) {
-	ref, ok := getAttr(n, key)
+	ref, ok := attrValue(n, key)
 	if !ok {
 		return
 	}
@@ -218,18 +218,18 @@ func (in *inliner) inlineAttrAsData(n *html.Node, key, dir string) {
 // redact replaces a file: reference with about:blank and says so.
 func (in *inliner) redact(n *html.Node, key, ref string) {
 	in.warnRedacted(ref)
-	setAttr(n, key, redactedFileRef)
+	setAttr(n, key, localRefPlaceholder)
 }
 
 func (in *inliner) warnRedacted(ref string) {
-	in.warnf("redacted %q: a file: reference would leak a local filesystem path to a public page, replaced with %s", ref, redactedFileRef)
+	in.warnf("redacted %q: a file: reference would leak a local filesystem path to a public page, replaced with %s", ref, localRefPlaceholder)
 }
 
-// inlineSrcset rewrites each candidate URL in n's srcset to its own data:
+// embedSrcsetImages rewrites each candidate URL in n's srcset to its own data:
 // URI (or about:blank for a file: ref), leaving descriptors (1x, 480w)
 // and remote candidates untouched.
-func (in *inliner) inlineSrcset(n *html.Node) {
-	value, ok := getAttr(n, "srcset")
+func (in *inliner) embedSrcsetImages(n *html.Node) {
+	value, ok := attrValue(n, "srcset")
 	if !ok || value == "" {
 		return
 	}
@@ -241,7 +241,7 @@ func (in *inliner) inlineSrcset(n *html.Node) {
 		switch {
 		case isFileRef(ref):
 			in.warnRedacted(ref)
-			out.WriteString(redactedFileRef)
+			out.WriteString(localRefPlaceholder)
 		case isRemoteRef(ref):
 			out.WriteString(ref)
 		default:
@@ -344,10 +344,10 @@ func (in *inliner) importing(full string) bool {
 	return false
 }
 
-// inlineCSS inlines @import rules (replacing each with the imported
+// embedStylesheetRefs inlines @import rules (replacing each with the imported
 // stylesheet's own inlined content) and then url(...) references in css,
 // resolving relative refs against dir. depth counts nested @import levels.
-func (in *inliner) inlineCSS(css, dir string, depth int) string {
+func (in *inliner) embedStylesheetRefs(css, dir string, depth int) string {
 	// Imports that stay as-is (remote, failed, unsupported conditions) are
 	// parked behind a placeholder so the url() pass below can't turn their
 	// url(...) into a data: URI.
@@ -362,7 +362,7 @@ func (in *inliner) inlineCSS(css, dir string, depth int) string {
 		cond := strings.TrimSpace(sub[6])
 		if isFileRef(ref) {
 			in.warnRedacted(ref)
-			return park("@import url(" + redactedFileRef + ")" + condSuffix(cond) + ";")
+			return park("@import url(" + localRefPlaceholder + ")" + condSuffix(cond) + ";")
 		}
 		if isRemoteRef(ref) {
 			return park(match)
@@ -385,7 +385,7 @@ func (in *inliner) inlineCSS(css, dir string, depth int) string {
 			return park(match)
 		}
 		inner := in.withImportGuard(full, func() string {
-			return in.inlineCSS(string(data), filepath.Dir(full), depth+1)
+			return in.embedStylesheetRefs(string(data), filepath.Dir(full), depth+1)
 		})
 		if cond != "" {
 			return "@media " + cond + "{" + inner + "}"
@@ -398,7 +398,7 @@ func (in *inliner) inlineCSS(css, dir string, depth int) string {
 		ref := strings.TrimSpace(firstNonEmpty(sub[1], sub[2], sub[3]))
 		if isFileRef(ref) {
 			in.warnRedacted(ref)
-			return "url(" + redactedFileRef + ")"
+			return "url(" + localRefPlaceholder + ")"
 		}
 		if isRemoteRef(ref) {
 			return match
@@ -534,7 +534,7 @@ func isRemoteRef(ref string) bool {
 	return u.IsAbs()
 }
 
-func getAttr(n *html.Node, key string) (string, bool) {
+func attrValue(n *html.Node, key string) (string, bool) {
 	for _, a := range n.Attr {
 		if a.Key == key {
 			return a.Val, true
@@ -543,8 +543,8 @@ func getAttr(n *html.Node, key string) (string, bool) {
 	return "", false
 }
 
-func hasAttr(n *html.Node, key string) bool {
-	_, ok := getAttr(n, key)
+func attrPresent(n *html.Node, key string) bool {
+	_, ok := attrValue(n, key)
 	return ok
 }
 

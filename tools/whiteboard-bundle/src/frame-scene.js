@@ -49,12 +49,10 @@ export function referencedFiles(elements, files) {
 export async function convertDiagram(text) {
   const parsed = await parseMermaidToExcalidraw(text, { themeVariables: { fontSize: `${DIAGRAM_FONT_PX}px` } });
   const skeletons = uniquifyIds(breakTagsToNewlines(parsed.elements));
-  let elements = convertToExcalidrawElements(skeletons, { regenerateIds: false });
-  if (findRepeatedIds(elements).length > 0) {
-    // The ids were made unique above; if the conversion still repeats any,
-    // let Excalidraw issue fresh ones (it keeps bindings consistent).
-    elements = convertToExcalidrawElements(skeletons, { regenerateIds: true });
-  }
+  // Ids are normally unique by now. Only when some id still repeats is
+  // Excalidraw asked to issue fresh ones (it keeps bindings consistent).
+  const regenerateIds = findRepeatedIds(skeletons).length > 0;
+  const elements = convertToExcalidrawElements(skeletons, { regenerateIds });
   return { elements, files: parsed.files || {} };
 }
 
@@ -77,7 +75,7 @@ let canvas = null;
 
 // Measure text exactly as the editor lays it out: only explicit line breaks,
 // real font, the element's own line height.
-export function measureText({ text, fontSize, fontFamily, lineHeight }) {
+export function measureLabel({ text, fontSize, fontFamily, lineHeight }) {
   canvas = canvas || document.createElement("canvas");
   const context = canvas.getContext("2d");
   context.font = fontShorthand(fontSize, fontFamily);
@@ -103,7 +101,7 @@ export async function loadFontsFor(elements) {
 
 // Size the nodes of a scene to their labels with the fonts as they are now.
 export function fitScene(elements) {
-  return fitNodesToLabels(elements, measureText);
+  return fitNodesToLabels(elements, measureLabel);
 }
 
 // Export

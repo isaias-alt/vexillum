@@ -461,7 +461,7 @@ func TestLayoutPrompt_ShorteningAndTooLarge(t *testing.T) {
 	if len(target) > maxTargetBytes || len(body) > maxPromptChars {
 		t.Fatalf("shortened batch still too large: %d / %d", len(target), len(body))
 	}
-	if !strings.HasPrefix(body, "Fix these "+itoa(len(used))+" layout issues") || label != "Layout issues: "+itoa(len(used))+" selected" {
+	if !strings.HasPrefix(body, "The browser flagged "+itoa(len(used))+" layout problems") || label != "Layout issues: "+itoa(len(used))+" selected" {
 		t.Fatalf("header and label must count the issues actually used: %q / %q", strings.SplitN(body, "\n", 2)[0], label)
 	}
 	// Not even one fits.

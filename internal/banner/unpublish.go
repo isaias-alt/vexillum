@@ -11,11 +11,11 @@ const UnpublishPlaceholderHTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Unpublished</title>
+<title>Page withdrawn</title>
 <meta name="robots" content="noindex">
 </head>
 <body>
-<p>This page has been unpublished.</p>
+<p>The owner took this page down and it is no longer available.</p>
 </body>
 </html>
 `

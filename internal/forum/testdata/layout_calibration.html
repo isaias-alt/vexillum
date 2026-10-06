@@ -133,7 +133,7 @@ for (const [n, shift] of [["sub-0.4", 0.4], ["sub-1", 1], ["hang-4", 4], ["fail-
   const it = s.items.find((i) => i.ref === host.firstChild);
   const w = it.rect.r - it.rect.l;
   const outside = Math.max(0, s.page.reach.l - it.rect.l);
-  report.push({ name: "reach-" + n, outsidePx: +outside.toFixed(3), share: +(outside / w).toFixed(3) });
+  report.push({ name: "reach-" + n, pxBeyondEdge: +outside.toFixed(3), share: +(outside / w).toFixed(3) });
   host.remove();
 }
 // Buried text: an opaque box covering a share of a paragraph (top of the page, in view).

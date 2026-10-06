@@ -42,9 +42,9 @@ at the picture, and only needs the text for the reasons behind it.
 - Colors come from forum's classes (`fr-node`, `fr-edge`, `fr-arrow`,
   `fr-label`, and their variants) or from `currentColor` and `--fr-*` custom
   properties, never raw hex. That keeps the figure correct in dark and light.
-- Give every meaningful node, edge and region a stable `id` and a `<title>`;
-  that is what lets the user comment on exactly one part and lets screen
-  readers navigate the figure. Add `role="img"` and an `aria-labelledby` title
+- Every node, edge and region worth discussing needs its own permanent `id`
+  and a `<title>`; that is what lets the user comment on exactly one part and
+  lets screen readers navigate the figure. Add `role="img"` and an `aria-labelledby` title
   to the `<svg>`.
 - Labels stay to a few words. SVG text does not wrap, so brevity is also your
   protection against overflow. Longer explanations go in HTML beside or under
@@ -90,9 +90,10 @@ at the picture, and only needs the text for the reasons behind it.
 - When part of the picture is uncertain, label it as a question and attach a
   small decision form (input playbook) so the user resolves it in place.
 - A whiteboard's edits arrive as a `tag: whiteboard` prompt with a bounded edit
-  summary plus the paths of a scene file and a PNG preview. Read the summary,
-  open the files only if you need more, then change the **Mermaid source** in
-  the artifact; never try to write the scene back.
+  summary plus the paths of a scene file and a PNG preview. The summary
+  usually says enough; open the scene or PNG only for a detail it lacks. Apply
+  the change to the **Mermaid source** in the artifact, since the scene file is
+  never read back.
 - Keep stable ids on nodes: the user's annotation records the element's
   selector, so a figure that keeps its ids keeps its comments attached.
 

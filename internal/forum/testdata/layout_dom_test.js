@@ -100,11 +100,11 @@ const cutRight = (px, over = {}) => text({ rect: rect(10, 10, 610, 30), clips: [
   assert.deepStrictEqual(judge([at(1200, 1400)], page({ reach: { l: 0, t: 0, r: 1500, b: 5000 } })), [], "scrollable reach covers it");
   assert.deepStrictEqual(kinds(judge([text({ rect: rect(10, -400, 210, -380) })])), ["unreachable-text:vertical:-1"]);
   // boundaries: pixels and share
-  const outsidePx = (px, w = 200) => at(-px, w - px);
-  assert.deepStrictEqual(judge([outsidePx(T.beyondReachPx * 0.99, 10)]), [], "under the pixel floor");
-  assert.deepStrictEqual(judge([outsidePx(T.beyondReachPx * 4, 8 * 4 / T.beyondReachShare + 100)]), [], "under the share floor");
-  assert.strictEqual(judge([outsidePx(T.beyondReachShare * 200 * 1.01)]).length, 1, "just over the share");
-  assert.deepStrictEqual(judge([outsidePx(T.beyondReachShare * 200 * 0.99)]), [], "just under the share");
+  const pxBeyondEdge = (px, w = 200) => at(-px, w - px);
+  assert.deepStrictEqual(judge([pxBeyondEdge(T.beyondReachPx * 0.99, 10)]), [], "under the pixel floor");
+  assert.deepStrictEqual(judge([pxBeyondEdge(T.beyondReachPx * 4, 8 * 4 / T.beyondReachShare + 100)]), [], "under the share floor");
+  assert.strictEqual(judge([pxBeyondEdge(T.beyondReachShare * 200 * 1.01)]).length, 1, "just over the share");
+  assert.deepStrictEqual(judge([pxBeyondEdge(T.beyondReachShare * 200 * 0.99)]), [], "just under the share");
   // parked far away on purpose, either side
   assert.deepStrictEqual(judge([at(-9999 - 200, -9999)]), []);
   assert.deepStrictEqual(judge([at(T.farAwayPx * 2 + 1100, T.farAwayPx * 2 + 1300)], fixed), []);

@@ -385,7 +385,7 @@ the top bar (with a count) and **nowhere else**:
   - uid: pr_...
     tag: layout-warnings
     prompt: |
-      Fix these 2 layout issues the browser detected in this artifact:
+      The browser flagged 2 layout problems in this artifact. Repair them:
       1. [uwuiagklgk6avlfr] Text cut off by its container - Rendered text crosses its container's right edge by 550px and is hidden. Selector: "div#bad-clip". Viewport: Desktop (1106px). Status: Open.
       2. ...
       Repair all of the issues above together, in one editing pass. Queueing this request does not claim a repair: ...
@@ -522,14 +522,21 @@ in place and it stays queued. Full patterns (single choice, tracked batch, free 
 `playbooks/input.md`.
 
 ```html
-<form data-forum-question="plan" onsubmit="event.preventDefault();
-  const choice = new FormData(event.currentTarget).get('plan');
-  if (choice) window.forum.queuePrompt('Use the ' + choice + ' plan',
-    { tag: 'choice', text: 'Plan: ' + choice, element: event.currentTarget,
-      data: { question: 'plan', answer: choice } });">
-  <label><input type="radio" name="plan" value="Starter"> Starter</label>
-  <label><input type="radio" name="plan" value="Pro"> Pro</label>
-  <button type="submit">Queue this answer</button>
+<form data-forum-question="region" onsubmit="event.preventDefault();
+  const picked = event.currentTarget.elements.region.value;
+  if (!picked) return;
+  window.forum.queuePrompt(`Deploy to ${picked}`, {
+    tag: 'decision',
+    text: `Region: ${picked}`,
+    element: event.currentTarget,
+    data: { question: 'region', answer: picked },
+  });">
+  <fieldset>
+    <legend>Where should this deploy first?</legend>
+    <label><input type="radio" name="region" value="eu-west"> eu-west</label>
+    <label><input type="radio" name="region" value="us-east"> us-east</label>
+  </fieldset>
+  <button type="submit">Queue my pick</button>
 </form>
 ```
 
@@ -566,9 +573,9 @@ locally. **Queue feedback** writes a `.excalidraw` scene and a PNG preview to
 
 The `Reviewer remark:` line carries the optional note the reviewer typed next to
 Queue feedback, and is present only when they typed one. Read the summary and
-the remark first, open the files only if you need more, then apply the edits by
-**updating the Mermaid source in the artifact** - never try to write the scene
-back.
+the remark first; the scene and preview files are for when those leave a
+question open. The change itself always goes into the **Mermaid source in the
+artifact**, because the scene file is output only and is never read back.
 
 ## Playbooks
 

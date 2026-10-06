@@ -134,7 +134,7 @@ var issueRules = []issueRule{
 		},
 	},
 	{
-		id: "cut-off-control", title: "Control cut off by its container",
+		id: "cut-off-control", title: "Control hidden by its container",
 		explain: func(axis string, px, _ float64) string {
 			return fmt.Sprintf("A control crosses its container's %s edge by %dpx, so part of it cannot be pressed or read.", sideName(axis, px), whole(px))
 		},
@@ -738,9 +738,9 @@ func composeLayoutPrompt(issues []layoutIssue) (used []layoutIssue, body, label 
 func layoutPromptBody(issues []layoutIssue) string {
 	var b strings.Builder
 	if len(issues) == 1 {
-		b.WriteString("Fix this layout issue the browser detected in this artifact:\n")
+		b.WriteString("The browser flagged one layout problem in this artifact. Repair it:\n")
 	} else {
-		fmt.Fprintf(&b, "Fix these %d layout issues the browser detected in this artifact:\n", len(issues))
+		fmt.Fprintf(&b, "The browser flagged %d layout problems in this artifact. Repair them:\n", len(issues))
 	}
 	for i, is := range issues {
 		rule, _ := ruleFor(is.Kind)

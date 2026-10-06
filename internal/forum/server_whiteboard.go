@@ -157,7 +157,7 @@ type submitBoardRequest struct {
 
 const pngDataURLPrefix = "data:image/png;base64,"
 
-func decodePNGDataURL(dataURL string) ([]byte, error) {
+func pngFromDataURL(dataURL string) ([]byte, error) {
 	if dataURL == "" {
 		return nil, nil
 	}
@@ -183,7 +183,7 @@ func (s *Server) handleSubmitBoard(w http.ResponseWriter, r *http.Request, key s
 	if !decodeBodyLimit(w, r, &req, maxSceneBytes) {
 		return
 	}
-	png, err := decodePNGDataURL(req.PNG)
+	png, err := pngFromDataURL(req.PNG)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
@@ -274,6 +274,6 @@ func whiteboardPrompt(index, total int, summary []string, remark string, paths F
 	if paths.PreviewPath != "" {
 		fmt.Fprintf(&b, "Preview (PNG): %s\n", paths.PreviewPath)
 	}
-	b.WriteString("Read the summary first and open the files only if you need more detail, then apply the edits by updating the Mermaid source in the artifact (never try to write the scene back).")
+	b.WriteString("The summary above is usually enough; open the scene or preview files only when it leaves a question open. Make the requested change in the Mermaid source inside the artifact page itself, because the scene file is read-only output and nothing reads it back.")
 	return b.String()
 }

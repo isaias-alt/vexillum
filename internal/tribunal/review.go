@@ -246,9 +246,9 @@ func buildReviewPrompt(in reviewInput) string {
 
 	if intent != "" {
 		b.WriteString("Compare what the change adds with the request in the mission block, including any later instructions in it. " +
-			"For each added component (a layer, cache, option, abstraction, endpoint, dependency) that nothing in the request calls for, " +
-			"report one finding, once, with severity warning and action ask-user. Name the component in description, " +
-			"and use failure_scenario to say which requirement it goes beyond. " +
+			"Whenever the change introduces a component (a layer, cache, option, abstraction, endpoint, dependency) that no part of the request asked for, " +
+			"raise exactly one finding for it: severity warning, action ask-user, the component named in description, " +
+			"and the requirement it overreaches stated in failure_scenario. " +
 			"Work the request plainly implies, such as tests for the new behavior, is not an addition.\n\n")
 	}
 

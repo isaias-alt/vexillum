@@ -95,7 +95,7 @@ func TestLayoutAPI_QueuedPromptCarriesEveryPinnedElement(t *testing.T) {
 		t.Errorf("label = %q", p.Text)
 	}
 	lines := strings.Split(p.Prompt, "\n")
-	if lines[0] != "Fix these 2 layout issues the browser detected in this artifact:" {
+	if lines[0] != "The browser flagged 2 layout problems in this artifact. Repair them:" {
 		t.Errorf("first line = %q", lines[0])
 	}
 	matches := numberedLine.FindAllStringSubmatch(p.Prompt, -1)
@@ -171,7 +171,7 @@ func TestLayoutAPI_SingularPromptMatchesTheDocumentedExample(t *testing.T) {
 	env.audit(key, "v1", 1106, true, clippedAt("div#bad-clip", 549.9))
 	env.browser("POST", "/api/s/"+key+"/layout/queue", key, map[string]any{"ids": []string{env.issues(key)[0].ID}})
 	p := env.snapshot(key).Queued[0]
-	if p.Text != "Layout issue: 1 selected" || !strings.HasPrefix(p.Prompt, "Fix this layout issue the browser detected in this artifact:\n1. [") {
+	if p.Text != "Layout issue: 1 selected" || !strings.HasPrefix(p.Prompt, "The browser flagged one layout problem in this artifact. Repair it:\n1. [") {
 		t.Fatalf("singular forms: %q / %q", p.Text, p.Prompt)
 	}
 
@@ -181,7 +181,7 @@ func TestLayoutAPI_SingularPromptMatchesTheDocumentedExample(t *testing.T) {
 	}
 	example := string(doc)
 	for _, pinned := range []string{
-		"Fix these 2 layout issues the browser detected in this artifact:",
+		"The browser flagged 2 layout problems in this artifact. Repair them:",
 		"Text cut off by its container - Rendered text crosses its container's right edge by 550px and is hidden. Selector: \"div#bad-clip\". Viewport: Desktop (1106px). Status: Open.",
 		"text: Layout issues: 2 selected",
 		`"type":"layout-warnings","warnings":[{"id":"`,
