@@ -39,7 +39,7 @@ export interface BrowserCopy {
   title: string;
   pickTag: string;
   intro: string;
-  cards: { title: string; badge?: string; text: string; bullets: string[] }[];
+  cards: { title: string; badge?: string; text: string }[];
   question: string;
   choices: string[];
   queueLabel: string;
@@ -213,29 +213,14 @@ const en: DemoCopy = {
             title: "A. Close in a finally block",
             badge: "recommended",
             text: "Close the previous socket in a finally on the retry path.",
-            bullets: [
-              "One file, about 6 lines",
-              "Fixes the leak, nothing else changes",
-              "Risk: low",
-            ],
           },
           {
             title: "B. Pool with a max age",
             text: "Route requests through a small pool that retires sockets after a fixed age.",
-            bullets: [
-              "Two files, about 60 lines",
-              "Also covers future leaks of this kind",
-              "Risk: medium, new moving part",
-            ],
           },
           {
             title: "C. Reuse one session",
             text: "Rewrite the retry loop to keep a single session for every attempt.",
-            bullets: [
-              "Touches the whole client",
-              "Removes the cause, not just the symptom",
-              "Risk: high, wide change",
-            ],
           },
         ],
         question: "Which fix should the soldier build?",
@@ -437,29 +422,14 @@ const es: DemoCopy = {
             title: "A. Cerrar en un bloque finally",
             badge: "recomendada",
             text: "Cerrar el socket anterior en un finally del camino de reintento.",
-            bullets: [
-              "Un archivo, unas 6 líneas",
-              "Arregla la fuga, nada más cambia",
-              "Riesgo: bajo",
-            ],
           },
           {
             title: "B. Pool con edad máxima",
             text: "Pasar los pedidos por un pool chico que retira los sockets pasada una edad fija.",
-            bullets: [
-              "Dos archivos, unas 60 líneas",
-              "También cubre fugas futuras de este tipo",
-              "Riesgo: medio, una pieza nueva",
-            ],
           },
           {
             title: "C. Reusar una sola sesión",
             text: "Reescribir el bucle de reintentos para mantener una sola sesión en cada intento.",
-            bullets: [
-              "Toca todo el cliente",
-              "Elimina la causa, no solo el síntoma",
-              "Riesgo: alto, cambio amplio",
-            ],
           },
         ],
         question: "¿Qué arreglo tiene que construir el soldier?",

@@ -8,8 +8,10 @@
  * component, so sizes here are native pixels.
  */
 .fm {
-  --fr-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  --fr-font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  --fr-font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --fr-font-mono:
+    ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
   --fr-radius-sm: 4px;
   --fr-radius-md: 7px;
   --fr-radius-lg: 12px;
@@ -211,7 +213,7 @@
 }
 .fm[data-mode="compact"] .fm-main {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 .fm-stage {
   min-width: 0;
@@ -229,7 +231,7 @@
 
 /* The artifact (forum-artifact.css) */
 .fm-art {
-  padding: 18px 18px 16px;
+  padding: 14px 16px 12px;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -238,7 +240,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -273,7 +275,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 .fm[data-mode="compact"] .fm-cards {
   grid-template-columns: minmax(0, 1fr);
@@ -303,22 +305,9 @@
   font-size: 11px;
   line-height: 1.5;
 }
-.fm-card ul {
-  margin-top: 6px;
-  padding-left: 14px;
-  list-style: disc;
-  color: var(--fr-text-secondary);
-  font-size: 10.5px;
-  line-height: 1.5;
-}
-.fm-card li::marker {
-  color: var(--fr-text-muted);
-}
-.fm[data-mode="compact"] .fm-card ul {
-  display: none;
-}
+
 .fm-question {
-  margin-top: 14px;
+  margin-top: 9px;
   color: var(--fr-text-secondary);
   font-size: 11px;
 }
@@ -332,7 +321,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
+  padding: 5px 10px;
   background: var(--fr-surface);
   border: 1px solid var(--fr-border);
   border-radius: var(--fr-radius-md);
@@ -366,7 +355,7 @@
   background: var(--fr-accent);
 }
 .fm-queue {
-  margin-top: 12px;
+  margin-top: 9px;
 }
 
 /* Buttons (forum.css .btn, forum-artifact.css button) */
@@ -655,4 +644,19 @@
     transition: none !important;
     animation: none !important;
   }
+}
+
+.fm[data-mode="compact"] .fm-card p {
+  display: none;
+}
+.fm[data-mode="compact"] .fm-card {
+  padding: 8px 10px;
+}
+.fm[data-mode="compact"] .fm-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fm[data-mode="compact"] .fm-card h3 .fm-pill {
+  margin-top: 0;
 }

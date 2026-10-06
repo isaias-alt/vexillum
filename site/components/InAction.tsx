@@ -4,6 +4,7 @@ import Link from "next/link";
 import { RotateCcw } from "lucide-react";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -175,6 +176,7 @@ export function InAction({
   );
   const root = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const node = root.current;
@@ -199,6 +201,38 @@ export function InAction({
   const view =
     !browser || elapsed === null ? staticView : viewAt(stepNow.frames, elapsed);
   const mock = browser ? deriveMock(stepNow.frames, elapsed) : null;
+  // Keep the newest printed line at the bottom of the terminal; the oldest
+  // lines scroll out at the top, fading under the header (data-scrolled). It
+  // re-follows
+  // whenever the transcript is resized (a web font landing, a window resize),
+  // not only when a line prints.
+  const follow = useRef<() => void>(() => {});
+  useLayoutEffect(() => {
+    follow.current = () => {
+      const node = screen.current;
+      const lines = node?.firstElementChild?.children;
+      if (!node || !lines) return;
+      const rows = Array.from(lines) as HTMLElement[];
+      let bottom = 0;
+      for (const line of rows) {
+        if (line.classList.contains("invisible")) continue;
+        bottom = Math.max(bottom, line.offsetTop + line.offsetHeight);
+      }
+      const needed = Math.max(0, bottom + 20 - node.clientHeight);
+      node.scrollTop = needed;
+      node.dataset.scrolled = String(needed > 0);
+    };
+    follow.current();
+  });
+  useEffect(() => {
+    const node = screen.current;
+    if (!node || !node.firstElementChild) return;
+    const observer = new ResizeObserver(() => follow.current());
+    observer.observe(node);
+    observer.observe(node.firstElementChild);
+    return () => observer.disconnect();
+  }, [active]);
+
   const playing =
     state.visible && elapsed !== null && !overBody && !finished && !reduced;
 
@@ -215,7 +249,7 @@ export function InAction({
   const select = (step: number) => {
     setStaticView("terminal");
     dispatch({ type: "select", step, reduced });
-    if (window.matchMedia("(max-width: 767px)").matches) {
+    if (window.matchMedia("(max-width: 1023px)").matches) {
       pane.current?.scrollIntoView({
         block: "nearest",
         behavior: reduced ? "auto" : "smooth",
@@ -228,181 +262,204 @@ export function InAction({
       if (e.pointerType === "mouse") set(value);
     };
 
+  const list = (current: number, ghost: boolean) => (
+    <ol className="m-0 min-w-0 list-none p-0">
+      {steps.map((step, i) => {
+        const isActive = i === current;
+        return (
+          <li key={step.title} className="relative">
+            {/* The line through the markers, drawn per step so it always
+                  meets the marker centers. */}
+            <span
+              aria-hidden
+              className="absolute left-[31px] w-px bg-border"
+              style={{
+                top: i === 0 ? MARKER_CENTER : 0,
+                bottom: i === last ? `calc(100% - ${MARKER_CENTER}px)` : 0,
+              }}
+            />
+            <div
+              className={`relative flex gap-4 rounded-lg border-l-2 p-4 ${
+                isActive ? "border-accent bg-sunken" : "border-transparent"
+              }`}
+            >
+              <div className="relative z-[1] w-[42px] shrink-0">
+                <span
+                  className={`flex h-[27px] w-[27px] items-center justify-center rounded-full font-serif text-[12.5px] ${
+                    isActive
+                      ? "bg-accent text-accent-contrast"
+                      : "border border-border bg-bg text-text-muted"
+                  }`}
+                >
+                  {NUMERALS[i]}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  aria-current={isActive && !ghost ? "step" : undefined}
+                  onClick={() => select(i)}
+                  tabIndex={ghost ? -1 : undefined}
+                  className={`block w-full cursor-pointer rounded-sm text-left text-[14px] text-text after:absolute after:inset-0 after:content-[''] ${
+                    isActive ? "font-semibold" : ""
+                  }`}
+                >
+                  {step.title}
+                </button>
+                {isActive && (
+                  <>
+                    <p className="mt-2 max-w-[380px] text-[12.5px] leading-[1.6] text-text-secondary">
+                      {step.blurb}
+                    </p>
+                    <Link
+                      href={`${docsRoot}${step.docs}`}
+                      className="relative z-[1] mt-2.5 block w-fit border-b border-accent pb-px text-[12px] text-accent"
+                    >
+                      {docsLabel} &rarr;
+                    </Link>
+                    {!reduced && (
+                      <div
+                        aria-hidden
+                        className="mt-3.5 h-0.5 w-full max-w-[380px] overflow-hidden rounded-[1px] bg-border"
+                      >
+                        <div
+                          className="h-full origin-left bg-accent"
+                          style={{
+                            transform: `scaleX(${
+                              elapsed === null
+                                ? 0
+                                : Math.min(1, elapsed / total)
+                            })`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+
   return (
     <div
       ref={root}
-      className="grid grid-cols-1 items-start gap-7 md:grid-cols-2"
+      className="grid grid-cols-1 gap-7 lg:grid-cols-2"
       onPointerEnter={mouseOnly(setHovered, true)}
       onPointerLeave={mouseOnly(setHovered, false)}
       onFocus={(e) => setFocused(e.target.matches(":focus-visible"))}
       onBlur={() => setFocused(false)}
     >
-      <ol className="m-0 min-w-0 list-none p-0">
-        {steps.map((step, i) => {
-          const isActive = i === active;
-          return (
-            <li key={step.title} className="relative">
-              {/* The line through the markers, drawn per step so it always
-                  meets the marker centers. */}
-              <span
-                aria-hidden
-                className="absolute left-[31px] w-px bg-border"
-                style={{
-                  top: i === 0 ? MARKER_CENTER : 0,
-                  bottom: i === last ? `calc(100% - ${MARKER_CENTER}px)` : 0,
-                }}
-              />
-              <div
-                className={`relative flex gap-4 rounded-lg border-l-2 p-4 ${
-                  isActive ? "border-accent bg-sunken" : "border-transparent"
-                }`}
-              >
-                <div className="relative z-[1] w-[42px] shrink-0">
-                  <span
-                    className={`flex h-[27px] w-[27px] items-center justify-center rounded-full font-serif text-[12.5px] ${
-                      isActive
-                        ? "bg-accent text-accent-contrast"
-                        : "border border-border bg-bg text-text-muted"
-                    }`}
-                  >
-                    {NUMERALS[i]}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <button
-                    type="button"
-                    aria-current={isActive ? "step" : undefined}
-                    onClick={() => select(i)}
-                    className={`block w-full cursor-pointer rounded-sm text-left text-[14px] text-text after:absolute after:inset-0 after:content-[''] ${
-                      isActive ? "font-semibold" : ""
-                    }`}
-                  >
-                    {step.title}
-                  </button>
-                  {isActive && (
-                    <>
-                      <p className="mt-2 max-w-[380px] text-[12.5px] leading-[1.6] text-text-secondary">
-                        {step.blurb}
-                      </p>
-                      <Link
-                        href={`${docsRoot}${step.docs}`}
-                        className="relative z-[1] mt-2.5 block w-fit border-b border-accent pb-px text-[12px] text-accent"
-                      >
-                        {docsLabel} &rarr;
-                      </Link>
-                      {!reduced && (
-                        <div
-                          aria-hidden
-                          className="mt-3.5 h-0.5 w-full max-w-[380px] overflow-hidden rounded-[1px] bg-border"
-                        >
-                          <div
-                            className="h-full origin-left bg-accent"
-                            style={{
-                              transform: `scaleX(${
-                                elapsed === null
-                                  ? 0
-                                  : Math.min(1, elapsed / total)
-                              })`,
-                            }}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      {/* The step list sets the height of the row. Its active step is taller
+          than the others, so a hidden copy per step (each one active) sizes
+          the cell: the row never changes height as the steps change. */}
+      <div className="grid min-w-0 lg:self-stretch">
+        <div className="col-start-1 row-start-1">{list(active, false)}</div>
+        {steps.map((step, i) => (
+          <div
+            key={step.title}
+            aria-hidden
+            inert
+            className="pointer-events-none invisible col-start-1 row-start-1"
+          >
+            {list(i, true)}
+          </div>
+        ))}
+      </div>
 
+      {/* On two columns the pane takes the height of the step list (it is
+          absolute, so its own content never sizes the row); stacked, it has a
+          fixed height of its own. */}
       <div
         ref={pane}
-        className="min-w-0 scroll-mt-20 overflow-hidden rounded-xl border border-border bg-surface"
+        className="relative h-[620px] min-w-0 scroll-mt-20 min-[420px]:h-[500px] lg:h-auto"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border bg-sunken px-4 py-2 text-[12.5px]">
-          <span className="flex min-w-0 items-center gap-2">
-            <LogoMark className="h-3 w-3 shrink-0" />
-            <span className="truncate font-medium text-text">
-              {copy.paneTitle}
-            </span>
-          </span>
-          <span className="flex shrink-0 items-center gap-3">
-            <span className="text-[11px] text-text-muted">
-              {String(active + 1).padStart(2, "0")} /{" "}
-              {String(steps.length).padStart(2, "0")}
-            </span>
-            {reduced && browser && (
-              <span className="flex gap-2 text-[11px]">
-                {(["terminal", "browser"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-pressed={view === v}
-                    onClick={() => setStaticView(v)}
-                    className={`cursor-pointer rounded-sm ${
-                      view === v ? "text-accent" : "text-text-muted"
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
+        <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl border border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-sunken px-4 py-2 text-[12.5px]">
+            <span className="flex min-w-0 items-center gap-2">
+              <LogoMark className="h-3 w-3 shrink-0" />
+              <span className="truncate font-medium text-text">
+                {copy.paneTitle}
               </span>
-            )}
-            {!reduced && (
-              <button
-                type="button"
-                onClick={() => dispatch({ type: "replay" })}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-sm text-[11px] hover:text-accent ${
-                  finished ? "text-accent" : "text-text-muted"
+            </span>
+            <span className="flex shrink-0 items-center gap-3">
+              <span className="text-[11px] text-text-muted">
+                {String(active + 1).padStart(2, "0")} /{" "}
+                {String(steps.length).padStart(2, "0")}
+              </span>
+              {reduced && browser && (
+                <span className="flex gap-2 text-[11px]">
+                  {(["terminal", "browser"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={view === v}
+                      onClick={() => setStaticView(v)}
+                      className={`cursor-pointer rounded-sm ${
+                        view === v ? "text-accent" : "text-text-muted"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </span>
+              )}
+              {!reduced && (
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: "replay" })}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-sm text-[11px] hover:text-accent ${
+                    finished ? "text-accent" : "text-text-muted"
+                  }`}
+                >
+                  <RotateCcw aria-hidden className="h-3 w-3" />
+                  {copy.replay}
+                </button>
+              )}
+            </span>
+          </div>
+          {/* The terminal: a fixed box that follows its newest line, like a real
+            one (no scrollbar, the oldest lines scroll out at the top). */}
+          <div
+            className="relative min-h-0 flex-1"
+            onPointerEnter={mouseOnly(setOverBody, true)}
+            onPointerLeave={mouseOnly(setOverBody, false)}
+          >
+            <div
+              ref={screen}
+              className="absolute inset-0 overflow-hidden px-[22px] py-5 text-[12.5px] leading-[1.9] data-[scrolled=true]:[mask-image:linear-gradient(to_bottom,transparent,#000_26px)]"
+            >
+              <div
+                className={`min-w-0 transition-opacity duration-500 motion-reduce:transition-none ${
+                  view === "browser" ? "opacity-0" : ""
                 }`}
               >
-                <RotateCcw aria-hidden className="h-3 w-3" />
-                {copy.replay}
-              </button>
-            )}
-          </span>
-        </div>
-        {/* Every step sits in the same grid cell and only the active one is
-            visible, so the pane is always as tall as the tallest script. */}
-        <div
-          className="relative grid px-[22px] py-5 text-[12.5px] leading-[1.9]"
-          onPointerEnter={mouseOnly(setOverBody, true)}
-          onPointerLeave={mouseOnly(setOverBody, false)}
-        >
-          {steps.map((step, i) => (
-            <div
-              key={step.title}
-              className={`col-start-1 row-start-1 min-w-0 transition-opacity duration-500 motion-reduce:transition-none ${
-                i !== active
-                  ? "invisible"
-                  : view === "browser"
-                    ? "opacity-0"
-                    : ""
-              }`}
-            >
-              {step.frames.map((frame, n) => (
-                <FrameLine
-                  key={n}
-                  frame={frame}
-                  elapsed={i === active ? elapsed : null}
-                  first={n === 0}
-                />
-              ))}
+                {stepNow.frames.map((frame, n) => (
+                  <FrameLine
+                    key={`${active}-${n}`}
+                    frame={frame}
+                    elapsed={elapsed}
+                    first={n === 0}
+                  />
+                ))}
+              </div>
             </div>
-          ))}
-          {/* The browser phase: the same box as the terminal, cross-faded.
+            {/* The browser phase: the same box as the terminal, cross-faded.
               Clicks and hovers pass through, so pausing still works. */}
-          {browser && mock && (
-            <div
-              aria-hidden
-              className={`pointer-events-none absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none ${
-                view === "browser" ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              <ForumMock copy={browser} state={mock} />
-            </div>
-          )}
+            {browser && mock && (
+              <div
+                aria-hidden
+                className={`pointer-events-none absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none ${
+                  view === "browser" ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                <ForumMock copy={browser} state={mock} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

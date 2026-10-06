@@ -29,8 +29,15 @@ export interface MockState {
 }
 
 const PRESS_MS = 220;
+// The native width each layout is designed at, and the least native height its
+// content needs. The mock scales by whichever limit is tighter, then takes the
+// rest of the box as extra native width and height.
 const WIDE = 760;
 const COMPACT = 400;
+const WIDE_MIN_H = 470;
+// The browser bar, the forum top bar and the stage padding around the artifact.
+const CHROME_H = 32 + 44 + 24;
+const COMPACT_MIN_H = 880;
 
 export function hasBrowserPhase(frames: DemoFrame[]) {
   return frames.some((f) => f.kind === "view");
@@ -132,7 +139,17 @@ export function ForumMock({
   const queueRef = useRef<HTMLSpanElement>(null);
   const sendRef = useRef<HTMLSpanElement>(null);
   const pointerRef = useRef<HTMLSpanElement>(null);
+  const artRef = useRef<HTMLDivElement>(null);
+  const [artHeight, setArtHeight] = useState(0);
   const [size, setSize] = useState({ w: 626, h: 700 });
+
+  useLayoutEffect(() => {
+    const art = artRef.current;
+    if (!art) return;
+    const observer = new ResizeObserver(() => setArtHeight(art.offsetHeight));
+    observer.observe(art);
+    return () => observer.disconnect();
+  }, []);
 
   useLayoutEffect(() => {
     const node = box.current;
@@ -145,9 +162,16 @@ export function ForumMock({
     return () => observer.disconnect();
   }, []);
 
-  const compact = size.w < 520;
-  const native = compact ? COMPACT : WIDE;
-  const scale = size.w / native;
+  const compact = size.w < 420;
+  const base = compact ? COMPACT : WIDE;
+  // The least native height the content needs: a fixed floor, or the artifact's
+  // measured height plus the bars around it when a translation wraps more.
+  const minH = Math.max(
+    compact ? COMPACT_MIN_H : WIDE_MIN_H,
+    compact ? 0 : artHeight + CHROME_H,
+  );
+  const scale = Math.min(size.w / base, size.h / minH);
+  const native = size.w / scale;
   const height = size.h / scale;
 
   // Where the pointer goes, in native pixels: measured off the live layout so
@@ -219,7 +243,7 @@ export function ForumMock({
         <div className="fm-main">
           <div className="fm-stage">
             <div className="fm-frame">
-              <div className="fm-art">
+              <div ref={artRef} className="fm-art">
                 <h1>
                   {copy.title} <span className="fm-pill">{copy.pickTag}</span>
                 </h1>
@@ -238,11 +262,6 @@ export function ForumMock({
                         )}
                       </h3>
                       <p>{card.text}</p>
-                      <ul>
-                        {card.bullets.map((b) => (
-                          <li key={b}>{b}</li>
-                        ))}
-                      </ul>
                     </div>
                   ))}
                 </div>
