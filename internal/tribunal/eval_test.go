@@ -34,7 +34,6 @@ import (
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
-
 func init() {
 	real, err := exec.LookPath("claude")
 	if err != nil {
