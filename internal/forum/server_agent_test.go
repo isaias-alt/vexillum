@@ -343,7 +343,7 @@ next_step: Apply this feedback, then run ` + "`vx forum poll /tmp/a.html --reply
 func TestFormatPoll_EmptyStatuses(t *testing.T) {
 	cases := map[string]string{
 		forum.PollEnded:               "ended",
-		forum.PollBrowserDisconnected: "ask the user",
+		forum.PollBrowserDisconnected: "user choose",
 		forum.PollTimeout:             "again",
 	}
 	for status, needle := range cases {

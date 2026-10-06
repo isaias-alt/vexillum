@@ -232,8 +232,8 @@
     return call("queue", message);
   }
 
-  // sendQueuedPrompts() delivers the whole queue to the agent now, rather than
-  // waiting for the user to press Send to Agent.
+  // sendQueuedPrompts() passes the entire queue to the agent immediately, with no
+  // click on Send to Agent needed.
   function sendQueuedPrompts() {
     return call("send");
   }

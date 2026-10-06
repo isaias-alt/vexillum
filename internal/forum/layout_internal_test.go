@@ -505,13 +505,13 @@ func TestExplanations_AreShortSpecificAndNeverPrescribe(t *testing.T) {
 			}
 		}
 	}
-	if got := issueRules[0].explain("horizontal", 549.9, 0); got != "Rendered text crosses its container's right edge by 550px and is hidden." {
+	if got := issueRules[0].explain("horizontal", 549.9, 0); got != "On the right side, this text runs 550px beyond its container and is clipped." {
 		t.Fatalf("pinned sentence: %q", got)
 	}
-	if got := issueRules[0].explain("horizontal", -30, 0); !strings.Contains(got, "left edge by 30px") {
+	if got := issueRules[0].explain("horizontal", -30, 0); !strings.Contains(got, "left side, this text runs 30px") {
 		t.Fatalf("left side: %q", got)
 	}
-	if got := issueRules[0].explain("vertical", 20, 0); !strings.Contains(got, "bottom edge") {
+	if got := issueRules[0].explain("vertical", 20, 0); !strings.Contains(got, "bottom side") {
 		t.Fatalf("bottom side: %q", got)
 	}
 	ids := map[string]bool{}

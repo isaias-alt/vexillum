@@ -130,13 +130,13 @@ var issueRules = []issueRule{
 	{
 		id: "clipped-text", title: "Text cut off by its container",
 		explain: func(axis string, px, _ float64) string {
-			return fmt.Sprintf("Rendered text crosses its container's %s edge by %dpx and is hidden.", sideName(axis, px), whole(px))
+			return fmt.Sprintf("On the %s side, this text runs %dpx beyond its container and is clipped.", sideName(axis, px), whole(px))
 		},
 	},
 	{
 		id: "cut-off-control", title: "Control hidden by its container",
 		explain: func(axis string, px, _ float64) string {
-			return fmt.Sprintf("A control crosses its container's %s edge by %dpx, so part of it cannot be pressed or read.", sideName(axis, px), whole(px))
+			return fmt.Sprintf("On the %s side, this control extends %dpx beyond its container, so a portion of it can neither be read nor clicked.", sideName(axis, px), whole(px))
 		},
 	},
 	{

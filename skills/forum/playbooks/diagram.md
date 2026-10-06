@@ -10,11 +10,12 @@ at the picture, and only needs the text for the reasons behind it.
   emphasis and grouping, so the layout itself says something: the important
   box is big, the dependency points the way it really goes, the boundary is a
   visible region.
-- **Mermaid is opt-in.** Only when the user asks for an editable whiteboard.
-  Write `<div class="mermaid">...</div>`; in the forum browser it becomes an
-  editable whiteboard the user can redraw, and their edits come back as a
-  `tag: whiteboard` prompt (see "Whiteboards" in SKILL.md). Do not pick it just
-  because it is quicker to author: it hands the layout to an engine.
+- **Mermaid is opt-in.** Reach for it solely when the user has requested a
+  whiteboard they can edit. Write `<div class="mermaid">...</div>`; the forum
+  browser turns it into a whiteboard the user can redraw, and what they change
+  returns as a `tag: whiteboard` prompt (see "Whiteboards" in SKILL.md). Do not
+  choose it merely because it is faster to write: it hands the layout over to
+  an engine.
 - **Not div-and-flexbox boxes with arrows.** Figures are SVG; HTML carries the
   prose around them.
 

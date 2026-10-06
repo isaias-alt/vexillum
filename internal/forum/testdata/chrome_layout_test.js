@@ -5,7 +5,7 @@ const { makeEnv } = require("./chrome_harness.js");
 
 const boot = { key: "0123456789abcdef", token: "t", file: "/tmp/x/plan.html", name: "plan.html", artifact_src: "/a/x/plan.html" };
 const warning = (id, over = {}) => ({
-  id, status_label: "", title: "Text cut off by its container", explanation: "Rendered text crosses its container's right edge by 40px and is hidden.",
+  id, status_label: "", title: "Text cut off by its container", explanation: "On the right side, this text runs 40px beyond its container and is clipped.",
   selector: "div#card > p", viewport_label: "Desktop", viewport_width: 1200,
   active: true, selectable: true, outstanding: false, ...over,
 });

@@ -170,9 +170,10 @@ Rules for a batch:
 - `data.items` stays small and bounded: id, a short label, the disposition.
   Put long evidence on the page, not in the prompt.
 - Your receipt (sent with `vx forum reply <file> --reply-file -`, or the
-  `poll` forms if you are polling by hand) gives each submitted ID exactly one
-  outcome: **addressed** with concrete evidence (a file, a commit, a command),
-  **deferred** with a reason, or **rejected** with a reason. Before you say
+  `poll` forms if you are polling by hand) settles each submitted ID in
+  exactly one way: **addressed**, backed by concrete evidence (a file, a commit,
+  a command); **deferred**, with the reason it waits; or **rejected**, with the
+  reason it was turned down. Before you say
   "done", compare the set of submitted IDs with the set in the receipt and
   report any ID that is missing.
 

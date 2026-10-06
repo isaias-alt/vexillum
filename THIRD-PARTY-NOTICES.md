@@ -11,8 +11,8 @@ software and assets listed in this file: the browser bundle and the fonts of
 the whiteboard feature of `vx forum` (vendored under
 `internal/forum/assets/whiteboard/`, see that package's doc comment), a few
 icon shapes in the forum chrome, and the Go modules linked into the binary.
-Each component remains under its own license; the notices below satisfy their
-attribution requirements.
+Every component stays governed by its own license, and the notices that follow
+are there to meet each license's attribution terms.
 
 The bundle is built by `tools/whiteboard-bundle/build.js` (dev-only, never run
 at vexillum's own build or install time, see that directory's README) and
@@ -254,8 +254,9 @@ Basis for each licence:
 - **Nunito**: the font's name table (license URL, name id 14) points to https://scripts.sil.org/OFL; the file names the OFL by URL only and carries no text or version, so the OFL 1.1 text below (the version the Virgil file carries) is the one printed.
 - **Virgil**: the font's name table (name id 13) states SIL Open Font License 1.1 and carries its full text.
 
-The Xiaolai family (CJK glyphs, ~12 MB) is intentionally not vendored;
-Excalidraw falls back to its CDN or the system font for those glyphs.
+The Xiaolai family (CJK glyphs, ~12 MB) is left out of the vendored fonts;
+for those characters Excalidraw loads the font from its CDN or uses whatever
+the system provides.
 
 ### SIL Open Font License 1.1
 

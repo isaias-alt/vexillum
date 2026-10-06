@@ -78,7 +78,7 @@ func TestLayoutAPI_QueuedPromptCarriesEveryPinnedElement(t *testing.T) {
 	if issues[0].StatusLabel != "" || !issues[0].Selectable || !issues[0].Active || issues[0].ViewportLabel != "Desktop" || issues[0].Title != "Text cut off by its container" {
 		t.Fatalf("a plain new issue: %+v", issues[0])
 	}
-	if issues[0].Explanation != "Rendered text crosses its container's right edge by 550px and is hidden." {
+	if issues[0].Explanation != "On the right side, this text runs 550px beyond its container and is clipped." {
 		t.Fatalf("explanation = %q", issues[0].Explanation)
 	}
 
@@ -104,7 +104,7 @@ func TestLayoutAPI_QueuedPromptCarriesEveryPinnedElement(t *testing.T) {
 	}
 	first := matches[0]
 	if first[1] != "1" || first[2] != issues[0].ID || first[3] != "Text cut off by its container" ||
-		first[4] != "Rendered text crosses its container's right edge by 550px and is hidden." ||
+		first[4] != "On the right side, this text runs 550px beyond its container and is clipped." ||
 		first[5] != "div#bad-clip" || first[6] != "Desktop" || first[7] != "1106" || first[8] != "Open" {
 		t.Errorf("first line fields = %q", first)
 	}
@@ -182,7 +182,7 @@ func TestLayoutAPI_SingularPromptMatchesTheDocumentedExample(t *testing.T) {
 	example := string(doc)
 	for _, pinned := range []string{
 		"The browser flagged 2 layout problems in this artifact. Repair them:",
-		"Text cut off by its container - Rendered text crosses its container's right edge by 550px and is hidden. Selector: \"div#bad-clip\". Viewport: Desktop (1106px). Status: Open.",
+		"Text cut off by its container - On the right side, this text runs 550px beyond its container and is clipped. Selector: \"div#bad-clip\". Viewport: Desktop (1106px). Status: Open.",
 		"text: Layout issues: 2 selected",
 		`"type":"layout-warnings","warnings":[{"id":"`,
 	} {

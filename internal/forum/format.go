@@ -138,26 +138,26 @@ func pollStatusStep(file string, res PollResponse, again, reply string) string {
 		}
 		return lead
 	case PollEnded:
-		who := "The session ended"
+		who := "This session is over"
 		if res.EndedBy == EndedByUser {
-			who = "The user ended the session from the browser"
+			who = "The user closed this session from the browser"
 		}
 		if res.All {
-			tail := " Do not reopen it unless the user asks. Run `" + again + "` again to keep listening to the other open sessions (it reports no_sessions when none are left)."
+			tail := " Leave it closed unless the user requests otherwise. To keep covering the sessions that are still open, run `" + again + "` once more (no_sessions means none remain)."
 			if len(res.Prompts) > 0 {
-				return who + ". This was the final feedback of that session, delivered once: apply it." + tail
+				return who + ". Its last feedback comes with this result and will not be sent again: apply it." + tail
 			}
 			return who + "." + tail
 		}
 		if len(res.Prompts) > 0 {
-			return who + ". This was the final feedback, delivered once: apply it. Do not poll again and do not reopen the session unless the user asks."
+			return who + ". Its last feedback comes with this result and will not be sent again: apply it. Polling this session is finished, and it stays closed unless the user requests otherwise."
 		}
-		return who + ". Stop polling and do not reopen the session unless the user asks."
+		return who + ". Polling this session is finished, and it stays closed unless the user requests otherwise."
 	case PollBrowserDisconnected:
 		if res.All {
-			return "Every review window went away but the sessions are still resumable. Ask the user whether to reopen them (`" + cmdname.Name + " forum <file>`) or end them (`" + cmdname.Name + " forum end <file>`); do neither uninvited."
+			return "No review window is open any more, yet the sessions can still be resumed. Let the user choose between bringing them back (`" + cmdname.Name + " forum <file>`) and closing them (`" + cmdname.Name + " forum end <file>`), and take neither step before they answer."
 		}
-		return "The browser window went away but the session is still resumable. Ask the user whether to reopen it (`" + cmdname.Name + " forum " + shellQuote(file) + "`) or end it (`" + cmdname.Name + " forum end " + shellQuote(file) + "`); do neither uninvited."
+		return "The browser window is gone, yet the session can still be resumed. Let the user choose between bringing it back (`" + cmdname.Name + " forum " + shellQuote(file) + "`) and closing it (`" + cmdname.Name + " forum end " + shellQuote(file) + "`), and take neither step before they answer."
 	case PollNoSessions:
 		return "No forum session is open, so there is nothing to listen to. Stop polling; open an artifact with `" + cmdname.Name + " forum <file>` when there is something to review."
 	case PollTimeout:

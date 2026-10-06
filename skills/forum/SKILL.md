@@ -3,7 +3,7 @@ name: forum
 description: Open an HTML artifact (plan, comparison, diagram, table, decision form) in the browser for the user to review, receive their feedback through the forum inbox (a background listener forwards it and wakes you), and answer in the browser's conversation panel. Use when a response will be clearer as a visual page than as prose, or when you need structured decisions from the user. Driven by the `vx forum` commands.
 license: MIT
 metadata:
-  argument-hint: "<what the artifact should show>"
+  argument-hint: "<what you want the page to show>"
 ---
 
 # Forum
@@ -25,8 +25,8 @@ code is credited in THIRD-PARTY-NOTICES.md.
 
 $ARGUMENTS
 
-If the request above is non-empty, build that artifact. If it is empty, infer
-what to visualize from the conversation.
+When text appears above, make the artifact it describes. When nothing appears,
+work out from the conversation what would be worth showing.
 
 ## The flow
 
@@ -182,9 +182,9 @@ next_step: <what to do now>
 `pending_prompts` counts prompts the user already sent that the listener (or
 your next poll, with `listener: none`) delivers. If the user **ended the session from the browser**, the command exits
 1 with `status: user_ended` and does not reopen it: reopening something the
-user deliberately closed is not your call. Pass `--reopen` only when the user
-asks for further review, or when something important needs their visual
-attention.
+user deliberately closed is not your call. Add `--reopen` only if the user
+requests another round of review or the matter truly calls for them to look at
+it.
 
 ## `poll` and `inbox` output
 
@@ -328,8 +328,8 @@ be dismissed: it says who ended it, shows the artifact's absolute path with a
 behind it is inert, so nothing typed afterwards can reach you. What you do:
 
 - On `status: ended` (from `vx forum inbox`, or from `poll`): apply the final
-  prompts (if any), then **stop polling** if you were. Do not reopen the session on your own, and do not run
-  `vx forum <file> --reopen` unless the user asks for further review.
+  prompts (if any), then **stop polling** if you were. Never reopen the session on your own initiative;
+  `vx forum <file> --reopen` is for when the user wants another round of review.
 - When the user asks you to review again, reopen it (`vx forum <file>
   --reopen`); the dialog goes away in their open tab by itself and the queue and
   transcript are still there.
@@ -386,7 +386,7 @@ the top bar (with a count) and **nowhere else**:
     tag: layout-warnings
     prompt: |
       The browser flagged 2 layout problems in this artifact. Repair them:
-      1. [uwuiagklgk6avlfr] Text cut off by its container - Rendered text crosses its container's right edge by 550px and is hidden. Selector: "div#bad-clip". Viewport: Desktop (1106px). Status: Open.
+      1. [uwuiagklgk6avlfr] Text cut off by its container - On the right side, this text runs 550px beyond its container and is clipped. Selector: "div#bad-clip". Viewport: Desktop (1106px). Status: Open.
       2. ...
       Repair all of the issues above together, in one editing pass. Queueing this request does not claim a repair: ...
     text: Layout issues: 2 selected
@@ -453,9 +453,9 @@ the whole API.
   The user can hide them all with the **Marks** switch next to Annotate. Keep
   stable selectors (ids, `data-forum-question`) on what the user is likely to
   comment on, so the badges find their element after a rewrite.
-- `window.forum.sendQueuedPrompts()` - sends everything queued right away,
-  instead of waiting for the user to press Send to Agent. Use it only for a
-  control whose whole purpose is "submit this to the agent now".
+- `window.forum.sendQueuedPrompts()` - delivers the whole queue immediately,
+  without the user having to click Send to Agent. Reserve it for a control
+  whose entire job is "submit this to the agent now".
 
 Native controls (radios, checkboxes, inputs, selects, textareas, buttons,
 labels, `<summary>`, links inside forms) **always act exactly as authored**, in
@@ -546,13 +546,14 @@ decision path with an obvious way to send it (the panel's Send to Agent, or a
 
 ## Whiteboards (Mermaid, opt-in)
 
-Mermaid is **not** the diagram default (see `playbooks/diagram.md`). Only when
-the user asks for an editable whiteboard, author the diagram as
-`<div class="mermaid">...</div>`. In the browser it becomes an embedded,
-editable Excalidraw whiteboard (click it to unlock editing, Fullscreen opens it
-over the whole page); flowchart, sequence, class, ER and state diagrams become
-editable shapes, other types embed as an image to draw on. Edits autosave
-locally. **Queue feedback** writes a `.excalidraw` scene and a PNG preview to
+Mermaid is **not** the diagram default (see `playbooks/diagram.md`). Write a
+diagram as `<div class="mermaid">...</div>` solely when the user has requested
+an editable whiteboard. The browser turns that block into an embedded
+Excalidraw whiteboard (click it to unlock editing; Fullscreen enlarges it to
+the whole page). Flowcharts, sequence, class, ER and state diagrams are
+converted into shapes the user can edit, while any other type is embedded as a
+picture the user can draw over. Edits are autosaved in the browser. **Queue
+feedback** writes a `.excalidraw` scene and a PNG preview to
 `~/.vexillum/forums/<key>/whiteboards/` and queues a prompt with
 `tag: whiteboard`, which the inbox (or `poll`) delivers like any other:
 
@@ -584,11 +585,11 @@ combines several, e.g. a plan with a comparison and a diagram):
 
 | Playbook | Use when |
 |---|---|
-| `playbooks/plan.md` | Explain a product or technical plan before implementation. |
-| `playbooks/comparison.md` | Show options, tradeoffs, current vs target behavior. |
+| `playbooks/plan.md` | Lay out what will be built, and how, before any code is written. |
+| `playbooks/comparison.md` | Weigh alternatives against each other, or today's behavior against the target. |
 | `playbooks/input.md` | Collect decisions, choices, preferences or triage from inside the artifact. **Required** whenever you need structured answers. |
-| `playbooks/diagram.md` | Explain relationships, flows, state or architecture with illustrations. |
-| `playbooks/table.md` | Turn dense records into scan-friendly review surfaces. |
+| `playbooks/diagram.md` | Draw how parts relate, how data flows, what states exist or how a system is put together. |
+| `playbooks/table.md` | Lay many records out so a reviewer can scan and judge them quickly. |
 
 ## Design: use forum's own styles
 

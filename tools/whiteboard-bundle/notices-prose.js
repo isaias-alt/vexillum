@@ -115,16 +115,17 @@ export const FONT_DISPLAY = {
   Virgil: "Virgil",
 };
 
-export const XIAOLAI_NOTE = `The Xiaolai family (CJK glyphs, ~12 MB) is intentionally not vendored;
-Excalidraw falls back to its CDN or the system font for those glyphs.`;
+export const XIAOLAI_NOTE = `The Xiaolai family (CJK glyphs, ~12 MB) is left out of the vendored fonts;
+for those characters Excalidraw loads the font from its CDN or uses whatever
+the system provides.`;
 
 export const INTRO = `vexillum is one Go binary. Besides its own code it carries the third-party
 software and assets listed in this file: the browser bundle and the fonts of
 the whiteboard feature of \`vx forum\` (vendored under
 \`internal/forum/assets/whiteboard/\`, see that package's doc comment), a few
 icon shapes in the forum chrome, and the Go modules linked into the binary.
-Each component remains under its own license; the notices below satisfy their
-attribution requirements.
+Every component stays governed by its own license, and the notices that follow
+are there to meet each license's attribution terms.
 
 The bundle is built by \`tools/whiteboard-bundle/build.js\` (dev-only, never run
 at vexillum's own build or install time, see that directory's README) and
