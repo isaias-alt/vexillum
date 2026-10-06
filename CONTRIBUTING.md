@@ -74,6 +74,14 @@ scripts/install-local.sh --force    # skip the clean and branch guards
 `VX_INSTALL_DIR` sets the destination, `VX_INSTALL_BASE` the base branch and
 `VX_INSTALL_FORCE=1` is the same as `--force`.
 
+## Third-party notices
+
+`THIRD-PARTY-NOTICES.md` is generated and never edited by hand. After changing
+the whiteboard bundle, its `package-lock.json` or the vendored fonts, run
+`cd tools/whiteboard-bundle && npm ci && npm run notices` and commit the result
+(see `tools/whiteboard-bundle/README.md`). `go test ./internal/thirdparty`
+fails when the notices are stale.
+
 ## Docs checks
 
 Changes to `site/`, `tools/docgen`, `skills/`, `internal/cli` or the docs

@@ -23,9 +23,43 @@ This writes the compiled output straight into
 `internal/forum/assets/whiteboard/`. Review the diff and commit it like any
 other vendor update.
 
+## Regenerating the third-party notices
+
+`THIRD-PARTY-NOTICES.md` at the repo root is generated, never edited by hand.
+Re-run it whenever the bundle, `package-lock.json` or the vendored fonts change
+(it is part of the same vendor update as `npm run build`):
+
+```sh
+cd tools/whiteboard-bundle
+npm ci
+npm run notices          # writes THIRD-PARTY-NOTICES.md and bundled-packages.json
+npm run notices:check    # regenerates in memory, exits non-zero if either file is stale
+```
+
+`generate-notices.js` repeats the esbuild build of `build.js` (same options,
+shared through `bundle-options.js`, nothing written) and lists every npm package
+that contributes bytes to the output with its version, license, copyright lines
+and license text, read from the installed package. The font section is read
+from the name tables of the vendored woff2 files, and the Go section from
+`go list -deps ./cmd/vx`. The output order is sorted, so reruns are
+byte-identical. It exits non-zero, writing nothing, when a bundled package has
+no license information, ships a license file it cannot classify, or declares a
+license its own file contradicts. The hand-written prose and the curated facts
+(headline packages, per-family font licenses, copyright fallbacks) live in
+`notices-prose.js`; each curated font claim is re-checked against the font file
+on every run.
+
+`bundled-packages.json` records which lockfile entries the bundle inlines (the
+lockfile itself cannot say: they are all devDependencies) and the sha256 of the
+lockfile it was generated from. `go test ./internal/thirdparty` reads it, the
+lockfile and the notices (no node, no network) and fails when the lockfile moved
+without a regeneration or a bundled package has no entry in the notices. Like
+`build.js`, none of this runs at vexillum's own build or install time.
+
 ## What is in here, and what is vendored
 
-Everything under `src/` and `build.js` is vexillum's own code:
+Everything under `src/`, `build.js`, `bundle-options.js` and the notices generator
+(`generate-notices.js`, `notices-lib.js`, `notices-prose.js`) is vexillum's own code:
 
 - `src/whiteboard-core.js` - the DOM-free surface the frame and the tests
   import; it re-exports three modules:
@@ -65,4 +99,4 @@ their public APIs and pinned exactly: `mermaid@11.12.1`,
 `react@18.3.1`, `react-dom@18.3.1`. Keep them pinned, not ranged - a converter or
 Excalidraw upgrade should be a deliberate, tested bump, not a silent
 `npm install` drift. See `THIRD-PARTY-NOTICES.md` at the repo root for their
-licenses.
+licenses (generated; see above).

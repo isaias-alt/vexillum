@@ -47,6 +47,10 @@ El `CONTRIBUTING.md` del repositorio lista el conjunto completo de chequeos, inc
 
 Un pull request que cambia comandos, comportamiento, configuración o skills también debe actualizar la documentación, en inglés y en español, en las mismas páginas y en la misma posición del menú. Las páginas de la referencia del CLI se generan desde el binario: regeneralas en vez de editarlas a mano y commiteá el resultado. `CONTRIBUTING.md` tiene el comando exacto. Un pull request que cambia el núcleo sin tocar la documentación no está completo.
 
+## Actualizar los avisos de terceros
+
+`THIRD-PARTY-NOTICES.md` se genera, nunca se edita a mano. Después de cambiar el bundle de la whiteboard, su `package-lock.json` o las fuentes vendoreadas, corré `cd tools/whiteboard-bundle && npm ci && npm run notices` y commiteá el resultado. `go test ./internal/thirdparty` falla si los avisos quedaron desactualizados. `tools/whiteboard-bundle/README.md` explica qué lee el generador y cuándo se niega a correr.
+
 ## Instalar tu propio build
 
 Los maintainers pueden instalar el checkout actual como su `vx` local con `scripts/install-local.sh`. Se niega a instalar con un checkout sucio o en una rama que no sea `canary`, verifica que el `vx --version` del binario recién compilado reporte `HEAD`, guarda el binario anterior como `vx.prev` al lado para volver atrás en un paso, y reemplaza `vx` de forma atómica. Definí `VX_INSTALL_DIR` para cambiar el destino (por defecto `~/.local/bin`), o pasá `--force` para saltear las guardas de checkout limpio y de rama. Un build de desarrollo imprime su identidad, por ejemplo `vx dev (a1b2c3d, 2026-10-05, dirty)`.
