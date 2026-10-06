@@ -26,6 +26,12 @@ archives:
     formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    # Setting files replaces goreleaser's default glob, so LICENSE and README
+    # are listed too. The notices travel with the binary that embeds that code.
+    files:
+      - LICENSE
+      - README.md
+      - THIRD-PARTY-NOTICES.md
 
 checksum:
   name_template: checksums.txt
@@ -76,6 +82,13 @@ brews:
     skip_upload: auto
     install: |
       bin.install "vx"
+    extra_install: |
+      doc.install "LICENSE", "THIRD-PARTY-NOTICES.md"
+    caveats: |
+      vx needs Claude Code (logged in) and herdr installed.
+      Run `vx init` inside a git repository to set it up.
+      Then run `vx doctor` to check your environment.
+      Docs: https://vx.lucasco.dev
     test: |
       system "#{bin}/vx", "--version"
 
