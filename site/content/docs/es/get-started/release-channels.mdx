@@ -7,8 +7,8 @@ vexillum se publica por tres canales. La mayoría de la gente quiere **stable**,
 
 | Canal | Cómo se ve la versión | Qué es | Promesa |
 | --- | --- | --- | --- |
-| stable | `v0.2.0` | El release oficial, cortado a mano. | El que conviene usar. |
-| rc | `v0.2.0-rc.1` | Un release candidate: el build que está por convertirse en un stable. | Casi final, publicado para probarlo. |
+| stable | `v0.1.0` | El release oficial, cortado a mano. | El que conviene usar. |
+| rc | `v0.1.1-rc.1` | Un release candidate: el build que está por convertirse en un stable. | Casi final, publicado para probarlo. |
 | canary | `v0.2.1-canary.20261004.gabc1234` | Un build de lo último, hecho automáticamente. | Ninguna. |
 
 Stable es el único canal que llega a Homebrew. Los builds rc y canary se publican como pre-releases de GitHub, así que nunca reemplazan la versión que te dan `brew install` o la instalación por defecto.
@@ -41,12 +41,12 @@ El script de instalación nunca instala un pre-release por su cuenta: sin opcion
 Un rc (release candidate) se publica antes de un release stable para poder probar el release en sí. Es un pre-release de GitHub y no se ofrece por Homebrew ni en la instalación por defecto. Para instalar uno en particular, nombrá su versión:
 
 ```bash
-curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.2.0-rc.1
+curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.1.1-rc.1
 ```
 
 Las versiones disponibles están en la [página de releases de GitHub](https://github.com/isaias-alt/vexillum/releases).
 
-Mientras no exista un `v0.2.0` stable, correr el script sin `--version` instala el último stable (hoy v0.1.x), por Homebrew cuando `brew` está presente, y nunca el rc. Para probar el rc, pasá `--version v0.2.0-rc.1`: es una descarga directa que saltea Homebrew.
+El primer stable es `v0.1.0` y los rc aparecen más adelante. Correr el script sin `--version` instala el último stable, por Homebrew cuando `brew` está presente, y nunca el rc. Para probar el rc, pasá `--version v0.1.1-rc.1`: es una descarga directa que saltea Homebrew.
 
 ## Canary
 
@@ -89,6 +89,6 @@ Estas opciones van después de `bash -s --` cuando le pasás el script por pipe:
 | --- | --- |
 | `--channel stable` | El valor por defecto. Instala el último release stable, con Homebrew cuando está disponible. Nunca instala un pre-release. |
 | `--channel canary` | Instala el último build canary por descarga directa. |
-| `--version <tag>` | Instala exactamente ese release por descarga directa, por ejemplo `v0.2.0` o `v0.2.0-rc.1`. La `v` inicial es opcional. |
+| `--version <tag>` | Instala exactamente ese release por descarga directa, por ejemplo `v0.1.0` o `v0.1.1-rc.1`. La `v` inicial es opcional. |
 
 `--channel` y `--version` no se pueden combinar: una versión ya nombra el release exacto. `--help` imprime la misma lista.

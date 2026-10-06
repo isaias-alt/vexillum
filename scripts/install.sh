@@ -7,14 +7,14 @@ set -euo pipefail
 # Usage:
 #   curl -fsSL https://vx.lucasco.dev/install | bash
 #   curl -fsSL .../install.sh | bash -s -- --channel canary
-#   curl -fsSL .../install.sh | bash -s -- --version v0.2.0
+#   curl -fsSL .../install.sh | bash -s -- --version v0.1.0
 #
 # Options:
 #   --channel stable|canary   stable (default) installs the latest stable
 #                             release and never a pre-release; canary installs
 #                             the latest canary build, by direct download
-#   --version <tag>           install exactly this release, for example v0.2.0
-#                             or v0.2.0-rc.1, by direct download. The leading
+#   --version <tag>           install exactly this release, for example v0.1.0
+#                             or v0.1.1-rc.1, by direct download. The leading
 #                             "v" is optional. Cannot be combined with --channel
 #   -h, --help                print this help
 #
@@ -27,7 +27,7 @@ GITHUB_OWNER="isaias-alt"
 GITHUB_REPO="vexillum"
 PRODUCT_NAME="vexillum"   # brew formula and release archive name
 BINARY_NAME="vx"          # the executable that gets installed
-OLD_BINARY_NAME="vexillum"  # the executable the v0.1.x formula installed
+OLD_BINARY_NAME="vexillum"  # the executable the old formula installed
 BREW_TAP="isaias-alt/tap"
 
 CHANNEL="stable"          # stable | canary
@@ -54,8 +54,8 @@ Usage: install.sh [--channel stable|canary] [--version <tag>]
                             and never a pre-release. canary installs the latest
                             canary build by direct download, without Homebrew
                             and with no stability promise.
-  --version <tag>           install exactly this release (for example v0.2.0 or
-                            v0.2.0-rc.1) by direct download, without Homebrew.
+  --version <tag>           install exactly this release (for example v0.1.0 or
+                            v0.1.1-rc.1) by direct download, without Homebrew.
                             Cannot be combined with --channel.
   -h, --help                print this help
 USAGE
@@ -88,7 +88,7 @@ parse_args() {
     fi
     if [ -n "$version" ]; then
         printf '%s' "$version" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
-            || fatal "Invalid version: ${version} (want a release tag such as v0.2.0 or v0.2.0-rc.1)"
+            || fatal "Invalid version: ${version} (want a release tag such as v0.1.0 or v0.1.1-rc.1)"
         REQUESTED_VERSION="v${version#v}"
     fi
 }
@@ -115,7 +115,7 @@ detect_platform() {
 
 install_via_brew() {
     info "Homebrew found - installing via ${BREW_TAP}"
-    # The v0.1.x formula installed a binary named vexillum. When it is already
+    # The old formula installed a binary named vexillum. When it is already
     # installed, `brew install` is a no-op for it and would leave the user
     # without vx, so move it forward with an upgrade instead.
     if brew list --formula "$PRODUCT_NAME" >/dev/null 2>&1; then
@@ -279,7 +279,7 @@ verify_install() {
         old="$(locate_binary "$OLD_BINARY_NAME" || true)"
         if [ -n "$old" ]; then
             warn "Only the old '${OLD_BINARY_NAME}' binary is present: ${old}"
-            warn "That comes from the v0.1.x Homebrew formula, which installed a command named '${OLD_BINARY_NAME}'."
+            warn "That comes from the old Homebrew formula, which installed a command named '${OLD_BINARY_NAME}'."
             warn "Fix: brew update && brew upgrade ${BREW_TAP}/${PRODUCT_NAME} (or brew reinstall ${BREW_TAP}/${PRODUCT_NAME}), then re-run this script."
         else
             warn "Searched: ${INSTALL_DIR:-(direct install dir not used)}, ${BREW_BIN:-(no brew prefix)}, and your PATH."

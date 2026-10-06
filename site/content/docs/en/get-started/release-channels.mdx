@@ -7,8 +7,8 @@ vexillum ships through three channels. Most people want **stable**, which is wha
 
 | Channel | Version looks like | What it is | Promise |
 | --- | --- | --- | --- |
-| stable | `v0.2.0` | The official release, cut by hand. | The one to rely on. |
-| rc | `v0.2.0-rc.1` | A release candidate: the build that is about to become a stable release. | Close to final, published to be tried. |
+| stable | `v0.1.0` | The official release, cut by hand. | The one to rely on. |
+| rc | `v0.1.1-rc.1` | A release candidate: the build that is about to become a stable release. | Close to final, published to be tried. |
 | canary | `v0.2.1-canary.20261004.gabc1234` | A build of the latest work, made automatically. | None. |
 
 Stable is the only channel that reaches Homebrew. rc and canary builds are published as GitHub pre-releases, so they never replace the version `brew install` or the default install gives you.
@@ -41,12 +41,12 @@ The install script never installs a pre-release on its own: without options it i
 An rc (release candidate) is published before a stable release so the release itself can be tried. It is a GitHub pre-release and is not offered through Homebrew or by the default install. To install a specific one, name its version:
 
 ```bash
-curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.2.0-rc.1
+curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.1.1-rc.1
 ```
 
 Find the available versions on the [GitHub releases page](https://github.com/isaias-alt/vexillum/releases).
 
-Until a stable `v0.2.0` exists, running the script without `--version` installs the latest stable (currently v0.1.x), through Homebrew when `brew` is present, and never the rc. To test the rc, pass `--version v0.2.0-rc.1`: it is a direct download that skips Homebrew.
+The first stable is `v0.1.0` and rc builds appear later. Running the script without `--version` installs the latest stable, through Homebrew when `brew` is present, and never the rc. To test the rc, pass `--version v0.1.1-rc.1`: it is a direct download that skips Homebrew.
 
 ## Canary
 
@@ -89,6 +89,6 @@ These options go after `bash -s --` when you pipe the script:
 | --- | --- |
 | `--channel stable` | The default. Installs the latest stable release, through Homebrew when it is available. Never installs a pre-release. |
 | `--channel canary` | Installs the latest canary build by direct download. |
-| `--version <tag>` | Installs exactly that release by direct download, for example `v0.2.0` or `v0.2.0-rc.1`. The leading `v` is optional. |
+| `--version <tag>` | Installs exactly that release by direct download, for example `v0.1.0` or `v0.1.1-rc.1`. The leading `v` is optional. |
 
 `--channel` and `--version` cannot be combined: a version already names the exact release. `--help` prints the same list.

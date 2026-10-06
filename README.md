@@ -30,7 +30,7 @@ stability promise) or an exact version, pass an option to the script:
 
 ```sh
 curl -fsSL https://vx.lucasco.dev/install | bash -s -- --channel canary
-curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.2.0-rc.1
+curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.1.1-rc.1
 ```
 
 ## Usage
