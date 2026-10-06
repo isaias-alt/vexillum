@@ -47,12 +47,11 @@ No existe un CHANGELOG.md y nunca se edita a mano. goreleaser genera las notas d
 ## Bitácoras y TODOs
 
 Las bitácoras de sesión (ver skill `binnacle`, local y gitignoreada en este
-repo) y los TODOs de trabajo pendiente no viven en el repo de vexillum -
-persisten en un repo privado aparte del general:
-`~/Desktop/Ideaverse/02-Areas/vexillum-cli/` (`binnacles/` y `todos/`).
-Después de escribir o actualizar un archivo ahí, commiteá y pusheá ese repo
-a mano (no confiar en su auto-sync periódico para esto) antes de dar la
-sesión por terminada.
+repo) y los TODOs de trabajo pendiente no viven en el repo de vexillum: viven
+en el repo de notas privado del maintainer, con carpetas `binnacles/` y
+`todos/`. Después de escribir o actualizar un archivo ahí, commiteá y pusheá
+ese repo a mano (no confiar en su auto-sync periódico para esto) antes de dar
+la sesión por terminada.
 
 `todos/`: un archivo markdown por item, nombre `YYYYMMDD-tema-corto.md`, con
 una sección `## Estado` al final que dice si sigue abierto, parcial o

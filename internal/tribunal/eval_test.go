@@ -7,8 +7,8 @@
 //
 // Environment:
 //
-//	EVAL_ROOT  directory the throwaway repos are built under (default: the
-//	           vexillum-prueba test repo, under .tribunal-evals/)
+//	EVAL_ROOT  directory the throwaway repos are built under (default: a
+//	           tribunal-evals directory under the OS temp dir)
 //	EVAL_OUT   where transcripts and a per-run summary are copied (default: a temp dir)
 //	EVAL_RUNS  runs per case (default 3)
 //
@@ -34,7 +34,6 @@ import (
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
-const defaultEvalRoot = "/Users/lucascodev/github/isaias-alt/tmp/vexillum-prueba/.tribunal-evals"
 
 func init() {
 	real, err := exec.LookPath("claude")
@@ -83,7 +82,7 @@ func newEvalRepo(t *testing.T, name string) *evalRepo {
 	t.Helper()
 	base := os.Getenv("EVAL_ROOT")
 	if base == "" {
-		base = defaultEvalRoot
+		base = filepath.Join(os.TempDir(), "tribunal-evals")
 	}
 	root := filepath.Join(base, name)
 	if err := os.RemoveAll(root); err != nil {
