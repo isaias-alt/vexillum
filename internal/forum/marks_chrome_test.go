@@ -15,7 +15,11 @@ import (
 // A self-styled artifact (no forum look, no tokens), so the badges must stand
 // on their own: a plain decision form, two annotated paragraphs and a long
 // page. Every 150ms it reports what the badge layer shows and whether the
-// badges moved anything of the artifact's own.
+// badges moved anything of the artifact's own. The artifact sits in an iframe
+// that starts loading before the chrome around it has laid out, so a read taken
+// right after navigation or reload can see a 0x0 frame. A size is therefore
+// only reported once it is non-empty and identical across two animation
+// frames; until then the report says size=unsettled.
 func marksArtifact(extra string) string {
 	return `<!doctype html><html><head><meta charset="utf-8"><title>m</title><style>body{font:16px sans-serif;margin:0;padding:24px}</style></head><body>
 ` + extra + `
@@ -24,13 +28,18 @@ func marksArtifact(extra string) string {
 <p id="p2">Second paragraph, will not be annotated.</p>
 <div style="height:2000px"></div>
 <script>
-const sizes = () => document.documentElement.scrollWidth + "x" + document.documentElement.scrollHeight + "/" + Math.round(document.getElementById("p1").getBoundingClientRect().top);
+const rawSizes = () => document.documentElement.scrollWidth + "x" + document.documentElement.scrollHeight + "/" + Math.round(document.getElementById("p1").getBoundingClientRect().top);
+const settledSizes = () => new Promise((resolve) => requestAnimationFrame(() => {
+  const a = rawSizes();
+  requestAnimationFrame(() => { const b = rawSizes(); resolve(a === b && !a.startsWith("0x0/") ? a : "unsettled"); });
+}));
 let last = "";
-setInterval(() => {
+setInterval(async () => {
+  const size = await settledSizes();
   const host = document.querySelector("[data-forum-ui=marks]");
   const marks = host ? [...host.shadowRoot.querySelectorAll(".mark")].map((m) => m.dataset.kind + ":" + m.textContent) : [];
   const layer = host ? getComputedStyle(host.shadowRoot.querySelector(".layer")).pointerEvents + "/" + getComputedStyle(host).pointerEvents + "/" + getComputedStyle(host).position : "-";
-  const now = "marks=" + marks.join("|") + " layer=" + layer + " size=" + sizes();
+  const now = "marks=" + marks.join("|") + " layer=" + layer + " size=" + size;
   if (now !== last) { last = now; fetch("/__report?v=" + encodeURIComponent(now), { mode: "no-cors" }); }
 }, 150);
 </script></body></html>`
@@ -62,12 +71,12 @@ func TestMarks_RealChrome_BadgesOnFormsAndAnnotationsSurviveReload(t *testing.T)
 	}
 	t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); _ = cmd.Wait() })
 
-	waitFor := func(want ...string) string {
+	find := func(settled bool, want ...string) string {
 		t.Helper()
 		for deadline := time.Now().Add(40 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 			mu.Lock()
 			for _, r := range reports {
-				ok := true
+				ok := !settled || !strings.Contains(r, "size=unsettled")
 				for _, w := range want {
 					ok = ok && strings.Contains(r, w)
 				}
@@ -80,12 +89,17 @@ func TestMarks_RealChrome_BadgesOnFormsAndAnnotationsSurviveReload(t *testing.T)
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		t.Fatalf("never saw %q; reports: %v", want, reports)
+		t.Fatalf("never saw %q (settled size required: %v); reports: %v", want, settled, reports)
 		return ""
 	}
+	waitFor := func(want ...string) string { t.Helper(); return find(false, want...) }
+	// waitSettled wants a report whose size was measured on a settled layout
+	// (non-empty and stable across two frames), so size comparisons never
+	// involve a half-laid-out frame.
+	waitSettled := func(want ...string) string { t.Helper(); return find(true, want...) }
 	sizeOf := func(report string) string { return report[strings.Index(report, "size="):] }
 
-	initial := waitFor("marks= layer=-")
+	initial := waitSettled("marks= layer=-")
 	baseline := sizeOf(initial)
 
 	queue := func(body map[string]any) {
@@ -98,7 +112,7 @@ func TestMarks_RealChrome_BadgesOnFormsAndAnnotationsSurviveReload(t *testing.T)
 	queue(map[string]any{"prompt": "a comment on something since removed", "selector": "#gone"})
 	env.browser("POST", "/api/s/"+key+"/send", key, map[string]any{})
 
-	sent := waitFor("decision:Sent in round 1", "comment:Sent in round 1")
+	sent := waitSettled("decision:Sent in round 1", "comment:Sent in round 1")
 	if strings.Count(sent, "Sent in round 1") != 2 {
 		t.Errorf("want exactly two badges (the form and #p1; #gone no longer matches): %s", sent)
 	}
@@ -122,7 +136,7 @@ func TestMarks_RealChrome_BadgesOnFormsAndAnnotationsSurviveReload(t *testing.T)
 		mu.Lock()
 		last := reports[len(reports)-1]
 		mu.Unlock()
-		if sizeOf(last) != baseline && strings.Count(last, "Answered in round 1") == 2 {
+		if !strings.Contains(last, "size=unsettled") && sizeOf(last) != baseline && strings.Count(last, "Answered in round 1") == 2 {
 			reloaded = last
 			break
 		}
