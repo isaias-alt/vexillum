@@ -114,9 +114,10 @@ entry and whether it is safe to delete.
 
 ## Contributing
 
-See `CONTRIBUTING.md` for how to build, test, and submit a PR. Found a bug or
-have a feature request? Open an issue using the templates in
-`.github/ISSUE_TEMPLATE/`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build, test, and submit a PR.
+Found a bug or have a feature request? [Open an issue](https://github.com/isaias-alt/vexillum/issues)
+using the templates in `.github/ISSUE_TEMPLATE/`. To report a vulnerability,
+do not open an issue: follow [SECURITY.md](SECURITY.md).
 
 ### Regenerating the command reference
 
