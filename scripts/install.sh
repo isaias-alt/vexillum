@@ -267,6 +267,37 @@ locate_binary() {
     command -v "$name" 2>/dev/null
 }
 
+# Tell the user how to put directory $1 on PATH, with the exact line for the
+# shell named in $SHELL (zsh, bash, fish, anything else gets the generic form).
+path_hint() {
+    local dir="$1" shown shell_name
+    shown="$dir"
+    case "$dir" in
+        "$HOME"/*) shown="\$HOME/${dir#"$HOME"/}" ;;
+    esac
+    shell_name="${SHELL##*/}"
+
+    warn "${dir} is not in your PATH, so '${BINARY_NAME}' will not be found yet. Add it with:"
+    case "$shell_name" in
+        zsh)
+            warn "  echo 'export PATH=\"${shown}:\$PATH\"' >> ~/.zshrc"
+            warn "Then open a new terminal, or run: source ~/.zshrc && hash -r"
+            ;;
+        bash)
+            warn "  echo 'export PATH=\"${shown}:\$PATH\"' >> ~/.bashrc"
+            warn "Then open a new terminal, or run: source ~/.bashrc && hash -r"
+            ;;
+        fish)
+            warn "  fish_add_path ${shown}"
+            warn "Then open a new terminal."
+            ;;
+        *)
+            warn "  export PATH=\"${shown}:\$PATH\""
+            warn "Add that line to your shell profile, then open a new terminal, or run it in this one followed by: hash -r"
+            ;;
+    esac
+}
+
 # After any install path, prove that a working vx exists. An install step that
 # exits 0 is not enough: a stale formula or an unexpected archive can leave the
 # machine without the command.
@@ -300,7 +331,7 @@ verify_install() {
     ok "$out"
     case ":$PATH:" in
         *":${found%/*}:"*) ;;
-        *) warn "${found%/*} is not in your PATH - add it to your shell profile" ;;
+        *) path_hint "${found%/*}" ;;
     esac
     info "Run '${BINARY_NAME} init' in a project to get started, and '${BINARY_NAME} doctor' to check your setup."
 }

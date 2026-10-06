@@ -536,3 +536,82 @@ func TestInstallStableStillUsesBrewWhenAvailable(t *testing.T) {
 		t.Errorf("brew path must not download directly, curl log:\n%s", e.curlLog())
 	}
 }
+
+func TestInstallPathHintMatchesTheUsersShell(t *testing.T) {
+	cases := []struct {
+		name  string
+		shell string
+		want  []string
+		not   []string
+	}{
+		{
+			name:  "zsh",
+			shell: "/bin/zsh",
+			want: []string{
+				`echo 'export PATH="$HOME/bin-out:$PATH"' >> ~/.zshrc`,
+				"source ~/.zshrc && hash -r",
+			},
+			not: []string{"~/.bashrc", "fish_add_path"},
+		},
+		{
+			name:  "bash",
+			shell: "/usr/bin/bash",
+			want: []string{
+				`echo 'export PATH="$HOME/bin-out:$PATH"' >> ~/.bashrc`,
+				"source ~/.bashrc && hash -r",
+			},
+			not: []string{"~/.zshrc", "fish_add_path"},
+		},
+		{
+			name:  "fish",
+			shell: "/opt/homebrew/bin/fish",
+			want:  []string{"fish_add_path $HOME/bin-out", "open a new terminal"},
+			not:   []string{"export PATH", "~/.zshrc", "~/.bashrc"},
+		},
+		{
+			name:  "unknown shell",
+			shell: "/bin/tcsh",
+			want:  []string{`export PATH="$HOME/bin-out:$PATH"`, "shell profile", "hash -r"},
+			not:   []string{"~/.zshrc", "~/.bashrc", "fish_add_path"},
+		},
+		{
+			name:  "SHELL unset",
+			shell: "",
+			want:  []string{`export PATH="$HOME/bin-out:$PATH"`, "hash -r"},
+			not:   []string{"~/.zshrc", "~/.bashrc", "fish_add_path"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			dir := filepath.Join(e.home, "bin-out")
+			e.extra = append(e.extra, "VX_INSTALL_DIR="+dir, "SHELL="+tc.shell)
+
+			out, err := e.run()
+			mustSucceed(t, out, err)
+
+			mustContain(t, out, dir+" is not in your PATH")
+			for _, w := range tc.want {
+				mustContain(t, out, w)
+			}
+			for _, n := range tc.not {
+				if strings.Contains(out, n) {
+					t.Errorf("output must not mention %q\n%s", n, out)
+				}
+			}
+		})
+	}
+}
+
+func TestInstallNoPathHintWhenDirIsOnPath(t *testing.T) {
+	e := newEnv(t)
+	dir := filepath.Join(e.home, "bin-out")
+	e.extra = append(e.extra, "VX_INSTALL_DIR="+dir, "PATH="+e.bin+":"+dir+":/usr/bin:/bin")
+
+	out, err := e.run()
+	mustSucceed(t, out, err)
+
+	if strings.Contains(out, "is not in your PATH") {
+		t.Errorf("no PATH hint expected when the dir is on PATH\n%s", out)
+	}
+}
