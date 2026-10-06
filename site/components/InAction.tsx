@@ -110,6 +110,7 @@ function FrameLine({
   first: boolean;
 }) {
   const shown = elapsed === null || elapsed >= frame.t;
+  if (frame.kind === "shot") return null;
   const gap = first || frame.kind === "out" ? "" : "mt-3";
   const hidden = shown ? "" : "invisible";
 
@@ -137,6 +138,63 @@ function FrameLine({
     out: Output,
   }[frame.kind];
   return <Line className={`${gap} ${hidden}`}>{frame.text}</Line>;
+}
+
+// The browser window beside the transcript: a thin chrome bar and the step's
+// screenshots, stacked in one box whose ratio is reserved up front so nothing
+// moves when the first one appears. `current` is the index of the latest shot
+// reached (-1: none yet, the window is still transparent); a shot fades in
+// over the previous one.
+const SHOT_RATIO = "1473 / 812";
+
+function BrowserWindow({
+  shots,
+  current,
+  url,
+}: {
+  shots: DemoFrame[];
+  current: number;
+  url: string;
+}) {
+  return (
+    <div
+      className={`min-w-0 overflow-hidden md:col-start-1 md:row-start-2 rounded-xl border border-border bg-surface transition-opacity duration-500 motion-reduce:transition-none ${
+        current < 0 ? "opacity-0" : "opacity-100"
+      }`}
+    >
+      <div
+        aria-hidden
+        className="flex items-center gap-3 border-b border-border bg-sunken px-4 py-2"
+      >
+        <span className="flex shrink-0 gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-border" />
+          <span className="h-2 w-2 rounded-full bg-border" />
+          <span className="h-2 w-2 rounded-full bg-border" />
+        </span>
+        <span className="min-w-0 flex-1 truncate rounded-md bg-bg px-3 py-0.5 text-[11px] text-text-muted">
+          {url}
+        </span>
+      </div>
+      <div className="relative w-full" style={{ aspectRatio: SHOT_RATIO }}>
+        {shots.map((shot, i) => (
+          // eslint-disable-next-line @next/next/no-img-element -- fixed-size, pre-optimized webp
+          <img
+            key={shot.text}
+            src={shot.text}
+            alt={shot.alt ?? ""}
+            width={1473}
+            height={812}
+            loading="lazy"
+            decoding="async"
+            aria-hidden={i === current ? undefined : true}
+            className={`absolute inset-0 h-full w-full transition-opacity duration-500 motion-reduce:transition-none ${
+              i <= current ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function InAction({
@@ -183,6 +241,15 @@ export function InAction({
 
   const { active, elapsed } = state;
   const last = steps.length - 1;
+  const shots = useMemo(
+    () => steps[active].frames.filter((f) => f.kind === "shot"),
+    [steps, active],
+  );
+  // Whole step (reduced motion, or not started): the last shot, shown whole.
+  const shotNow =
+    elapsed === null
+      ? shots.length - 1
+      : shots.filter((f) => f.t <= elapsed).length - 1;
   const total = ends[active] + HOLD_MS;
   const finished = active === last && elapsed !== null && elapsed >= total;
   const engaged = hovered || focused;
@@ -210,21 +277,20 @@ export function InAction({
   };
 
   const mouseOnly =
-    (set: (v: boolean) => void, value: boolean) =>
-    (e: React.PointerEvent) => {
+    (set: (v: boolean) => void, value: boolean) => (e: React.PointerEvent) => {
       if (e.pointerType === "mouse") set(value);
     };
 
   return (
     <div
       ref={root}
-      className="grid grid-cols-1 items-start gap-7 md:grid-cols-2"
+      className="grid grid-cols-1 items-start gap-7 md:grid-cols-2 md:grid-rows-[auto_1fr]"
       onPointerEnter={mouseOnly(setHovered, true)}
       onPointerLeave={mouseOnly(setHovered, false)}
       onFocus={(e) => setFocused(e.target.matches(":focus-visible"))}
       onBlur={() => setFocused(false)}
     >
-      <ol className="m-0 min-w-0 list-none p-0">
+      <ol className="m-0 min-w-0 list-none p-0 md:col-start-1 md:row-start-1">
         {steps.map((step, i) => {
           const isActive = i === active;
           return (
@@ -236,8 +302,7 @@ export function InAction({
                 className="absolute left-[31px] w-px bg-border"
                 style={{
                   top: i === 0 ? MARKER_CENTER : 0,
-                  bottom:
-                    i === last ? `calc(100% - ${MARKER_CENTER}px)` : 0,
+                  bottom: i === last ? `calc(100% - ${MARKER_CENTER}px)` : 0,
                 }}
               />
               <div
@@ -306,7 +371,7 @@ export function InAction({
 
       <div
         ref={pane}
-        className="min-w-0 scroll-mt-20 overflow-hidden rounded-xl border border-border bg-surface"
+        className="min-w-0 scroll-mt-20 md:col-start-2 md:row-span-2 md:row-start-1 overflow-hidden rounded-xl border border-border bg-surface"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border bg-sunken px-4 py-2 text-[12.5px]">
           <span className="flex min-w-0 items-center gap-2">
@@ -360,6 +425,13 @@ export function InAction({
           ))}
         </div>
       </div>
+      {shots.length > 0 && steps[active].browserUrl && (
+        <BrowserWindow
+          shots={shots}
+          current={shotNow}
+          url={steps[active].browserUrl}
+        />
+      )}
     </div>
   );
 }

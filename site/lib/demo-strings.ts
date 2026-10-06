@@ -8,13 +8,20 @@
 // vx commands (the same in both languages), and the replies are the commander
 // speaking in the tone the product skill gives it: it calls the user "general"
 // and keeps technical terms in English.
+//
+// A `shot` frame is not a line of the transcript: it swaps the screenshot shown
+// in the browser window next to it (a real screenshot of the real UI, kept in
+// public/demo). A step with no shot frames has no browser window at all.
 
-export type FrameKind = "prompt" | "reply" | "tool" | "out" | "hook";
+export type FrameKind = "prompt" | "reply" | "tool" | "out" | "hook" | "shot";
 
 export interface DemoFrame {
   t: number;
   kind: FrameKind;
+  /** The line of the session, or for a `shot` the image path under public/. */
   text: string;
+  /** Alt text of a `shot`. */
+  alt?: string;
 }
 
 export interface DemoStep {
@@ -22,6 +29,8 @@ export interface DemoStep {
   blurb: string;
   /** Docs page the step links to, relative to the docs root. */
   docs: string;
+  /** Address shown in the browser window that displays the step's shots. */
+  browserUrl?: string;
   frames: DemoFrame[];
 }
 
@@ -74,9 +83,39 @@ const INBOX_OUT = [
   "status: feedback",
   "prompts[1]:",
   "  - uid: pr_5d2a91c40be3f817",
-  "    tag: choice",
-  "    prompt: Option B: close the sockets in a finally block",
+  "    tag: decision",
+  "    prompt: |",
+  "      Fix for the leak: Close the sockets in a finally block",
+  "      Context data:",
+  "      {",
+  '        "question": "leak-fix",',
+  '        "answer": "Close the sockets in a finally block"',
+  "      }",
 ];
+const FORUM_URL = "127.0.0.1:51237/session/83b329918b347776";
+
+const SHOT_ALT = {
+  en: [
+    "The forum page open in the browser: three options for the connection leak fix, A, B and C, and an empty conversation panel.",
+    "Option A, close the sockets in a finally block, picked and queued, with the Send to Agent button active.",
+    "The same page after the answer: the pick is marked answered in round 1 and the commander's reply appears in the conversation panel.",
+  ],
+  es: [
+    "La página de forum abierta en el navegador: tres opciones para arreglar la fuga de conexiones, A, B y C, y el panel de conversación vacío.",
+    "La opción A, cerrar los sockets en un bloque finally, elegida y en cola, con el botón Send to Agent activo.",
+    "La misma página tras la respuesta: la elección figura respondida en la ronda 1 y la respuesta del commander aparece en el panel de conversación.",
+  ],
+};
+
+function shot(lang: "en" | "es", n: 0 | 1 | 2, t: number): DemoFrame {
+  const name = ["1-open", "2-picked", "3-answered"][n];
+  return {
+    t,
+    kind: "shot",
+    text: `/demo/forum-${name}-${lang}.webp`,
+    alt: SHOT_ALT[lang][n],
+  };
+}
 
 const en: DemoCopy = {
   eyebrow: "see it in action",
@@ -147,6 +186,7 @@ const en: DemoCopy = {
       blurb:
         "A page opens in your browser, you answer with a click, and your answer wakes the commander.",
       docs: "/guides/forum",
+      browserUrl: FORUM_URL,
       frames: [
         {
           t: 0,
@@ -160,6 +200,7 @@ const en: DemoCopy = {
         },
         { t: 2700, kind: "tool", text: FORUM_CMD },
         { t: 3400, kind: "out", text: FORUM_OUT[0] },
+        shot("en", 0, 3400),
         { t: 3600, kind: "out", text: FORUM_OUT[1] },
         { t: 3800, kind: "out", text: FORUM_OUT[2] },
         {
@@ -167,6 +208,7 @@ const en: DemoCopy = {
           kind: "reply",
           text: "The page is open, general. Pick one there and press Send to Agent.",
         },
+        shot("en", 1, 5000),
         { t: 6800, kind: "hook", text: WAKE_HOOK },
         { t: 7400, kind: "out", text: FORUM_HOOK_HEADER },
         { t: 7600, kind: "out", text: FORUM_HOOK_LINE },
@@ -177,11 +219,18 @@ const en: DemoCopy = {
         { t: 9900, kind: "out", text: INBOX_OUT[3] },
         { t: 10100, kind: "out", text: INBOX_OUT[4] },
         { t: 10300, kind: "out", text: INBOX_OUT[5] },
+        { t: 10500, kind: "out", text: INBOX_OUT[6] },
+        { t: 10700, kind: "out", text: INBOX_OUT[7] },
+        { t: 10900, kind: "out", text: INBOX_OUT[8] },
+        { t: 11100, kind: "out", text: INBOX_OUT[9] },
+        { t: 11300, kind: "out", text: INBOX_OUT[10] },
+        { t: 11500, kind: "out", text: INBOX_OUT[11] },
         {
-          t: 11300,
+          t: 12700,
           kind: "reply",
           text: "Got it, general, the finally block. Sending a mission to camp 3.",
         },
+        shot("en", 2, 12900),
       ],
     },
     {
@@ -311,6 +360,7 @@ const es: DemoCopy = {
       blurb:
         "Se abre una página en tu navegador, respondés con un clic y tu respuesta despierta al commander.",
       docs: "/guides/forum",
+      browserUrl: FORUM_URL,
       frames: [
         {
           t: 0,
@@ -324,6 +374,7 @@ const es: DemoCopy = {
         },
         { t: 2900, kind: "tool", text: FORUM_CMD },
         { t: 3600, kind: "out", text: FORUM_OUT[0] },
+        shot("es", 0, 3600),
         { t: 3800, kind: "out", text: FORUM_OUT[1] },
         { t: 4000, kind: "out", text: FORUM_OUT[2] },
         {
@@ -331,6 +382,7 @@ const es: DemoCopy = {
           kind: "reply",
           text: "La página está abierta, general. Elegí una ahí y apretá Send to Agent.",
         },
+        shot("es", 1, 5200),
         { t: 7000, kind: "hook", text: WAKE_HOOK },
         { t: 7600, kind: "out", text: FORUM_HOOK_HEADER },
         { t: 7800, kind: "out", text: FORUM_HOOK_LINE },
@@ -341,11 +393,18 @@ const es: DemoCopy = {
         { t: 10100, kind: "out", text: INBOX_OUT[3] },
         { t: 10300, kind: "out", text: INBOX_OUT[4] },
         { t: 10500, kind: "out", text: INBOX_OUT[5] },
+        { t: 10700, kind: "out", text: INBOX_OUT[6] },
+        { t: 10900, kind: "out", text: INBOX_OUT[7] },
+        { t: 11100, kind: "out", text: INBOX_OUT[8] },
+        { t: 11300, kind: "out", text: INBOX_OUT[9] },
+        { t: 11500, kind: "out", text: INBOX_OUT[10] },
+        { t: 11700, kind: "out", text: INBOX_OUT[11] },
         {
-          t: 11500,
+          t: 12900,
           kind: "reply",
           text: "Entendido, general, el bloque finally. Mando una mission al camp 3.",
         },
+        shot("es", 2, 13100),
       ],
     },
     {
