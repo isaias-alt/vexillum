@@ -14,43 +14,19 @@ import { gzipSync } from "node:zlib";
 
 import * as esbuild from "esbuild";
 
+import { FONT_FAMILIES, frameBuildOptions } from "./bundle-options.js";
+
 const SCRATCH = "dist";
 const ASSETS = "../../internal/forum/assets";
 const TARGET = `${ASSETS}/whiteboard`;
 
-// Excalidraw loads canvas fonts on demand from <asset path>/fonts/<family>.
-// Every family ships except Xiaolai: its CJK glyphs weigh about 12 MB, and
-// without them those characters simply fall back to the system font.
-const FONT_FAMILIES = [
-  "Assistant",
-  "Cascadia",
-  "ComicShanns",
-  "Excalifont",
-  "Liberation",
-  "Lilita",
-  "Nunito",
-  "Virgil",
-];
 const FONT_SOURCE = "node_modules/@excalidraw/excalidraw/dist/prod/fonts";
 
 // One self-contained script: Excalidraw, the Mermaid converter with its pinned
 // mermaid, and React are all inlined, so the whiteboard works with no network
 // once the vexillum binary exists.
 async function bundleFrame() {
-  await esbuild.build({
-    entryPoints: { whiteboard: "src/whiteboard-frame.js" },
-    outdir: SCRATCH,
-    bundle: true,
-    minify: true,
-    format: "iife",
-    platform: "browser",
-    conditions: ["production"],
-    loader: { ".woff2": "file", ".woff": "file", ".ttf": "file" },
-    define: {
-      "process.env.NODE_ENV": '"production"',
-      "process.env.IS_PREACT": '"false"',
-    },
-  });
+  await esbuild.build(frameBuildOptions(SCRATCH));
 }
 
 async function stageFonts() {

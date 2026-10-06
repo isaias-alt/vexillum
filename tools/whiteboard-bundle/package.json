@@ -4,7 +4,9 @@
   "type": "module",
   "description": "Dev-only build for vexillum forum's whiteboard.js browser bundle. Never installed or run at vexillum's install path or runtime - see README.md.",
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "notices": "node generate-notices.js",
+    "notices:check": "node generate-notices.js --check"
   },
   "devDependencies": {
     "@excalidraw/excalidraw": "0.18.1",
