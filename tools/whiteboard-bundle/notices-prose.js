@@ -178,10 +178,39 @@ SOFTWARE.
 
 export const GO_STD_NOTE = `The Go standard library is compiled into every Go binary, including the
 subsets of \`golang.org/x/crypto\`, \`golang.org/x/net\` and \`golang.org/x/text\`
-that it vendors. It is licensed by The Go Authors under the same BSD-3-Clause
-text as the modules above (the toolchain used to generate this file ships no
-separate LICENSE file, so that equality is stated by the Go project, not
-checked here).`;
+that it vendors. It is licensed by The Go Authors under the BSD-3-Clause text
+below (the toolchain used to generate this file ships no separate LICENSE file,
+so the text is the one the Go project publishes, not checked here).`;
+
+export const GO_NO_MODULES = "No third-party Go module is linked into the `vx` binary.";
+
+export const GO_LICENSE_TEXT = `Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.`;
 
 export const SLOT_SECTION = `## Inspired by \`internal/slot/\` (AGENTS.md marker block repair)
 

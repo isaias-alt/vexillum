@@ -63,8 +63,6 @@ func run(args []string) int {
 		return cli.Sentinel(args[1:])
 	case "forum":
 		return cli.Forum(args[1:])
-	case "banner":
-		return cli.Banner(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, cmdname.Name+": unknown command %q\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run '"+cmdname.Name+" --help' for a list of commands.")

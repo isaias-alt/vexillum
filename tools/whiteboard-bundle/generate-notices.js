@@ -50,6 +50,8 @@ import {
   FONT_DISPLAY,
   FONT_LICENSES,
   GO_STD_NOTE,
+  GO_NO_MODULES,
+  GO_LICENSE_TEXT,
   HEADLINE,
   ICONS,
   INTRO,
@@ -505,19 +507,26 @@ function render(packages, fonts, goMods) {
 
   push("## Go modules and the Go standard library");
   push();
-  push("Linked into the `vx` binary (from `go list -deps ./cmd/vx`):");
-  push();
-  push("| Module | Version | License | Copyright |");
-  push("| --- | --- | --- | --- |");
-  for (const m of goMods) push(`| \`${m.path}\` | ${m.version} | ${m.id ?? "unknown"} | ${cell(m.lines.join("; "))} |`);
-  push();
-  for (const m of goMods) {
-    push(`License text of \`${m.path}\`:`);
+  if (goMods.length === 0) {
+    push(GO_NO_MODULES);
     push();
-    push(fence(m.text));
+  } else {
+    push("Linked into the `vx` binary (from `go list -deps ./cmd/vx`):");
     push();
+    push("| Module | Version | License | Copyright |");
+    push("| --- | --- | --- | --- |");
+    for (const m of goMods) push(`| \`${m.path}\` | ${m.version} | ${m.id ?? "unknown"} | ${cell(m.lines.join("; "))} |`);
+    push();
+    for (const m of goMods) {
+      push(`License text of \`${m.path}\`:`);
+      push();
+      push(fence(m.text));
+      push();
+    }
   }
   push(GO_STD_NOTE);
+  push();
+  push(fence(GO_LICENSE_TEXT));
   push();
 
   push("## License texts for the npm packages");

@@ -152,7 +152,9 @@ func TestNoticesCoverEveryGoModule(t *testing.T) {
 			t.Errorf("go.mod requires %s but THIRD-PARTY-NOTICES.md does not mention it; run %q", m[1], regenerateAs)
 		}
 	}
-	if found == 0 {
-		t.Fatal("found no require lines in go.mod")
+	// With no third-party module left, the notices must say so rather than
+	// list an empty table.
+	if found == 0 && !strings.Contains(notices, "No third-party Go module is linked") {
+		t.Errorf("go.mod requires no module but THIRD-PARTY-NOTICES.md does not say so; run %q", regenerateAs)
 	}
 }

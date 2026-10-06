@@ -1,9 +1,9 @@
 ---
-title: Forum y banner
-description: Revisá un artefacto HTML en tu navegador, y publicá uno en una URL pública.
+title: Forum
+description: Revisá un artefacto HTML en tu navegador y devolvé tu feedback al agente.
 ---
 
-Dos comandos permiten a los agentes mostrarte algo más rico que texto de terminal.
+`vx forum` permite a los agentes mostrarte algo más rico que texto de terminal.
 
 ## forum: revisar en tu navegador
 
@@ -79,15 +79,3 @@ Un poll no consume el feedback por devolverlo. Los prompts quedan en el servidor
 Después de apretar Send to Agent, el overlay **Agent is working on your feedback** se queda hasta que el commander responde de verdad (un `vx forum reply`), el artefacto cambia, o apretás **Stop waiting**. La línea "Received" del listener y que vuelva a hacer poll no lo sacan.
 
 El playbook del agente es la [skill](/es/docs/concepts/skills) `forum`, que instala `vx init` (el texto completo está en [Skill: forum](/es/docs/reference/skills/forum)).
-
-## banner: publicar públicamente
-
-```bash
-vx banner report.html
-```
-
-<Callout type="warn" title="Esto publica en un tercero">
-  `banner` incrusta los assets locales en el HTML y lo envía por POST a un servicio de hosting de terceros (ht-ml.app por defecto). La página es pública salvo que pases `--private` o `--password`. Publicar es una decisión tuya, página por página.
-</Callout>
-
-Imprime la URL de la página y una `update_key`, mostrada **una sola vez** y nunca guardada por vexillum. Es la única credencial que puede actualizar o despublicar la página; si la perdés, la página no podrá modificarse nunca más. `--unpublish` reemplaza la página por un placeholder detrás de una contraseña descartada, ya que no existe un borrado real. Ver la [referencia de `banner`](/es/docs/reference/cli/banner) para cada flag y límite de tamaño.

@@ -1,9 +1,9 @@
 ---
-title: Forum and banner
-description: Review an HTML artifact in your browser, and publish one to a public URL.
+title: Forum
+description: Review an HTML artifact in your browser and send your feedback back to the agent.
 ---
 
-Two commands let agents show you something richer than terminal text.
+`vx forum` lets agents show you something richer than terminal text.
 
 ## forum: review in your browser
 
@@ -79,15 +79,3 @@ A poll does not consume feedback by returning it. The prompts stay on the server
 After you press Send to Agent the **Agent is working on your feedback** overlay stays up until the commander really answers (a `vx forum reply`), the artifact changes, or you press **Stop waiting**. The listener's "Received" line and its polling again do not clear it.
 
 The agent's playbook is the `forum` [skill](/docs/concepts/skills), installed by `vx init` (full text on [Skill: forum](/docs/reference/skills/forum)).
-
-## banner: publish publicly
-
-```bash
-vx banner report.html
-```
-
-<Callout type="warn" title="This publishes to a third party">
-  `banner` inlines local assets into the HTML and POSTs it to a third-party hosting service (ht-ml.app by default). The page is public unless you pass `--private` or `--password`. It is your decision, per page, to publish.
-</Callout>
-
-It prints the page URL and an `update_key`, shown **once** and never stored by vexillum. It is the only credential that can update or unpublish the page; lose it and the page can never be changed. `--unpublish` replaces the page with a placeholder behind a discarded password, since there is no real delete. See the [`banner` reference](/docs/reference/cli/banner) for every flag and size cap.

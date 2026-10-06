@@ -45,7 +45,6 @@ var commands = []Command{
 	{"strike", "Strike a soldier's camp (dismantle it and return it to the pool) once its work has landed", strikeUsage},
 	{"sentinel", "Watch dispatched soldiers and record status changes", sentinelUsage},
 	{"forum", "Open a local HTML artifact for visual review and collect the user's feedback", forumUsage},
-	{"banner", "Publish an HTML artifact to a public URL, or update one already published", bannerUsage},
 }
 
 // Commands returns a copy of the command registry, in display order.

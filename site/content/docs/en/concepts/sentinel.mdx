@@ -15,7 +15,7 @@ It also watches settled soldiers whose camp is still in place: if one is working
 
 A wake is delivered at most once and only while it is still news. When it is read, the sentinel drops it if the task's status has changed since (you answered, re-prompted or shipped it), its camp was struck, or its mission was landed, so a backlog that built up while nobody was listening never replays as a burst of old notices. Run `vx status` for the full picture after a long absence.
 
-The same hook also carries **forum wakes**: when a user sends feedback from a [forum](/docs/guides/forum-and-banner) review panel, the forum listener (not a soldier) stores it in the project's inbox and records a wake under `wakes/forum/`, one per session. `vx sentinel await` and `drain` report it as `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` It is delivered once and dropped if its messages were already confirmed; the inbox, not the wake, is the source of truth.
+The same hook also carries **forum wakes**: when a user sends feedback from a [forum](/docs/guides/forum) review panel, the forum listener (not a soldier) stores it in the project's inbox and records a wake under `wakes/forum/`, one per session. `vx sentinel await` and `drain` report it as `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` It is delivered once and dropped if its messages were already confirmed; the inbox, not the wake, is the source of truth.
 
 A soldier is only recorded as `blocked` on a `needs-decision:` line it wrote in its final turn, after the end of the dispatched prompt, with real text. The template line in the prompt, or any angle-bracket placeholder, never counts, and neither does a question you already answered or dismissed.
 

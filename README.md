@@ -54,7 +54,6 @@ curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.2.0-rc.1
 | `vx strike` | Strike a soldier's camp (dismantle it and return it to the pool) once its work has landed |
 | `vx sentinel` | Watch dispatched soldiers and record status changes |
 | `vx forum` | Open a local HTML artifact for visual review and collect the user's feedback |
-| `vx banner` | Publish an HTML artifact to a public URL, or update one already published |
 <!-- docgen:commands:end -->
 
 Run `vx --help` for the full command list, or `vx <command> -h`

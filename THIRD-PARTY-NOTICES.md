@@ -416,13 +416,13 @@ SOFTWARE.
 
 ## Go modules and the Go standard library
 
-Linked into the `vx` binary (from `go list -deps ./cmd/vx`):
+No third-party Go module is linked into the `vx` binary.
 
-| Module | Version | License | Copyright |
-| --- | --- | --- | --- |
-| `golang.org/x/net` | v0.59.0 | BSD-3-Clause | Copyright 2009 The Go Authors. |
-
-License text of `golang.org/x/net`:
+The Go standard library is compiled into every Go binary, including the
+subsets of `golang.org/x/crypto`, `golang.org/x/net` and `golang.org/x/text`
+that it vendors. It is licensed by The Go Authors under the BSD-3-Clause text
+below (the toolchain used to generate this file ships no separate LICENSE file,
+so the text is the one the Go project publishes, not checked here).
 
 ```
 Copyright 2009 The Go Authors.
@@ -453,13 +453,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
-
-The Go standard library is compiled into every Go binary, including the
-subsets of `golang.org/x/crypto`, `golang.org/x/net` and `golang.org/x/text`
-that it vendors. It is licensed by The Go Authors under the same BSD-3-Clause
-text as the modules above (the toolchain used to generate this file ships no
-separate LICENSE file, so that equality is stated by the Go project, not
-checked here).
 
 ## License texts for the npm packages
 
