@@ -9,19 +9,42 @@
 // speaking in the tone the product skill gives it: it calls the user "general"
 // and keeps technical terms in English.
 //
-// A `shot` frame is not a line of the transcript: it swaps the screenshot shown
-// in the browser window next to it (a real screenshot of the real UI, kept in
-// public/demo). A step with no shot frames has no browser window at all.
+// `view` and `act` frames are not lines of the transcript. A `view` frame
+// switches the pane between the terminal and a mock of the forum screen in the
+// browser (same box, cross-faded); `act` frames move the pointer in that mock
+// and click. A step with no `view` frame has no browser phase at all.
 
-export type FrameKind = "prompt" | "reply" | "tool" | "out" | "hook" | "shot";
+export type FrameKind =
+  "prompt" | "reply" | "tool" | "out" | "hook" | "view" | "act";
 
 export interface DemoFrame {
   t: number;
   kind: FrameKind;
-  /** The line of the session, or for a `shot` the image path under public/. */
+  /**
+   * The line of the session. For a `view` frame, the pane to show: "terminal"
+   * or "browser". For an `act` frame, what the pointer does in the browser:
+   * "move:<target>" or "click:<target>" (target: option, queue or send).
+   */
   text: string;
-  /** Alt text of a `shot`. */
-  alt?: string;
+}
+
+/**
+ * The forum screen of a step (components/ForumMock.tsx). The forum's own chrome
+ * (Annotate, Conversation, Send to Agent...) stays English, it is the product's
+ * UI; only the artifact the commander wrote and its decision are translated.
+ */
+export interface BrowserCopy {
+  url: string;
+  file: string;
+  title: string;
+  pickTag: string;
+  intro: string;
+  cards: { title: string; badge?: string; text: string; bullets: string[] }[];
+  question: string;
+  choices: string[];
+  queueLabel: string;
+  /** What the picked option sends: the queued card and the "You" message. */
+  decision: string;
 }
 
 export interface DemoStep {
@@ -29,8 +52,8 @@ export interface DemoStep {
   blurb: string;
   /** Docs page the step links to, relative to the docs root. */
   docs: string;
-  /** Address shown in the browser window that displays the step's shots. */
-  browserUrl?: string;
+  /** What the browser view of the step shows (only for a step with `view` frames). */
+  browser?: BrowserCopy;
   frames: DemoFrame[];
 }
 
@@ -78,44 +101,36 @@ const FORUM_HOOK_HEADER = "Forum feedback is waiting for you:";
 const FORUM_HOOK_LINE =
   "forum session /Users/dev/project/.vexillum/forum/leak-fix.html: 1 new message (ended: false). Run vx forum inbox.";
 const INBOX_CMD = "Bash(vx forum inbox)";
-const INBOX_OUT = [
+const INBOX_FIRST = [
   "unread_prompts: 1",
   "status: feedback",
   "prompts[1]:",
   "  - uid: pr_5d2a91c40be3f817",
   "    tag: decision",
   "    prompt: |",
-  "      Fix for the leak: Close the sockets in a finally block",
-  "      Context data:",
-  "      {",
-  '        "question": "leak-fix",',
-  '        "answer": "Close the sockets in a finally block"',
-  "      }",
 ];
-const FORUM_URL = "127.0.0.1:51237/session/83b329918b347776";
 
-const SHOT_ALT = {
-  en: [
-    "The forum page open in the browser: three options for the connection leak fix, A, B and C, and an empty conversation panel.",
-    "Option A, close the sockets in a finally block, picked and queued, with the Send to Agent button active.",
-    "The same page after the answer: the pick is marked answered in round 1 and the commander's reply appears in the conversation panel.",
-  ],
-  es: [
-    "La página de forum abierta en el navegador: tres opciones para arreglar la fuga de conexiones, A, B y C, y el panel de conversación vacío.",
-    "La opción A, cerrar los sockets en un bloque finally, elegida y en cola, con el botón Send to Agent activo.",
-    "La misma página tras la respuesta: la elección figura respondida en la ronda 1 y la respuesta del commander aparece en el panel de conversación.",
-  ],
-};
-
-function shot(lang: "en" | "es", n: 0 | 1 | 2, t: number): DemoFrame {
-  const name = ["1-open", "2-picked", "3-answered"][n];
-  return {
-    t,
-    kind: "shot",
-    text: `/demo/forum-${name}-${lang}.webp`,
-    alt: SHOT_ALT[lang][n],
-  };
+// What `vx forum inbox` prints for the pick: the prompt block carries the
+// decision text, then "Context data:" and the pretty-printed JSON of the form.
+function inboxOut(decision: string, answer: string) {
+  return [
+    ...INBOX_FIRST,
+    `      ${decision}`,
+    "      Context data:",
+    "      {",
+    '        "question": "leak-fix",',
+    `        "answer": "${answer}"`,
+    "      }",
+  ];
 }
+const inboxEn = inboxOut(
+  "Fix for the leak: Close the sockets in a finally block",
+  "Close the sockets in a finally block",
+);
+const inboxEs = inboxOut(
+  "Arreglo para la fuga: Cerrar los sockets en un bloque finally",
+  "Cerrar los sockets en un bloque finally",
+);
 
 const en: DemoCopy = {
   eyebrow: "see it in action",
@@ -186,7 +201,52 @@ const en: DemoCopy = {
       blurb:
         "A page opens in your browser, you answer with a click, and your answer wakes the commander.",
       docs: "/guides/forum",
-      browserUrl: FORUM_URL,
+      browser: {
+        url: "127.0.0.1:47125",
+        file: "leak-fix.html",
+        title: "Fix options: the connection leak",
+        pickTag: "pick one",
+        intro:
+          "The scout traced the leak to <code>PaymentClient</code>: on a retry it opens a new socket and never closes the old one. Three ways to fix it, from smallest to largest.",
+        cards: [
+          {
+            title: "A. Close in a finally block",
+            badge: "recommended",
+            text: "Close the previous socket in a finally on the retry path.",
+            bullets: [
+              "One file, about 6 lines",
+              "Fixes the leak, nothing else changes",
+              "Risk: low",
+            ],
+          },
+          {
+            title: "B. Pool with a max age",
+            text: "Route requests through a small pool that retires sockets after a fixed age.",
+            bullets: [
+              "Two files, about 60 lines",
+              "Also covers future leaks of this kind",
+              "Risk: medium, new moving part",
+            ],
+          },
+          {
+            title: "C. Reuse one session",
+            text: "Rewrite the retry loop to keep a single session for every attempt.",
+            bullets: [
+              "Touches the whole client",
+              "Removes the cause, not just the symptom",
+              "Risk: high, wide change",
+            ],
+          },
+        ],
+        question: "Which fix should the soldier build?",
+        choices: [
+          "A. Close the sockets in a finally block",
+          "B. Pool with a max age",
+          "C. Reuse one session",
+        ],
+        queueLabel: "Queue my pick",
+        decision: "Fix for the leak: Close the sockets in a finally block",
+      },
       frames: [
         {
           t: 0,
@@ -200,7 +260,6 @@ const en: DemoCopy = {
         },
         { t: 2700, kind: "tool", text: FORUM_CMD },
         { t: 3400, kind: "out", text: FORUM_OUT[0] },
-        shot("en", 0, 3400),
         { t: 3600, kind: "out", text: FORUM_OUT[1] },
         { t: 3800, kind: "out", text: FORUM_OUT[2] },
         {
@@ -208,29 +267,35 @@ const en: DemoCopy = {
           kind: "reply",
           text: "The page is open, general. Pick one there and press Send to Agent.",
         },
-        shot("en", 1, 5000),
-        { t: 6800, kind: "hook", text: WAKE_HOOK },
-        { t: 7400, kind: "out", text: FORUM_HOOK_HEADER },
-        { t: 7600, kind: "out", text: FORUM_HOOK_LINE },
-        { t: 8600, kind: "tool", text: INBOX_CMD },
-        { t: 9300, kind: "out", text: INBOX_OUT[0] },
-        { t: 9500, kind: "out", text: INBOX_OUT[1] },
-        { t: 9700, kind: "out", text: INBOX_OUT[2] },
-        { t: 9900, kind: "out", text: INBOX_OUT[3] },
-        { t: 10100, kind: "out", text: INBOX_OUT[4] },
-        { t: 10300, kind: "out", text: INBOX_OUT[5] },
-        { t: 10500, kind: "out", text: INBOX_OUT[6] },
-        { t: 10700, kind: "out", text: INBOX_OUT[7] },
-        { t: 10900, kind: "out", text: INBOX_OUT[8] },
-        { t: 11100, kind: "out", text: INBOX_OUT[9] },
-        { t: 11300, kind: "out", text: INBOX_OUT[10] },
-        { t: 11500, kind: "out", text: INBOX_OUT[11] },
+        { t: 5800, kind: "view", text: "browser" },
+        { t: 6600, kind: "act", text: "move:option" },
+        { t: 7700, kind: "act", text: "click:option" },
+        { t: 8500, kind: "act", text: "move:queue" },
+        { t: 9600, kind: "act", text: "click:queue" },
+        { t: 10400, kind: "act", text: "move:send" },
+        { t: 11500, kind: "act", text: "click:send" },
+        { t: 12200, kind: "view", text: "terminal" },
+        { t: 13000, kind: "hook", text: WAKE_HOOK },
+        { t: 13600, kind: "out", text: FORUM_HOOK_HEADER },
+        { t: 13800, kind: "out", text: FORUM_HOOK_LINE },
+        { t: 14800, kind: "tool", text: INBOX_CMD },
+        { t: 15500, kind: "out", text: inboxEn[0] },
+        { t: 15700, kind: "out", text: inboxEn[1] },
+        { t: 15900, kind: "out", text: inboxEn[2] },
+        { t: 16100, kind: "out", text: inboxEn[3] },
+        { t: 16300, kind: "out", text: inboxEn[4] },
+        { t: 16500, kind: "out", text: inboxEn[5] },
+        { t: 16700, kind: "out", text: inboxEn[6] },
+        { t: 16900, kind: "out", text: inboxEn[7] },
+        { t: 17100, kind: "out", text: inboxEn[8] },
+        { t: 17300, kind: "out", text: inboxEn[9] },
+        { t: 17500, kind: "out", text: inboxEn[10] },
+        { t: 17700, kind: "out", text: inboxEn[11] },
         {
-          t: 12700,
+          t: 18700,
           kind: "reply",
           text: "Got it, general, the finally block. Sending a mission to camp 3.",
         },
-        shot("en", 2, 12900),
       ],
     },
     {
@@ -360,7 +425,53 @@ const es: DemoCopy = {
       blurb:
         "Se abre una página en tu navegador, respondés con un clic y tu respuesta despierta al commander.",
       docs: "/guides/forum",
-      browserUrl: FORUM_URL,
+      browser: {
+        url: "127.0.0.1:47125",
+        file: "leak-fix.html",
+        title: "Opciones de arreglo: la fuga de conexiones",
+        pickTag: "elegí una",
+        intro:
+          "El scout rastreó la fuga hasta <code>PaymentClient</code>: en un reintento abre un socket nuevo y nunca cierra el anterior. Tres formas de arreglarlo, de la más chica a la más grande.",
+        cards: [
+          {
+            title: "A. Cerrar en un bloque finally",
+            badge: "recomendada",
+            text: "Cerrar el socket anterior en un finally del camino de reintento.",
+            bullets: [
+              "Un archivo, unas 6 líneas",
+              "Arregla la fuga, nada más cambia",
+              "Riesgo: bajo",
+            ],
+          },
+          {
+            title: "B. Pool con edad máxima",
+            text: "Pasar los pedidos por un pool chico que retira los sockets pasada una edad fija.",
+            bullets: [
+              "Dos archivos, unas 60 líneas",
+              "También cubre fugas futuras de este tipo",
+              "Riesgo: medio, una pieza nueva",
+            ],
+          },
+          {
+            title: "C. Reusar una sola sesión",
+            text: "Reescribir el bucle de reintentos para mantener una sola sesión en cada intento.",
+            bullets: [
+              "Toca todo el cliente",
+              "Elimina la causa, no solo el síntoma",
+              "Riesgo: alto, cambio amplio",
+            ],
+          },
+        ],
+        question: "¿Qué arreglo tiene que construir el soldier?",
+        choices: [
+          "A. Cerrar los sockets en un bloque finally",
+          "B. Pool con edad máxima",
+          "C. Reusar una sola sesión",
+        ],
+        queueLabel: "Poner mi elección en cola",
+        decision:
+          "Arreglo para la fuga: Cerrar los sockets en un bloque finally",
+      },
       frames: [
         {
           t: 0,
@@ -374,7 +485,6 @@ const es: DemoCopy = {
         },
         { t: 2900, kind: "tool", text: FORUM_CMD },
         { t: 3600, kind: "out", text: FORUM_OUT[0] },
-        shot("es", 0, 3600),
         { t: 3800, kind: "out", text: FORUM_OUT[1] },
         { t: 4000, kind: "out", text: FORUM_OUT[2] },
         {
@@ -382,29 +492,35 @@ const es: DemoCopy = {
           kind: "reply",
           text: "La página está abierta, general. Elegí una ahí y apretá Send to Agent.",
         },
-        shot("es", 1, 5200),
-        { t: 7000, kind: "hook", text: WAKE_HOOK },
-        { t: 7600, kind: "out", text: FORUM_HOOK_HEADER },
-        { t: 7800, kind: "out", text: FORUM_HOOK_LINE },
-        { t: 8800, kind: "tool", text: INBOX_CMD },
-        { t: 9500, kind: "out", text: INBOX_OUT[0] },
-        { t: 9700, kind: "out", text: INBOX_OUT[1] },
-        { t: 9900, kind: "out", text: INBOX_OUT[2] },
-        { t: 10100, kind: "out", text: INBOX_OUT[3] },
-        { t: 10300, kind: "out", text: INBOX_OUT[4] },
-        { t: 10500, kind: "out", text: INBOX_OUT[5] },
-        { t: 10700, kind: "out", text: INBOX_OUT[6] },
-        { t: 10900, kind: "out", text: INBOX_OUT[7] },
-        { t: 11100, kind: "out", text: INBOX_OUT[8] },
-        { t: 11300, kind: "out", text: INBOX_OUT[9] },
-        { t: 11500, kind: "out", text: INBOX_OUT[10] },
-        { t: 11700, kind: "out", text: INBOX_OUT[11] },
+        { t: 6000, kind: "view", text: "browser" },
+        { t: 6800, kind: "act", text: "move:option" },
+        { t: 7900, kind: "act", text: "click:option" },
+        { t: 8700, kind: "act", text: "move:queue" },
+        { t: 9800, kind: "act", text: "click:queue" },
+        { t: 10600, kind: "act", text: "move:send" },
+        { t: 11700, kind: "act", text: "click:send" },
+        { t: 12400, kind: "view", text: "terminal" },
+        { t: 13200, kind: "hook", text: WAKE_HOOK },
+        { t: 13800, kind: "out", text: FORUM_HOOK_HEADER },
+        { t: 14000, kind: "out", text: FORUM_HOOK_LINE },
+        { t: 15000, kind: "tool", text: INBOX_CMD },
+        { t: 15700, kind: "out", text: inboxEs[0] },
+        { t: 15900, kind: "out", text: inboxEs[1] },
+        { t: 16100, kind: "out", text: inboxEs[2] },
+        { t: 16300, kind: "out", text: inboxEs[3] },
+        { t: 16500, kind: "out", text: inboxEs[4] },
+        { t: 16700, kind: "out", text: inboxEs[5] },
+        { t: 16900, kind: "out", text: inboxEs[6] },
+        { t: 17100, kind: "out", text: inboxEs[7] },
+        { t: 17300, kind: "out", text: inboxEs[8] },
+        { t: 17500, kind: "out", text: inboxEs[9] },
+        { t: 17700, kind: "out", text: inboxEs[10] },
+        { t: 17900, kind: "out", text: inboxEs[11] },
         {
-          t: 12900,
+          t: 18900,
           kind: "reply",
           text: "Entendido, general, el bloque finally. Mando una mission al camp 3.",
         },
-        shot("es", 2, 13100),
       ],
     },
     {

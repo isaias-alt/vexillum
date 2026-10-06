@@ -12,6 +12,7 @@ import {
 } from "react";
 import { LogoMark } from "./Logo";
 import { Hook, Output, Prompt, Reply, ToolCall } from "./transcript";
+import { ForumMock, deriveMock, hasBrowserPhase, viewAt } from "./ForumMock";
 import type { DemoCopy, DemoFrame } from "@/lib/demo-strings";
 
 const NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII"];
@@ -109,8 +110,8 @@ function FrameLine({
   elapsed: number | null;
   first: boolean;
 }) {
+  if (frame.kind === "view" || frame.kind === "act") return null;
   const shown = elapsed === null || elapsed >= frame.t;
-  if (frame.kind === "shot") return null;
   const gap = first || frame.kind === "out" ? "" : "mt-3";
   const hidden = shown ? "" : "invisible";
 
@@ -140,63 +141,6 @@ function FrameLine({
   return <Line className={`${gap} ${hidden}`}>{frame.text}</Line>;
 }
 
-// The browser window beside the transcript: a thin chrome bar and the step's
-// screenshots, stacked in one box whose ratio is reserved up front so nothing
-// moves when the first one appears. `current` is the index of the latest shot
-// reached (-1: none yet, the window is still transparent); a shot fades in
-// over the previous one.
-const SHOT_RATIO = "1473 / 812";
-
-function BrowserWindow({
-  shots,
-  current,
-  url,
-}: {
-  shots: DemoFrame[];
-  current: number;
-  url: string;
-}) {
-  return (
-    <div
-      className={`min-w-0 overflow-hidden md:col-start-1 md:row-start-2 rounded-xl border border-border bg-surface transition-opacity duration-500 motion-reduce:transition-none ${
-        current < 0 ? "opacity-0" : "opacity-100"
-      }`}
-    >
-      <div
-        aria-hidden
-        className="flex items-center gap-3 border-b border-border bg-sunken px-4 py-2"
-      >
-        <span className="flex shrink-0 gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-border" />
-          <span className="h-2 w-2 rounded-full bg-border" />
-          <span className="h-2 w-2 rounded-full bg-border" />
-        </span>
-        <span className="min-w-0 flex-1 truncate rounded-md bg-bg px-3 py-0.5 text-[11px] text-text-muted">
-          {url}
-        </span>
-      </div>
-      <div className="relative w-full" style={{ aspectRatio: SHOT_RATIO }}>
-        {shots.map((shot, i) => (
-          // eslint-disable-next-line @next/next/no-img-element -- fixed-size, pre-optimized webp
-          <img
-            key={shot.text}
-            src={shot.text}
-            alt={shot.alt ?? ""}
-            width={1473}
-            height={812}
-            loading="lazy"
-            decoding="async"
-            aria-hidden={i === current ? undefined : true}
-            className={`absolute inset-0 h-full w-full transition-opacity duration-500 motion-reduce:transition-none ${
-              i <= current ? "opacity-100" : "opacity-0"
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function InAction({
   copy,
   docsLabel,
@@ -224,6 +168,11 @@ export function InAction({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [overBody, setOverBody] = useState(false);
+  // Reduced motion never plays, so a step with a browser phase offers both
+  // panes, each drawn whole, behind a switch in the pane header.
+  const [staticView, setStaticView] = useState<"terminal" | "browser">(
+    "terminal",
+  );
   const root = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
 
@@ -241,18 +190,15 @@ export function InAction({
 
   const { active, elapsed } = state;
   const last = steps.length - 1;
-  const shots = useMemo(
-    () => steps[active].frames.filter((f) => f.kind === "shot"),
-    [steps, active],
-  );
-  // Whole step (reduced motion, or not started): the last shot, shown whole.
-  const shotNow =
-    elapsed === null
-      ? shots.length - 1
-      : shots.filter((f) => f.t <= elapsed).length - 1;
   const total = ends[active] + HOLD_MS;
   const finished = active === last && elapsed !== null && elapsed >= total;
   const engaged = hovered || focused;
+  const stepNow = steps[active];
+  const browser =
+    stepNow.browser && hasBrowserPhase(stepNow.frames) ? stepNow.browser : null;
+  const view =
+    !browser || elapsed === null ? staticView : viewAt(stepNow.frames, elapsed);
+  const mock = browser ? deriveMock(stepNow.frames, elapsed) : null;
   const playing =
     state.visible && elapsed !== null && !overBody && !finished && !reduced;
 
@@ -267,6 +213,7 @@ export function InAction({
 
   // Stacked on a phone the transcript sits below the steps: bring it into view.
   const select = (step: number) => {
+    setStaticView("terminal");
     dispatch({ type: "select", step, reduced });
     if (window.matchMedia("(max-width: 767px)").matches) {
       pane.current?.scrollIntoView({
@@ -284,13 +231,13 @@ export function InAction({
   return (
     <div
       ref={root}
-      className="grid grid-cols-1 items-start gap-7 md:grid-cols-2 md:grid-rows-[auto_1fr]"
+      className="grid grid-cols-1 items-start gap-7 md:grid-cols-2"
       onPointerEnter={mouseOnly(setHovered, true)}
       onPointerLeave={mouseOnly(setHovered, false)}
       onFocus={(e) => setFocused(e.target.matches(":focus-visible"))}
       onBlur={() => setFocused(false)}
     >
-      <ol className="m-0 min-w-0 list-none p-0 md:col-start-1 md:row-start-1">
+      <ol className="m-0 min-w-0 list-none p-0">
         {steps.map((step, i) => {
           const isActive = i === active;
           return (
@@ -371,7 +318,7 @@ export function InAction({
 
       <div
         ref={pane}
-        className="min-w-0 scroll-mt-20 md:col-start-2 md:row-span-2 md:row-start-1 overflow-hidden rounded-xl border border-border bg-surface"
+        className="min-w-0 scroll-mt-20 overflow-hidden rounded-xl border border-border bg-surface"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border bg-sunken px-4 py-2 text-[12.5px]">
           <span className="flex min-w-0 items-center gap-2">
@@ -385,6 +332,23 @@ export function InAction({
               {String(active + 1).padStart(2, "0")} /{" "}
               {String(steps.length).padStart(2, "0")}
             </span>
+            {reduced && browser && (
+              <span className="flex gap-2 text-[11px]">
+                {(["terminal", "browser"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-pressed={view === v}
+                    onClick={() => setStaticView(v)}
+                    className={`cursor-pointer rounded-sm ${
+                      view === v ? "text-accent" : "text-text-muted"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </span>
+            )}
             {!reduced && (
               <button
                 type="button"
@@ -402,15 +366,19 @@ export function InAction({
         {/* Every step sits in the same grid cell and only the active one is
             visible, so the pane is always as tall as the tallest script. */}
         <div
-          className="grid px-[22px] py-5 text-[12.5px] leading-[1.9]"
+          className="relative grid px-[22px] py-5 text-[12.5px] leading-[1.9]"
           onPointerEnter={mouseOnly(setOverBody, true)}
           onPointerLeave={mouseOnly(setOverBody, false)}
         >
           {steps.map((step, i) => (
             <div
               key={step.title}
-              className={`col-start-1 row-start-1 min-w-0 ${
-                i === active ? "" : "invisible"
+              className={`col-start-1 row-start-1 min-w-0 transition-opacity duration-500 motion-reduce:transition-none ${
+                i !== active
+                  ? "invisible"
+                  : view === "browser"
+                    ? "opacity-0"
+                    : ""
               }`}
             >
               {step.frames.map((frame, n) => (
@@ -423,15 +391,20 @@ export function InAction({
               ))}
             </div>
           ))}
+          {/* The browser phase: the same box as the terminal, cross-faded.
+              Clicks and hovers pass through, so pausing still works. */}
+          {browser && mock && (
+            <div
+              aria-hidden
+              className={`pointer-events-none absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none ${
+                view === "browser" ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              <ForumMock copy={browser} state={mock} />
+            </div>
+          )}
         </div>
       </div>
-      {shots.length > 0 && steps[active].browserUrl && (
-        <BrowserWindow
-          shots={shots}
-          current={shotNow}
-          url={steps[active].browserUrl}
-        />
-      )}
     </div>
   );
 }
