@@ -1,40 +1,103 @@
 ---
 title: Archivos
-description: Cada archivo que vexillum lee o escribe, y dónde.
+description: Cada archivo y carpeta que vexillum crea, dónde, qué guarda y si es seguro borrarlo.
 ---
+
+vexillum escribe en dos lugares: tu proyecto (lo que scaffoldea `vx init`) y el `~/.vexillum` a nivel de máquina. Esta página lista ambos, derivados del código, con una línea por entrada. "Seguro borrar" significa que vexillum sigue funcionando después; la nota dice qué perdés.
 
 ## En tu proyecto
 
-| Ruta | Escrito por | Propósito |
-| --- | --- | --- |
-| `AGENTS.md` | `init`, `upgrade` | recibe el bloque de vexillum (entre los marcadores); tu propio texto nunca se toca. Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot) |
-| `CLAUDE.md` | `init`, `upgrade` | tiene el bloque de vexillum en lugar de `AGENTS.md` cuando el proyecto no tiene `AGENTS.md`; si no, se crea con, o recibe, la línea `@AGENTS.md` para que Claude Code vea el bloque |
-| `.claude/skills/<name>/` | `init`, `upgrade` | las [skills](/es/docs/concepts/skills) `vexillum`, `forum` y `muster`, si las aceptaste |
-| `.claude/settings.json` | `init`, `upgrade` | suma el hook `Stop` asíncrono que corre `vx sentinel await` mediante un wrapper de una línea que no depende del PATH (ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path)); el contenido existente se fusiona, nunca se pisa. Un JSON inválido se deja intacto y se reporta |
-| `.vexillum/config.json` | `init`, `upgrade` | marca el proyecto como inicializado; guarda un hash de contenido por skill instalada para que `upgrade` sepa si la editaste |
-| `.vexillum/models.json` | `init` (una vez) | los perfiles de modelo y effort; **tuyo para editar**, nunca se pisa. Ver [`models.json`](/es/docs/reference/models-json) |
-| `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | si [yolo mode](/es/docs/guides/yolo-mode) está activado en el proyecto; si no existe, está desactivado. Se commitea con el proyecto, igual que `models.json` |
-| `.vexillum/.gitignore` | `init` | ignora `.vexillum/forum/`, los artefactos temporales del forum |
-| `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | tu bloque editado, guardado antes de reemplazarlo |
-| `.vexillum/AGENTS.md.backup`, `.vexillum/CLAUDE.md.backup` | `upgrade` | el archivo entero que tiene el bloque, guardado antes de reparar un bloque malformado |
-| `.vexillum/backups/skills/<name>/` | `upgrade --force` | una skill editada, guardada antes de sobrescribirla |
+`vx init` (y `vx upgrade`) scaffoldean esto. Todo vive en el checkout del proyecto.
 
-`AGENTS.md` y `CLAUDE.md` son tuyos: `init` los lista en un aviso y pregunta antes de cambiarlos. Estos archivos los trackea git, así que commitealos.
+```text
+<project>/
+  AGENTS.md                       el bloque de vexillum (o tu archivo, más el bloque)
+  CLAUDE.md                       "@AGENTS.md", o el bloque si no hay AGENTS.md
+  .claude/
+    settings.json                 suma el hook Stop del sentinel
+    skills/
+      vexillum/  forum/  muster/  las skills first-party
+  .vexillum/
+    config.json                   marca el proyecto como inicializado
+    models.json                   perfiles de modelo y effort
+    yolo.json                     interruptor de yolo mode (solo tras vx yolo)
+    .gitignore                    ignora forum/
+    forum/                        artefactos temporales de los agentes (ignorado por git)
+    agents-md-slot.backup.md      backups, solo tras un upgrade --force o una reparación
+    AGENTS.md.backup
+    CLAUDE.md.backup
+    backups/skills/<name>/
+```
+
+| Ruta | Escrito por | Guarda | ¿Seguro borrar? |
+| --- | --- | --- | --- |
+| `AGENTS.md` | `init`, `upgrade` | recibe el bloque de vexillum (entre los marcadores); tu propio texto nunca se toca. Ver [El slot de AGENTS.md](/es/docs/concepts/agents-md-slot) | No. Es tu archivo y lleva las instrucciones del commander; corré `vx init` de nuevo para restaurar el bloque |
+| `CLAUDE.md` | `init`, `upgrade` | tiene el bloque de vexillum en lugar de `AGENTS.md` cuando el proyecto no tiene `AGENTS.md`; si no, se crea con, o recibe, la línea `@AGENTS.md` para que Claude Code vea el bloque | No. Igual que arriba; sin la línea o el bloque Claude Code deja de ver las reglas del commander |
+| `.claude/settings.json` | `init`, `upgrade` | suma el hook `Stop` asíncrono que corre `vx sentinel await` mediante un wrapper de una línea que no depende del PATH (ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path)); el contenido existente se fusiona, nunca se pisa. Un JSON inválido se deja intacto y se reporta | No el archivo entero, puede tener tus propios ajustes. Borrar solo la entrada del hook deja al commander sin despertar hasta que `vx upgrade` la vuelva a agregar |
+| `.claude/skills/<name>/` | `init`, `upgrade` | las [skills](/es/docs/concepts/skills) `vexillum`, `forum` y `muster`, si las aceptaste | Sí. `vx upgrade` las reinstala (una editada se respalda antes) |
+| `.vexillum/config.json` | `init`, `upgrade` | marca el proyecto como inicializado; guarda un hash de contenido por skill instalada para que `upgrade` sepa si la editaste | No conviene. El proyecto pasa a verse como no inicializado y se pierde la memoria de qué skills editaste; `vx init` lo recrea |
+| `.vexillum/models.json` | `init` (una vez) | los perfiles de modelo y effort; **tuyo para editar**, nunca se pisa. Ver [`models.json`](/es/docs/reference/models-json) | Sí, pero se van tus perfiles; rigen los valores built-in hasta que `init` escriba uno nuevo |
+| `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | si [yolo mode](/es/docs/guides/yolo-mode) está activado en el proyecto; si no existe, está desactivado. Se commitea con el proyecto, igual que `models.json` | Sí. Desactiva yolo mode |
+| `.vexillum/.gitignore` | `init` | ignora `forum/` para que los artefactos temporales del forum queden fuera de git | Sí, pero entonces `.vexillum/forum/` aparece en `git status` |
+| `.vexillum/forum/` | los agentes, por las skills forum y muster (no lo crea `init`) | artefactos HTML temporales abiertos con `vx forum`, por ejemplo `plan.html` o `muster.html` | Sí. Se regeneran cuando hacen falta |
+| `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | tu bloque editado, guardado antes de reemplazarlo | Sí, cuando ya no necesites tu edición |
+| `.vexillum/AGENTS.md.backup`, `.vexillum/CLAUDE.md.backup` | `upgrade` | el archivo entero que tiene el bloque, guardado antes de reparar un bloque malformado | Sí, una vez que revisaste la reparación |
+| `.vexillum/backups/skills/<name>/` | `upgrade --force` | una skill editada, guardada antes de sobrescribirla | Sí, cuando ya no necesites tu edición |
+
+`AGENTS.md` y `CLAUDE.md` son tuyos: `init` los lista en un aviso y pregunta antes de cambiarlos. Commiteá `AGENTS.md`, `CLAUDE.md`, `.claude/` y `.vexillum/` (los backups y `forum/` son las excepciones que no vas a querer commitear).
 
 ## En `~/.vexillum`
 
-| Ruta | Propósito |
-| --- | --- |
-| `models.json` | base global opcional para los [perfiles](/es/docs/reference/models-json); lo creás vos |
-| `sentinel.pid`, `sentinel.log` | el único sentinel por máquina |
-| `forum/listener.pid`, `forum/listener.log` | el único listener de forum por usuario, ver [Forum](/es/docs/guides/forum) |
-| `projects/<repo>-<hash>/tasks/<id>.json` | una tarea |
-| `projects/<repo>-<hash>/wakes/<id>.json` | un wake pendiente del sentinel |
-| `projects/<repo>-<hash>/wakes/forum/<session>.json` | un wake de forum pendiente (uno por sesión de revisión) |
-| `projects/<repo>-<hash>/forum-inbox/<session>/<uid>.json` | feedback de forum esperando al commander (los confirmados pasan a `read/`) |
-| `projects/<repo>-<hash>/pending/<id>.json` | una decisión pendiente del commander, ver [`vx pending`](/es/docs/reference/cli/pending) |
-| `projects/<repo>-<hash>/camps/` | el pool de worktrees: `pool.json` y `<slot>/<repo>/` |
-| `projects/<repo>-<hash>/reports/<agent>-<id>.md` | el reporte final de un scout |
-| `projects/<repo>-<hash>/pauses/<agent>.md` | una pausa declarada por un soldier |
+Estado a nivel de máquina, compartido por todos los proyectos. Nada de esto se commitea en ningún lado. Ver [Estado](/es/docs/concepts/state) para saber cómo se deriva la clave del proyecto.
 
-Ver [Estado](/es/docs/concepts/state) para saber cómo se deriva la clave del proyecto.
+```text
+~/.vexillum/
+  models.json                          perfiles de modelo globales opcionales (lo creás vos)
+  sentinel.pid  sentinel.lock          los archivos de lock del único sentinel
+  sentinel.json  sentinel.log          su registro de build y su log
+  sentinel-awaiters/<pid>.json         un registro por cada `vx sentinel await` vivo
+  forum/
+    server.pid  server.json            el lock del servidor de forum y su archivo de descubrimiento
+    last-port  server.log              puerto preferido y log del servidor
+    listener.pid  listener.log         el lock y el log del listener de forum
+  forums/<session>/
+    session.json  transcript.json      una sesión de revisión: cola y conversación
+    layout.json                        inbox de problemas de layout
+    whiteboards/                       escenas y previews de whiteboards
+    attachments/                       imágenes que adjuntó quien revisa
+  projects/<repo>-<hash>/              un namespace por proyecto
+    tasks/<id>.json                    una tarea
+    camps/
+      pool.json  pool.lock             el estado y el lock del pool de worktrees
+      <slot>/<repo>/                   un camp: un git worktree
+    wakes/<id>.json                    wakes pendientes del sentinel
+    wakes/forum/<session>.json         wakes de forum pendientes
+    forum-inbox/<session>/<uid>.json   feedback de forum para el commander
+    forum-inbox/<session>/read/        feedback confirmado
+    pending/<id>.json                  decisiones pendientes del commander
+    reports/<agent>-<id>.md            el reporte final de un scout
+    pauses/<agent>.md                  una pausa declarada por un soldier
+```
+
+| Ruta | Guarda | ¿Seguro borrar? |
+| --- | --- | --- |
+| `models.json` | base global opcional para los [perfiles](/es/docs/reference/models-json); lo creás vos | Sí, pero se van tus perfiles globales |
+| `sentinel.pid`, `sentinel.lock` | el único sentinel por máquina: su pid y el lock que impide arrancar un segundo | Solo con el sentinel detenido. Borrarlos con uno vivo puede dejar arrancar un segundo |
+| `sentinel.json` | el build desde el que arrancó el sentinel en marcha, para que un binario más nuevo pueda reemplazarlo | Sí (solo si no hay sentinel corriendo) |
+| `sentinel.log` | el log del sentinel | Sí |
+| `sentinel-awaiters/<pid>.json` | un registro por cada proceso de hook `vx sentinel await` vivo | Sí. Los registros viejos se limpian solos |
+| `forum/server.pid`, `forum/server.json` | el lock del servidor de forum y su archivo de descubrimiento (dirección y token de agente, modo 0600); existen solo mientras corre | Solo con el servidor detenido |
+| `forum/last-port` | el último puerto que usó el servidor, preferido en el siguiente arranque para que una pestaña abierta siga viva | Sí |
+| `forum/server.log` | el log del servidor de forum | Sí |
+| `forum/listener.pid`, `forum/listener.log` | el único listener de forum por usuario, ver [Forum](/es/docs/guides/forum) | Solo con el listener detenido; el log siempre |
+| `forums/<session>/` | una sesión de revisión de forum: `session.json` (cola y estado), `transcript.json` (la conversación), `layout.json`, `whiteboards/` y `attachments/` | Sí para una sesión terminada. Perdés su transcript y sus dibujos. Nada poda estas carpetas por vos |
+| `projects/<repo>-<hash>/tasks/<id>.json` | una tarea, el [schema `Task`](/es/docs/reference/status-json) | Solo con `vx strike`. Borrarla a mano hace que vexillum olvide la tarea mientras su camp y su branch siguen ahí |
+| `projects/<repo>-<hash>/camps/` | el pool de worktrees: `pool.json`, `pool.lock` y `<slot>/<repo>/` | No. Los slots son git worktrees registrados en tu repositorio; usá `vx strike` |
+| `projects/<repo>-<hash>/wakes/<id>.json` | un wake pendiente del sentinel | Sí. Perdés solo esa notificación |
+| `projects/<repo>-<hash>/wakes/forum/<session>.json` | un wake de forum pendiente (uno por sesión de revisión) | Sí. Perdés solo esa notificación |
+| `projects/<repo>-<hash>/forum-inbox/<session>/<uid>.json` | feedback de forum esperando al commander; los confirmados pasan a `read/` (se guardan los 200 más nuevos) | `read/` sí. El feedback sin leer se pierde si lo borrás |
+| `projects/<repo>-<hash>/pending/<id>.json` | una decisión pendiente del commander, ver [`vx pending`](/es/docs/reference/cli/pending) | Sí, si ya no necesitás esa decisión registrada |
+| `projects/<repo>-<hash>/reports/<agent>-<id>.md` | el reporte final de un scout (lo escribe el scout, no el binario) | Sí, una vez que lo leíste |
+| `projects/<repo>-<hash>/pauses/<agent>.md` | una pausa declarada por un soldier (la escribe el soldier) | Sí. Sin ella, un soldier inactivo vuelve a tratarse como no confirmado |
+
+Cada archivo JSON se escribe primero a un archivo temporal `*.tmp` y se renombra a su lugar. Un crash puede dejar un `*.tmp` suelto; es seguro borrarlo.

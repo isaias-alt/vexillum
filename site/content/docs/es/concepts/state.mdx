@@ -9,20 +9,33 @@ vexillum no guarda memoria en un daemon. Cada dato en el que se apoya es un arch
 
 ```text
 ~/.vexillum/
-  sentinel.pid  sentinel.log
+  models.json              perfiles de modelo globales opcionales
+  sentinel.pid  sentinel.lock  sentinel.json  sentinel.log
   sentinel-awaiters/       un registro por cada `vx sentinel await` vivo
+  forum/                   el servidor y el listener de forum: pid, log, puerto
+  forums/<session>/        una sesión de revisión de forum: cola, transcript, whiteboards
   projects/
     <repo>-<hash>/         un namespace por proyecto
       tasks/<id>.json      un archivo por tarea
+      camps/               el pool de worktrees: pool.json y <slot>/<repo>/
       wakes/<id>.json      wakes pendientes del sentinel
       wakes/forum/         wakes de forum pendientes, uno por sesión de revisión
       forum-inbox/         feedback de forum esperando al commander
-      camps/               el pool de worktrees
+      pending/             decisiones pendientes del commander
       reports/             reportes de scouts
       pauses/              pausas declaradas por soldiers
 ```
 
-En el proyecto mismo, `init` escribe `.vexillum/config.json` y `.claude/`. Ver [Archivos](/es/docs/reference/files) para la lista completa.
+En el proyecto mismo, `init` escribe `AGENTS.md` o `CLAUDE.md`, `.claude/` (las skills y el hook del sentinel) y `.vexillum/` (`config.json`, `models.json`, `.gitignore`):
+
+```text
+<project>/
+  AGENTS.md  CLAUDE.md
+  .claude/settings.json  .claude/skills/
+  .vexillum/config.json  .vexillum/models.json  .vexillum/.gitignore
+```
+
+El estado por proyecto es local a la máquina; los archivos del proyecto se commitean con él. Ver [Archivos](/es/docs/reference/files) para cada entrada, qué guarda y si es seguro borrarla.
 
 ## La clave del proyecto
 

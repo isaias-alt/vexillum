@@ -1,40 +1,103 @@
 ---
 title: Files
-description: Every file vexillum reads or writes, and where.
+description: Every file and folder vexillum creates, where, what it holds and whether it is safe to delete.
 ---
+
+vexillum writes in two places: your project (what `vx init` scaffolds) and the machine-level `~/.vexillum`. This page lists both, derived from the code, with one line per entry. "Safe to delete" means vexillum keeps working afterwards; the note says what you lose.
 
 ## In your project
 
-| Path | Written by | Purpose |
-| --- | --- | --- |
-| `AGENTS.md` | `init`, `upgrade` | gains the vexillum block (between the markers); your own text is never touched. See [The AGENTS.md slot](/docs/concepts/agents-md-slot) |
-| `CLAUDE.md` | `init`, `upgrade` | holds the vexillum block instead of `AGENTS.md` when the project has no `AGENTS.md`; otherwise it is created with, or given, the line `@AGENTS.md` so Claude Code sees the block |
-| `.claude/skills/<name>/` | `init`, `upgrade` | the `vexillum`, `forum` and `muster` [skills](/docs/concepts/skills), if you accepted them |
-| `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook that runs `vx sentinel await` through a PATH-independent one-line wrapper (see [Sentinel](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path)), and existing content is merged, never overwritten. Invalid JSON is left untouched and reported |
-| `.vexillum/config.json` | `init`, `upgrade` | marks the project initialized; stores a content hash per installed skill so `upgrade` can tell whether you edited it |
-| `.vexillum/models.json` | `init` (once) | the model and effort profiles; **yours to edit**, never overwritten. See [`models.json`](/docs/reference/models-json) |
-| `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | whether [yolo mode](/docs/guides/yolo-mode) is on for the project; absent means off. Committed with the project, like `models.json` |
-| `.vexillum/.gitignore` | `init` | ignores `.vexillum/forum/`, the forum's scratch artifacts |
-| `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | your edited block, saved before it is replaced |
-| `.vexillum/AGENTS.md.backup`, `.vexillum/CLAUDE.md.backup` | `upgrade` | the whole file that holds the block, saved before a malformed block is repaired |
-| `.vexillum/backups/skills/<name>/` | `upgrade --force` | an edited skill, saved before it is overwritten |
+`vx init` (and `vx upgrade`) scaffold this. Everything here lives in the project checkout.
 
-`AGENTS.md` and `CLAUDE.md` are yours: `init` lists them in a notice and asks before changing them. These files are git-tracked, so commit them.
+```text
+<project>/
+  AGENTS.md                       the vexillum block (or your own file, plus the block)
+  CLAUDE.md                       "@AGENTS.md", or the block when there is no AGENTS.md
+  .claude/
+    settings.json                 gains the sentinel Stop hook
+    skills/
+      vexillum/  forum/  muster/  the first-party skills
+  .vexillum/
+    config.json                   marks the project initialized
+    models.json                   model and effort profiles
+    yolo.json                     yolo mode switch (only after vx yolo)
+    .gitignore                    ignores forum/
+    forum/                        scratch artifacts written by agents (gitignored)
+    agents-md-slot.backup.md      backups, only after an upgrade --force or a repair
+    AGENTS.md.backup
+    CLAUDE.md.backup
+    backups/skills/<name>/
+```
+
+| Path | Written by | Holds | Safe to delete? |
+| --- | --- | --- | --- |
+| `AGENTS.md` | `init`, `upgrade` | gains the vexillum block (between the markers); your own text is never touched. See [The AGENTS.md slot](/docs/concepts/agents-md-slot) | No. It is your file and carries the commander's instructions; re-run `vx init` to restore the block |
+| `CLAUDE.md` | `init`, `upgrade` | holds the vexillum block instead of `AGENTS.md` when the project has no `AGENTS.md`; otherwise it is created with, or given, the line `@AGENTS.md` so Claude Code sees the block | No. Same as above; without the line or the block Claude Code stops seeing the commander rules |
+| `.claude/settings.json` | `init`, `upgrade` | gains the async `Stop` hook that runs `vx sentinel await` through a PATH-independent one-line wrapper (see [Sentinel](/docs/concepts/sentinel#the-hook-does-not-depend-on-your-path)); existing content is merged, never overwritten. Invalid JSON is left untouched and reported | Not the whole file, it can hold your own settings. Deleting only the hook entry stops the commander from being woken until `vx upgrade` re-adds it |
+| `.claude/skills/<name>/` | `init`, `upgrade` | the `vexillum`, `forum` and `muster` [skills](/docs/concepts/skills), if you accepted them | Yes. `vx upgrade` reinstalls them (an edited one is backed up first) |
+| `.vexillum/config.json` | `init`, `upgrade` | marks the project initialized; stores a content hash per installed skill so `upgrade` can tell whether you edited it | Not advisable. The project then reads as not initialized, and the edited-or-not memory of the skills is lost; `vx init` recreates it |
+| `.vexillum/models.json` | `init` (once) | the model and effort profiles; **yours to edit**, never overwritten. See [`models.json`](/docs/reference/models-json) | Yes, but your profiles go with it; the built-in defaults apply until `init` writes a new one |
+| `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | whether [yolo mode](/docs/guides/yolo-mode) is on for the project; absent means off. Committed with the project, like `models.json` | Yes. It turns yolo mode off |
+| `.vexillum/.gitignore` | `init` | ignores `forum/` so the forum's scratch artifacts stay out of git | Yes, but `.vexillum/forum/` then shows up in `git status` |
+| `.vexillum/forum/` | agents, by the forum and muster skills (not created by `init`) | scratch HTML artifacts opened with `vx forum`, for example `plan.html` or `muster.html` | Yes. They are regenerated when needed |
+| `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | your edited block, saved before it is replaced | Yes, once you no longer need your edit |
+| `.vexillum/AGENTS.md.backup`, `.vexillum/CLAUDE.md.backup` | `upgrade` | the whole file that holds the block, saved before a malformed block is repaired | Yes, once you checked the repair |
+| `.vexillum/backups/skills/<name>/` | `upgrade --force` | an edited skill, saved before it is overwritten | Yes, once you no longer need your edit |
+
+`AGENTS.md` and `CLAUDE.md` are yours: `init` lists them in a notice and asks before changing them. Commit `AGENTS.md`, `CLAUDE.md`, `.claude/` and `.vexillum/` (the backups and `forum/` are the exceptions you will not want to commit).
 
 ## In `~/.vexillum`
 
-| Path | Purpose |
-| --- | --- |
-| `models.json` | optional global base for the [profiles](/docs/reference/models-json); you create it |
-| `sentinel.pid`, `sentinel.log` | the single per-machine sentinel |
-| `forum/listener.pid`, `forum/listener.log` | the single per-user forum listener, see [Forum](/docs/guides/forum) |
-| `projects/<repo>-<hash>/tasks/<id>.json` | one task |
-| `projects/<repo>-<hash>/wakes/<id>.json` | a pending sentinel wake |
-| `projects/<repo>-<hash>/wakes/forum/<session>.json` | a pending forum wake (one per review session) |
-| `projects/<repo>-<hash>/forum-inbox/<session>/<uid>.json` | forum feedback waiting for the commander (confirmed ones move to `read/`) |
-| `projects/<repo>-<hash>/pending/<id>.json` | a commander's pending decision, see [`vx pending`](/docs/reference/cli/pending) |
-| `projects/<repo>-<hash>/camps/` | the worktree pool: `pool.json` and `<slot>/<repo>/` |
-| `projects/<repo>-<hash>/reports/<agent>-<id>.md` | a scout's final report |
-| `projects/<repo>-<hash>/pauses/<agent>.md` | a soldier's declared pause |
+Machine-level state, shared by every project. Nothing here is committed anywhere. See [State](/docs/concepts/state) for how the project key is derived.
 
-See [State](/docs/concepts/state) for how the project key is derived.
+```text
+~/.vexillum/
+  models.json                          optional global model profiles (you create it)
+  sentinel.pid  sentinel.lock          the single sentinel's lock files
+  sentinel.json  sentinel.log          its build record and log
+  sentinel-awaiters/<pid>.json         one record per live `vx sentinel await`
+  forum/
+    server.pid  server.json            the forum server's lock and discovery file
+    last-port  server.log              preferred port and server log
+    listener.pid  listener.log         the forum listener's lock and log
+  forums/<session>/
+    session.json  transcript.json      one review session: queue and conversation
+    layout.json                        layout issues inbox
+    whiteboards/                       whiteboard scenes and previews
+    attachments/                       images the reviewer attached
+  projects/<repo>-<hash>/              one namespace per project
+    tasks/<id>.json                    one task
+    camps/
+      pool.json  pool.lock             the worktree pool's state and lock
+      <slot>/<repo>/                   a camp: one git worktree
+    wakes/<id>.json                    pending sentinel wakes
+    wakes/forum/<session>.json         pending forum wakes
+    forum-inbox/<session>/<uid>.json   forum feedback for the commander
+    forum-inbox/<session>/read/        confirmed feedback
+    pending/<id>.json                  the commander's pending decisions
+    reports/<agent>-<id>.md            a scout's final report
+    pauses/<agent>.md                  a soldier's declared pause
+```
+
+| Path | Holds | Safe to delete? |
+| --- | --- | --- |
+| `models.json` | optional global base for the [profiles](/docs/reference/models-json); you create it | Yes, but your global profiles go with it |
+| `sentinel.pid`, `sentinel.lock` | the single per-machine sentinel: its pid and the lock that keeps a second one from starting | Only with the sentinel stopped. Deleting them under a live sentinel can let a second one start |
+| `sentinel.json` | the build the running sentinel was started from, so a newer binary can replace it | Yes (only while no sentinel runs) |
+| `sentinel.log` | the sentinel's log | Yes |
+| `sentinel-awaiters/<pid>.json` | one record per live `vx sentinel await` hook process | Yes. Stale records are cleaned up |
+| `forum/server.pid`, `forum/server.json` | the forum server's lock and its discovery file (address and agent token, mode 0600); exist only while it runs | Only with the server stopped |
+| `forum/last-port` | the port the server used last, preferred on the next start so an open tab survives | Yes |
+| `forum/server.log` | the forum server's log | Yes |
+| `forum/listener.pid`, `forum/listener.log` | the single per-user forum listener, see [Forum](/docs/guides/forum) | Only with the listener stopped; the log always |
+| `forums/<session>/` | one forum review session: `session.json` (queue and status), `transcript.json` (the conversation), `layout.json`, `whiteboards/` and `attachments/` | Yes for an ended session. You lose its transcript and drawings. Nothing prunes these folders for you |
+| `projects/<repo>-<hash>/tasks/<id>.json` | one task, the [`Task` schema](/docs/reference/status-json) | Only through `vx strike`. Deleting it by hand makes vexillum forget the task while its camp and branch remain |
+| `projects/<repo>-<hash>/camps/` | the worktree pool: `pool.json`, `pool.lock` and `<slot>/<repo>/` | No. The slots are git worktrees registered in your repository; use `vx strike` |
+| `projects/<repo>-<hash>/wakes/<id>.json` | a pending sentinel wake | Yes. You lose only that notification |
+| `projects/<repo>-<hash>/wakes/forum/<session>.json` | a pending forum wake (one per review session) | Yes. You lose only that notification |
+| `projects/<repo>-<hash>/forum-inbox/<session>/<uid>.json` | forum feedback waiting for the commander; confirmed ones move to `read/` (the newest 200 are kept) | `read/` yes. Unread feedback is lost if you delete it |
+| `projects/<repo>-<hash>/pending/<id>.json` | a commander's pending decision, see [`vx pending`](/docs/reference/cli/pending) | Yes, if you no longer need that decision recorded |
+| `projects/<repo>-<hash>/reports/<agent>-<id>.md` | a scout's final report (written by the scout, not by the binary) | Yes, once you read it |
+| `projects/<repo>-<hash>/pauses/<agent>.md` | a soldier's declared pause (written by the soldier) | Yes. Without it, an idle soldier is treated as unconfirmed again |
+
+Every JSON file is written to a temporary `*.tmp` file and renamed into place. A crash can leave a stray `*.tmp` file behind; it is safe to delete.

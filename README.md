@@ -74,6 +74,44 @@ curl -fsSL https://vx.lucasco.dev/install | bash -s -- --version v0.1.1-rc.1
 Run `vx --help` for the full command list, or `vx <command> -h`
 for a specific command.
 
+## Files and folders
+
+`vx init` scaffolds this inside your project; commit it (the backups and `forum/` aside):
+
+```text
+<project>/
+  AGENTS.md or CLAUDE.md     the vexillum block (CLAUDE.md is "@AGENTS.md" when AGENTS.md exists)
+  .claude/
+    settings.json            the sentinel Stop hook
+    skills/                  the vexillum, forum and muster skills
+  .vexillum/
+    config.json              marks the project initialized
+    models.json              model and effort profiles (yours to edit)
+    yolo.json                yolo mode switch, only after `vx yolo`
+    .gitignore               ignores forum/
+    forum/                   scratch artifacts written by agents (gitignored)
+```
+
+Machine-level state lives in `~/.vexillum/`, outside your repositories. It is
+plain JSON, written atomically, and one namespace per project:
+
+```text
+~/.vexillum/
+  models.json                optional global model profiles
+  sentinel.*, sentinel-awaiters/   the single sentinel: locks, build record, log
+  forum/, forums/<session>/        the forum server, listener and review sessions
+  projects/<repo>-<hash>/
+    tasks/                   one JSON file per task
+    camps/                   the worktree pool: pool.json and <slot>/<repo>/
+    wakes/  forum-inbox/     pending notifications for the commander
+    pending/                 the commander's pending decisions
+    reports/  pauses/        scout reports and declared soldier pauses
+```
+
+Do not delete `camps/` or a task file by hand; use `vx strike`. See
+[Files](https://vx.lucasco.dev/docs/reference/files) in the docs for every
+entry and whether it is safe to delete.
+
 ## Contributing
 
 See `CONTRIBUTING.md` for how to build, test, and submit a PR. Found a bug or
