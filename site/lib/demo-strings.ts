@@ -59,15 +59,23 @@ const SHIP_CMD = `Bash(vx ship ${C})`;
 const SHIP_STEPS = ["[ok] lint", "[ok] tests", "[ok] review", "[ok] docs"];
 const SHIP_OUT = `tribunal passed, pushed vexillum/${C}, pull request: https://github.com/acme/shop/pull/214`;
 
-const DOCTOR_CMD = "Bash(vx doctor)";
-const DOCTOR_OUT = [
-  "[ok] Claude Code",
-  "[ok] herdr",
-  "[ok] GitHub CLI (gh)",
-  "[ok] project initialized",
-  "[ok] skill vexillum - installed, current",
-  "[ok] sentinel Stop hook - registered in .claude/settings.json",
-  "Environment ready.",
+const FORUM_CMD = "Bash(vx forum .vexillum/forum/leak-fix.html)";
+const FORUM_OUT = [
+  "status: open",
+  "url: http://127.0.0.1:51237/session/83b329918b347776",
+  "listener: running",
+];
+const FORUM_HOOK_HEADER = "Forum feedback is waiting for you:";
+const FORUM_HOOK_LINE =
+  "forum session /Users/dev/project/.vexillum/forum/leak-fix.html: 1 new message (ended: false). Run vx forum inbox.";
+const INBOX_CMD = "Bash(vx forum inbox)";
+const INBOX_OUT = [
+  "unread_prompts: 1",
+  "status: feedback",
+  "prompts[1]:",
+  "  - uid: pr_5d2a91c40be3f817",
+  "    tag: choice",
+  "    prompt: Option B: close the sockets in a finally block",
 ];
 
 const en: DemoCopy = {
@@ -135,6 +143,48 @@ const en: DemoCopy = {
       ],
     },
     {
+      title: "Forum",
+      blurb:
+        "A page opens in your browser, you answer with a click, and your answer wakes the commander.",
+      docs: "/guides/forum",
+      frames: [
+        {
+          t: 0,
+          kind: "prompt",
+          text: "show me the options for the leak fix, I want to pick one",
+        },
+        {
+          t: 1700,
+          kind: "reply",
+          text: "Opening a page with the three options, general.",
+        },
+        { t: 2700, kind: "tool", text: FORUM_CMD },
+        { t: 3400, kind: "out", text: FORUM_OUT[0] },
+        { t: 3600, kind: "out", text: FORUM_OUT[1] },
+        { t: 3800, kind: "out", text: FORUM_OUT[2] },
+        {
+          t: 4800,
+          kind: "reply",
+          text: "The page is open, general. Pick one there and press Send to Agent.",
+        },
+        { t: 6800, kind: "hook", text: WAKE_HOOK },
+        { t: 7400, kind: "out", text: FORUM_HOOK_HEADER },
+        { t: 7600, kind: "out", text: FORUM_HOOK_LINE },
+        { t: 8600, kind: "tool", text: INBOX_CMD },
+        { t: 9300, kind: "out", text: INBOX_OUT[0] },
+        { t: 9500, kind: "out", text: INBOX_OUT[1] },
+        { t: 9700, kind: "out", text: INBOX_OUT[2] },
+        { t: 9900, kind: "out", text: INBOX_OUT[3] },
+        { t: 10100, kind: "out", text: INBOX_OUT[4] },
+        { t: 10300, kind: "out", text: INBOX_OUT[5] },
+        {
+          t: 11300,
+          kind: "reply",
+          text: "Got it, general, the finally block. Sending a mission to camp 3.",
+        },
+      ],
+    },
+    {
       title: "Land",
       blurb:
         "A finished mission fast-forwards your checkout and its camp goes back to the pool.",
@@ -186,37 +236,6 @@ const en: DemoCopy = {
           t: 6800,
           kind: "reply",
           text: "Pull request 214 is open, general, and it passed lint, tests, the adversarial review and the docs check. The soldier stays in its camp until you merge it, in case the review asks for changes.",
-        },
-      ],
-    },
-    {
-      title: "Doctor",
-      blurb:
-        "One read-only check that the tools, the project and the sentinel hook are all in place.",
-      docs: "/reference/cli/doctor",
-      frames: [
-        {
-          t: 0,
-          kind: "prompt",
-          text: "is everything wired up right?",
-        },
-        {
-          t: 900,
-          kind: "reply",
-          text: "Let me check the camp, general.",
-        },
-        { t: 1700, kind: "tool", text: DOCTOR_CMD },
-        { t: 2400, kind: "out", text: DOCTOR_OUT[0] },
-        { t: 2600, kind: "out", text: DOCTOR_OUT[1] },
-        { t: 2800, kind: "out", text: DOCTOR_OUT[2] },
-        { t: 3000, kind: "out", text: DOCTOR_OUT[3] },
-        { t: 3200, kind: "out", text: DOCTOR_OUT[4] },
-        { t: 3400, kind: "out", text: DOCTOR_OUT[5] },
-        { t: 3700, kind: "out", text: DOCTOR_OUT[6] },
-        {
-          t: 4700,
-          kind: "reply",
-          text: "All clear, general. Every required tool is in place and the sentinel hook will wake me when a soldier settles. The troop is ready to march.",
         },
       ],
     },
@@ -288,6 +307,48 @@ const es: DemoCopy = {
       ],
     },
     {
+      title: "Forum",
+      blurb:
+        "Se abre una página en tu navegador, respondés con un clic y tu respuesta despierta al commander.",
+      docs: "/guides/forum",
+      frames: [
+        {
+          t: 0,
+          kind: "prompt",
+          text: "mostrame las opciones para arreglar la pérdida, quiero elegir una",
+        },
+        {
+          t: 1900,
+          kind: "reply",
+          text: "Abro una página con las tres opciones, general.",
+        },
+        { t: 2900, kind: "tool", text: FORUM_CMD },
+        { t: 3600, kind: "out", text: FORUM_OUT[0] },
+        { t: 3800, kind: "out", text: FORUM_OUT[1] },
+        { t: 4000, kind: "out", text: FORUM_OUT[2] },
+        {
+          t: 5000,
+          kind: "reply",
+          text: "La página está abierta, general. Elegí una ahí y apretá Send to Agent.",
+        },
+        { t: 7000, kind: "hook", text: WAKE_HOOK },
+        { t: 7600, kind: "out", text: FORUM_HOOK_HEADER },
+        { t: 7800, kind: "out", text: FORUM_HOOK_LINE },
+        { t: 8800, kind: "tool", text: INBOX_CMD },
+        { t: 9500, kind: "out", text: INBOX_OUT[0] },
+        { t: 9700, kind: "out", text: INBOX_OUT[1] },
+        { t: 9900, kind: "out", text: INBOX_OUT[2] },
+        { t: 10100, kind: "out", text: INBOX_OUT[3] },
+        { t: 10300, kind: "out", text: INBOX_OUT[4] },
+        { t: 10500, kind: "out", text: INBOX_OUT[5] },
+        {
+          t: 11500,
+          kind: "reply",
+          text: "Entendido, general, el bloque finally. Mando una mission al camp 3.",
+        },
+      ],
+    },
+    {
       title: "Land",
       blurb:
         "Una mission terminada avanza tu checkout con fast-forward y su camp vuelve al pool.",
@@ -339,37 +400,6 @@ const es: DemoCopy = {
           t: 6900,
           kind: "reply",
           text: "El pull request 214 está abierto, general, y pasó lint, tests, la review adversarial y el chequeo de docs. El soldier queda en su camp hasta que lo mergees, por si la review pide cambios.",
-        },
-      ],
-    },
-    {
-      title: "Doctor",
-      blurb:
-        "Un chequeo de solo lectura de que las herramientas, el proyecto y el hook del sentinel están en su lugar.",
-      docs: "/reference/cli/doctor",
-      frames: [
-        {
-          t: 0,
-          kind: "prompt",
-          text: "¿está todo bien configurado?",
-        },
-        {
-          t: 800,
-          kind: "reply",
-          text: "Reviso el campamento, general.",
-        },
-        { t: 1600, kind: "tool", text: DOCTOR_CMD },
-        { t: 2300, kind: "out", text: DOCTOR_OUT[0] },
-        { t: 2500, kind: "out", text: DOCTOR_OUT[1] },
-        { t: 2700, kind: "out", text: DOCTOR_OUT[2] },
-        { t: 2900, kind: "out", text: DOCTOR_OUT[3] },
-        { t: 3100, kind: "out", text: DOCTOR_OUT[4] },
-        { t: 3300, kind: "out", text: DOCTOR_OUT[5] },
-        { t: 3600, kind: "out", text: DOCTOR_OUT[6] },
-        {
-          t: 4600,
-          kind: "reply",
-          text: "Todo en orden, general. Cada herramienta requerida está en su lugar y el hook del sentinel me despierta cuando un soldier termina. La tropa está lista para marchar.",
         },
       ],
     },
