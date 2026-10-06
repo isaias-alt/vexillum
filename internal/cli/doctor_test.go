@@ -317,19 +317,20 @@ func TestDoctor_HerdrMissingHasNoSeparateVersionLine(t *testing.T) {
 	}
 }
 
-// forum-tool was replaced by `vx forum`: doctor must no longer report it.
-func TestDoctor_ForumNotListed(t *testing.T) {
+// A skill that vexillum no longer ships (an old install left it behind) is not
+// reported by doctor.
+func TestDoctor_RetiredSkillNotListed(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir := initializedProject(t)
-	writeSkillFile(t, projectDir, "forum")
+	writeSkillFile(t, projectDir, "retired-skill")
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
 
 	var out bytes.Buffer
 	runDoctor(projectDir, vexillumHome, homeDir, &out)
 
-	if bytes.Contains(out.Bytes(), []byte("forum")) {
-		t.Errorf("doctor must not mention forum any more, got:\n%s", out.String())
+	if bytes.Contains(out.Bytes(), []byte("retired-skill")) {
+		t.Errorf("doctor must not mention a retired skill, got:\n%s", out.String())
 	}
 }
 
@@ -405,9 +406,13 @@ func TestDoctor_FirstPartySkills(t *testing.T) {
 	if strings.Contains(out, "npx skills add isaias-alt") {
 		t.Errorf("stale install hint for an embedded skill:\n%s", out)
 	}
-	for _, gone := range []string{"AXI", "quota-tool", "chrome-devtools"} {
-		if strings.Contains(out, gone) {
-			t.Errorf("doctor must not mention %q any more:\n%s", gone, out)
+	// Only the first-party skills are reported, never any other tool.
+	for _, line := range strings.Split(out, "\n") {
+		if i := strings.Index(line, "] skill "); i >= 0 {
+			name := strings.Fields(line[i+len("] skill "):])[0]
+			if name != "vexillum" && name != "forum" && name != "muster" {
+				t.Errorf("doctor reports an unexpected skill %q:\n%s", name, out)
+			}
 		}
 	}
 

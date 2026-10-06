@@ -36,8 +36,8 @@ func initStrikeTestProject(t *testing.T) string {
 }
 
 // L4-06: striking a landed, clean camp closes the soldier's herdr tab -
-// at the same moment as the worktree returns to the pool, matching
-// upstream-tool's own teardown timing.
+// at the same moment as the worktree returns to the pool, so
+// the tab never outlives the camp.
 func TestStrikeInHerdr_ClosesTabOnceCampStrikes(t *testing.T) {
 	project := initStrikeTestProject(t)
 	home := t.TempDir()

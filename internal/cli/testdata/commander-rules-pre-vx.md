@@ -95,7 +95,7 @@ agent session. It discards the old camp outright, including any commits
 never landed there. Because that's destructive, tell the general what you
 found in the old camp and ask before running it - don't redispatch on
 your own judgment just because a task went interrupted. If the dead
-soldier had a browser open (chrome-devtools-tool), redispatch also stops
+soldier had a browser open (driven by an external tool), redispatch also stops
 that orphaned browser process on its own - nothing for you to check or
 clean up there.
 

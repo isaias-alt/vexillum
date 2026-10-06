@@ -78,9 +78,8 @@ const (
 // can leave a suggested completion sitting in the pane's input box after
 // a soldier's turn ends - text nobody typed or submitted, easy for the
 // commander to mistake for something the soldier itself left behind.
-// It's disabled the same way upstream-tool disables it for its own workers
-// (CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false), just via the equivalent
-// CLI flag instead of an env var. This only applies to a soldier's own
+// It is turned off with the equivalent CLI flag (the
+// CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false env var would do the same). This only applies to a soldier's own
 // interactive session - never the commander's, which the general starts
 // directly, not vexillum; and never the headless Command path, which has
 // no pane input box for a suggestion to sit in.

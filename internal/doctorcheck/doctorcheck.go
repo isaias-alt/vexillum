@@ -46,7 +46,7 @@ func Binary(label, binaryName string, required bool) Result {
 // GitHub CLI, called directly by "vx ship" (internal/ghpr.Create)
 // to open a mission's pull request once its tribunal pipeline passes,
 // and by "vx land" (internal/ghpr.MergeShipped) to later merge it -
-// not the separate "gh-tool" agent-facing AXI. Optional and purely
+// nothing else stands in for it. Optional and purely
 // informational: a project that never ships never needs it.
 func GitHubCLI() Result {
 	const name = "GitHub CLI (gh)"

@@ -125,9 +125,8 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	}
 
 	// Submit the prompt and probe briefly for a fast settle - not a full
-	// wait for completion. upstream-tool's own fm-spawn.sh never blocks on
-	// worker completion either; a dedicated daemon supervises it
-	// (AGENTS.md section 8, "Supervision protocol"). Blocking here for
+	// wait for completion. Dispatch never blocks on the whole task: the
+	// sentinel is the supervisor that follows it to the end. Blocking here for
 	// the soldier's whole real task (previously up to 10 minutes) was
 	// exactly why internal/sentinel could never win the race for it: by
 	// the time the sentinel's next poll ran, dispatch had already
@@ -139,9 +138,8 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	if task.Kind == state.KindScout {
 		// Only a scout gets told to write a report - a mission's
 		// deliverable is the PR/merge itself, never a report.md (see
-		// internal/report's package doc; confirmed against upstream-tool,
-		// where report.md is exclusive to worker tasks, never optional
-		// for a ship). The instruction is appended to what's actually
+		// internal/report's package doc: report.md belongs to scouts
+		// alone, and a ship never needs one). The instruction is appended to what's actually
 		// submitted, not stored back onto task.Prompt: task.Prompt stays
 		// the general's original ask, since 'vx redispatch' reuses
 		// it verbatim and would otherwise accumulate a new copy of this
@@ -476,9 +474,8 @@ const (
 // never a dirty or unlanded camp, never the wrong owner) and, only once that
 // succeeds, closes the soldier's herdr tab. That happens at the same
 // moment as the worktree return, not when the soldier's turn merely
-// finishes: matches upstream-tool's own teardown
-// ("committed work must be landed before the worktree is returned...
-// cleanup closes only the exact recorded task pane", docs/herdr-backend.md).
+// finishes. Committed work must be landed before the worktree is
+// returned, and cleanup closes only the exact pane recorded for the task.
 // If camp.Strike refuses, the pane is left open - there's still
 // something worth looking at.
 func StrikeInHerdr(task state.Task, c camp.Camp, client herdr.Client) error {
@@ -577,8 +574,8 @@ func pauseInstructions(pausePath string) string {
 // can make vexillum's status machinery notice at all - reliably catches
 // Claude Code's AskUserQuestion tool, but never a question left as
 // ordinary prose (see the durable decision record's design report); this
-// is vexillum's own convention for that other case, adapted from
-// upstream-tool's "needs-decision:" status-line pattern (a structured,
+// is vexillum's own convention for that other case, a
+// "needs-decision:" status-line pattern (a structured,
 // grep-able signal, never inferred from free-form language - see
 // ExtractNeedsDecisionSignal, its consumer).
 func needsDecisionInstructions() string {

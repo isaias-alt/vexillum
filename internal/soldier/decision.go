@@ -14,8 +14,8 @@ var optionLinePattern = regexp.MustCompile(`^\s*(?:[-*\x{2022}]|\d+[.):])\s+(.+?
 
 // needsDecisionPattern matches the soldier-authored end-of-turn line
 // documented in needsDecisionInstructions: a strict, syntactic marker for
-// a plain-prose question that needs the general's answer, adapted from
-// upstream-tool's own "needs-decision:" status-line convention. Unlike
+// a plain-prose question that needs the general's answer, written as a
+// structured status line, never inferred from free-form language. Unlike
 // optionLinePattern (a fuzzy heuristic over arbitrary prose), this is the
 // only thing that can turn a plain-prose question into a genuine
 // StatusBlocked transition at all - herdr's own classifier never does,
