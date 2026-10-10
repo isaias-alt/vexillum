@@ -454,6 +454,9 @@ func openTab(t *testing.T, home, key string) (closeTab func()) {
 				return
 			}
 		}
+		if err := sc.Err(); err != nil {
+			t.Errorf("reading tab stream: %v", err)
+		}
 	}()
 	select {
 	case <-line:
@@ -572,6 +575,9 @@ func TestRestart_TabReconnectsToTheSamePortWithItsSession(t *testing.T) {
 			found = true
 			break
 		}
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
 	}
 	if !found {
 		t.Fatal("no snapshot after the reconnect")

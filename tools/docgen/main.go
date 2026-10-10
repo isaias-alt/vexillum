@@ -171,12 +171,12 @@ func commandPage(c cli.Command, l locale) string {
 	fmt.Fprintf(&b, "title: %s\n", yamlString(cmdname.Name+" "+c.Name))
 	fmt.Fprintf(&b, "description: %s\n", yamlString(c.Summary))
 	b.WriteString("---\n\n")
-	b.WriteString(l.notice + "\n\n")
+	b.WriteString(l.notice);b.WriteString("\n\n")
 
 	fence := codeFence(c.Usage)
-	b.WriteString(fence + "text\n")
-	b.WriteString(strings.TrimRight(c.Usage, "\n") + "\n")
-	b.WriteString(fence + "\n")
+	b.WriteString(fence);b.WriteString("text\n")
+	b.WriteString(strings.TrimRight(c.Usage, "\n"));b.WriteString("\n")
+	b.WriteString(fence);b.WriteString("\n")
 	return b.String()
 }
 
@@ -216,8 +216,8 @@ func indexPage(cmds []cli.Command, l locale) string {
 	fmt.Fprintf(&b, "title: %s\n", yamlString(l.title))
 	fmt.Fprintf(&b, "description: %s\n", yamlString(l.description))
 	b.WriteString("---\n\n")
-	b.WriteString(l.notice + "\n\n")
-	b.WriteString(l.intro + "\n\n")
+	b.WriteString(l.notice);b.WriteString("\n\n")
+	b.WriteString(l.intro);b.WriteString("\n\n")
 	fmt.Fprintf(&b, "| %s | %s |\n| --- | --- |\n", l.commandHeader, l.descriptionHeader)
 	for _, c := range cmds {
 		fmt.Fprintf(&b, "| [`"+cmdname.Name+" %s`](%s/reference/cli/%s) | %s |\n",

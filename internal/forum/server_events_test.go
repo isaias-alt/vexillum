@@ -56,6 +56,9 @@ func (e *testEnv) openStream(key string) *eventStream {
 				}
 			}
 		}
+		if err := sc.Err(); err != nil {
+			s.t.Errorf("events stream for %q: %v", key, err)
+		}
 	}()
 	e.t.Cleanup(cancel)
 	return s

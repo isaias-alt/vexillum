@@ -67,7 +67,7 @@ func TestFormatFindings_MostSevereFirst(t *testing.T) {
 		{File: "i.go", Line: 1, Severity: "info", Action: "no-op", Description: "note"},
 		{File: "e.go", Line: 2, Severity: "error", Action: "auto-fix", Description: "bug", FailureScenario: "x then y", SiblingSites: []string{"f.go:3 same"}},
 	})
-	if strings.Index(out, "[error] e.go:2") > strings.Index(out, "[info] i.go:1") || strings.Index(out, "[error]") < 0 {
+	if strings.Index(out, "[error] e.go:2") > strings.Index(out, "[info] i.go:1") || !strings.Contains(out, "[error]") {
 		t.Errorf("expected the error before the info:\n%s", out)
 	}
 	for _, want := range []string{"scenario: x then y", "sibling sites: f.go:3 same"} {

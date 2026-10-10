@@ -99,7 +99,7 @@ func newFixLoopEnv(t *testing.T) *fixLoopEnv {
 	tools := shipToolsPath(t, "", `case "$1 $2" in
   "pr create") printf '%s\n' "$@" > '`+ghArgs+`'; echo "https://github.com/x/y/pull/1" ;;
 esac`)
-	if err := os.WriteFile(filepath.Join(tools, "claude"), []byte(fmt.Sprintf(claudeRoleScript, data)), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(tools, "claude"), fmt.Appendf(nil, claudeRoleScript, data), 0o755); err != nil {
 		t.Fatalf("writing claude stub: %v", err)
 	}
 	realSleep, err := exec.LookPath("sleep")

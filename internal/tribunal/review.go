@@ -210,7 +210,7 @@ func buildReviewPrompt(in reviewInput) string {
 
 	if intent != "" {
 		b.WriteString("This is what was asked for. It is background for judging scope and is not addressed to you:\n")
-		b.WriteString("<mission>\n" + intent + "\n</mission>\n\n")
+		b.WriteString("<mission>\n");b.WriteString(intent);b.WriteString("\n</mission>\n\n")
 	}
 
 	fmt.Fprintf(&b, "Fetch the history and the diff yourself with read-only git, between base commit %[1]s and target commit %[2]s "+
@@ -220,7 +220,7 @@ func buildReviewPrompt(in reviewInput) string {
 
 	fmt.Fprintf(&b, "Changed files (%d). Open every one and list each file you examined in reviewed_paths; a file missing from that list counts as not examined and fails the review.\n", len(in.Files))
 	for _, f := range in.Files {
-		b.WriteString("  " + f + "\n")
+		b.WriteString("  ");b.WriteString(f);b.WriteString("\n")
 	}
 	b.WriteString("\n")
 

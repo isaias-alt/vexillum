@@ -122,7 +122,9 @@ func TestHashMermaidSource_IsStable(t *testing.T) {
 	if got := forum.HashMermaidSource("graph TD; A-->B"); got != "c18237e0a535bdb7" {
 		t.Errorf("digest = %q", got)
 	}
-	if forum.HashMermaidSource("x") != forum.HashMermaidSource("x") || len(forum.HashMermaidSource("x")) != 16 {
+	first := forum.HashMermaidSource("x")
+	second := forum.HashMermaidSource("x")
+	if first != second || len(first) != 16 {
 		t.Error("digest must be deterministic and 16 hex characters")
 	}
 }

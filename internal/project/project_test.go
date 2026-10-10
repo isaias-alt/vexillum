@@ -12,7 +12,8 @@ import (
 // input, same output, every time.
 func TestKey_StableForSamePath(t *testing.T) {
 	dir := t.TempDir()
-	if project.Key(dir) != project.Key(dir) {
+	key := project.Key(dir)
+	if project.Key(dir) != key {
 		t.Fatalf("expected Key to be stable for the same path")
 	}
 }

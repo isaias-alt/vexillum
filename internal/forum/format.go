@@ -62,7 +62,7 @@ func FormatPoll(file string, res PollResponse) string {
 // writePrompt writes one prompt as a list item of a prompts[N] block, its "- "
 // marker indented by lead.
 func writePrompt(b *strings.Builder, lead string, p Prompt) {
-	b.WriteString(lead + "  - ")
+	b.WriteString(lead);b.WriteString("  - ")
 	writeField(b, "", "uid", p.UID)
 	in := lead + "    "
 	if p.Redelivered {
@@ -82,7 +82,7 @@ func writePrompt(b *strings.Builder, lead string, p Prompt) {
 	if len(p.Attachments) > 0 {
 		fmt.Fprintf(b, "%sattachments[%d]:\n", in, len(p.Attachments))
 		for _, a := range p.Attachments {
-			b.WriteString(in + "  - ")
+			b.WriteString(in);b.WriteString("  - ")
 			writeField(b, "", "path", a.Path)
 			writeField(b, in+"    ", "type", a.Mime)
 			writeField(b, in+"    ", "bytes", fmt.Sprint(a.Bytes))

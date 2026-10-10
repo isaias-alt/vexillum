@@ -91,7 +91,7 @@ func releaseFixture(t *testing.T, src *fakeSource, tag string, newBinary []byte)
 		src.assets = map[string][]byte{}
 	}
 	src.assets[tag+"/"+archiveName] = archive
-	src.assets[tag+"/checksums.txt"] = []byte(fmt.Sprintf("%s  %s\n%s  other.tar.gz\n", sha(archive), archiveName, strings.Repeat("0", 64)))
+	src.assets[tag+"/checksums.txt"] = fmt.Appendf(nil, "%s  %s\n%s  other.tar.gz\n", sha(archive), archiveName, strings.Repeat("0", 64))
 }
 
 // directUpdater is an Updater for an install-script binary in a temp dir.
