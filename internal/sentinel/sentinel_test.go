@@ -643,6 +643,97 @@ func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 	}
 }
 
+// movingHerdr runs onStatus inside every AgentStatus call, the moment a
+// command like vx land can move a task while the sentinel is mid-tick,
+// working from the task list it read before.
+type movingHerdr struct {
+	*fakeHerdr
+	onStatus func()
+}
+
+func (m *movingHerdr) AgentStatus(name string) (string, error) {
+	if m.onStatus != nil {
+		m.onStatus()
+	}
+	return m.fakeHerdr.AgentStatus(name)
+}
+
+// A task that vx land recorded done while the sentinel was reading its
+// agent must stay done: the sentinel's snapshot says running and the pane
+// was just closed by the strike, but writing that back would mark a landed
+// mission interrupted.
+func TestTick_DoesNotInterruptATaskMovedOnDiskDuringTheTick(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+	task.AgentNotFoundSince = time.Now().Add(-11 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	landed := task
+	landed.Status = state.StatusDone
+	client := &movingHerdr{
+		fakeHerdr: &fakeHerdr{err: &herdr.APIError{Code: "agent_not_found", Message: "gone"}},
+		onStatus: func() {
+			if err := state.Save(proj, landed); err != nil {
+				t.Errorf("state.Save: %v", err)
+			}
+		},
+	}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected no wake for a task that moved on disk, got %d", woke)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected the on-disk status done to win, got %s", got.Status)
+	}
+	if wakes, err := sentinel.Drain(proj); err != nil || len(wakes) != 0 {
+		t.Errorf("expected no wake recorded, got %+v err=%v", wakes, err)
+	}
+}
+
+// The same guard on the settle path: a snapshot that reads the agent as
+// idle must not turn a task the commander already moved into a fresh
+// done transition with a wake.
+func TestTick_DoesNotSettleATaskMovedOnDiskDuringTheTick(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+
+	struck := task
+	struck.Status = state.StatusStruck
+	client := &movingHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "done"}},
+		onStatus: func() {
+			if err := state.Save(proj, struck); err != nil {
+				t.Errorf("state.Save: %v", err)
+			}
+		},
+	}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 0 {
+		t.Errorf("expected no wake, got %d", woke)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Status != state.StatusStruck {
+		t.Errorf("expected the on-disk status struck to win, got %s", got.Status)
+	}
+}
+
 // Capa 4 paso 5 (fault isolation), formalized: three tasks in one Tick
 // call - one settles normally, one has its agent confirmed gone
 // (interrupted), one is still genuinely running - none of that interferes

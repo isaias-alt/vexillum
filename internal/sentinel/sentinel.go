@@ -192,8 +192,12 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 			// so a later genuine disappearance starts its own fresh
 			// confirmation window instead of inheriting a stale one.
 			task.AgentNotFoundSince = time.Time{}
-			if err := state.Save(projectRoot, task); err != nil {
+			saved, err := saveIfRunning(projectRoot, task)
+			if err != nil {
 				return woke, fmt.Errorf("clearing not-found mark for task %s: %w", task.ID, err)
+			}
+			if !saved {
+				continue
 			}
 		}
 
@@ -210,10 +214,13 @@ func tickProject(projectRoot string, client herdr.Client) (int, error) {
 		// ever means the turn stopped responding, never why - see
 		// settleIdleTask and internal/pause's package doc.
 		if newStatus != state.StatusDone {
-			if err := settleTransition(projectRoot, task, newStatus, client); err != nil {
+			settled, err := settleTransition(projectRoot, task, newStatus, client)
+			if err != nil {
 				return woke, err
 			}
-			woke++
+			if settled {
+				woke++
+			}
 			continue
 		}
 
@@ -294,13 +301,40 @@ func reopenActiveTasks(projectRoot string, tasks []state.Task, client herdr.Clie
 	return nil
 }
 
+// saveIfRunning persists task only while its record on disk is still
+// Running, and reports whether it did. tickProject works from a snapshot of
+// the task list, and a herdr call or a captured transcript can take seconds,
+// so a command that moved the task in the meantime (vx land recording it
+// done, vx strike, vx prompt) must win: writing the stale snapshot back would
+// undo it, for instance by marking a landed mission interrupted because its
+// pane was closed. Every transition tickProject makes out of Running goes
+// through here, so a task that is no longer Running is left exactly as it
+// is and no wake is recorded for it.
+func saveIfRunning(projectRoot string, task state.Task) (bool, error) {
+	current, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if current.Status != state.StatusRunning {
+		return false, nil
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // settleTransition persists task's straightforward transition out of
 // Running - blocked or failed, the only two live statuses MapAgentStatus
 // can produce here besides Done (see tickProject's own guard reasoning) -
 // and records a wake for it. Captures the final transcript now, since
 // dispatch's own quick-settle probe usually returned long before this
-// point.
-func settleTransition(projectRoot string, task state.Task, newStatus state.Status, client herdr.Client) error {
+// point. Returns whether it settled the task: false when the task is no
+// longer Running on disk (see saveIfRunning).
+func settleTransition(projectRoot string, task state.Task, newStatus state.Status, client herdr.Client) (bool, error) {
 	old := task.Status
 	task.Status = newStatus
 	task.UpdatedAt = time.Now().UTC()
@@ -315,13 +349,17 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 		// See soldier.ResolveBlockedDecision.
 		task.Decision = soldier.ResolveBlockedDecision(client, task.HerdrAgentName, task.Output)
 	}
-	if err := state.Save(projectRoot, task); err != nil {
-		return fmt.Errorf("persisting task %s: %w", task.ID, err)
+	saved, err := saveIfRunning(projectRoot, task)
+	if err != nil {
+		return false, fmt.Errorf("persisting task %s: %w", task.ID, err)
+	}
+	if !saved {
+		return false, nil
 	}
 	if err := recordWake(projectRoot, task, old, newStatus, ""); err != nil {
-		return fmt.Errorf("recording wake for task %s: %w", task.ID, err)
+		return false, fmt.Errorf("recording wake for task %s: %w", task.ID, err)
 	}
-	return nil
+	return true, nil
 }
 
 // settleIdleTask handles a Running task whose live herdr status just
@@ -352,7 +390,7 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	output, readErr := client.AgentRead(task.HerdrAgentName, tickReadLines)
 	if readErr == nil {
 		if d, found := soldier.FinalTurnNeedsDecision(task, output); found {
-			return true, settleNeedsDecision(projectRoot, task, output, d)
+			return settleNeedsDecision(projectRoot, task, output, d)
 		}
 	}
 
@@ -361,7 +399,7 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 		return false, err
 	}
 	if strong {
-		return true, settleDone(projectRoot, task, reportPath, output, readErr)
+		return settleDone(projectRoot, task, reportPath, output, readErr)
 	}
 
 	_, active, err := pause.Active(projectRoot, task.HerdrAgentName, time.Now())
@@ -371,7 +409,7 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	if active {
 		if !task.IdleUnconfirmedSince.IsZero() {
 			task.IdleUnconfirmedSince = time.Time{}
-			if err := state.Save(projectRoot, task); err != nil {
+			if _, err := saveIfRunning(projectRoot, task); err != nil {
 				return false, fmt.Errorf("clearing idle-unconfirmed mark for task %s: %w", task.ID, err)
 			}
 		}
@@ -387,20 +425,24 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 // the soldier is waiting on the general, not finished. output is
 // whatever settleIdleTask already read to find that line, so this never
 // re-reads it.
-func settleNeedsDecision(projectRoot string, task state.Task, output string, decision *state.Decision) error {
+func settleNeedsDecision(projectRoot string, task state.Task, output string, decision *state.Decision) (bool, error) {
 	old := task.Status
 	task.Status = state.StatusBlocked
 	task.Output = output
 	task.Decision = decision
 	task.UpdatedAt = time.Now().UTC()
 	task.IdleUnconfirmedSince = time.Time{}
-	if err := state.Save(projectRoot, task); err != nil {
-		return fmt.Errorf("persisting task %s: %w", task.ID, err)
+	saved, err := saveIfRunning(projectRoot, task)
+	if err != nil {
+		return false, fmt.Errorf("persisting task %s: %w", task.ID, err)
+	}
+	if !saved {
+		return false, nil
 	}
 	if err := recordWake(projectRoot, task, old, state.StatusBlocked, ""); err != nil {
-		return fmt.Errorf("recording wake for task %s: %w", task.ID, err)
+		return false, fmt.Errorf("recording wake for task %s: %w", task.ID, err)
 	}
-	return nil
+	return true, nil
 }
 
 // settleDone persists task's corroborated Done transition and records a
@@ -408,7 +450,7 @@ func settleNeedsDecision(projectRoot string, task state.Task, output string, dec
 // package required corroboration first. output/readErr are whatever
 // settleIdleTask already read while checking for a needs-decision line,
 // so this never issues a second AgentRead for the same tick.
-func settleDone(projectRoot string, task state.Task, reportPath, output string, readErr error) error {
+func settleDone(projectRoot string, task state.Task, reportPath, output string, readErr error) (bool, error) {
 	old := task.Status
 	task.Status = state.StatusDone
 	task.UpdatedAt = time.Now().UTC()
@@ -416,13 +458,17 @@ func settleDone(projectRoot string, task state.Task, reportPath, output string, 
 	if readErr == nil {
 		task.Output = output
 	}
-	if err := state.Save(projectRoot, task); err != nil {
-		return fmt.Errorf("persisting task %s: %w", task.ID, err)
+	saved, err := saveIfRunning(projectRoot, task)
+	if err != nil {
+		return false, fmt.Errorf("persisting task %s: %w", task.ID, err)
+	}
+	if !saved {
+		return false, nil
 	}
 	if err := recordWake(projectRoot, task, old, state.StatusDone, reportPath); err != nil {
-		return fmt.Errorf("recording wake for task %s: %w", task.ID, err)
+		return false, fmt.Errorf("recording wake for task %s: %w", task.ID, err)
 	}
-	return nil
+	return true, nil
 }
 
 // idleUnconfirmedConfirmWindow mirrors notFoundConfirmWindow's own
@@ -444,7 +490,7 @@ const idleUnconfirmedConfirmWindow = 30 * time.Second
 func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
 	if task.IdleUnconfirmedSince.IsZero() {
 		task.IdleUnconfirmedSince = time.Now().UTC()
-		if err := state.Save(projectRoot, task); err != nil {
+		if _, err := saveIfRunning(projectRoot, task); err != nil {
 			return false, fmt.Errorf("recording idle-unconfirmed mark for task %s: %w", task.ID, err)
 		}
 		return false, nil
@@ -463,8 +509,12 @@ func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
 	task.Output += "[vexillum] this soldier's turn went idle with no completion signal (no report for a scout, " +
 		"no new commit for a mission) and no declared pause (internal/pause) - marked unconfirmed, not done. " +
 		"Check its camp/pane before assuming either way."
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err := saveIfRunning(projectRoot, task)
+	if err != nil {
 		return false, fmt.Errorf("persisting unconfirmed task %s: %w", task.ID, err)
+	}
+	if !saved {
+		return false, nil
 	}
 	if err := recordWake(projectRoot, task, old, state.StatusUnconfirmed, ""); err != nil {
 		return false, fmt.Errorf("recording wake for unconfirmed task %s: %w", task.ID, err)
@@ -479,7 +529,7 @@ func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
 func handleAgentNotFound(projectRoot string, task state.Task) (interrupted bool, err error) {
 	if task.AgentNotFoundSince.IsZero() {
 		task.AgentNotFoundSince = time.Now().UTC()
-		if err := state.Save(projectRoot, task); err != nil {
+		if _, err := saveIfRunning(projectRoot, task); err != nil {
 			return false, fmt.Errorf("recording not-found mark for task %s: %w", task.ID, err)
 		}
 		return false, nil
@@ -496,8 +546,12 @@ func handleAgentNotFound(projectRoot string, task state.Task) (interrupted bool,
 		task.Output += "\n\n"
 	}
 	task.Output += "[vexillum] this soldier's herdr agent disappeared (pane closed, or herdr restarted) - marked interrupted. Any work it already committed is still in its camp."
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err := saveIfRunning(projectRoot, task)
+	if err != nil {
 		return false, fmt.Errorf("persisting interrupted task %s: %w", task.ID, err)
+	}
+	if !saved {
+		return false, nil
 	}
 	if err := recordWake(projectRoot, task, old, state.StatusInterrupted, ""); err != nil {
 		return false, fmt.Errorf("recording wake for interrupted task %s: %w", task.ID, err)

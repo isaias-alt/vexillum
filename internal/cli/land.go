@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
@@ -105,13 +106,55 @@ func runLand(projectDir, vexillumHome, taskID string, client herdr.Client, stdou
 	// fails anyway (rare - the merge just made the camp clean and landed),
 	// the merge itself stands: report both outcomes plainly and leave the
 	// camp for a manual strike, never swallow the error.
-	if err := soldier.StrikeInHerdr(task, c, client); err != nil {
-		fmt.Fprintf(stderr, cmdname.Name+": landed, but automatic strike failed: %v\n", err)
+	strikeErr := soldier.StrikeInHerdr(task, c, client)
+
+	// The merge stands whatever the strike did, so the task record must say
+	// the work landed. It is written after the strike has released the lease
+	// (the sentinel reopens a settled task whose agent is working again, but
+	// only while its camp is leased) and closed the pane, and in every case:
+	// a record left running would turn interrupted once the sentinel
+	// notices the pane is gone.
+	recordErr := recordLanded(projectRoot, taskID)
+
+	if strikeErr != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": landed, but automatic strike failed: %v\n", strikeErr)
 		fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' by hand to clean up the camp\n", taskID)
+	}
+	if recordErr != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": landed, but recording task %s as done failed: %v\n", taskID, recordErr)
+	}
+	if strikeErr != nil || recordErr != nil {
 		return 1
 	}
 	fmt.Fprintln(stdout, "struck: camp returned to the pool, herdr pane closed.")
 	return 0
+}
+
+// recordLanded settles the task record of a mission that has just landed.
+// A task that was settled and then asked for more work (a rebase, say) is
+// running again when the commander lands it, and a running task whose pane
+// is gone is exactly what the sentinel marks interrupted. The task is
+// re-read first so a sentinel write since land started is not undone. Only
+// the open states move to done, the state a landed mission rests in; a
+// terminal one (interrupted, failed, struck, shipped) is left alone.
+func recordLanded(projectRoot, taskID string) error {
+	task, err := state.Load(projectRoot, taskID)
+	if err != nil {
+		return fmt.Errorf("reloading task: %w", err)
+	}
+	switch task.Status {
+	case state.StatusRunning, state.StatusBlocked, state.StatusUnconfirmed:
+	default:
+		return nil
+	}
+	task.Status = state.StatusDone
+	task.UpdatedAt = time.Now().UTC()
+	task.IdleUnconfirmedSince = time.Time{}
+	task.AgentNotFoundSince = time.Time{}
+	if err := state.Save(projectRoot, task); err != nil {
+		return fmt.Errorf("saving task: %w", err)
+	}
+	return nil
 }
 
 // mergeShippedPR merges a shipped mission's real PR on GitHub - the
