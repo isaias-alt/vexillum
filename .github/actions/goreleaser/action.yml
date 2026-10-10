@@ -21,7 +21,7 @@ runs:
         go-version-file: go.mod
 
     # goreleaser's own previous-tag lookup counts canary and rc tags, so the
-    # notes (and the "Full changelog" link) would only span the commits since
+    # compare link in the release notes would only span the commits since
     # the last canary. Pin the previous tag to the last reachable stable one.
     - name: Previous stable tag
       shell: bash
@@ -41,11 +41,3 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         HOMEBREW_TAP_TOKEN: ${{ inputs.homebrew-tap-token }}
         GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
-
-    # goreleaser has already published these notes as the GitHub release
-    # body, which is what the docs page /docs/changelog is built from (see
-    # site/scripts/changelog.mjs). Keep the file too, for inspection.
-    - uses: actions/upload-artifact@v4
-      with:
-        name: changelog
-        path: dist/CHANGELOG.md
