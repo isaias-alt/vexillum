@@ -56,6 +56,59 @@ gofmt -l .        # must print nothing
 go test ./... -race
 ```
 
+## Testing the forum end to end
+
+The forum has three kinds of test, from cheapest to most real:
+
+- DOM tests (`chrome_dom_test.go`, `sdk_dom_test.go`, the scripts in
+  `internal/forum/testdata`) run the chrome and SDK scripts under Node.
+- Real-Chrome tests (`internal/forum/*_chrome_test.go`) start headless Chrome on
+  a throwaway profile and load a real session page. Set `VX_TEST_CHROME` to pick
+  the browser; the tests skip when there is none.
+- `cdp_chrome_test.go` does what a user does: it clicks inside the artifact.
+
+Why the last one exists: the artifact runs in an iframe with an opaque origin
+(`sandbox` without `allow-same-origin`), so nothing in the chrome page can reach
+into it, and neither can a tool that works on the page's DOM. The claude-in-chrome
+tool cannot see inside it (`find` and `read_page` stop at the frame) and a
+coordinate `left_click` on a button in the artifact does not register (checked
+against a local session: the button's own click handler never ran). That is why
+the other real-Chrome tests have the artifact report on itself.
+
+The Chrome DevTools Protocol can click there, and it is reliable. Input events
+sent with `Input.dispatchMouseEvent` are dispatched by the browser at viewport
+coordinates and routed to whichever frame is under the point, same-origin or
+not, so the click reaches the artifact as a trusted event. Chrome runs the
+sandboxed frame in its own process, which CDP lists as an `iframe` target:
+attaching to it gives a session that runs scripts inside the artifact, so a
+selector can be turned into coordinates (the helper falls back to
+`Page.createIsolatedWorld` if the frame ever shares the page's process). In a
+test:
+
+```go
+browser := startCDPChrome(t, chrome, env.ts.URL+"/session/"+key)
+browser.click("#artifact", "#pick") // a real move, press and release
+```
+
+`click` waits until the element has stopped moving before it clicks, because
+the frame starts loading before the chrome around it has laid out. The helper
+speaks the WebSocket protocol itself so the tests stay standard library only.
+
+### Keep E2E runs in their own directory
+
+An E2E run must never use another project's `.vexillum/forum/`: it holds that
+project's live artifacts and a run that clears or rewrites it loses them. This
+applies to a soldier doing a manual run as much as to a test:
+
+- Tests build their own state: `newEnv` gives each forum test a temporary home
+  and artifact directory, and every Chrome gets a temporary `--user-data-dir`.
+  The `internal/cli` suite also runs with a temporary `HOME`. Do not set `HOME`
+  for a Chrome process, it renders a blank page.
+- For a manual run, create a scratch project under a temporary directory (run
+  `vx init` there, write artifacts to its own `.vexillum/forum/`) and use a
+  temporary `HOME` for `vx`. Never point `vx forum` at a sibling project, and
+  never `rm` anything under a `.vexillum/forum/` you did not create yourself.
+
 ## Installing your own build
 
 Maintainers can install a build of the current checkout as their local `vx`
