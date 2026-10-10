@@ -4,18 +4,14 @@
   "private": true,
   "packageManager": "pnpm@11.22.0",
   "scripts": {
-    "predev": "node scripts/changelog.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/changelog.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test scripts/changelog.test.mjs scripts/search-state.test.mjs scripts/search-index.test.mjs scripts/search-index-retry.test.mjs scripts/install-route.test.mjs scripts/install-command.test.mjs",
+    "test": "node --test scripts/search-state.test.mjs scripts/search-index.test.mjs scripts/search-index-retry.test.mjs scripts/install-route.test.mjs scripts/install-command.test.mjs",
     "seo:audit": "node scripts/seo-audit.mjs",
     "links:check": "node scripts/link-check.mjs",
     "typecheck": "next typegen && tsc --noEmit",
-    "pretypecheck": "node scripts/changelog.mjs",
-    "changelog": "node scripts/changelog.mjs",
     "diagrams": "node scripts/export-diagrams.mjs"
   },
   "dependencies": {
