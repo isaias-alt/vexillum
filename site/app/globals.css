@@ -7,10 +7,10 @@
 
 /* ---------------------------------------------------------------------------
    Design tokens. Names and values are copied verbatim from
-   design/forum-tokens.css (the "Marmol y Lapislazuli" identity the docs and
+   site/design/forum-tokens.css (the "Marmol y Lapislazuli" identity the docs and
    landing designs are built on). Only the theme wiring differs: dark is the
    brand default and is the `data-theme="dark"` attribute set by the
-   head script (components/ThemeScript.tsx), light is the base `:root`. See design/README.md.
+   head script (components/ThemeScript.tsx), light is the base `:root`. See site/design/README.md.
    ------------------------------------------------------------------------ */
 :root {
   --fr-radius-sm: 4px;
@@ -313,7 +313,7 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Docs: the re-theme of Fumadocs' notebook layout to design/Vexillum
+   Docs: the re-theme of Fumadocs' notebook layout to site/design/Vexillum
    Docs.dc.html. Structure and behaviour (sidebar, toc, search, mobile
    drawer) are Fumadocs'; type, rules and surfaces are the design's.
    ------------------------------------------------------------------------ */

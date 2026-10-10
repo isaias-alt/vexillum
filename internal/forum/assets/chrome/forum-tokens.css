@@ -1,6 +1,6 @@
 /*
  * forum design tokens - direction B, "Marmol y Lapislazuli".
- * Adapted from design/forum-tokens.css, see design/README.md. Token names
+ * Adapted from site/design/forum-tokens.css, see site/design/README.md. Token names
  * and values are the design system's; only the theme wiring differs: dark is
  * the default (the design system's default is light) and does not follow prefers-color-scheme; <html data-fr-theme="light">
  * switches to the light tokens. forum-theme.js sets that attribute from the

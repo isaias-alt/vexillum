@@ -26,7 +26,7 @@ hand, as described below.
 | (derived from the tokens and the spec's component vocabulary) | `internal/forum/assets/chrome/forum-artifact.css` | The look of an artifact's *content*: typography, links, code, tables, cards, badges, buttons, decision-form controls, callouts, SVG figures. Built only from `--fr-*` tokens; the zip defines no content components, so this extends the spec's buttons, code and status colors rather than inventing a separate style. |
 | `assets/vexillum-mark.svg` and the other `.dc.html` files | not shipped by forum | Brand, landing and docs material; unrelated to the forum chrome. |
 
-The source lives here in `design/`; the delivered CSS lives under
+The source lives here in `site/design/`; the delivered CSS lives under
 `internal/forum/assets/` and is embedded in the binary. No fonts, no CDN:
 system stacks only.
 
@@ -98,7 +98,7 @@ Tailwind or daisyUI. Safety rules, each covered by a test:
 ## Updating the identity
 
 1. Unzip the new export over this directory (delete `uploads/`).
-2. Diff `design/forum-tokens.css` (from git) against `internal/forum/assets/chrome/forum-tokens.css`
+2. Diff `site/design/forum-tokens.css` (from git) against `internal/forum/assets/chrome/forum-tokens.css`
    and carry the token changes over, keeping the theme wiring described above (dark in the base `:root`, light under `data-fr-theme`).
 3. Compare the surfaces in the spec against `forum.css` and adjust components.
    `forum.css` must stay free of raw colors (a test enforces it): add or change
