@@ -11,26 +11,13 @@ import (
 // binary speaks and serves. Bump it only for a change an older client or
 // server cannot cope with; a newer build that keeps the API compatible keeps
 // the same number, which is what lets a client reuse a running server from a
-// different build instead of replacing it. A server that predates the field
-// published no protocol and is treated as legacyProtocol (the API it served
-// is the one version 1 describes).
-const (
-	ProtocolVersion = 1
-	legacyProtocol  = 1
-)
-
-// normalizeProtocol maps the "not published" zero value to legacyProtocol.
-func normalizeProtocol(p int) int {
-	if p <= 0 {
-		return legacyProtocol
-	}
-	return p
-}
+// different build instead of replacing it.
+const ProtocolVersion = 1
 
 // ProtocolCompatible reports whether this binary can drive a server speaking
-// protocol (0 means a server that did not publish one).
+// protocol.
 func ProtocolCompatible(protocol int) bool {
-	return normalizeProtocol(protocol) == ProtocolVersion
+	return protocol == ProtocolVersion
 }
 
 // Activity is what a server is doing for people right now. A server with any

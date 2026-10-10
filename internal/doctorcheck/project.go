@@ -2,7 +2,6 @@ package doctorcheck
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
@@ -26,9 +25,6 @@ func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
 	out = append(out, slotRes)
 	if slotState != slot.StateAbsent && !inClaude {
 		out = append(out, ClaudeImport(projectDir))
-	}
-	if r, ok := LegacyRules(projectDir); ok {
-		out = append(out, r)
 	}
 	out = append(out, Skills(projectDir)...)
 	out = append(out, Models(projectDir, vexillumHome))
@@ -85,20 +81,6 @@ func ClaudeImport(projectDir string) Result {
 		why = "CLAUDE.md has no " + slot.ClaudeImportLine + " line"
 	}
 	return Result{Name: name, Warn: true, Detail: why + ", so Claude Code will not see the vexillum block; add the line, or run '" + cmdname.Name + " init'"}
-}
-
-// LegacyRules reports a .claude/rules/vexillum.md left by an older version.
-// ok is false when there is none.
-func LegacyRules(projectDir string) (Result, bool) {
-	path := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
-	if _, err := os.Stat(path); err != nil {
-		return Result{}, false
-	}
-	return Result{
-		Name:   ".claude/rules/vexillum.md",
-		Warn:   true,
-		Detail: "from an older vexillum, now redundant with the vexillum block and the skills; run '" + cmdname.Name + " upgrade' to migrate",
-	}, true
 }
 
 // Skills reports each first-party skill installed in the project and how it

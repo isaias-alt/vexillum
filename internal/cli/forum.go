@@ -273,8 +273,6 @@ func runForumOpen(ctx context.Context, home string, args []string, stdout, stder
 	listening := false
 	switch {
 	case root == "":
-	case res.ProjectRoot == "":
-		fmt.Fprintf(stderr, cmdname.Name+": warning: the running forum server predates the forum listener, so no listener was started; run `"+cmdname.Name+" forum stop` and open the file again\n")
 	default:
 		if lerr := ensureForumListener(home); lerr != nil {
 			fmt.Fprintf(stderr, cmdname.Name+": warning: could not start the forum listener (poll the session yourself): %v\n", lerr)

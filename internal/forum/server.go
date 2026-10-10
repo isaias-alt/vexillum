@@ -238,7 +238,7 @@ type OpenResponse struct {
 	BrowserConnected bool   `json:"browser_connected"`
 	Pending          int    `json:"pending"`
 	// ProjectRoot echoes the project root the session is recorded under; empty
-	// when the opener sent none, or when the server predates the field.
+	// when the opener sent none.
 	ProjectRoot string `json:"project_root,omitempty"`
 }
 

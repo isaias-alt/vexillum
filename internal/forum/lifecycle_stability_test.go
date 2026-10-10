@@ -403,33 +403,33 @@ func TestEnsureServer_ReplacesAServerWhoseSessionsAreEnded(t *testing.T) {
 	}
 }
 
-// A server that predates the status route cannot say whether it is in use, so
-// it is reused, never stopped.
+// A server that does not answer the status route cannot say whether it is in
+// use, so it is reused, never stopped.
 func TestEnsureServer_ReusesAServerThatCannotReportActivity(t *testing.T) {
 	home := t.TempDir()
-	legacy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	silent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
 			_, _ = w.Write([]byte(`{"app":"vexillum-forum","ok":true}`))
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	defer legacy.Close()
+	defer silent.Close()
 	if err := os.MkdirAll(filepath.Join(home, "forum"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	state, _ := json.Marshal(forum.ServerState{
-		PID: os.Getpid(), Addr: strings.TrimPrefix(legacy.URL, "http://"), AgentToken: "t", Build: "legacy-build",
+		PID: os.Getpid(), Addr: strings.TrimPrefix(silent.URL, "http://"), AgentToken: "t", Build: "other-build", Protocol: forum.ProtocolVersion,
 	})
 	writeFile(t, filepath.Join(home, "forum", "server.json"), string(state))
 
 	h := newEnsureHarness(t, home)
 	client, err := h.ensure()
 	if err != nil || client == nil {
-		t.Fatalf("EnsureServer = %v, want the legacy server reused", err)
+		t.Fatalf("EnsureServer = %v, want the silent server reused", err)
 	}
 	if h.spawns() != 0 {
-		t.Errorf("spawned %d servers over a legacy one that may be in use", h.spawns())
+		t.Errorf("spawned %d servers over one that may be in use", h.spawns())
 	}
 }
 

@@ -31,7 +31,6 @@ type ServerState struct {
 	// but only when it is idle (see EnsureServer).
 	Build string `json:"build,omitempty"`
 	// Protocol is the agent API version the server speaks (ProtocolVersion).
-	// Absent in the file of a server that predates it.
 	Protocol int `json:"protocol,omitempty"`
 }
 
@@ -340,17 +339,16 @@ func replaceStale(ctx context.Context, home string, c *Client, st ServerState) e
 	}
 }
 
-// serverStatus asks the running server for its status. ok is false for a
-// server that predates the status route: its activity is unknown, so callers
-// must treat it as possibly busy.
+// serverStatus asks the running server for its status. ok is false when the
+// server does not answer the status route: its activity is unknown, so
+// callers must treat it as possibly busy.
 func serverStatus(ctx context.Context, c *Client, st ServerState) (status ServerStatus, ok bool) {
 	statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	s, err := c.Status(statusCtx)
 	if err != nil {
-		return ServerStatus{PID: st.PID, Build: st.Build, Protocol: normalizeProtocol(st.Protocol)}, false
+		return ServerStatus{PID: st.PID, Build: st.Build, Protocol: st.Protocol}, false
 	}
-	s.Protocol = normalizeProtocol(s.Protocol)
 	return s, true
 }
 
@@ -362,7 +360,7 @@ func serverStatus(ctx context.Context, c *Client, st ServerState) (status Server
 //
 // A server of the caller's own build is used as is. One from another build
 // is used too when its protocol is compatible and it is in use, or when its
-// activity cannot be known (a server too old to say): stopping it would cut
+// activity cannot be known (a server that does not answer the status route): stopping it would cut
 // off tabs and polls. Only an idle server is replaced, so the caller's own
 // build serves the chrome. An incompatible one that is in use is an error
 // telling the user how to proceed.

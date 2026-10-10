@@ -533,23 +533,17 @@ func TestDoctor_ClaudeMDSlot(t *testing.T) {
 	})
 }
 
-func TestDoctor_ClaudeImportAndLegacyRules(t *testing.T) {
+func TestDoctor_ClaudeImport(t *testing.T) {
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
 	projectDir := initializedProject(t)
 	core, _ := install.SlotTemplate(slot.LangEN)
 	current, _ := slot.Upsert(englishAgents, core, false)
 	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), current)
-	writeFileT(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"), "# old\n")
 
 	var out bytes.Buffer
 	runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
-	for _, want := range []string{
-		"[warn] CLAUDE.md imports AGENTS.md - CLAUDE.md does not exist, so Claude Code will not see",
-		"[warn] .claude/rules/vexillum.md - from an older vexillum",
-	} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("missing %q in:\n%s", want, out.String())
-		}
+	if want := "[warn] CLAUDE.md imports AGENTS.md - CLAUDE.md does not exist, so Claude Code will not see"; !strings.Contains(out.String(), want) {
+		t.Errorf("missing %q in:\n%s", want, out.String())
 	}
 	writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# x\n")
 	out.Reset()
