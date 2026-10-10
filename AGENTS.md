@@ -48,9 +48,9 @@ proyecto de prueba bajo un temp dir y un `HOME` temporal para `vx`. Nunca el
 borrar nada que no hayas creado vos. Detalle y cómo hacer clic dentro del iframe
 del forum con CDP: `CONTRIBUTING.md`, sección "Testing the forum end to end".
 
-## Changelog generado
+## Notas de release
 
-No existe un CHANGELOG.md y nunca se edita a mano. goreleaser genera las notas desde los commits convencionales al publicar el release (config en `.goreleaser.yaml`), y la página `/docs/changelog` del sitio se arma desde los releases de GitHub con `site/scripts/changelog.mjs` (archivos generados y gitignoreados, con encabezado de auto-generado). Para que una entrada salga bien agrupada, usá el prefijo `feat:`, `fix:` o `docs:`; `chore:` y `test:` se filtran.
+No existe un CHANGELOG.md ni una página de changelog en el sitio, y nunca se edita nada a mano. Las notas de release viven solo en GitHub Releases: goreleaser publica el header de instalación y un link de compare, sin lista de commits (config en `.goreleaser.yaml`), y los highlights se escriben a mano en GitHub cuando valen la pena. Los prefijos de commit convencional (`feat:`, `fix:`, `docs:`) siguen importando para tener un historial legible.
 
 ## Bitácoras y TODOs
 

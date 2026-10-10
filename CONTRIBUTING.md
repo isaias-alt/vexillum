@@ -16,8 +16,8 @@ rules in short.
 
 - Branch from `canary`, the default branch. Keep each branch small and focused.
 - Add or update tests.
-- Title the PR and write commits as conventional commits (`feat:`, `fix:` or
-  `docs:`). `chore:` and `test:` are left out of the release notes.
+- Title the PR and write commits as conventional commits (`feat:`, `fix:`,
+  `docs:`, `chore:` or `test:`). They keep the history readable.
 - Run the checks below before pushing.
 
 ## Documentation rule
@@ -126,6 +126,14 @@ scripts/install-local.sh --force    # skip the clean and branch guards
 
 `VX_INSTALL_DIR` sets the destination, `VX_INSTALL_BASE` the base branch and
 `VX_INSTALL_FORCE=1` is the same as `--force`.
+
+## Releases
+
+Release notes live only on [GitHub Releases](https://github.com/isaias-alt/vexillum/releases).
+goreleaser publishes the install header and a compare link, with no commit
+list; when a release deserves it, the maintainer writes a short highlights
+paragraph by hand on the GitHub release page. There is no `CHANGELOG.md` and no
+changelog page on the site.
 
 ## Third-party notices
 
