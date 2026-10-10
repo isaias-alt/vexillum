@@ -226,9 +226,9 @@ func TestListener_StoresWakesRelaysAndAcks(t *testing.T) {
 	if snap.Pending != 0 || snap.Listening {
 		t.Errorf("pending %d listening %v: the delivery must be acknowledged and the listener is not the agent", snap.Pending, snap.Listening)
 	}
-	if !strings.Contains(e.logbuf.String(), "stored 1 prompt") {
-		t.Errorf("log = %q", e.logbuf.String())
-	}
+	// The listener logs after it stores and acknowledges, so the line can land
+	// a moment after the wake: wait for it instead of reading the log once.
+	e.eventually("the log line", func() bool { return strings.Contains(e.logbuf.String(), "stored 1 prompt") })
 	cancel()
 	if err := e.wait(done); err != nil {
 		t.Errorf("Run = %v after cancel, want nil", err)
