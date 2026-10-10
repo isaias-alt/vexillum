@@ -1,12 +1,5 @@
 import type { LoopCopy } from "@/lib/loop-strings";
-import {
-  Arrow,
-  ArrowDefs,
-  Badge,
-  Rail,
-  Soldier,
-  Tag,
-} from "./diagram-parts";
+import { Arrow, ArrowDefs, Badge, Rail, Soldier, Tag } from "./diagram-parts";
 
 type Labels = LoopCopy["labels"];
 
@@ -41,30 +34,70 @@ function Wide({ l, alt }: { l: Labels; alt: string }) {
       viewBox="0 40 960 436"
       role="img"
       aria-label={alt}
-      className="mx-auto hidden h-auto w-full max-w-[960px] lg:block"
+      className="mx-auto hidden h-auto w-full max-w-240 lg:block"
     >
       <ArrowDefs id={id} />
 
       {/* general <-> commander */}
-      <rect x="16" y="180" width="130" height="80" rx="10" className={BOX} strokeWidth="1.5" />
-      <text x="81" y="216" textAnchor="middle" className={NODE_TITLE}>{l.general}</text>
-      <text x="81" y="237" textAnchor="middle" className={NODE_SUB}>{l.generalSub}</text>
+      <rect
+        x="16"
+        y="180"
+        width="130"
+        height="80"
+        rx="10"
+        className={BOX}
+        strokeWidth="1.5"
+      />
+      <text x="81" y="216" textAnchor="middle" className={NODE_TITLE}>
+        {l.general}
+      </text>
+      <text x="81" y="237" textAnchor="middle" className={NODE_SUB}>
+        {l.generalSub}
+      </text>
 
-      <rect x="236" y="180" width="140" height="80" rx="10" className="fill-surface stroke-accent" strokeWidth="2" />
-      <text x="306" y="216" textAnchor="middle" className={NODE_TITLE}>{l.commander}</text>
-      <text x="306" y="237" textAnchor="middle" className={NODE_SUB}>{l.commanderSub}</text>
+      <rect
+        x="236"
+        y="180"
+        width="140"
+        height="80"
+        rx="10"
+        className="fill-surface stroke-accent"
+        strokeWidth="2"
+      />
+      <text x="306" y="216" textAnchor="middle" className={NODE_TITLE}>
+        {l.commander}
+      </text>
+      <text x="306" y="237" textAnchor="middle" className={NODE_SUB}>
+        {l.commanderSub}
+      </text>
 
       <Arrow id={id} d="M146 205 H234" />
-      <text x="190" y="197" textAnchor="middle" className={LABEL}>{l.ask}</text>
+      <text x="190" y="197" textAnchor="middle" className={LABEL}>
+        {l.ask}
+      </text>
       <Arrow id={id} d="M236 241 H148" />
-      <text x="192" y="259" textAnchor="middle" className={LABEL}>{l.report}</text>
+      <text x="192" y="259" textAnchor="middle" className={LABEL}>
+        {l.report}
+      </text>
       <Badge x={190} y={170} n={1} />
 
       {/* commander decides: land or ship */}
       <Arrow id={id} d="M306 180 V118" />
-      <rect x="250" y="72" width="112" height="46" rx="8" className={BOX} strokeWidth="1.5" />
-      <text x="306" y="91" textAnchor="middle" className={LABEL}>vx land</text>
-      <text x="306" y="108" textAnchor="middle" className={LABEL}>vx ship</text>
+      <rect
+        x="250"
+        y="72"
+        width="112"
+        height="46"
+        rx="8"
+        className={BOX}
+        strokeWidth="1.5"
+      />
+      <text x="306" y="91" textAnchor="middle" className={LABEL}>
+        vx land
+      </text>
+      <text x="306" y="108" textAnchor="middle" className={LABEL}>
+        vx ship
+      </text>
       <Badge x={334} y={149} n={6} />
 
       {/* commander -> camps: the fan-out */}
@@ -72,7 +105,9 @@ function Wide({ l, alt }: { l: Labels; alt: string }) {
       <Arrow id={id} d="M466 108 H508" />
       <Arrow id={id} d="M466 220 H508" />
       <Arrow id={id} d="M466 332 H508" />
-      <text x="421" y="210" textAnchor="middle" className={LABEL}>{l.dispatch}</text>
+      <text x="421" y="210" textAnchor="middle" className={LABEL}>
+        {l.dispatch}
+      </text>
       <Badge x={421} y={186} n={2} />
 
       {/* camps, each with its soldier */}
@@ -95,7 +130,11 @@ function Wide({ l, alt }: { l: Labels; alt: string }) {
             </text>
             <Tag text={camp.kind(l)} x={campX + campW - 14} y={top + 12} />
             <Soldier x={campX + 18} y={top + 46} />
-            <text x={campX + 62} y={top + 61} className="fill-text font-serif text-[15px] font-semibold">
+            <text
+              x={campX + 62}
+              y={top + 61}
+              className="fill-text font-serif text-[15px] font-semibold"
+            >
               {l.soldier}
             </text>
             <text x={campX + 62} y={top + 78} className={NODE_SUB}>
@@ -107,14 +146,28 @@ function Wide({ l, alt }: { l: Labels; alt: string }) {
       <Badge x={campX} y={campTop[0]} n={3} />
 
       {/* sentinel polls the camps */}
-      <rect x="814" y="180" width="130" height="80" rx="10" className="fill-surface stroke-bronze" strokeWidth="2" />
-      <text x="879" y="216" textAnchor="middle" className={NODE_TITLE}>{l.sentinel}</text>
-      <text x="879" y="237" textAnchor="middle" className={NODE_SUB}>{l.sentinelSub}</text>
+      <rect
+        x="814"
+        y="180"
+        width="130"
+        height="80"
+        rx="10"
+        className="fill-surface stroke-bronze"
+        strokeWidth="2"
+      />
+      <text x="879" y="216" textAnchor="middle" className={NODE_TITLE}>
+        {l.sentinel}
+      </text>
+      <text x="879" y="237" textAnchor="middle" className={NODE_SUB}>
+        {l.sentinelSub}
+      </text>
       <Rail d="M814 220 H758 M758 108 V332" tone="muted" dashed />
       <Arrow id={id} d="M758 108 H724" tone="muted" dashed />
       <Arrow id={id} d="M758 220 H724" tone="muted" dashed />
       <Arrow id={id} d="M758 332 H724" tone="muted" dashed />
-      <text x="786" y="210" textAnchor="middle" className={LABEL}>{l.polls}</text>
+      <text x="786" y="210" textAnchor="middle" className={LABEL}>
+        {l.polls}
+      </text>
       <Badge x={758} y={84} n={4} />
 
       {/* sentinel wakes the commander */}
@@ -123,10 +176,17 @@ function Wide({ l, alt }: { l: Labels; alt: string }) {
         tone="bronze"
         d="M879 260 V428 Q879 440 867 440 H318 Q306 440 306 428 V262"
       />
-      <text x="592" y="430" textAnchor="middle" className="fill-bronze font-mono text-[11px]">
+      <text
+        x="592"
+        y="430"
+        textAnchor="middle"
+        className="fill-bronze font-mono text-[11px]"
+      >
         {`${l.wakeA} ${l.wakeB}`}
       </text>
-      <text x="592" y="462" textAnchor="middle" className={NODE_SUB}>{l.wakeNote}</text>
+      <text x="592" y="462" textAnchor="middle" className={NODE_SUB}>
+        {l.wakeNote}
+      </text>
       <Badge x={592} y={402} n={5} />
     </svg>
   );
@@ -144,30 +204,80 @@ function Narrow({ l, alt }: { l: Labels; alt: string }) {
       viewBox="0 0 320 452"
       role="img"
       aria-label={alt}
-      className="mx-auto h-auto w-full max-w-[420px] lg:hidden"
+      className="mx-auto h-auto w-full max-w-105 lg:hidden"
     >
       <ArrowDefs id={id} />
 
       {/* general <-> commander */}
-      <rect x="100" y="8" width="120" height="48" rx="10" className={BOX} strokeWidth="1.5" />
-      <text x="160" y="29" textAnchor="middle" className="fill-text font-serif text-[15px] font-semibold">{l.general}</text>
-      <text x="160" y="45" textAnchor="middle" className={NODE_SUB}>{l.generalSub}</text>
+      <rect
+        x="100"
+        y="8"
+        width="120"
+        height="48"
+        rx="10"
+        className={BOX}
+        strokeWidth="1.5"
+      />
+      <text
+        x="160"
+        y="29"
+        textAnchor="middle"
+        className="fill-text font-serif text-[15px] font-semibold"
+      >
+        {l.general}
+      </text>
+      <text x="160" y="45" textAnchor="middle" className={NODE_SUB}>
+        {l.generalSub}
+      </text>
 
-      <rect x="100" y="104" width="120" height="48" rx="10" className="fill-surface stroke-accent" strokeWidth="2" />
-      <text x="160" y="125" textAnchor="middle" className="fill-text font-serif text-[15px] font-semibold">{l.commander}</text>
-      <text x="160" y="141" textAnchor="middle" className={NODE_SUB}>{l.commanderSub}</text>
+      <rect
+        x="100"
+        y="104"
+        width="120"
+        height="48"
+        rx="10"
+        className="fill-surface stroke-accent"
+        strokeWidth="2"
+      />
+      <text
+        x="160"
+        y="125"
+        textAnchor="middle"
+        className="fill-text font-serif text-[15px] font-semibold"
+      >
+        {l.commander}
+      </text>
+      <text x="160" y="141" textAnchor="middle" className={NODE_SUB}>
+        {l.commanderSub}
+      </text>
 
       <Arrow id={id} d="M140 56 V102" />
-      <text x="132" y="84" textAnchor="end" className={LABEL}>{l.ask}</text>
+      <text x="132" y="84" textAnchor="end" className={LABEL}>
+        {l.ask}
+      </text>
       <Arrow id={id} d="M180 104 V58" />
-      <text x="188" y="84" className={LABEL}>{l.report}</text>
+      <text x="188" y="84" className={LABEL}>
+        {l.report}
+      </text>
       <Badge x={160} y={80} n={1} />
 
       {/* commander decides: land or ship */}
       <Arrow id={id} d="M220 128 H248" />
-      <rect x="250.5" y="108" width="69" height="40" rx="8" className={BOX} strokeWidth="1.5" />
-      <text x="285" y="125" textAnchor="middle" className={LABEL}>vx land</text>
-      <text x="285" y="140" textAnchor="middle" className={LABEL}>vx ship</text>
+      <rect
+        x="250.5"
+        y="108"
+        width="69"
+        height="40"
+        rx="8"
+        className={BOX}
+        strokeWidth="1.5"
+      />
+      <text x="285" y="125" textAnchor="middle" className={LABEL}>
+        vx land
+      </text>
+      <text x="285" y="140" textAnchor="middle" className={LABEL}>
+        vx ship
+      </text>
       <Badge x={285} y={96} n={6} />
 
       {/* commander -> camps: the fan-out */}
@@ -175,7 +285,9 @@ function Narrow({ l, alt }: { l: Labels; alt: string }) {
       <Arrow id={id} d="M66 192 V214" />
       <Arrow id={id} d="M160 192 V214" />
       <Arrow id={id} d="M254 192 V214" />
-      <text x="168" y="184" className={LABEL}>{l.dispatch}</text>
+      <text x="168" y="184" className={LABEL}>
+        {l.dispatch}
+      </text>
       <Badge x={136} y={172} n={2} />
 
       {/* camps, each with its soldier */}
@@ -194,11 +306,21 @@ function Narrow({ l, alt }: { l: Labels; alt: string }) {
               strokeDasharray="6 4"
               className={CAMP}
             />
-            <text x={cx} y={campTop + 21} textAnchor="middle" className={NODE_SUB}>
+            <text
+              x={cx}
+              y={campTop + 21}
+              textAnchor="middle"
+              className={NODE_SUB}
+            >
               {camp.name(l)}
             </text>
             <Soldier x={cx - 16} y={campTop + 34} />
-            <text x={cx} y={campTop + 82} textAnchor="middle" className="fill-text font-serif text-[13px] font-semibold">
+            <text
+              x={cx}
+              y={campTop + 82}
+              textAnchor="middle"
+              className="fill-text font-serif text-[13px] font-semibold"
+            >
               {l.soldier}
             </text>
             <Tag text={camp.kind(l)} x={cx} y={campTop + 92} align="middle" />
@@ -212,12 +334,31 @@ function Narrow({ l, alt }: { l: Labels; alt: string }) {
       <Arrow id={id} d="M66 368 V340" tone="muted" dashed />
       <Arrow id={id} d="M160 368 V340" tone="muted" dashed />
       <Arrow id={id} d="M254 368 V340" tone="muted" dashed />
-      <text x="242" y="385" textAnchor="end" className={LABEL}>{l.polls}</text>
+      <text x="242" y="385" textAnchor="end" className={LABEL}>
+        {l.polls}
+      </text>
       <Badge x={38} y={368} n={4} />
 
-      <rect x="181.5" y="392" width="138" height="48" rx="10" className="fill-surface stroke-bronze" strokeWidth="2" />
-      <text x="250.5" y="413" textAnchor="middle" className="fill-text font-serif text-[15px] font-semibold">{l.sentinel}</text>
-      <text x="250.5" y="429" textAnchor="middle" className={NODE_SUB}>{l.sentinelSub}</text>
+      <rect
+        x="181.5"
+        y="392"
+        width="138"
+        height="48"
+        rx="10"
+        className="fill-surface stroke-bronze"
+        strokeWidth="2"
+      />
+      <text
+        x="250.5"
+        y="413"
+        textAnchor="middle"
+        className="fill-text font-serif text-[15px] font-semibold"
+      >
+        {l.sentinel}
+      </text>
+      <text x="250.5" y="429" textAnchor="middle" className={NODE_SUB}>
+        {l.sentinelSub}
+      </text>
 
       {/* sentinel wakes the commander */}
       <Arrow
@@ -225,8 +366,22 @@ function Narrow({ l, alt }: { l: Labels; alt: string }) {
         tone="bronze"
         d="M181.5 416 H22 Q10 416 10 404 V140 Q10 128 22 128 H98"
       />
-      <text x="91" y="404" textAnchor="middle" className="fill-bronze font-mono text-[11px]">{l.wakeA}</text>
-      <text x="91" y="433" textAnchor="middle" className="fill-bronze font-mono text-[11px]">{l.wakeB}</text>
+      <text
+        x="91"
+        y="404"
+        textAnchor="middle"
+        className="fill-bronze font-mono text-[11px]"
+      >
+        {l.wakeA}
+      </text>
+      <text
+        x="91"
+        y="433"
+        textAnchor="middle"
+        className="fill-bronze font-mono text-[11px]"
+      >
+        {l.wakeB}
+      </text>
       <Badge x={10} y={260} n={5} />
     </svg>
   );
@@ -246,7 +401,7 @@ export function CommandLoop({ t }: { t: LoopCopy }) {
           <li key={step} className="flex min-w-0 gap-3">
             <span
               aria-hidden
-              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-accent font-serif text-[12px] text-accent-contrast"
+              className="flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full bg-accent font-serif text-[12px] text-accent-contrast"
             >
               {i + 1}
             </span>

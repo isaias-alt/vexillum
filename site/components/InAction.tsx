@@ -279,7 +279,7 @@ export function InAction({
                   meets the marker centers. */}
             <span
               aria-hidden
-              className="absolute left-[31px] w-px bg-border"
+              className="absolute left-7.75 w-px bg-border"
               style={{
                 top: i === 0 ? MARKER_CENTER : 0,
                 bottom: i === last ? `calc(100% - ${MARKER_CENTER}px)` : 0,
@@ -290,9 +290,9 @@ export function InAction({
                 isActive ? "border-accent bg-sunken" : "border-transparent"
               }`}
             >
-              <div className="relative z-[1] w-[42px] shrink-0">
+              <div className="relative z-1 w-10.5 shrink-0">
                 <span
-                  className={`flex h-[27px] w-[27px] items-center justify-center rounded-full font-serif text-[12.5px] ${
+                  className={`flex h-6.72 w-6.72 items-center justify-center rounded-full font-serif text-[12.5px] ${
                     isActive
                       ? "bg-accent text-accent-contrast"
                       : "border border-border bg-bg text-text-muted"
@@ -315,19 +315,19 @@ export function InAction({
                 </button>
                 {isActive && (
                   <>
-                    <p className="mt-2 max-w-[380px] text-[12.5px] leading-[1.6] text-text-secondary">
+                    <p className="mt-2 max-w-95 text-[12.5px] leading-[1.6] text-text-secondary">
                       {step.blurb}
                     </p>
                     <Link
                       href={`${docsRoot}${step.docs}`}
-                      className="relative z-[1] mt-2.5 block w-fit border-b border-accent pb-px text-[12px] text-accent"
+                      className="relative z-1 mt-2.5 block w-fit border-b border-accent pb-px text-[12px] text-accent"
                     >
                       {docsLabel} &rarr;
                     </Link>
                     {!reduced && (
                       <div
                         aria-hidden
-                        className="mt-3.5 h-0.5 w-full max-w-[380px] overflow-hidden rounded-[1px] bg-border"
+                        className="mt-3.5 h-0.5 w-full max-w-95 overflow-hidden rounded-[1px] bg-border"
                       >
                         <div
                           className="h-full origin-left bg-accent"
@@ -437,7 +437,7 @@ export function InAction({
           >
             <div
               ref={screen}
-              className="absolute inset-0 overflow-hidden px-[22px] py-5 text-[12.5px] leading-[1.9] data-[scrolled=true]:[mask-image:linear-gradient(to_bottom,transparent,#000_26px)]"
+              className="absolute inset-0 overflow-hidden px-5.5 py-5 text-[12.5px] leading-[1.9] data-[scrolled=true]:[mask-image:linear-gradient(to_bottom,transparent,#000_26px)]"
             >
               <div
                 className={`min-w-0 transition-opacity duration-500 motion-reduce:transition-none ${

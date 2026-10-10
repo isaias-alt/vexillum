@@ -17,7 +17,11 @@ function Row({
       <span aria-hidden className={`shrink-0 ${markClass}`}>
         {mark}
       </span>
-      <span className={`min-w-0 break-words whitespace-pre-wrap ${textClass}`}>{children}</span>
+      <span
+        className={`min-w-0 wrap-break-words whitespace-pre-wrap ${textClass}`}
+      >
+        {children}
+      </span>
     </div>
   );
 }

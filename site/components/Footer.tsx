@@ -10,27 +10,27 @@ export function Footer({ lang }: { lang: Lang }) {
   return (
     <footer className="mt-auto border-t border-border text-[11.5px] text-text-muted">
       <div className="site-container flex flex-wrap items-center justify-between gap-3 py-5">
-      <div className="flex items-center gap-2.5">
-        <LogoMark className="h-3.5 w-3.5" />
-        <span>vexillum &middot; {t.license}</span>
-      </div>
-      <div className="flex gap-[18px]">
-        <ExternalLink href={GITHUB_URL} className="hover:text-text-secondary">
-          {t.github}
-        </ExternalLink>
-        <Link
-          href={`${localePrefix(lang)}/docs`}
-          className="hover:text-text-secondary"
-        >
-          {t.docs}
-        </Link>
-        <ExternalLink
-          href="https://lucasco.dev"
-          className="hover:text-text-secondary"
-        >
-          lucasco.dev
-        </ExternalLink>
-      </div>
+        <div className="flex items-center gap-2.5">
+          <LogoMark className="h-3.5 w-3.5" />
+          <span>vexillum &middot; {t.license}</span>
+        </div>
+        <div className="flex gap-4.5">
+          <ExternalLink href={GITHUB_URL} className="hover:text-text-secondary">
+            {t.github}
+          </ExternalLink>
+          <Link
+            href={`${localePrefix(lang)}/docs`}
+            className="hover:text-text-secondary"
+          >
+            {t.docs}
+          </Link>
+          <ExternalLink
+            href="https://lucasco.dev"
+            className="hover:text-text-secondary"
+          >
+            lucasco.dev
+          </ExternalLink>
+        </div>
       </div>
     </footer>
   );

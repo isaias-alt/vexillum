@@ -2,7 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { JsonLd } from "@/components/JsonLd";
-import { landingOgImagePath, pageMetadata, softwareApplicationLd } from "@/lib/seo";
+import {
+  landingOgImagePath,
+  pageMetadata,
+  softwareApplicationLd,
+} from "@/lib/seo";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { InstallCommand } from "@/components/InstallCommand";
@@ -78,14 +82,11 @@ export default async function Home({
           <h1 className="display-title mx-auto mb-8 max-w-[18ch]">
             {t.hero.title}
           </h1>
-          <p className="mx-auto mb-8 max-w-[480px] text-sm leading-[1.7] text-text-secondary">
+          <p className="mx-auto mb-8 max-w-120 text-sm leading-[1.7] text-text-secondary">
             {t.hero.sub}
           </p>
           <InstallCommand className="mb-5" />
-          <Link
-            href={`${prefix}/docs`}
-            className="btn btn-primary"
-          >
+          <Link href={`${prefix}/docs`} className="btn btn-primary">
             {t.hero.cta}
           </Link>
         </section>
@@ -113,16 +114,14 @@ export default async function Home({
           <div className="site-container py-(--section-space)">
             <div className="mx-auto mb-14 max-w-[min(100%,52rem)] text-center">
               <Eyebrow>{t.vocab.eyebrow}</Eyebrow>
-              <h2 className="section-title">
-                {t.vocab.title}
-              </h2>
+              <h2 className="section-title">{t.vocab.title}</h2>
             </div>
             {/* the only section narrower than the shared container */}
             <div className="mx-auto max-w-(--content-wide)">
               {t.vocab.items.map((item) => (
                 <div
                   key={item.term}
-                  className="grid grid-cols-[150px_minmax(0,1fr)] gap-5 border-t border-border py-[18px] max-sm:grid-cols-1 max-sm:gap-1.5"
+                  className="grid grid-cols-[150px_minmax(0,1fr)] gap-5 border-t border-border py-4.5 max-sm:grid-cols-1 max-sm:gap-1.5"
                 >
                   <div className="text-[13.5px] text-accent">{item.term}</div>
                   <div className="text-[13px] leading-[1.7] text-text-secondary">
@@ -157,9 +156,7 @@ export default async function Home({
           <div className="site-container py-(--section-space)">
             <div className="mx-auto mb-12 max-w-[min(100%,52rem)] text-center">
               <Eyebrow>{t.dispatching.eyebrow}</Eyebrow>
-              <h2 className="section-title mb-5">
-                {t.dispatching.title}
-              </h2>
+              <h2 className="section-title mb-5">{t.dispatching.title}</h2>
               <p className="text-sm leading-[1.7] text-text-secondary">
                 {t.dispatching.sub}
               </p>
@@ -174,24 +171,22 @@ export default async function Home({
         {/* open source */}
         <section className="border-t border-border">
           <div className="site-container py-(--section-space) text-center">
-          <Eyebrow>{t.oss.eyebrow}</Eyebrow>
-          <h2 className="section-title mb-8">
-            {t.oss.title}
-          </h2>
-          <div className="flex flex-wrap justify-center gap-3">
-            <ExternalLink
-              href={`${GITHUB_URL}/issues/new`}
-              className="btn btn-secondary"
-            >
-              {t.oss.issue}
-            </ExternalLink>
-            <ExternalLink
-              href={`${GITHUB_URL}/blob/main/CONTRIBUTING.md`}
-              className="btn btn-secondary"
-            >
-              {t.oss.contributing}
-            </ExternalLink>
-          </div>
+            <Eyebrow>{t.oss.eyebrow}</Eyebrow>
+            <h2 className="section-title mb-8">{t.oss.title}</h2>
+            <div className="flex flex-wrap justify-center gap-3">
+              <ExternalLink
+                href={`${GITHUB_URL}/issues/new`}
+                className="btn btn-secondary"
+              >
+                {t.oss.issue}
+              </ExternalLink>
+              <ExternalLink
+                href={`${GITHUB_URL}/blob/main/CONTRIBUTING.md`}
+                className="btn btn-secondary"
+              >
+                {t.oss.contributing}
+              </ExternalLink>
+            </div>
           </div>
         </section>
       </main>

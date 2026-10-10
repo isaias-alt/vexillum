@@ -17,7 +17,7 @@ const TABS = ["brew", "curl"] as const;
 // look and behave alike: tabs on top, a scrollable command, a copy button.
 export function InstallCommand({ className }: { className?: string }) {
   return (
-    <div className={`mx-auto max-w-[640px] text-left ${className ?? ""}`}>
+    <div className={`mx-auto max-w-160 text-left ${className ?? ""}`}>
       <CodeBlockTabs defaultValue="brew">
         <CodeBlockTabsList>
           {TABS.map((t) => (

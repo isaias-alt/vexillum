@@ -23,7 +23,7 @@ export function LangToggle({ lang }: { lang: Lang }) {
     <div
       role="group"
       aria-label="Language"
-      className="flex overflow-hidden rounded-[var(--fr-radius-sm)] border border-border-strong text-[12.5px]"
+      className="flex overflow-hidden rounded-(--fr-radius-sm) border border-border-strong text-[12.5px]"
     >
       {i18n.languages.map((l) => (
         <Link
@@ -31,7 +31,7 @@ export function LangToggle({ lang }: { lang: Lang }) {
           href={hrefFor(pathname, l)}
           hrefLang={l}
           aria-current={l === lang ? "true" : undefined}
-          className={`px-3 py-[7px] max-[359px]:px-2 ${
+          className={`px-3 py-1.75 max-[359px]:px-2 ${
             l === lang
               ? "bg-sunken text-text"
               : "text-text-muted hover:text-text"
