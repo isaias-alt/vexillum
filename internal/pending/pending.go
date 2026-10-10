@@ -29,12 +29,8 @@ import (
 	"github.com/isaias-alt/vexillum/internal/schemaver"
 )
 
-// SchemaVersion is the current version of the Item JSON schema. Numbering
-// restarted at 0; items written before that carry 1 (see
-// legacySchemaVersions).
+// SchemaVersion is the current version of the Item JSON schema.
 const SchemaVersion = schemaver.Current
-
-var legacySchemaVersions = []int{1}
 
 const dirName = "pending"
 
@@ -192,10 +188,9 @@ func List(projectRoot string) ([]Item, error) {
 		if item.ID == "" || item.Text == "" {
 			return nil, fmt.Errorf("%s: incomplete pending decision (missing id or text)", p)
 		}
-		if !schemaver.Supported(item.SchemaVersion, legacySchemaVersions...) {
+		if !schemaver.Supported(item.SchemaVersion) {
 			return nil, fmt.Errorf("%s: unsupported schema version %d (expected %d)", p, item.SchemaVersion, SchemaVersion)
 		}
-		item.SchemaVersion = SchemaVersion
 		if err := validateRecommended(len(item.Options), item.Recommended); err != nil {
 			return nil, fmt.Errorf("%s: %w", p, err)
 		}

@@ -7,18 +7,12 @@ import (
 )
 
 func TestSupported(t *testing.T) {
-	legacy := []int{1, 2, 3}
-	for _, v := range []int{0, 1, 2, 3} {
-		if !schemaver.Supported(v, legacy...) {
-			t.Errorf("Supported(%d) = false, want true", v)
-		}
+	if !schemaver.Supported(0) {
+		t.Error("Supported(0) = false, want true")
 	}
-	for _, v := range []int{4, 999, -1} {
-		if schemaver.Supported(v, legacy...) {
+	for _, v := range []int{1, 2, 3, 4, 999, -1} {
+		if schemaver.Supported(v) {
 			t.Errorf("Supported(%d) = true, want false", v)
 		}
-	}
-	if schemaver.Supported(1) {
-		t.Error("Supported(1) with no legacy numbers = true, want false")
 	}
 }

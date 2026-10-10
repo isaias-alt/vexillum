@@ -28,17 +28,7 @@ import (
 // SchemaVersion is the current version of the Task JSON schema. Bump it
 // when Task's shape changes in a way that breaks reading older state
 // files.
-//
-// Numbering restarted at 0 while vexillum is pre-release. Task files
-// written before the restart carry 1, 2 or 3 (see legacySchemaVersions)
-// and still load; a later bump must pick a number above those.
 const SchemaVersion = schemaver.Current
-
-// legacySchemaVersions are the task schema numbers used before the
-// restart. v1 was the first layer, v2 (Capa 3) added the camp assignment,
-// exit code and output fields and the running/done/failed statuses, v3
-// (Capa 4) added the herdr identifiers and the blocked status.
-var legacySchemaVersions = []int{1, 2, 3}
 
 // Kind distinguishes a mission (delivers code changes, landed locally via
 // vx land - v1 never opens a real PR) from a scout (delivers a
@@ -417,12 +407,9 @@ func decodeTask(path string, data []byte) (Task, error) {
 	if t.ID == "" || t.Kind == "" {
 		return Task{}, fmt.Errorf("%s: incomplete task (missing id or kind)", path)
 	}
-	if !schemaver.Supported(t.SchemaVersion, legacySchemaVersions...) {
+	if !schemaver.Supported(t.SchemaVersion) {
 		return Task{}, fmt.Errorf("%s: unsupported schema version %d (expected %d)", path, t.SchemaVersion, SchemaVersion)
 	}
-	// A legacy number is a known older spelling of the current schema, not
-	// data: report and re-save it as the current one.
-	t.SchemaVersion = SchemaVersion
 	return t, nil
 }
 

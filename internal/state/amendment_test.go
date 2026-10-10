@@ -114,15 +114,14 @@ func TestAmendments_RoundTripThroughDisk(t *testing.T) {
 	}
 }
 
-// A task file written before amendments existed must keep loading, with no
-// amendments. It carries the legacy schema_version 3.
-func TestLoad_OlderTaskFileWithoutAmendments(t *testing.T) {
+// A task file without an amendments field loads with no amendments.
+func TestLoad_TaskFileWithoutAmendments(t *testing.T) {
 	root := t.TempDir()
 	id := "0123456789abcdef"
 	if err := os.MkdirAll(filepath.Join(root, "tasks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	old := `{"schema_version":3,"id":"` + id + `","kind":"mission","prompt":"p","status":"done","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+	old := `{"schema_version":0,"id":"` + id + `","kind":"mission","prompt":"p","status":"done","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
 	if err := os.WriteFile(filepath.Join(root, "tasks", id+".json"), []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}

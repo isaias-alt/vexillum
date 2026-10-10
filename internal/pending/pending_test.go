@@ -187,28 +187,6 @@ func TestList_RejectsRecommendedOutOfRange(t *testing.T) {
 	}
 }
 
-// Items written before the schema numbering restarted at 0 carry
-// schema_version 1. They must still load, intact, as the current version.
-func TestList_ReadsLegacySchemaVersion(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "pending")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	old := `{"schema_version":1,"id":"1a2b3c4d","text":"legacy item","options":["a","b"],"recommended":2,"created_at":"2026-09-24T12:00:00Z"}`
-	if err := os.WriteFile(filepath.Join(dir, "1a2b3c4d.json"), []byte(old), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	items, err := pending.List(root)
-	if err != nil || len(items) != 1 {
-		t.Fatalf("List = %v, %v", items, err)
-	}
-	got := items[0]
-	if got.SchemaVersion != pending.SchemaVersion || got.Text != "legacy item" || len(got.Options) != 2 || got.Recommended != 2 {
-		t.Errorf("legacy item = %+v, want current version and every other field intact", got)
-	}
-}
-
 func TestList_RefusesFutureSchemaVersion(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "pending")
