@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -56,7 +57,7 @@ func (e *testEnv) openStream(key string) *eventStream {
 				}
 			}
 		}
-		if err := sc.Err(); err != nil {
+		if err := sc.Err(); err != nil && !errors.Is(err, context.Canceled) {
 			s.t.Errorf("events stream for %q: %v", key, err)
 		}
 	}()

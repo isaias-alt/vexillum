@@ -183,12 +183,20 @@ func skillPage(name string, l contentLocale) (string, error) {
 	var b strings.Builder
 	b.WriteString(frontmatter(l.skillTitle(name), l.skillDescription(name)))
 	b.WriteString(skillsNotice + "\n\n")
-	b.WriteString(l.skillIntro(name, hash, len(files)));b.WriteString("\n\n")
+	b.WriteString(l.skillIntro(name, hash, len(files)))
+	b.WriteString("\n\n")
 	for _, f := range files {
-		b.WriteString("## ");b.WriteString(l.fileHeading(path.Clean(f.Path)));b.WriteString("\n\n")
+		b.WriteString("## ")
+		b.WriteString(l.fileHeading(path.Clean(f.Path)))
+		b.WriteString("\n\n")
 		text := strings.TrimRight(string(f.Content), "\n")
 		fence := codeFence(text)
-		b.WriteString(fence);b.WriteString("markdown\n");b.WriteString(text);b.WriteString("\n");b.WriteString(fence);b.WriteString("\n\n")
+		b.WriteString(fence)
+		b.WriteString("markdown\n")
+		b.WriteString(text)
+		b.WriteString("\n")
+		b.WriteString(fence)
+		b.WriteString("\n\n")
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n", nil
 }
@@ -197,7 +205,8 @@ func skillsIndexPage(names []string, l contentLocale) (string, error) {
 	var b strings.Builder
 	b.WriteString(frontmatter(l.skillsIndexTitle, l.skillsIndexDescription))
 	b.WriteString(skillsNotice + "\n\n")
-	b.WriteString(l.skillsIndexIntro);b.WriteString("\n\n")
+	b.WriteString(l.skillsIndexIntro)
+	b.WriteString("\n\n")
 	fmt.Fprintf(&b, "| %s | %s |\n| --- | --- |\n", l.skillHeader, l.descriptionHeader)
 	for _, name := range names {
 		data, err := skills.ReadFile(name, "SKILL.md")
@@ -222,7 +231,8 @@ func slotBlockPage(l contentLocale) (string, error) {
 	var b strings.Builder
 	b.WriteString(frontmatter(l.slotTitle, l.slotDescription))
 	b.WriteString(skillsNotice + "\n\n")
-	b.WriteString(l.slotIntro);b.WriteString("\n\n")
+	b.WriteString(l.slotIntro)
+	b.WriteString("\n\n")
 	for _, s := range []struct {
 		heading string
 		lang    string
@@ -233,9 +243,17 @@ func slotBlockPage(l contentLocale) (string, error) {
 		}
 		block := slot.Render(body)
 		fence := codeFence(block)
-		b.WriteString("## ");b.WriteString(s.heading);b.WriteString("\n\n")
-		b.WriteString(fence);b.WriteString("markdown\n");b.WriteString(strings.TrimRight(block, "\n"));b.WriteString("\n");b.WriteString(fence);b.WriteString("\n\n")
+		b.WriteString("## ")
+		b.WriteString(s.heading)
+		b.WriteString("\n\n")
+		b.WriteString(fence)
+		b.WriteString("markdown\n")
+		b.WriteString(strings.TrimRight(block, "\n"))
+		b.WriteString("\n")
+		b.WriteString(fence)
+		b.WriteString("\n\n")
 	}
-	b.WriteString(l.slotNote);b.WriteString("\n")
+	b.WriteString(l.slotNote)
+	b.WriteString("\n")
 	return b.String(), nil
 }

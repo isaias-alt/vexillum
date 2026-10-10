@@ -282,7 +282,8 @@ func bulletList(items []string) string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString("- ");b.WriteString(item)
+		b.WriteString("- ")
+		b.WriteString(item)
 	}
 	return b.String()
 }

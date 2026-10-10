@@ -29,9 +29,16 @@ func askUserQuestionCapture(label, question string, modelOptions []string) strin
 	rule := gray + strings.Repeat("─", 60) + reset
 
 	var b strings.Builder
-	b.WriteString(rule);b.WriteString("\n")
-	b.WriteString(hdr + " ☐ ");b.WriteString(label);b.WriteString(reset);b.WriteString("\n\n")
-	b.WriteString(bold);b.WriteString(question);b.WriteString(reset);b.WriteString("\n\n")
+	b.WriteString(rule)
+	b.WriteString("\n")
+	b.WriteString(hdr + " ☐ ")
+	b.WriteString(label)
+	b.WriteString(reset)
+	b.WriteString("\n\n")
+	b.WriteString(bold)
+	b.WriteString(question)
+	b.WriteString(reset)
+	b.WriteString("\n\n")
 
 	all := append(append([]string{}, modelOptions...), "Type something.", "Chat about this")
 	for i, opt := range all {
@@ -39,14 +46,30 @@ func askUserQuestionCapture(label, question string, modelOptions []string) strin
 		if n == len(all) {
 			// Second rule, directly before the last (auto-injected)
 			// option.
-			b.WriteString(rule);b.WriteString("\n")
-			b.WriteString("  ");b.WriteString(n1(n));b.WriteString(". ");b.WriteString(opt);b.WriteString("\n")
+			b.WriteString(rule)
+			b.WriteString("\n")
+			b.WriteString("  ")
+			b.WriteString(n1(n))
+			b.WriteString(". ")
+			b.WriteString(opt)
+			b.WriteString("\n")
 			continue
 		}
 		if n == 1 {
-			b.WriteString(blue + "❯ ");b.WriteString(n1(n));b.WriteString(". ");b.WriteString(opt);b.WriteString(reset);b.WriteString("\n")
+			b.WriteString(blue + "❯ ")
+			b.WriteString(n1(n))
+			b.WriteString(". ")
+			b.WriteString(opt)
+			b.WriteString(reset)
+			b.WriteString("\n")
 		} else {
-			b.WriteString("  " + gray);b.WriteString(n1(n));b.WriteString(".");b.WriteString(reset);b.WriteString(" ");b.WriteString(opt);b.WriteString("\n")
+			b.WriteString("  " + gray)
+			b.WriteString(n1(n))
+			b.WriteString(".")
+			b.WriteString(reset)
+			b.WriteString(" ")
+			b.WriteString(opt)
+			b.WriteString("\n")
 		}
 	}
 	b.WriteString("\n" + gray + "Enter to select · ↑/↓ to navigate · Esc to cancel" + reset + "\n")

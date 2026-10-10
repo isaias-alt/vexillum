@@ -454,7 +454,7 @@ func openTab(t *testing.T, home, key string) (closeTab func()) {
 				return
 			}
 		}
-		if err := sc.Err(); err != nil {
+		if err := sc.Err(); err != nil && !errors.Is(err, context.Canceled) {
 			t.Errorf("reading tab stream: %v", err)
 		}
 	}()
