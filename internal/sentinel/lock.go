@@ -70,14 +70,6 @@ func AcquireLock(vexillumHome string) (release func(), err error) {
 		return nil, fmt.Errorf("locking sentinel lock: %w", err)
 	}
 
-	// No sentinel of this generation is alive now. One that predates the
-	// flock holds only the pid file.
-	if pid, ok := legacyHolder(vexillumHome); ok {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		_ = f.Close()
-		return nil, &ErrRunning{PID: pid, Home: vexillumHome}
-	}
-
 	self := os.Getpid()
 	if err := atomicfile.Write(lockPath(vexillumHome), []byte(strconv.Itoa(self))); err != nil {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
@@ -143,21 +135,6 @@ func readPID(vexillumHome string) (int, bool) {
 	return pid, true
 }
 
-// legacyHolder reports a live sentinel process named by the pid file that is
-// not this process: the only way to tell a sentinel that never took the flock.
-// A pid that is alive but no longer a "vx sentinel" was recycled and is not a
-// holder.
-func legacyHolder(vexillumHome string) (pid int, ok bool) {
-	pid, ok = readPID(vexillumHome)
-	if !ok || pid == os.Getpid() || !processAlive(pid) {
-		return 0, false
-	}
-	if _, command, err := inspectProcess(pid); err != nil || !isSentinelCommand(command) {
-		return 0, false
-	}
-	return pid, true
-}
-
 // flockHeld reports whether some process holds the sentinel flock. It probes
 // with a shared lock, which never blocks another probe.
 func flockHeld(vexillumHome string) bool {
@@ -177,11 +154,7 @@ func flockHeld(vexillumHome string) bool {
 // vexillumHome, without claiming the lock itself - internal/cli uses this to
 // decide whether dispatch needs to auto-start one.
 func IsRunning(vexillumHome string) bool {
-	if flockHeld(vexillumHome) {
-		return true
-	}
-	_, ok := legacyHolder(vexillumHome)
-	return ok
+	return flockHeld(vexillumHome)
 }
 
 func processAlive(pid int) bool {

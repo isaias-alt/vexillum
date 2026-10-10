@@ -37,10 +37,6 @@ import (
 
 const awaitersDirName = "sentinel-awaiters"
 
-// legacyExecutableName is the executable's name before cmdname.Name; an
-// await launched by an old hook may still be running under it.
-const legacyExecutableName = "vexillum"
-
 // AwaiterRecord is what an await process writes about itself.
 type AwaiterRecord struct {
 	PID         int       `json:"pid"`
@@ -86,7 +82,7 @@ func parsePSLine(line string) (ppid int, command string, err error) {
 }
 
 // isAwaitCommand reports whether command is a "vx sentinel await"
-// invocation: the executable (under its current or legacy name, any path)
+// invocation: the executable (any path)
 // followed by exactly those two arguments. The main polling sentinel ("vx
 // sentinel") and anything else never match.
 func isAwaitCommand(command string) bool {
@@ -100,8 +96,7 @@ func isSentinelCommand(command string) bool {
 	return isVXCommand(command, " sentinel")
 }
 
-// isVXCommand reports whether command is this program (under its current or
-// legacy name, any path) followed by exactly the given arguments suffix.
+// isVXCommand reports whether command is this program (any path) followed by exactly the given arguments suffix.
 func isVXCommand(command, suffix string) bool {
 	exe, ok := strings.CutSuffix(strings.TrimSpace(command), suffix)
 	if !ok {
@@ -114,7 +109,7 @@ func isVXCommand(command, suffix string) bool {
 		return false
 	}
 	base := filepath.Base(exe)
-	return base == cmdname.Name || base == legacyExecutableName
+	return base == cmdname.Name
 }
 
 // OwnerGone reports whether the process that launched this one (ownerPID,

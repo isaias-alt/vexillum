@@ -22,15 +22,14 @@ func fakeInspect(t *testing.T, f func(pid int) (string, error)) {
 
 func TestIsListenCommand(t *testing.T) {
 	for cmd, want := range map[string]bool{
-		"/usr/local/bin/vx forum listen":       true,
-		"vx forum listen":                      true,
-		"/opt/my tools/vx forum listen":        true,
-		"/usr/local/bin/vexillum forum listen": true,
-		"/usr/local/bin/vx forum serve":        false,
-		"/usr/local/bin/vx forum listen --x":   false,
-		"/usr/bin/vim forum listen":            false,
-		"vx sentinel await":                    false,
-		"my tools/vx forum listen":             false,
+		"/usr/local/bin/vx forum listen":     true,
+		"vx forum listen":                    true,
+		"/opt/my tools/vx forum listen":      true,
+		"/usr/local/bin/vx forum serve":      false,
+		"/usr/local/bin/vx forum listen --x": false,
+		"/usr/bin/vim forum listen":          false,
+		"vx sentinel await":                  false,
+		"my tools/vx forum listen":           false,
 	} {
 		if got := isListenCommand(cmd); got != want {
 			t.Errorf("isListenCommand(%q) = %v, want %v", cmd, got, want)

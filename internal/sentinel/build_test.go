@@ -248,30 +248,6 @@ func TestAcquireLock_ReleaseLeavesAnotherHoldersFilesAlone(t *testing.T) {
 	}
 }
 
-// A sentinel started before the flock existed only has a pid file. While that
-// process is alive and is a sentinel, no second one starts.
-func TestAcquireLock_RefusesWhileALegacySentinelIsAlive(t *testing.T) {
-	home := t.TempDir()
-	legacy := liveOtherPID(t)
-	if err := os.WriteFile(filepath.Join(home, "sentinel.pid"), []byte(strconv.Itoa(legacy)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	restore := sentinel.SetInspectProcess(func(pid int) (int, string, error) {
-		return 1, "/opt/homebrew/bin/vexillum sentinel", nil
-	})
-	defer restore()
-
-	_, err := sentinel.AcquireLock(home)
-	var running *sentinel.ErrRunning
-	if !errors.As(err, &running) || running.PID != legacy {
-		t.Fatalf("AcquireLock = %v, want ErrRunning for pid %d", err, legacy)
-	}
-	if !sentinel.IsRunning(home) {
-		t.Error("IsRunning = false while a legacy sentinel is alive")
-	}
-}
-
 // A pid file naming a live process that is not a sentinel (the pid was
 // recycled) is stale.
 func TestAcquireLock_IgnoresARecycledPid(t *testing.T) {
@@ -478,7 +454,7 @@ func TestAcquireLockRetiring_RefusesAtOnceWhenTheHolderIsCurrent(t *testing.T) {
 func TestLivePIDs_FindsOnlyTheSentinelProcesses(t *testing.T) {
 	restore := sentinel.SetListProcesses(func() (string, error) {
 		return strings.Join([]string{
-			"  101 /opt/homebrew/bin/vexillum sentinel",
+			"  101 /opt/homebrew/bin/vx sentinel",
 			"  102 /Users/me/go/bin/vx sentinel await",
 			" 103 /Users/me/code/vexillum/vx sentinel",
 			"  104 vx sentinel drain",

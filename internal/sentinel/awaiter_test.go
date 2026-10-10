@@ -213,7 +213,7 @@ func TestSweep_NeverSignalsThePollingSentinel(t *testing.T) {
 	home := t.TempDir()
 	pid, exited := victim(t)
 	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: pid, OwnerPID: 1111, ProjectRoot: "/proj"})
-	inspectAs(t, 1, "/opt/homebrew/bin/vexillum sentinel")
+	inspectAs(t, 1, "/opt/homebrew/bin/vx sentinel")
 
 	sentinel.ReapAwaiters(home)
 	if waitExitedBriefly(exited) {
@@ -255,9 +255,9 @@ func TestIsAwaitCommand(t *testing.T) {
 	cases := map[string]bool{
 		"vx sentinel await":                                    true,
 		"/Users/me/.local/bin/vx sentinel await":               true,
-		"/opt/homebrew/bin/vexillum sentinel await":            true,
+		"/opt/homebrew/bin/vx sentinel await":                  true,
 		"/Users/me/My Tools/vx sentinel await":                 true,
-		"/opt/homebrew/bin/vexillum sentinel":                  false,
+		"/opt/homebrew/bin/vx sentinel":                        false,
 		"vx sentinel drain":                                    false,
 		"vx sentinel await --extra":                            false,
 		"/usr/bin/vim sentinel await":                          false,

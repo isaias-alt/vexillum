@@ -21,9 +21,6 @@ import (
 // recycled pid belongs to something else, so a lock naming it is stale and
 // signaling it is never done. Nothing here kills by name.
 
-// legacyExecutableName is the executable's name before cmdname.Name.
-const legacyExecutableName = "vexillum"
-
 // ErrRunning is returned by AcquireLock when another listener is alive.
 type ErrRunning struct{ PID int }
 
@@ -55,7 +52,7 @@ var inspectProcess = func(pid int) (command string, err error) {
 }
 
 // isListenCommand reports whether command is a "vx forum listen" invocation: the
-// executable (current or legacy name, any path) followed by exactly those two
+// executable (any path) followed by exactly those two
 // arguments.
 func isListenCommand(command string) bool {
 	exe, ok := strings.CutSuffix(strings.TrimSpace(command), " forum listen")
@@ -66,7 +63,7 @@ func isListenCommand(command string) bool {
 		return false
 	}
 	base := filepath.Base(exe)
-	return base == cmdname.Name || base == legacyExecutableName
+	return base == cmdname.Name
 }
 
 func processAlive(pid int) bool {
