@@ -28,8 +28,8 @@ const API_URL = `https://api.github.com/repos/${REPO}/releases?per_page=50`;
 const FETCH_TIMEOUT_MS = 8000;
 export const MAX_RELEASES = 10;
 // Releases older than this version are never shown: the changelog starts at the
-// first official release, so the early tags (v0.1.x) stay out of the page.
-export const MIN_VERSION = [0, 2, 0];
+// first official release, v0.1.0.
+export const MIN_VERSION = [0, 1, 0];
 const GROUPS = ["Features", "Bug fixes", "Documentation"];
 
 const NOTICE =

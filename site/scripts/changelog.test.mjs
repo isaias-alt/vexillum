@@ -103,11 +103,19 @@ test("generate shows the no-release line when GitHub returns nothing", async () 
 });
 
 test("releases below the minimum version are treated as no releases", async () => {
-  assert.ok(!atLeastMinVersion("v0.1.1") && !atLeastMinVersion("v0.1.9") && !atLeastMinVersion("nightly"));
-  assert.ok(atLeastMinVersion("v0.2.0") && atLeastMinVersion("v0.10.0") && atLeastMinVersion("v1.0.0"));
+  assert.ok(!atLeastMinVersion("v0.0.9") && !atLeastMinVersion("v0.0.1") && !atLeastMinVersion("nightly"));
+  assert.ok(atLeastMinVersion("v0.1.0") && atLeastMinVersion("v0.2.0") && atLeastMinVersion("v0.10.0") && atLeastMinVersion("v1.0.0"));
   const dir = mkdtempSync(join(tmpdir(), "changelog-"));
-  const early = ["v0.1.0", "v0.1.1"].map((tag_name) => ({ ...release, tag_name }));
+  const early = ["v0.0.1", "v0.0.9"].map((tag_name) => ({ ...release, tag_name }));
   await generate(dir, async () => ({ ok: true, json: async () => early }), quiet);
   const page = readFileSync(join(dir, "en", "changelog.mdx"), "utf8");
-  assert.ok(page.includes("No release has been published yet.") && !page.includes("v0.1"));
+  assert.ok(page.includes("No release has been published yet.") && !page.includes("v0.0"));
+});
+
+test("the first official release, v0.1.0, is shown", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "changelog-"));
+  const first = [{ ...release, tag_name: "v0.1.0" }];
+  await generate(dir, async () => ({ ok: true, json: async () => first }), quiet);
+  const page = readFileSync(join(dir, "en", "changelog.mdx"), "utf8");
+  assert.ok(page.includes("v0.1.0") && !page.includes("No release has been published yet."));
 });
