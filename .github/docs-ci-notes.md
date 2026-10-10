@@ -6,7 +6,7 @@ docs site.
 
 ## What the workflow checks
 
-On pull requests and pushes to `main` that touch the site, the docgen inputs,
+On pull requests and pushes to `canary` that touch the site, the docgen inputs,
 the skills or the docs tooling, `docs.yml` runs, in order: `go test ./...`
 (includes the docgen golden test), `pnpm install --frozen-lockfile`, `pnpm lint`,
 `pnpm build`, `pnpm seo:audit`, then the link checks. A second job runs Vale
@@ -43,7 +43,7 @@ account. Do it once.
    status on, so each PR gets its preview URL and a commit status.
 10. **Settings > Environment Variables**: the site needs none today. If one is
     added later, define it for the Preview environment too.
-11. Production branch stays `main`. Pushes to `main` deploy to the production
+11. Production branch stays `canary`. Pushes to `canary` deploy to the production
     domain, every other branch and pull request gets a preview URL.
 
 If a PR preview is wanted for a change outside `site/` (for example only
@@ -53,5 +53,5 @@ triggers the build.
 
 Optional, after the first preview works: in **Settings > Branches** of the
 GitHub repository, require the `Docs / Build, audit and link check` check on
-`main`. Do not require `Docs / Prose lint (advisory)`: it is meant to never
+`canary`. Do not require `Docs / Prose lint (advisory)`: it is meant to never
 block.
