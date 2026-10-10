@@ -35,7 +35,7 @@ type Harness interface {
 
 	// Command builds the CommandSpec that runs task's prompt through the
 	// real harness CLI, unattended, inside a camp (internal/soldier.Run,
-	// the Layer 3 headless path).
+	// the headless path).
 	Command(task state.Task) CommandSpec
 
 	// HerdrAgentKind is the agent kind string passed to herdr when
@@ -44,8 +44,7 @@ type Harness interface {
 	HerdrAgentKind() string
 
 	// HerdrExtraArgs returns the fixed extra CLI args herdr should pass
-	// when starting the soldier's interactive agent (RunInHerdr, the
-	// Layer 4 path), on top of task's Model/Effort args (added
+	// when starting the soldier's interactive agent (RunInHerdr), on top of task's Model/Effort args (added
 	// separately - see ModelEffortArgs).
 	HerdrExtraArgs() []string
 }

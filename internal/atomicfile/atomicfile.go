@@ -1,7 +1,7 @@
 // Package atomicfile writes files atomically: to a temp file in the same
 // directory, then renamed into place, so a reader never observes a
 // partially written file. Used by every package that persists state to
-// ~/.vexillum/ (tasks in Capa 2, camp pool state in Capa 3).
+// ~/.vexillum/.
 package atomicfile
 
 import (

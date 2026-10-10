@@ -137,13 +137,3 @@ func TestSentinelRunning_WarnsWhenTheBinaryWasReplacedUnderTheSameVersion(t *tes
 		t.Errorf("got %+v, want a replaced-binary warning", r)
 	}
 }
-
-func TestSentinelRunning_WarnsAboutASentinelThatNeverRecordedItsBuild(t *testing.T) {
-	home := holdSentinel(t, nil)
-	stubSentinelPIDs(t, []int{os.Getpid()}, nil)
-
-	r := SentinelRunning(home)
-	if !r.Warn || !strings.Contains(r.Detail, "predates build tracking") {
-		t.Errorf("got %+v, want the old-sentinel warning", r)
-	}
-}

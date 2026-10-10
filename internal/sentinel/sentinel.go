@@ -1,6 +1,5 @@
-// Package sentinel implements vexillum's supervision loop (Capa 4, paso
-// 2): it polls herdr for status changes on tasks vexillum is tracking,
-// persists any transition, and records a durable wake so the commander's
+// Package sentinel implements vexillum's supervision loop: it polls herdr
+// for status changes on tasks vexillum is tracking, persists any transition, and records a durable wake so the commander's
 // Stop hook can surface it and keep working instead of quietly ending its
 // turn.
 //
@@ -112,8 +111,8 @@ const settleGracePeriod = 8 * time.Second
 // notFoundConfirmWindow is how long Tick waits after first observing a
 // task's agent as genuinely gone (herdr's "agent_not_found", not a
 // transient read error - see herdr.IsNotFound) before marking that task
-// interrupted (PRD v1, Capa 4 restart-proof: "los soldiers que se puedan
-// resumir se resumen, los que no, quedan marcados como interrumpidos").
+// interrupted (restart-proof: soldiers that can be resumed are resumed, the
+// rest are marked interrupted).
 // A single observation isn't enough on its own - a herdr hiccup during
 // something like its own restart could otherwise falsely condemn a
 // soldier that's actually still there; requiring it to still be gone a

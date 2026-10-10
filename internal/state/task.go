@@ -102,7 +102,7 @@ type Task struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 
-	// Camp assignment, set once a soldier run starts (Capa 3). Empty
+	// Camp assignment, set once a soldier run starts. Empty
 	// until then.
 	CampSlot   int    `json:"camp_slot,omitempty"`
 	CampPath   string `json:"camp_path,omitempty"`
@@ -119,8 +119,7 @@ type Task struct {
 	// completion check - no SchemaVersion bump needed.
 	CampBase string `json:"camp_base,omitempty"`
 
-	// Soldier run result. ExitCode applies only to a headless run (the
-	// Capa 3 sequential runner, since removed); a run in a real herdr
+	// Soldier run result. ExitCode applies only to a headless run; a run in a real herdr
 	// pane (internal/soldier.RunInHerdr) has no process exit code, since
 	// it's an interactive agent session, not a one-shot command.
 	// Output holds the captured transcript either way.
@@ -128,7 +127,7 @@ type Task struct {
 	Output   string `json:"output,omitempty"`
 
 	// herdr pane assignment, set once a soldier runs in a real herdr
-	// pane (Capa 4, internal/soldier.RunInHerdr). Empty for a headless
+	// pane (internal/soldier.RunInHerdr). Empty for a headless
 	// run.
 	HerdrWorkspaceID string `json:"herdr_workspace_id,omitempty"`
 	HerdrTabID       string `json:"herdr_tab_id,omitempty"`

@@ -155,11 +155,7 @@ func SentinelRunning(vexillumHome string) Result {
 func staleSentinelProblem(vexillumHome string) []string {
 	info, ok := sentinel.LiveInfo(vexillumHome)
 	if !ok {
-		pid, known := sentinel.HolderPID(vexillumHome)
-		if !known {
-			return nil
-		}
-		return []string{fmt.Sprintf("the running sentinel (pid %d) predates build tracking, so it may run old code - stop it with 'kill %d'", pid, pid)}
+		return nil
 	}
 	switch {
 	case info.Build.Version != buildinfo.Version:

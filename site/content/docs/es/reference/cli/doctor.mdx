@@ -27,8 +27,7 @@ La línea del sentinel advierte, y nunca falla, cuando hay más de un proceso
 sentinel vivo (competirían por las mismas tareas), cuando el sentinel vivo es
 de una versión distinta a la de este binario, o cuando el binario desde el que
 arrancó fue reemplazado en disco desde entonces (un rebuild informa la misma
-versión, "dev"). Un sentinel anterior al seguimiento de versiones se informa
-de la misma manera. Cada advertencia nombra el pid que hay que detener; el
+versión, "dev"). Cada advertencia nombra el pid que hay que detener; el
 siguiente vx dispatch, prompt o await del hook Stop arranca entonces uno al
 día.
 
