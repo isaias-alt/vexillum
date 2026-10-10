@@ -53,6 +53,14 @@ repository or machine where reading credentials or other sensitive host state
 would be a problem. A soldier can still come back blocked if Claude Code asks a
 genuine clarifying question, just rarely.
 
+**When the task involves an end-to-end run, say where it may run.** A soldier
+that exercises `vx` for real (a forum session, a dispatch, a land) must do it in
+a scratch project under a temporary directory with a temporary `HOME`, never in
+a sibling project. Another project's `.vexillum/forum/` holds its live artifacts
+and a soldier that clears or rewrites it destroys them. Put it in the prompt:
+"run any E2E in your own temp directory, never in another project's
+`.vexillum/forum/`".
+
 **It returns quickly, not when the soldier finishes.** It only waits out a short
 probe (a handful of seconds) to catch trivial prompts that settle immediately.
 Anything else is left running and you find out it settled from the sentinel, not

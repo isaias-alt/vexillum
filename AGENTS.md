@@ -40,6 +40,14 @@ Trabajá en la capa activa. No adelantes código de capas futuras salvo pedido e
 - Tests con la librería estándar (`testing`). Cada capa se prueba antes de avanzar (ver casos de prueba).
 - Mantené el binario autosuficiente: sin dependencias de runtime externas más allá de las herramientas que orquesta (Claude Code, herdr, tmux), que se verifican con `doctor`, no se instalan.
 
+## Pruebas E2E aisladas
+
+Las corridas E2E (tests o a mano) usan su propio directorio temporal: un
+proyecto de prueba bajo un temp dir y un `HOME` temporal para `vx`. Nunca el
+`.vexillum/forum/` de otro proyecto (guarda artifacts vivos de ese proyecto) ni
+borrar nada que no hayas creado vos. Detalle y cómo hacer clic dentro del iframe
+del forum con CDP: `CONTRIBUTING.md`, sección "Testing the forum end to end".
+
 ## Changelog generado
 
 No existe un CHANGELOG.md y nunca se edita a mano. goreleaser genera las notas desde los commits convencionales al publicar el release (config en `.goreleaser.yaml`), y la página `/docs/changelog` del sitio se arma desde los releases de GitHub con `site/scripts/changelog.mjs` (archivos generados y gitignoreados, con encabezado de auto-generado). Para que una entrada salga bien agrupada, usá el prefijo `feat:`, `fix:` o `docs:`; `chore:` y `test:` se filtran.
