@@ -21,6 +21,8 @@ const ASSETS = "../../internal/forum/assets";
 const TARGET = `${ASSETS}/whiteboard`;
 
 const FONT_SOURCE = "node_modules/@excalidraw/excalidraw/dist/prod/fonts";
+// Families vexillum replaces with its own vetted copy (see vendor-fonts/README.md).
+const FONT_OVERRIDES = "vendor-fonts";
 
 // One self-contained script: Excalidraw, the Mermaid converter with its pinned
 // mermaid, and React are all inlined, so the whiteboard works with no network
@@ -35,6 +37,7 @@ async function stageFonts() {
   for (const family of FONT_FAMILIES) {
     await cp(`${FONT_SOURCE}/${family}`, `${fontsDir}/${family}`, { recursive: true });
   }
+  await cp(FONT_OVERRIDES, fontsDir, { recursive: true, filter: (src) => !src.endsWith(".md") });
 }
 
 // The Go handler serves the script with Content-Encoding: gzip as stored, so

@@ -57,6 +57,7 @@ import {
   INTRO,
   REGENERATE,
   SLOT_SECTION,
+  UPSTREAM_COPYRIGHT,
   XIAOLAI_NOTE,
 } from "./notices-prose.js";
 
@@ -67,6 +68,8 @@ const MANIFEST = join(HERE, "bundled-packages.json");
 const LOCKFILE = join(HERE, "package-lock.json");
 const FONTS_DIR = join(REPO, "internal/forum/assets/whiteboard/fonts");
 const FONT_SOURCE = join(HERE, "node_modules/@excalidraw/excalidraw/dist/prod/fonts");
+// Families replaced by a vetted copy of vexillum's own (vendor-fonts/README.md); build.js lays them over FONT_SOURCE.
+const FONT_OVERRIDES = join(HERE, "vendor-fonts");
 
 // Problems are collected and reported together so one run shows them all.
 const problems = [];
@@ -110,6 +113,11 @@ function noticeFileNames(dir) {
   return readdirSync(dir)
     .filter((f) => /^notice/i.test(f) && statSync(join(dir, f)).isFile())
     .sort(byText);
+}
+
+// The upstream-repository entry that covers a package, if any.
+function upstreamFor(name) {
+  return UPSTREAM_COPYRIGHT.find((u) => u.names?.includes(name) || (u.prefix && name.startsWith(u.prefix)));
 }
 
 // Everything the notices need to know about one installed package copy.
@@ -169,14 +177,14 @@ function describePackage(root) {
   }
 
   // Copyright lines: the package's own license and notice files first, then a
-  // curated fallback, then the package.json author. Only the first two are
-  // "the package's own LICENSE text"; the others are marked in the output.
+  // banner in the package, then the upstream repository's LICENSE or NOTICE,
+  // then the package.json author. Only the first two come from the package
+  // itself; the others are marked in the output.
   let lines = [];
   for (const f of [...files, ...extra, ...notices]) {
     for (const l of copyrightLines(f.text)) if (!lines.includes(l)) lines.push(l);
   }
   let source = "license";
-  let unverified = "";
   if (lines.length === 0) {
     const fallback = COPYRIGHT_FALLBACKS[pkg.name];
     const author = typeof pkg.author === "string" ? pkg.author : pkg.author?.name;
@@ -189,10 +197,9 @@ function describePackage(root) {
       } else {
         fail(`${label}: no copyright text matching ${fallback.pattern} in ${fallback.file}`);
       }
-    } else if (fallback?.lines) {
-      lines = fallback.lines;
-      source = "curated";
-      unverified = fallback.unverified;
+    } else if (upstreamFor(pkg.name)) {
+      lines = upstreamFor(pkg.name).lines;
+      source = "upstream";
     } else if (author) {
       lines = [author.replace(/\s*<[^>]*>/, "").replace(/\s*\([^)]*\)\s*$/, "").trim()];
       source = "author";
@@ -200,7 +207,7 @@ function describePackage(root) {
       source = "none";
     }
   }
-  return { root, pkg, label, name: pkg.name, version: pkg.version, expression, detectedOnly, extended, files, extra, notices, lines, source, unverified };
+  return { root, pkg, label, name: pkg.name, version: pkg.version, expression, detectedOnly, extended, files, extra, notices, lines, source };
 }
 
 // ------------------------------------------------------------ license texts
@@ -244,16 +251,27 @@ function readFonts() {
   const out = [];
   for (const family of families) {
     const files = readdirSync(join(FONTS_DIR, family)).filter((f) => f.endsWith(".woff2")).sort(byText);
-    const sourceDir = join(FONT_SOURCE, family);
+    const curated = FONT_LICENSES[family];
+    const overridden = Boolean(curated?.override);
+    const overrideDir = join(FONT_OVERRIDES, curated?.override?.dir ?? family);
+    if (overridden !== existsSync(overrideDir)) {
+      fail(`font family ${family}: vendor-fonts/ and the "override" entry in FONT_LICENSES (notices-prose.js) disagree`);
+    }
+    const sourceDir = overridden ? overrideDir : join(FONT_SOURCE, family);
+    if (overridden) {
+      const packageFiles = existsSync(join(FONT_SOURCE, family)) ? readdirSync(join(FONT_SOURCE, family)) : [];
+      for (const f of readdirSync(overrideDir).filter((f) => f.endsWith(".woff2"))) {
+        if (!packageFiles.includes(f)) fail(`vendor-fonts/${family}/${f} replaces no file of @excalidraw/excalidraw, it would ship next to the original`);
+      }
+    }
     for (const f of files) {
       const source = join(sourceDir, f);
       if (existsSync(source) && !readFileSync(source).equals(readFileSync(join(FONTS_DIR, family, f)))) {
-        fail(`font ${family}/${f} differs from the copy in @excalidraw/excalidraw (run npm run build)`);
+        fail(`font ${family}/${f} differs from the copy in ${overridden ? "vendor-fonts" : "@excalidraw/excalidraw"} (run npm run build)`);
       }
     }
     const tables = files.map((f) => readWoff2Names(join(FONTS_DIR, family, f)));
     const distinct = (id) => [...new Set(tables.map((n) => n[id]).filter((v) => v !== undefined))];
-    const curated = FONT_LICENSES[family];
     if (!curated) {
       fail(`font family ${family} has no entry in FONT_LICENSES (notices-prose.js)`);
       continue;
@@ -291,7 +309,8 @@ function oflText(fonts) {
 
 function fontCopyrightCell(font) {
   const lines = font.copyright.flatMap((c) => {
-    const found = copyrightLines(c);
+    // "Digitized data copyright (c) 2010 ..." is a copyright line too, though it does not start with the word.
+    const found = [...new Set([...copyrightLines(c), ...c.split(/\r?\n/).map((l) => l.trim().replace(/\s+/g, " ")).filter((l) => /^[A-Za-z ]+ copyright \(c\) \d{4}/i.test(l))])];
     return found.length > 0 ? found : [c.trim().replace(/\s+/g, " ")];
   });
   return [...new Set(lines)].join("; ");
@@ -426,24 +445,34 @@ function render(packages, fonts, goMods) {
     );
     push();
   }
-  const curated = list.filter((p) => p.source === "curated");
-  const none = list.filter((p) => p.source === "none");
-  if (curated.length > 0 || none.length > 0) {
-    push("‡ Not established from the package itself (marked as unverified):");
+  const upstream = UPSTREAM_COPYRIGHT.map((u) => ({ u, members: [...new Set(list.filter((p) => p.source === "upstream" && upstreamFor(p.name) === u).map((p) => p.name))] })).filter((g) => g.members.length > 0);
+  if (upstream.length > 0) {
+    push(
+      "§ The package ships no copyright line; the holder shown is taken from the project's upstream repository, " +
+        "from the file cited here (the package itself does not state it):",
+    );
     push();
-    for (const p of curated) push(`- \`${p.name}\` ${p.version}: ${p.unverified}.`);
-    if (none.length > 0) {
-      const names = [...new Set(none.map((p) => p.name))];
-      push(
-        `- ${names.length} package name${names.length === 1 ? "" : "s"} (${names.map((n) => `\`${n}\``).join(", ")}): the npm package ships ` +
-          `no license file and no copyright line, only a license field in package.json (${[...new Set(none.map((p) => p.expression))].join(", ")}); ` +
-          `the copyright holder is not stated in anything bundled here.`,
-      );
+    for (const { u, members } of upstream) {
+      const names = members.length > 3 ? `${members.length} packages` : members.map((n) => `\`${n}\``).join(", ");
+      push(`- \`${u.label}\`${members.length === 1 && members[0] === u.label ? "" : ` (${names})`}: ${u.lines.map((l) => `"${l}"`).join(" and ")}, from ${u.url}: ${u.basis}.`);
     }
     push();
   }
+  const none = list.filter((p) => p.source === "none");
+  if (none.length > 0) {
+    push("‡ Not established from the package itself:");
+    push();
+    const names = [...new Set(none.map((p) => p.name))];
+    push(
+      `- ${names.length} package name${names.length === 1 ? "" : "s"} (${names.map((n) => `\`${n}\``).join(", ")}): the npm package ships ` +
+        `no license file and no copyright line, only a license field in package.json (${[...new Set(none.map((p) => p.expression))].join(", ")}); ` +
+        `the copyright holder is not stated in anything bundled here.`,
+    );
+    push();
+  }
   const withNotice = list.filter((p) => p.notices.length > 0);
-  if (withNotice.length > 0) {
+  const upstreamNotices = upstream.filter((g) => g.u.notice);
+  if (withNotice.length > 0 || upstreamNotices.length > 0) {
     push("### NOTICE files");
     push();
     for (const p of withNotice) {
@@ -454,14 +483,21 @@ function render(packages, fonts, goMods) {
         push();
       }
     }
+    for (const { u, members } of upstreamNotices) {
+      push(`${members.map((n) => `\`${n}\``).join(", ")}: the project's NOTICE file (${u.url}), which the npm packages do not ship:`);
+      push();
+      push(fence(u.notice));
+      push();
+    }
   }
 
   push("## Fonts");
   push();
   push(
     "The fonts under `internal/forum/assets/whiteboard/fonts/` are copied unchanged from `@excalidraw/excalidraw` " +
-      `${list.find((p) => p.name === "@excalidraw/excalidraw")?.version ?? ""} (\`dist/prod/fonts\`). ` +
-      "Licence and copyright below are read from each font file's own name table; where the file does not settle the licence it says so.",
+      `${list.find((p) => p.name === "@excalidraw/excalidraw")?.version ?? ""} (\`dist/prod/fonts\`)` +
+      `${fonts.some((f) => f.curated.override) ? `, except ${fonts.filter((f) => f.curated.override).map((f) => f.display).join(", ")} (below)` : ""}. ` +
+      "Copyright is read from each font file's own name table; the licence is read from it too, and where the file does not carry it the basis below names the upstream file it comes from.",
   );
   push();
   push("| Family | Files | Version | License | Copyright (from the font file) |");
@@ -474,14 +510,18 @@ function render(packages, fonts, goMods) {
   push();
   for (const f of fonts) push(`- **${f.display}**: ${f.curated.basis}.`);
   push();
+  for (const f of fonts.filter((f) => f.curated.override)) {
+    push(`**${f.display}, replaced.** ${f.curated.override.text}`);
+    push();
+  }
   push(XIAOLAI_NOTE);
   push();
   const ofl = oflText(fonts);
   push("### SIL Open Font License 1.1");
   push();
   push(
-    "Applies to Assistant, Lilita One, Nunito and Virgil, each with the copyright line (and Reserved Font Name, where one is " +
-      "given) shown in the table above. The text is the one the Virgil font file carries.",
+    "Applies to Assistant, Excalifont, Liberation Sans, Lilita One, Nunito and Virgil, each with the copyright line shown in the table above " +
+      "(and the Reserved Font Name, where one is given, in the basis for that family). The text is the one the Virgil font file carries.",
   );
   push();
   push(fence(ofl));
@@ -592,7 +632,7 @@ function copyrightCell(p) {
   }
   const text = p.lines.join("; ");
   if (p.source === "author") return `† ${text}`;
-  if (p.source === "curated") return `‡ ${text}`;
+  if (p.source === "upstream") return `§ ${text}`;
   if (p.source === "banner") return `${text} (package banner)`;
   return text;
 }
@@ -629,11 +669,11 @@ async function main() {
     process.exit(1);
   }
 
-  const warnings = packages.filter((p) => p.source === "author" || p.source === "none" || p.unverified);
+  const warnings = packages.filter((p) => p.source === "author" || p.source === "none");
   if (warnings.length > 0) {
     console.error("generate-notices: copyright line not established from the package's own license text for:");
     for (const p of [...new Map(warnings.map((w) => [w.label, w])).values()].sort((a, b) => byText(a.label, b.label))) {
-      console.error(`  - ${p.label} (${p.unverified ? "unverified claim" : p.source === "author" ? "package.json author" : "none"})`);
+      console.error(`  - ${p.label} (${p.source === "author" ? "package.json author" : "none"})`);
     }
   }
   for (const f of fonts) if (f.curated.license === "licence unverified") console.error(`generate-notices: font ${f.display}: licence unverified`);

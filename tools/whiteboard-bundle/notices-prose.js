@@ -26,22 +26,58 @@ export const ELECTED = {
   dompurify: "Apache-2.0",
 };
 
-// Copyright lines for packages whose own files state none. A fixed `lines`
-// entry is a claim that cannot be checked from the installed package and is
-// flagged as such in the notices; a `file` + `pattern` entry is read from a
-// file of the package (a banner comment) and therefore first-hand.
+// Copyright lines for packages whose own files state none, read from a file of
+// the package (a banner comment) and therefore first-hand.
 export const COPYRIGHT_FALLBACKS = {
-  "@excalidraw/excalidraw": {
-    lines: ["Copyright (c) 2020 Excalidraw"],
-    unverified:
-      "carried over from the previous notice; the npm package ships no LICENSE file, so the line cannot be checked offline",
-  },
   dompurify: {
     file: "dist/purify.min.js",
     pattern: /\(c\) Cure53 and other contributors/,
     prefix: "",
   },
 };
+
+// Copyright holders for packages that ship no copyright line, taken from the
+// project's upstream repository. Every entry cites the file it was read from,
+// pinned to a tag or commit, so the claim can be re-checked. Used only when
+// the package's own files state no copyright line.
+//   names / prefix  which packages the entry covers (exact names, or a scope)
+//   lines           the copyright lines, verbatim from the cited file
+//   url             the cited file
+//   basis           one sentence for the notices on why the line applies
+//   notice          the upstream NOTICE text, when the project has one that the
+//                   npm packages do not ship (Apache-2.0 section 4(d))
+export const UPSTREAM_COPYRIGHT = [
+  {
+    label: "@excalidraw/excalidraw",
+    names: ["@excalidraw/excalidraw"],
+    lines: ["Copyright (c) 2020 Excalidraw"],
+    url: "https://github.com/excalidraw/excalidraw/blob/v0.18.1/LICENSE",
+    basis: "the repository LICENSE at the v0.18.1 tag (commit a2ec2889babf7d2295469c6d90ebe77fae57df84); the npm package ships no LICENSE file",
+  },
+  {
+    label: "@radix-ui/*",
+    prefix: "@radix-ui/",
+    lines: ["Copyright (c) 2022 WorkOS"],
+    url: "https://github.com/radix-ui/primitives/blob/01259a024d82ab3892d1e5938b1a50bb352c6df5/LICENSE",
+    basis:
+      "the repository LICENSE (commit 01259a024d82ab3892d1e5938b1a50bb352c6df5); the holder changed from Modulz to WorkOS on 2022-06-01 " +
+      "(https://github.com/radix-ui/primitives/commit/ee4e3197bffe7dde669d6bbf8c30fef97b65e49d), before the oldest bundled release (2022-07-20)",
+  },
+  {
+    label: "chevrotain",
+    names: ["chevrotain", "@chevrotain/cst-dts-gen", "@chevrotain/gast", "@chevrotain/regexp-to-ast", "@chevrotain/utils"],
+    lines: [
+      "Copyright (c) 2021 the original author or authors from the Chevrotain project",
+      "Copyright (c) 2015-2020 SAP SE or an SAP affiliate company.",
+    ],
+    url: "https://github.com/Chevrotain/chevrotain/blob/v11.0.3/NOTICE.txt",
+    basis:
+      "the repository NOTICE.txt at the v11.0.3 tag (commit 60f79017fef934ef4e7651361962d6e9778e5cfd); the package LICENSE.txt is the unfilled Apache appendix " +
+      "and the npm packages ship no NOTICE file",
+    notice: `Copyright (c) 2021 the original author or authors from the Chevrotain project
+Copyright (c) 2015-2020 SAP SE or an SAP affiliate company.`,
+  },
+];
 
 // License texts that live in a package but not in a LICENSE file: the Zlib
 // license of pako is the header comment of its lib/zlib sources.
@@ -74,16 +110,38 @@ export const FONT_LICENSES = {
     basis: "the font's name table (copyright, name id 0) carries the full MIT License text and five copyright lines",
   },
   Excalifont: {
-    license: "licence unverified",
-    holds: (n) => n[13] === undefined && n[14] === undefined && /All rights reserved/.test(n[0] ?? ""),
+    license: "OFL-1.1",
+    holds: (n) => /^Copyright \(c\) 2024 by Excalidraw\./.test(n[0] ?? ""),
     basis:
-      "licence unverified: the font file carries only a copyright line (\"All rights reserved\") and no licence text or URL; the npm package that ships it (@excalidraw/excalidraw) declares MIT for itself in package.json and ships no LICENSE file, and its README says nothing about the fonts. The Excalidraw repository was not consulted (no network)",
+      "the vendored files are subsets whose name table keeps only the copyright line (\"Copyright (c) 2024 by Excalidraw. All rights reserved.\"), " +
+      "so the licence comes from upstream: the Excalidraw repository records the original font's name table in " +
+      "`packages/excalidraw/fonts/Excalifont/index.ts` at the v0.18.1 tag " +
+      "(https://github.com/excalidraw/excalidraw/blob/v0.18.1/packages/excalidraw/fonts/Excalifont/index.ts, commit a2ec2889babf7d2295469c6d90ebe77fae57df84), " +
+      "which states \"This Font Software is licensed under the SIL Open Font License, Version 1.1\", licenseURL http://scripts.sil.org/OFL, " +
+      "and carries the OFL 1.1 text. The same name table names Virgil (Your Own Font Foundry) as the base and Ján Filípek / DizajnDesign (https://dizajndesign.sk) " +
+      "as the author of the modifications, and declares no Reserved Font Name. \"All rights reserved\" in the copyright line does not narrow the OFL grant stated alongside it. " +
+      "The OFL 1.1 text printed below is the one the Virgil file carries",
   },
   Liberation: {
-    license: "licence unverified",
-    holds: (n) => /license agreement under which you accepted/.test(n[13] ?? "") && /^Version 1\.0/.test(n[5] ?? ""),
+    license: "OFL-1.1",
+    holds: (n) =>
+      /^Version 2\./.test(n[5] ?? "") &&
+      /SIL Open Font License, Version 1\.1/.test(n[13] ?? "") &&
+      /Red Hat/.test(n[0] ?? ""),
+    override: {
+      dir: "Liberation",
+      text:
+        "Excalidraw 0.18.1 ships Liberation Sans 1.05 (Ascender Corporation, 2007), whose terms the file does not establish (it refers to a licence agreement it does not include). " +
+        "vexillum replaces it with Liberation Sans 2.1.5, the official release " +
+        "(https://github.com/liberationfonts/liberation-fonts/releases/tag/2.1.5, asset `liberation-fonts-ttf-2.1.5.tar.gz`, " +
+        "sha256 7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0). " +
+        "The only change is the container, TTF to WOFF2, with no subsetting and no change to glyphs, tables or the name table, so the Reserved Font Name \"Liberation\" is untouched; " +
+        "the procedure is in `tools/whiteboard-bundle/vendor-fonts/README.md`.",
+    },
     basis:
-      "licence unverified: this is Liberation Sans 1.05 (Ascender Corporation, 2007). The font file says only that use \"is subject to the license agreement under which you accepted the Liberation font software\" and points to http://www.ascendercorp.com/liberation.html. Nothing in the file calls it the SIL OFL, and no licence text is in the file or in the npm package, so the actual terms are not established here and must not be assumed to be the OFL",
+      "the font's name table (name id 13) says \"Licensed under the SIL Open Font License, Version 1.1\" (name id 14: http://scripts.sil.org/OFL), and the release LICENSE " +
+      "(https://github.com/liberationfonts/liberation-fonts/blob/2.1.5/LICENSE) states: \"Digitized data copyright (c) 2010 Google Corporation with Reserved Font Arimo, Tinos and Cousine. " +
+      "Copyright (c) 2012 Red Hat, Inc. with Reserved Font Name Liberation.\", then the same OFL 1.1 text printed below",
   },
   Lilita: {
     license: "OFL-1.1",

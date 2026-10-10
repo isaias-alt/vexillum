@@ -49,6 +49,12 @@ license its own file contradicts. The hand-written prose and the curated facts
 `notices-prose.js`; each curated font claim is re-checked against the font file
 on every run.
 
+Fonts come from `@excalidraw/excalidraw`'s `dist/prod/fonts`, except the families
+under `vendor-fonts/`, which `build.js` lays over them and the generator checks
+against instead (the notices say which, and why; see `vendor-fonts/README.md` for
+the provenance of each). Today that is Liberation Sans 2.1.5, replacing the 1.05
+the package ships.
+
 `bundled-packages.json` records which lockfile entries the bundle inlines (the
 lockfile itself cannot say: they are all devDependencies) and the sha256 of the
 lockfile it was generated from. `go test ./internal/thirdparty` reads it, the
