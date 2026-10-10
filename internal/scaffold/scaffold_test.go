@@ -51,9 +51,6 @@ func TestWriteConfigAndReadConfig(t *testing.T) {
 	if cfg.InitializedAt.IsZero() {
 		t.Error("expected InitializedAt to be set")
 	}
-	if cfg.VexillumRuleHash != "" {
-		t.Errorf("expected a fresh config to have no recorded hash, got %q", cfg.VexillumRuleHash)
-	}
 }
 
 func TestWriteFileIfMissing(t *testing.T) {
@@ -103,7 +100,6 @@ func TestSaveConfigRoundTripsSkillHashes(t *testing.T) {
 		t.Errorf("a fresh config has no skill hashes, got %v", cfg.Skills)
 	}
 	cfg.Skills = map[string]string{"forum": "abc"}
-	cfg.VexillumRuleHash = HashContent("x")
 	if err := SaveConfig(dir, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +107,7 @@ func TestSaveConfigRoundTripsSkillHashes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Skills["forum"] != "abc" || got.VexillumRuleHash != HashContent("x") || got.Version != 1 {
+	if got.Skills["forum"] != "abc" || got.Version != 1 {
 		t.Errorf("round trip lost data: %+v", got)
 	}
 }

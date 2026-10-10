@@ -7,8 +7,6 @@
 package scaffold
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -23,26 +21,12 @@ import (
 type Config struct {
 	Version       int       `json:"version"`
 	InitializedAt time.Time `json:"initialized_at"`
-	// VexillumRuleHash is the sha256 hex digest of the content vexillum
-	// itself last wrote to a .claude/rules/vexillum.md file. Projects no
-	// longer get that file (the rules moved into the vexillum block and the
-	// skills), so it only marks an old scaffold: 'vx upgrade' removes the
-	// file when it still hashes to this, and leaves an edited one alone.
-	// Empty means unknown provenance.
-	VexillumRuleHash string `json:"vexillum_rule_hash,omitempty"`
 	// Skills maps a first-party skill name to the content hash (see
 	// skills.HashFiles) of what vexillum last installed under
 	// .claude/skills/<name>/. 'vx upgrade' and 'vx doctor' compare the
 	// installed files against it to tell "untouched, safe to refresh"
 	// from "edited by the user".
 	Skills map[string]string `json:"skills,omitempty"`
-}
-
-// HashContent returns the sha256 hex digest of s, the format used by
-// Config.VexillumRuleHash.
-func HashContent(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])
 }
 
 // ReadConfig reads config.json directly inside configDir, the project's

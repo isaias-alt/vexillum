@@ -105,24 +105,6 @@ func TestStopHooks_UnresolvableBinaryWarnsWithTheFix(t *testing.T) {
 	}
 }
 
-func TestStopHooks_BareCommandDoesNotResolveEvenWhenInstalled(t *testing.T) {
-	skipIfRealVXInstalled(t)
-	// The pre-fix hook: vx is installed in ~/.local/bin, but that is not
-	// on the hook shell's PATH, exactly the reported failure.
-	projectDir, home := t.TempDir(), t.TempDir()
-	writeStopHook(t, projectDir, scaffold.BareSentinelHookCommand)
-	installFakeVX(t, filepath.Join(home, ".local", "bin"))
-
-	results := StopHooks(projectDir, t.TempDir(), home)
-
-	if r := byName(t, results, hookName); !r.Warn || !strings.Contains(r.Detail, cmdname.Name+" upgrade") {
-		t.Errorf("an old-form hook should warn to upgrade, got %+v", r)
-	}
-	if r := byName(t, results, hookResolves); !r.Warn || !strings.Contains(r.Detail, cmdname.Name+" upgrade") {
-		t.Errorf("a bare hook should not resolve with a minimal PATH, got %+v", r)
-	}
-}
-
 func TestStopHooks_HookAbsent(t *testing.T) {
 	projectDir := t.TempDir()
 

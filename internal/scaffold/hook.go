@@ -57,30 +57,6 @@ const (
 	SentinelHookNotFoundMessage = cmdname.Name + ": not found, so the sentinel Stop hook cannot wake the commander. " +
 		"Install " + cmdname.Name + " (brew or curl) or put its directory on PATH, then run: " + cmdname.Name + " doctor"
 
-	// BareSentinelHookCommand is the hook as earlier versions registered
-	// it: the bare executable name, which only works when the hook's shell
-	// has vx on its PATH. EnsureSentinelHook migrates it to
-	// SentinelHookCommand.
-	BareSentinelHookCommand = cmdname.Name + " sentinel await"
-
-	// legacyCommandName is the executable name before the command was
-	// renamed to cmdname.Name. A project initialized back then has hooks
-	// registered under it, which stop working once only the renamed
-	// binary is installed.
-	legacyCommandName = "vexillum"
-
-	// LegacySentinelHookCommand is the older, synchronous-only hook
-	// (an instant check-and-return, registered without asyncRewake)
-	// the async hook replaced. EnsureSentinelHook detects and upgrades
-	// it in place instead of leaving a stale, redundant hook alongside
-	// the new one.
-	LegacySentinelHookCommand = legacyCommandName + " sentinel drain"
-
-	// LegacyRenamedSentinelHookCommand is the async hook as it was
-	// registered under the old executable name: same behavior as
-	// BareSentinelHookCommand, but it invokes a binary that no longer exists.
-	LegacyRenamedSentinelHookCommand = legacyCommandName + " sentinel await"
-
 	// SentinelHookTimeoutSeconds bounds how long a single async hook
 	// invocation may block. runSentinelAwait's own internal deadline
 	// (sentinelAwaitMaxWait) stays comfortably under this so it always
@@ -178,11 +154,6 @@ func mergeSentinelHook(path string) (out []byte, changed bool, err error) {
 					group["hooks"] = entries
 					changed = true
 				}
-			case BareSentinelHookCommand, LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand:
-				entries[i] = newEntry
-				group["hooks"] = entries
-				found = true
-				changed = true
 			}
 		}
 	}
@@ -215,8 +186,7 @@ func mergeSentinelHook(path string) (out []byte, changed bool, err error) {
 // SentinelHookState is what a project's .claude/settings.json holds for
 // the sentinel Stop hook.
 type SentinelHookState struct {
-	// Present is whether a Stop hook of vexillum's is registered, in any
-	// of its current or older forms.
+	// Present is whether a Stop hook of vexillum's is registered.
 	Present bool
 	// Command is that hook's command line as registered.
 	Command string
@@ -257,8 +227,6 @@ func InspectSentinelHook(projectDir string) (SentinelHookState, error) {
 			switch h.Command {
 			case SentinelHookCommand:
 				return SentinelHookState{Present: true, Command: h.Command, Current: h.AsyncRewake && h.Timeout != nil}, nil
-			case BareSentinelHookCommand, LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand:
-				return SentinelHookState{Present: true, Command: h.Command}, nil
 			}
 		}
 	}

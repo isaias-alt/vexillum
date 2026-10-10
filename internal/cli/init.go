@@ -51,10 +51,7 @@ Flags:
   --no-skills     Do not install the skills, without asking.
 `
 
-const (
-	sentinelHookCommand       = scaffold.SentinelHookCommand
-	legacySentinelHookCommand = scaffold.LegacySentinelHookCommand
-)
+const sentinelHookCommand = scaffold.SentinelHookCommand
 
 // writeLocalConfig creates a fresh config.json directly inside configDir,
 // the project's .vexillum/.

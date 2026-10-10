@@ -14,11 +14,6 @@ import (
 	"github.com/isaias-alt/vexillum/internal/slot"
 )
 
-// legacyRulesRel is the commander rules file older vexillum versions wrote.
-// The rules now live in AGENTS.md and the skills, so projects no longer get
-// it; "vx upgrade" removes it when it is still what vexillum wrote.
-const legacyRulesRel = ".claude/rules/vexillum.md"
-
 type slotPlan int
 
 const (
@@ -47,14 +42,6 @@ type skillPlan struct {
 	act    skillAct
 }
 
-type legacyState int
-
-const (
-	legacyNone legacyState = iota
-	legacyUnedited
-	legacyEdited
-)
-
 // projectPlan is everything init/upgrade learned about the project before
 // writing anything.
 type projectPlan struct {
@@ -78,13 +65,9 @@ type projectPlan struct {
 	claude     slot.ClaudeImport
 	skills     []skillPlan
 	hookNeeded bool
-	// hookPresent is whether an older form of the hook is already
-	// registered, so the run migrates it instead of adding one.
-	hookPresent bool
-	hookErr     error
-	needIgnore  bool
-	needModels  bool
-	legacy      legacyState
+	hookErr    error
+	needIgnore bool
+	needModels bool
 }
 
 func (p *projectPlan) slotPlan() slotPlan {
@@ -146,24 +129,9 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 	}
 
 	p.hookNeeded, p.hookErr = scaffold.SentinelHookNeeded(projectDir)
-	if p.hookNeeded && p.hookErr == nil {
-		if hook, err := scaffold.InspectSentinelHook(projectDir); err == nil {
-			p.hookPresent = hook.Present
-		}
-	}
 	p.needIgnore = !exists(filepath.Join(p.configDir, ".gitignore"))
 	p.needModels = !exists(filepath.Join(p.configDir, models.FileName))
 
-	if exists(filepath.Join(projectDir, filepath.FromSlash(legacyRulesRel))) {
-		data, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(legacyRulesRel)))
-		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", legacyRulesRel, err)
-		}
-		p.legacy = legacyEdited
-		if p.cfg.VexillumRuleHash != "" && p.cfg.VexillumRuleHash == scaffold.HashContent(string(data)) {
-			p.legacy = legacyUnedited
-		}
-	}
 	return p, nil
 }
 
@@ -297,14 +265,7 @@ func (p *projectPlan) userFileLines() []string {
 		pad("CLAUDE.md", "add the "+slot.ClaudeImportLine+" import, so Claude Code sees the block (asks first)")
 	}
 	if p.hookNeeded {
-		if p.hookPresent {
-			pad(".claude/settings.json", "update the sentinel Stop hook so it finds "+cmdname.Name+" without depending on PATH (your other hooks stay)")
-		} else {
-			pad(".claude/settings.json", "add the sentinel Stop hook")
-		}
-	}
-	if p.kind == setupUpgrade && p.legacy == legacyUnedited {
-		pad(legacyRulesRel, "remove it (the rules now live in the vexillum block and the skills)")
+		pad(".claude/settings.json", "add the sentinel Stop hook")
 	}
 	return lines
 }
@@ -347,9 +308,6 @@ func (p *projectPlan) hasWork() bool {
 	if p.claude.Action != slot.ClaudeOK || p.hookNeeded || p.needIgnore || p.needModels || !p.cfgExists {
 		return true
 	}
-	if p.kind == setupUpgrade && p.legacy == legacyUnedited {
-		return true
-	}
 	for _, s := range p.skills {
 		switch s.act {
 		case skillInstall, skillRefresh, skillOverwrite:
@@ -372,18 +330,6 @@ func (p *projectPlan) report(e *setupEnv) {
 	}
 	if p.hookErr != nil {
 		e.warn("could not add the sentinel Stop hook: %v", p.hookErr)
-	}
-	switch p.legacy {
-	case legacyEdited:
-		if p.kind == setupUpgrade {
-			e.say("%s: you edited it, so it is left as it is. It is now redundant with the vexillum block and the skills; delete it once you have moved anything you want to keep.", legacyRulesRel)
-		} else {
-			e.say("%s is from an older vexillum and is now redundant with the vexillum block and the skills. Run '%s upgrade' to migrate it.", legacyRulesRel, cmdname.Name)
-		}
-	case legacyUnedited:
-		if p.kind == setupInit {
-			e.say("%s is from an older vexillum and is now redundant. Run '%s upgrade' to remove it.", legacyRulesRel, cmdname.Name)
-		}
 	}
 	p.reportSkills(e)
 }
@@ -524,22 +470,9 @@ func (p *projectPlan) apply(e *setupEnv, vexillumHome string) int {
 	if p.hookNeeded && p.hookErr == nil {
 		if added, err := scaffold.EnsureSentinelHook(p.dir); err != nil {
 			e.warn("could not add the sentinel Stop hook: %v", err)
-		} else if added && p.hookPresent {
-			e.say("Updated the %s sentinel Stop hook in .claude/settings.json so it no longer depends on PATH", cmdname.Name)
 		} else if added {
 			e.say("Added %s sentinel Stop hook to .claude/settings.json", cmdname.Name)
 		}
-	}
-
-	if p.kind == setupUpgrade && p.legacy == legacyUnedited {
-		rules := filepath.Join(p.dir, filepath.FromSlash(legacyRulesRel))
-		if err := os.Remove(rules); err != nil {
-			return e.fail("cannot remove %s: %v", legacyRulesRel, err)
-		}
-		_ = os.Remove(filepath.Dir(rules)) // only if it is now empty
-		p.cfg.VexillumRuleHash = ""
-		cfgDirty = true
-		e.say("Removed %s (unedited, replaced by the vexillum block and the skills)", legacyRulesRel)
 	}
 
 	if cfgDirty {

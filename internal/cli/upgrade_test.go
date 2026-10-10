@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io/fs"
 	"os"
@@ -37,14 +35,14 @@ func copyTree(t *testing.T, src, dst string) {
 	}
 }
 
-// oldScaffoldProject lays down a project exactly as the previous vexillum
-// left it: .claude/rules/vexillum.md with its hash in config.json, the
-// sentinel hook in settings.json, a Spanish AGENTS.md and a CLAUDE.md that
-// imports it. The fixture is a golden copy of that output.
-func oldScaffoldProject(t *testing.T) (projectDir, vexillumHome string) {
+// spanishProject lays down an initialized project that has a Spanish
+// AGENTS.md, a CLAUDE.md that imports it and a settings.json with only the
+// user's own permissions, so upgrade has the block, the skills and the
+// sentinel hook to write.
+func spanishProject(t *testing.T) (projectDir, vexillumHome string) {
 	t.Helper()
 	projectDir, vexillumHome = newProject(t)
-	copyTree(t, filepath.Join("testdata", "old-scaffold"), projectDir)
+	copyTree(t, filepath.Join("testdata", "spanish-project"), projectDir)
 	return projectDir, vexillumHome
 }
 
@@ -71,8 +69,8 @@ func TestUpgrade_RefusesInsideVexillumHome(t *testing.T) {
 // Golden: a project initialized with the OLD scaffold (rules file + hook) is
 // migrated: the unedited rules file goes, the block and the skills arrive,
 // the user's own text and settings are kept.
-func TestUpgrade_MigratesOldScaffold(t *testing.T) {
-	projectDir, home := oldScaffoldProject(t)
+func TestUpgrade_WritesTheSpanishBlock(t *testing.T) {
+	projectDir, home := spanishProject(t)
 	userAgents := readFile(t, filepath.Join(projectDir, "AGENTS.md"))
 	claudeBefore := readFile(t, filepath.Join(projectDir, "CLAUDE.md"))
 
@@ -80,9 +78,6 @@ func TestUpgrade_MigratesOldScaffold(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
 	}
-
-	notExist(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
-	notExist(t, filepath.Join(projectDir, ".claude", "rules"))
 
 	agents := readFile(t, filepath.Join(projectDir, "AGENTS.md"))
 	if !strings.HasPrefix(agents, userAgents) {
@@ -113,8 +108,8 @@ func TestUpgrade_MigratesOldScaffold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.VexillumRuleHash != "" || cfg.Skills["vexillum"] == "" {
-		t.Errorf("config after migration = %+v", cfg)
+	if cfg.Skills["vexillum"] == "" {
+		t.Errorf("config after upgrade = %+v", cfg)
 	}
 
 	// Running it again is a no-op.
@@ -126,13 +121,13 @@ func TestUpgrade_MigratesOldScaffold(t *testing.T) {
 	}
 }
 
-// The notice lists the removal, and without --yes and a terminal nothing
-// happens.
+// The notice lists what will change, and without --yes and a terminal
+// nothing happens.
 func TestUpgrade_NoticeAndNonTTY(t *testing.T) {
-	projectDir, home := oldScaffoldProject(t)
+	projectDir, home := spanishProject(t)
 	before, _ := snapshotTree(t, projectDir)
 	r := doUpgrade(projectDir, home, setupOptions{}, "", false)
-	if r.code == 0 || !strings.Contains(r.out, ".claude/rules/vexillum.md") || !strings.Contains(r.errOut, "--yes") {
+	if r.code == 0 || !strings.Contains(r.out, "add the vexillum block") || !strings.Contains(r.errOut, "--yes") {
 		t.Fatalf("exit %d\nout: %s\nerr: %s", r.code, r.out, r.errOut)
 	}
 	if after, _ := snapshotTree(t, projectDir); before != after {
@@ -144,46 +139,6 @@ func TestUpgrade_NoticeAndNonTTY(t *testing.T) {
 	}
 	if after, _ := snapshotTree(t, projectDir); before != after {
 		t.Error("a declined upgrade changed files")
-	}
-}
-
-// An edited rules file, or one of unknown provenance, is left alone and
-// reported as redundant.
-func TestUpgrade_EditedRulesFileKept(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		mutate func(t *testing.T, projectDir string)
-	}{
-		{"edited", func(t *testing.T, p string) {
-			path := filepath.Join(p, ".claude", "rules", "vexillum.md")
-			writeFileT(t, path, readFile(t, path)+"\nmy rule\n")
-		}},
-		{"no recorded hash", func(t *testing.T, p string) {
-			writeFileT(t, filepath.Join(p, ".vexillum", "config.json"), `{"version":1,"initialized_at":"2026-01-01T00:00:00Z"}`)
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			projectDir, home := oldScaffoldProject(t)
-			tc.mutate(t, projectDir)
-			rules := filepath.Join(projectDir, ".claude", "rules", "vexillum.md")
-			before := readFile(t, rules)
-			r := doUpgrade(projectDir, home, setupOptions{Yes: true}, "", false)
-			if r.code != 0 || !strings.Contains(r.out, "redundant") {
-				t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
-			}
-			if readFile(t, rules) != before {
-				t.Error("the rules file must be kept")
-			}
-			// The migration itself still happened.
-			if ins := slotInAgents(t, projectDir); ins.State == slot.StateAbsent {
-				t.Error("the block was not written")
-			}
-			// And upgrade --force does not delete it either.
-			doUpgrade(projectDir, home, setupOptions{Yes: true, Force: true}, "", false)
-			if readFile(t, rules) != before {
-				t.Error("--force must not remove a rules file the user edited")
-			}
-		})
 	}
 }
 
@@ -408,7 +363,7 @@ func TestUpgrade_LangFlagSwitchesLanguage(t *testing.T) {
 }
 
 func TestUpgrade_ClaudeMDWithoutImport(t *testing.T) {
-	projectDir, home := oldScaffoldProject(t)
+	projectDir, home := spanishProject(t)
 	writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# Mine\n")
 	// Continue? / language / CLAUDE.md edit / skills
 	r := doUpgrade(projectDir, home, setupOptions{}, "y\ny\ny\nn\n", true)
@@ -422,7 +377,7 @@ func TestUpgrade_ClaudeMDWithoutImport(t *testing.T) {
 }
 
 func TestUpgrade_ModelsNeverOverwritten(t *testing.T) {
-	projectDir, home := oldScaffoldProject(t)
+	projectDir, home := spanishProject(t)
 	custom := `{"default": {"model": "opus"}}`
 	writeFileT(t, filepath.Join(projectDir, ".vexillum", "models.json"), custom)
 	doUpgrade(projectDir, home, setupOptions{Yes: true, Force: true}, "", false)
@@ -528,43 +483,6 @@ func TestUpgrade_Skills(t *testing.T) {
 	})
 }
 
-// A project initialized before the command was renamed has the old rules
-// (hash recorded) and a Stop hook that runs the old executable name.
-func TestUpgrade_MigratesProjectInitializedBeforeTheRename(t *testing.T) {
-	oldRules, err := os.ReadFile(filepath.Join("testdata", "commander-rules-pre-vx.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(oldRules), "`vexillum dispatch`") {
-		t.Fatal("fixture should be the template from before the rename")
-	}
-	sum := sha256.Sum256(oldRules)
-
-	for _, legacyHook := range []string{"vexillum sentinel await", "vexillum sentinel drain"} {
-		t.Run(legacyHook, func(t *testing.T) {
-			projectDir, home := newProject(t)
-			cfg, _ := json.Marshal(map[string]any{
-				"version":            1,
-				"initialized_at":     "2026-01-01T00:00:00Z",
-				"vexillum_rule_hash": hex.EncodeToString(sum[:]),
-			})
-			writeFileT(t, filepath.Join(projectDir, ".vexillum", "config.json"), string(cfg))
-			writeFileT(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"), string(oldRules))
-			writeFileT(t, filepath.Join(projectDir, ".claude", "settings.json"), `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"`+legacyHook+`","asyncRewake":true,"timeout":3600}]}]}}`)
-
-			r := doUpgrade(projectDir, home, setupOptions{Yes: true}, "", false)
-			if r.code != 0 {
-				t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
-			}
-			notExist(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"))
-			settings := parseSettings(t, readFile(t, filepath.Join(projectDir, ".claude", "settings.json")))
-			if countStopHookCommand(settings, sentinelHookCommand) != 1 || countStopHookCommand(settings, "") != 1 {
-				t.Errorf("hook not migrated: %v", settings)
-			}
-		})
-	}
-}
-
 // countStopHookCommand counts the Stop hook entries whose command is
 // command, or every Stop hook entry when command is empty.
 func countStopHookCommand(settings map[string]any, command string) int {
@@ -584,30 +502,9 @@ func countStopHookCommand(settings map[string]any, command string) int {
 	return n
 }
 
-// upgrade tells the person it is replacing the PATH-dependent hook, keeps
-// the Stop hooks that are not vexillum's, and leaves nothing to redo.
-func TestUpgrade_MigratesBareHookKeepingForeignOnes(t *testing.T) {
-	projectDir, home := oldScaffoldProject(t)
-	writeFileT(t, filepath.Join(projectDir, ".claude", "settings.json"),
-		`{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-me stopped"},{"type":"command","command":"vx sentinel await","asyncRewake":true,"timeout":3600}]}]}}`)
-
-	r := doUpgrade(projectDir, home, setupOptions{Yes: true}, "", false)
-	if r.code != 0 {
-		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
-	}
-	if !strings.Contains(r.out, "update the sentinel Stop hook") || !strings.Contains(r.out, "Updated the vx sentinel Stop hook") {
-		t.Errorf("expected the notice and the result to say the hook is updated, got: %s", r.out)
-	}
-
-	settings := parseSettings(t, readFile(t, filepath.Join(projectDir, ".claude", "settings.json")))
-	if countStopHookCommand(settings, "notify-me stopped") != 1 || countStopHookCommand(settings, sentinelHookCommand) != 1 || countStopHookCommand(settings, "") != 2 {
-		t.Errorf("Stop hooks after upgrade: %v", settings)
-	}
-}
-
 // Without consent (no --yes, no terminal) nothing is rewritten.
-func TestUpgrade_BareHookUntouchedWithoutConsent(t *testing.T) {
-	projectDir, home := oldScaffoldProject(t)
+func TestUpgrade_WithoutConsentLeavesSettingsAlone(t *testing.T) {
+	projectDir, home := spanishProject(t)
 	before := readFile(t, filepath.Join(projectDir, ".claude", "settings.json"))
 
 	doUpgrade(projectDir, home, setupOptions{}, "", false)

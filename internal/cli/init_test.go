@@ -637,15 +637,6 @@ func TestInit_SymlinkedSkillIsLeftAlone(t *testing.T) {
 	mustStat(t, filepath.Join(projectDir, ".claude", "skills", "vexillum", "SKILL.md"))
 }
 
-func TestInit_OldRulesFileHint(t *testing.T) {
-	projectDir, home := newProject(t)
-	writeFileT(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md"), "# old\n")
-	r := doInit(projectDir, home, setupOptions{Yes: true}, "", false)
-	if !strings.Contains(r.out, "vx upgrade") || readFile(t, filepath.Join(projectDir, ".claude", "rules", "vexillum.md")) != "# old\n" {
-		t.Errorf("init must leave the old rules file and point at upgrade: %s", r.out)
-	}
-}
-
 func TestInit_FlagParsing(t *testing.T) {
 	for _, tc := range []struct {
 		args    []string
@@ -818,71 +809,6 @@ func TestInit_SentinelStopHookIsAsync(t *testing.T) {
 	}
 	if entry["timeout"] == nil {
 		t.Errorf("expected a timeout on the sentinel hook, got: %+v", entry)
-	}
-}
-
-// A project initialized with an older vexillum has the synchronous-only
-// hook (legacySentinelHookCommand, no asyncRewake) registered.
-// ensureSentinelHook must upgrade it in place - replace it with the new
-// async hook - not leave it as a stale duplicate alongside the new one.
-func TestEnsureSentinelHook_UpgradesLegacySyncHook(t *testing.T) {
-	projectDir := t.TempDir()
-	settingsDir := filepath.Join(projectDir, ".claude")
-	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	legacy := `{
-  "hooks": {
-    "Stop": [{"hooks": [{"type": "command", "command": "vexillum sentinel drain"}]}]
-  }
-}`
-	settingsPath := filepath.Join(settingsDir, "settings.json")
-	if err := os.WriteFile(settingsPath, []byte(legacy), 0o644); err != nil {
-		t.Fatalf("writing legacy settings: %v", err)
-	}
-
-	added, err := ensureSentinelHook(projectDir)
-	if err != nil {
-		t.Fatalf("ensureSentinelHook: %v", err)
-	}
-	if !added {
-		t.Fatal("expected the legacy hook to be upgraded (reported as a change)")
-	}
-
-	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		t.Fatalf("reading settings.json: %v", err)
-	}
-	if bytes.Contains(data, []byte(legacySentinelHookCommand)) {
-		t.Errorf("expected the legacy hook command to be gone, got: %s", data)
-	}
-	var settings map[string]any
-	if err := json.Unmarshal(data, &settings); err != nil {
-		t.Fatalf("parsing settings.json: %v", err)
-	}
-	stopGroups, _ := settings["hooks"].(map[string]any)["Stop"].([]any)
-	entryCount := 0
-	for _, g := range stopGroups {
-		group, _ := g.(map[string]any)
-		entries, _ := group["hooks"].([]any)
-		entryCount += len(entries)
-	}
-	if entryCount != 1 {
-		t.Errorf("expected exactly one Stop hook entry after upgrading, got %d", entryCount)
-	}
-
-	entry := findStopHookEntry(t, settings, sentinelHookCommand)
-	if asyncRewake, _ := entry["asyncRewake"].(bool); !asyncRewake {
-		t.Errorf("expected the upgraded hook to have asyncRewake: true, got: %+v", entry)
-	}
-
-	// Re-running is a no-op: the upgraded hook is already current.
-	addedAgain, err := ensureSentinelHook(projectDir)
-	if err != nil {
-		t.Fatalf("ensureSentinelHook (second call): %v", err)
-	}
-	if addedAgain {
-		t.Error("expected the second call to be a no-op after the upgrade")
 	}
 }
 

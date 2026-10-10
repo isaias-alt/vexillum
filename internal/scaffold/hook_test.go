@@ -59,73 +59,6 @@ func TestEnsureSentinelHook_IdempotentOnSecondCall(t *testing.T) {
 	}
 }
 
-func TestEnsureSentinelHook_UpgradesLegacyInPlace(t *testing.T) {
-	// Both legacy spellings carry the old executable name and must be
-	// replaced in place with the current command, without a duplicate.
-	for _, legacyCmd := range []string{LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand} {
-		t.Run(legacyCmd, func(t *testing.T) {
-			dir := t.TempDir()
-			settingsDir := filepath.Join(dir, ".claude")
-			os.MkdirAll(settingsDir, 0o755)
-			legacy := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"` + legacyCmd + `"}]}]}}`
-			if err := os.WriteFile(filepath.Join(settingsDir, "settings.json"), []byte(legacy), 0o644); err != nil {
-				t.Fatalf("writing legacy settings.json: %v", err)
-			}
-
-			added, err := EnsureSentinelHook(dir)
-			if err != nil {
-				t.Fatalf("EnsureSentinelHook: %v", err)
-			}
-			if !added {
-				t.Error("expected added=true when upgrading a legacy hook")
-			}
-
-			settings := readSettings(t, dir)
-			hooks := settings["hooks"].(map[string]any)
-			stop := hooks["Stop"].([]any)
-			if len(stop) != 1 {
-				t.Fatalf("expected the legacy group to be reused, got %d Stop groups", len(stop))
-			}
-			entries := stop[0].(map[string]any)["hooks"].([]any)
-			if len(entries) != 1 {
-				t.Fatalf("expected exactly one hook entry, got %d", len(entries))
-			}
-			entry := entries[0].(map[string]any)
-			if entry["command"] != SentinelHookCommand {
-				t.Errorf("expected the legacy entry to be replaced with %q, got %q", SentinelHookCommand, entry["command"])
-			}
-			if async, _ := entry["asyncRewake"].(bool); !async {
-				t.Error("expected the replacement to be an async hook")
-			}
-
-			// A second pass has nothing left to migrate.
-			again, err := EnsureSentinelHook(dir)
-			if err != nil {
-				t.Fatalf("EnsureSentinelHook (second call): %v", err)
-			}
-			if again {
-				t.Error("expected added=false once migrated")
-			}
-		})
-	}
-}
-
-func TestSentinelHookCommandUsesCurrentName(t *testing.T) {
-	if want := cmdname.Name + " sentinel await"; BareSentinelHookCommand != want {
-		t.Errorf("BareSentinelHookCommand = %q, want %q", BareSentinelHookCommand, want)
-	}
-	for _, old := range []string{BareSentinelHookCommand, LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand} {
-		if old == SentinelHookCommand {
-			t.Errorf("old command %q must differ from the current one", old)
-		}
-	}
-	for _, legacy := range []string{LegacySentinelHookCommand, LegacyRenamedSentinelHookCommand} {
-		if !strings.HasPrefix(legacy, "vexillum ") {
-			t.Errorf("legacy command %q must be the old-name spelling", legacy)
-		}
-	}
-}
-
 // runHookCommand runs the hook command through sh with exactly the given
 // environment, the way a hook runner with a bare shell would, and returns
 // its stdout, stderr and exit code.
@@ -254,38 +187,6 @@ func stopCommands(settings map[string]any) []string {
 	return cmds
 }
 
-func TestEnsureSentinelHook_MigratesBareAndRenamedForms(t *testing.T) {
-	for _, old := range []string{BareSentinelHookCommand, LegacyRenamedSentinelHookCommand, LegacySentinelHookCommand} {
-		t.Run(old, func(t *testing.T) {
-			dir := t.TempDir()
-			writeSettings(t, dir, `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"`+old+`","asyncRewake":true,"timeout":3600}]}]}}`)
-
-			need, err := SentinelHookNeeded(dir)
-			if err != nil || !need {
-				t.Fatalf("SentinelHookNeeded = %v, %v, want true", need, err)
-			}
-			state, err := InspectSentinelHook(dir)
-			if err != nil || !state.Present || state.Current || state.Command != old {
-				t.Fatalf("InspectSentinelHook before = %+v, %v", state, err)
-			}
-
-			if added, err := EnsureSentinelHook(dir); err != nil || !added {
-				t.Fatalf("EnsureSentinelHook = %v, %v, want true", added, err)
-			}
-			if got := stopCommands(readSettings(t, dir)); len(got) != 1 || got[0] != SentinelHookCommand {
-				t.Errorf("Stop commands = %q, want only the current one", got)
-			}
-			state, err = InspectSentinelHook(dir)
-			if err != nil || !state.Present || !state.Current {
-				t.Errorf("InspectSentinelHook after = %+v, %v", state, err)
-			}
-			if added, err := EnsureSentinelHook(dir); err != nil || added {
-				t.Errorf("second EnsureSentinelHook = %v, %v, want a no-op", added, err)
-			}
-		})
-	}
-}
-
 func TestEnsureSentinelHook_KeepsForeignHooks(t *testing.T) {
 	dir := t.TempDir()
 	writeSettings(t, dir, `{
@@ -293,7 +194,7 @@ func TestEnsureSentinelHook_KeepsForeignHooks(t *testing.T) {
   "hooks": {
     "PostToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "prettier --write"}]}],
     "Stop": [
-      {"hooks": [{"type": "command", "command": "notify-me stopped"}, {"type": "command", "command": "`+BareSentinelHookCommand+`", "asyncRewake": true, "timeout": 3600}]},
+      {"hooks": [{"type": "command", "command": "notify-me stopped"}, {"type": "command", "command": "`+strings.ReplaceAll(SentinelHookCommand, `"`, `\"`)+`"}]},
       {"hooks": [{"type": "command", "command": "echo another stop hook"}]}
     ]
   }
