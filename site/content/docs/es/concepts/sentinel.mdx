@@ -17,6 +17,8 @@ Un wake se entrega como mucho una vez y solo mientras siga siendo noticia. Al le
 
 El mismo hook también lleva **forum wakes**: cuando un usuario manda feedback desde un panel de revisión de [forum](/es/docs/guides/forum), el listener de forum (no un soldier) lo guarda en el inbox del proyecto y registra un wake bajo `wakes/forum/`, uno por sesión. `vx sentinel await` y `drain` lo informan como `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` Se entrega una vez y se descarta si sus mensajes ya fueron confirmados; la fuente de verdad es el inbox, no el wake.
 
+Herdr informa un turno como idle en el momento en que el agente se detiene, y el panel todavía puede estar pintando el final de su último mensaje. Antes de registrar a un soldier como `done` (o `blocked`), el sentinel lee el panel hasta que dos lecturas separadas por un segundo coinciden, así que la salida guardada con el wake contiene el reporte final del soldier. Un panel que nunca se estabiliza solo demora el wake unos segundos; la tarea queda entonces como `done` con una nota al final de su `output` que dice que el reporte final puede faltar, y `vx prompt` puede pedírselo al soldier. La misma nota aparece cuando el panel no se puede leer en absoluto.
+
 Un soldier solo queda registrado como `blocked` por una línea `needs-decision:` que escribió en su último turno, después del final del prompt despachado, con texto real. La línea de plantilla del prompt, o cualquier placeholder entre ángulos, nunca cuenta, ni tampoco una pregunta que ya respondiste o descartaste.
 
 ## Mantenerse al día

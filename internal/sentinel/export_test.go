@@ -1,5 +1,11 @@
 package sentinel
 
+import "time"
+
+// A settle waits settleReadGap between pane reads; the tests do not need to
+// wait for real.
+func init() { SetSettleReadGap(time.Millisecond) }
+
 // SetInspectProcess swaps the process inspector for the duration of a test
 // and returns a function that restores it.
 func SetInspectProcess(f func(pid int) (ppid int, command string, err error)) (restore func()) {

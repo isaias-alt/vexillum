@@ -17,6 +17,8 @@ A wake is delivered at most once and only while it is still news. When it is rea
 
 The same hook also carries **forum wakes**: when a user sends feedback from a [forum](/docs/guides/forum) review panel, the forum listener (not a soldier) stores it in the project's inbox and records a wake under `wakes/forum/`, one per session. `vx sentinel await` and `drain` report it as `forum session <file>: 2 new messages (ended: false). Run vx forum inbox.` It is delivered once and dropped if its messages were already confirmed; the inbox, not the wake, is the source of truth.
 
+Herdr reports a turn idle the moment the agent stops, and the pane can still be painting the end of its last message. Before it records a soldier as `done` (or `blocked`), the sentinel reads the pane until two reads a second apart agree, so the output saved with the wake holds the soldier's final report. A pane that never holds still delays the wake by a few seconds only; the task is then marked `done` with a note at the end of its `output` saying the final report may be missing, and `vx prompt` can ask the soldier for it. The same note appears when the pane cannot be read at all.
+
 A soldier is only recorded as `blocked` on a `needs-decision:` line it wrote in its final turn, after the end of the dispatched prompt, with real text. The template line in the prompt, or any angle-bracket placeholder, never counts, and neither does a question you already answered or dismissed.
 
 ## Staying current

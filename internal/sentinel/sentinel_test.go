@@ -643,6 +643,143 @@ func TestTick_NotFoundPastConfirmWindowInterruptsTask(t *testing.T) {
 	}
 }
 
+// scriptedHerdr answers successive transcript reads from reads, repeating the
+// last one once they run out, like a pane that is still painting when herdr
+// already reports it idle. A nil entry in errs makes that read succeed.
+type scriptedHerdr struct {
+	*fakeHerdr
+	reads []string
+	errs  []error
+	calls int
+}
+
+func (s *scriptedHerdr) AgentRead(name string, lines int) (string, error) {
+	i := min(s.calls, len(s.reads)-1)
+	s.calls++
+	if i < len(s.errs) && s.errs[i] != nil {
+		return "", s.errs[i]
+	}
+	return s.reads[i], nil
+}
+
+const lateFinalReport = "FINAL REPORT: changed a.txt, tests pass"
+
+// herdr says idle while the pane is still painting the soldier's last
+// message: the first read lacks the final report. The sentinel must not save
+// that read as the task's output; it keeps reading until the pane holds still.
+func TestTick_SavesTheFinalReportThatPaintedAfterIdle(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+
+	painted := "soldier: committed the change\n" + lateFinalReport
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{"soldier: committed the change\n", painted, painted},
+	}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusDone {
+		t.Fatalf("expected done, got %s", got.Status)
+	}
+	if got.Output != painted {
+		t.Errorf("expected the settled transcript with the final report, got %q", got.Output)
+	}
+}
+
+// A pane that never stops changing cannot hold the wake back for good: the
+// task settles after a bounded number of reads, and Output says the final
+// report may be missing so the gap is visible.
+func TestTick_SettlesWithANoteWhenThePaneNeverHoldsStill(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{"a", "ab", "abc", "abcd", "abcde", "abcdef"},
+	}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+	if client.calls < 3 || client.calls > 8 {
+		t.Errorf("expected a bounded number of reads, got %d", client.calls)
+	}
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusDone {
+		t.Fatalf("expected done, got %s", got.Status)
+	}
+	if !strings.HasPrefix(got.Output, "abcde") || !strings.Contains(got.Output, "still changing") || !strings.Contains(got.Output, "vx prompt") {
+		t.Errorf("expected the last read followed by a note that the report may be missing, got %q", got.Output)
+	}
+}
+
+// When the pane cannot be read at all the task still settles, but the stale
+// output is flagged instead of passing for the soldier's final report.
+func TestTick_SettlesWithANoteWhenThePaneCannotBeRead(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+	task.Output = "earlier output"
+	if err := state.Save(proj, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{""},
+		errs:      []error{fmt.Errorf("herdr hiccup")},
+	}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusDone || !strings.HasPrefix(got.Output, "earlier output") || !strings.Contains(got.Output, "could not be read") {
+		t.Errorf("expected done with the unread note after the old output, got %s %q", got.Status, got.Output)
+	}
+}
+
+// The same wait covers a question that only paints after idle: a
+// needs-decision line missing from the first read still blocks the task.
+func TestTick_NeedsDecisionLinePaintedAfterIdleStillBlocks(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+
+	asked := "I've looked into it.\n\nneeds-decision: should this use Postgres or SQLite?\n"
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{"I've looked into it.\n", asked, asked},
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusBlocked || got.Decision == nil || !strings.Contains(got.Decision.Question, "Postgres or SQLite") {
+		t.Errorf("expected blocked on the late question, got %s %+v", got.Status, got.Decision)
+	}
+}
+
 // movingHerdr runs onStatus inside every AgentStatus call, the moment a
 // command like vx land can move a task while the sentinel is mid-tick,
 // working from the task list it read before.

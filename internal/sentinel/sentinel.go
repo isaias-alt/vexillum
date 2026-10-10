@@ -385,21 +385,43 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 //     over, mirroring handleAgentNotFound's own confirm-window pattern
 //     instead of trusting it as done.
 //
+// Steps 0 and 1 end the turn, so before either one is taken the pane is
+// read until it stops changing (awaitSettledTranscript): the output saved with
+// the wake is the soldier's whole last message, not whatever was painted at the
+// instant herdr said idle. When it cannot be shown to hold still, the task
+// still settles but Output says so.
+//
 // Returns whether it settled the task (and so recorded a wake).
 func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (bool, error) {
 	output, readErr := client.AgentRead(task.HerdrAgentName, tickReadLines)
+
+	// Whichever way this idle turn ends below (a question for the general or
+	// a finished task), what the sentinel saves is the soldier's last word:
+	// wait until the pane stops changing before reading it, so the final
+	// report is in Output when the commander is woken for it.
+	strong, reportPath, signalErr := settle.HasCompletionSignal(projectRoot, task)
+	note := ""
+	switch {
+	case readErr != nil:
+		note = transcriptUnreadNote
+	case signalErr == nil && strong || needsDecisionIn(task, output):
+		var stable bool
+		if output, stable = awaitSettledTranscript(client, task.HerdrAgentName, output); !stable {
+			note = transcriptChangingNote
+		}
+	}
+
 	if readErr == nil {
 		if d, found := soldier.FinalTurnNeedsDecision(task, output); found {
 			return settleNeedsDecision(projectRoot, task, output, d)
 		}
 	}
 
-	strong, reportPath, err := settle.HasCompletionSignal(projectRoot, task)
-	if err != nil {
-		return false, err
+	if signalErr != nil {
+		return false, signalErr
 	}
 	if strong {
-		return settleDone(projectRoot, task, reportPath, output, readErr)
+		return settleDone(projectRoot, task, reportPath, output, readErr, note)
 	}
 
 	_, active, err := pause.Active(projectRoot, task.HerdrAgentName, time.Now())
@@ -417,6 +439,61 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	}
 
 	return handleIdleUnconfirmed(projectRoot, task)
+}
+
+func needsDecisionIn(task state.Task, output string) bool {
+	_, found := soldier.FinalTurnNeedsDecision(task, output)
+	return found
+}
+
+// settleReadGap is how long awaitSettledTranscript waits between two reads
+// of a soldier's pane, and settleReadAttempts how many reads it makes at
+// most. herdr reports a turn idle as soon as the agent stops, and a pane can
+// still be painting the end of its last message at that moment, so one read
+// at the instant of the transition can miss the final report. Two reads that
+// agree a second apart mean the pane has settled. Bounded, so a pane that
+// never stops changing (a clock in its status line) delays the wake by a few
+// seconds, not forever.
+var settleReadGap = time.Second
+
+const settleReadAttempts = 5
+
+// SetSettleReadGap swaps the pause between those reads and returns a function
+// that restores it. For tests, which have no pane to wait for.
+func SetSettleReadGap(d time.Duration) (restore func()) {
+	old := settleReadGap
+	settleReadGap = d
+	return func() { settleReadGap = old }
+}
+
+// Appended to a task's Output when the sentinel could not vouch that it holds
+// the soldier's whole final message, so the gap shows up where the commander
+// reads the result instead of looking like a report that was never written.
+const (
+	transcriptChangingNote = "[vexillum] the soldier's pane was still changing when it was marked done, so its final report may be missing above. " +
+		"Read the pane, or ask the soldier for the report with 'vx prompt'."
+	transcriptUnreadNote = "[vexillum] the soldier's pane could not be read when it was marked done, so the output above may not include its final report. " +
+		"Read the pane, or ask the soldier for the report with 'vx prompt'."
+)
+
+// awaitSettledTranscript re-reads the pane of agent until two consecutive
+// reads agree, starting from first, and returns the last text read and
+// whether it held still. A read that fails along the way ends the wait with
+// the last good text and stable false.
+func awaitSettledTranscript(client herdr.Client, agent, first string) (output string, stable bool) {
+	output = first
+	for attempt := 1; attempt < settleReadAttempts; attempt++ {
+		time.Sleep(settleReadGap)
+		next, err := client.AgentRead(agent, tickReadLines)
+		if err != nil {
+			return output, false
+		}
+		if next == output {
+			return output, true
+		}
+		output = next
+	}
+	return output, false
 }
 
 // settleNeedsDecision persists task's transition from an apparently-idle
@@ -450,13 +527,19 @@ func settleNeedsDecision(projectRoot string, task state.Task, output string, dec
 // package required corroboration first. output/readErr are whatever
 // settleIdleTask already read while checking for a needs-decision line,
 // so this never issues a second AgentRead for the same tick.
-func settleDone(projectRoot string, task state.Task, reportPath, output string, readErr error) (bool, error) {
+func settleDone(projectRoot string, task state.Task, reportPath, output string, readErr error, note string) (bool, error) {
 	old := task.Status
 	task.Status = state.StatusDone
 	task.UpdatedAt = time.Now().UTC()
 	task.IdleUnconfirmedSince = time.Time{}
 	if readErr == nil {
 		task.Output = output
+	}
+	if note != "" {
+		if task.Output != "" {
+			task.Output += "\n\n"
+		}
+		task.Output += note
 	}
 	saved, err := saveIfRunning(projectRoot, task)
 	if err != nil {
