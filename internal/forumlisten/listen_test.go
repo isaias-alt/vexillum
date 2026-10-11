@@ -322,7 +322,21 @@ func TestListener_SeveralMessagesCoalesceIntoOneWake(t *testing.T) {
 	e.send(key, "two", false)
 	e.send(key, "three", false)
 
-	e.runUntil("all three stored", e.options(), func() bool { return len(pending(t, e.root)) == 3 && e.snap(key).Pending == 0 })
+	// Stopping as soon as the prompts are stored and unpending would cancel the
+	// listener in the middle of its relay (it posts the notice before it
+	// acknowledges), so wait for the notice too.
+	notices := func() int {
+		n := 0
+		for _, m := range e.snap(key).Transcript {
+			if m.Kind == forum.MessageKindNotice {
+				n++
+			}
+		}
+		return n
+	}
+	e.runUntil("all three stored and noticed", e.options(), func() bool {
+		return len(pending(t, e.root)) == 3 && e.snap(key).Pending == 0 && notices() >= 1
+	})
 	if len(pending(t, e.root)) != 3 {
 		t.Fatalf("entries = %+v, want 3", pending(t, e.root))
 	}
@@ -330,14 +344,8 @@ func TestListener_SeveralMessagesCoalesceIntoOneWake(t *testing.T) {
 	if len(ws) != 1 || ws[0].Count != 3 {
 		t.Errorf("wakes = %+v, want one wake for 3 messages", ws)
 	}
-	notices := 0
-	for _, m := range e.snap(key).Transcript {
-		if m.Kind == forum.MessageKindNotice {
-			notices++
-		}
-	}
-	if notices > 3 || notices < 1 {
-		t.Errorf("%d notices", notices)
+	if n := notices(); n > 3 || n < 1 {
+		t.Errorf("%d notices", n)
 	}
 }
 
