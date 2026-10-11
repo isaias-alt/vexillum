@@ -4,10 +4,11 @@
 // A frame is one line of the session and `t` is the millisecond, counted from
 // the start of its step, at which it appears. A `prompt` is typed one
 // character at a time (InAction's CHAR_MS), so the next frame must start after
-// it has finished typing. The tool and output lines are the real stdout of the
-// vx commands (the same in both languages), and the replies are the commander
-// speaking in the tone the product skill gives it: it calls the user "general"
-// and keeps technical terms in English.
+// it has finished typing. The tool and output lines are abridged stdout of the
+// vx commands (the same in both languages): lines such as camp_branch,
+// status= and herdr: are left out, and the "still running" message is cut
+// short. The replies are the commander speaking in the tone the product skill
+// gives it: it calls the user "general" and keeps technical terms in English.
 //
 // `view` and `act` frames are not lines of the transcript. A `view` frame
 // switches the pane between the terminal and a mock of the forum screen in the

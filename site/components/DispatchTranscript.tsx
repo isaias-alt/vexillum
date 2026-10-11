@@ -2,7 +2,8 @@ import type { Dictionary } from "@/lib/strings";
 import { Output, Prompt, ToolCall } from "./transcript";
 
 // A commander session in Claude Code: the general talks, the commander calls
-// `vx dispatch`. Outputs are the real stdout lines of the command.
+// `vx dispatch`. Outputs are abridged: the real command also prints camp_branch,
+// status= and herdr: lines, and a longer "still running" message.
 export function DispatchTranscript({
   t,
   className,

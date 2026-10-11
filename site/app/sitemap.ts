@@ -5,8 +5,8 @@ import { i18n, type Lang } from "@/lib/i18n";
 import { absoluteUrl, localizedPath } from "@/lib/seo";
 
 /** One entry per real page in each language, each carrying its translations as
- * alternates. Pages without a translation (the Spanish CLI reference falls back
- * to English) are listed once, in their own language. No lastmod: dates would
+ * alternates. Pages without a translation are listed once, in their own
+ * language. No lastmod: dates would
  * have to come from git, which a shallow CI clone cannot answer reliably. */
 export default function sitemap(): MetadataRoute.Sitemap {
   // Locale-less path -> languages it is written in.

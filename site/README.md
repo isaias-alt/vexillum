@@ -24,7 +24,7 @@ pnpm diagrams   # re-export diagrams/*.excalidraw to public/diagrams/*.svg (need
 | `app/[lang]/(home)` | the landing, `/` and `/es` |
 | `app/[lang]/docs` | the docs, `/docs` and `/es/docs` (Fumadocs notebook layout, re-themed in `app/globals.css`) |
 | `content/docs/en`, `content/docs/es` | the pages, one tree per locale; `meta.json` orders the sidebar |
-| `content/docs/en/reference/cli` | **generated**, see below |
+| `content/docs/en/reference/cli`, `content/docs/es/reference/cli` | **generated**, see below |
 | `lib/strings.ts` | landing and nav strings per locale |
 | `app/api/search/route.ts` | static search index, queried in the browser per locale |
 | `app/llms.txt`, `app/llms-full.txt`, `app/llms.mdx` | `llms.txt`, `llms-full.txt` and `/docs/<page>.md` (`/es/...` for Spanish) |
@@ -38,12 +38,12 @@ pnpm diagrams   # re-export diagrams/*.excalidraw to public/diagrams/*.svg (need
 
 ## The CLI reference is generated
 
-`content/docs/en/reference/cli/*` and `content/docs/es/reference/cli/index.mdx`
-come from the command registry in `internal/cli`. Never edit them by hand; from
-the repository root run `go run ./tools/docgen` (`go test ./...` fails when they
-drift). The reference is English only, because a command's usage is the binary's
-own output: Spanish pages for a command fall back to the English page, and the
-generated Spanish index links to them under `/es/docs`.
+`content/docs/en/reference/cli/*` and `content/docs/es/reference/cli/*` come
+from the command registry in `internal/cli`. Never edit them by hand; from the
+repository root run `go run ./tools/docgen` (`go test ./...` fails when they
+drift). Both trees have one page per command. The Spanish pages take their prose
+from `tools/docgen/cli_es.go` (a test fails when a command or flag has no
+Spanish text); the command names, flags and synopsis lines stay in English.
 
 ## Writing docs
 
