@@ -67,7 +67,6 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.Binary("Claude Code", "claude", true),
 		doctorcheck.Binary("herdr", "herdr", true),
 		doctorcheck.HerdrVersion(),
-		doctorcheck.Binary("tmux", "tmux", false),
 		doctorcheck.GitHubCLI(),
 		doctorcheck.VXShadow(),
 		doctorcheck.VexillumHome(vexillumHome),

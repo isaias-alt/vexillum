@@ -82,7 +82,7 @@ func initializedProject(t *testing.T) string {
 
 // L1-07: full environment, everything ok, exit 0.
 func TestDoctor_FullEnvironment(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -100,7 +100,7 @@ func TestDoctor_FullEnvironment(t *testing.T) {
 
 // L1-08: Claude Code missing, rest ok, exit != 0.
 func TestDoctor_MissingClaudeCode(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "herdr"))
 	projectDir := initializedProject(t)
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -121,7 +121,7 @@ func TestDoctor_MissingClaudeCode(t *testing.T) {
 
 // L1-09: herdr missing, rest ok, exit != 0.
 func TestDoctor_MissingHerdr(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude"))
 	projectDir := initializedProject(t)
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -140,32 +140,10 @@ func TestDoctor_MissingHerdr(t *testing.T) {
 	}
 }
 
-// L1-10: tmux missing, rest ok. Policy: tmux is the control backend, not
-// primary, so this is a warning and exit stays 0.
-func TestDoctor_MissingTmuxIsWarningOnly(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
-	projectDir := initializedProject(t)
-	vexillumHome := t.TempDir()
-	homeDir := t.TempDir()
-
-	var out bytes.Buffer
-	code := runDoctor(projectDir, vexillumHome, homeDir, &out)
-
-	if code != 0 {
-		t.Fatalf("expected exit 0 (tmux optional), got %d\noutput:\n%s", code, out.String())
-	}
-	if !bytes.Contains(out.Bytes(), []byte("[missing] tmux")) {
-		t.Errorf("expected tmux to be reported missing, got:\n%s", out.String())
-	}
-	if !bytes.Contains(out.Bytes(), []byte("brew install tmux")) {
-		t.Errorf("expected an install hint for tmux, got:\n%s", out.String())
-	}
-}
-
 // L1-11: project not initialized, binaries present, exit != 0, suggests
 // running init.
 func TestDoctor_ProjectNotInitialized(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := t.TempDir()
 	initGitRepo(t, projectDir)
 	vexillumHome := t.TempDir()
@@ -184,7 +162,7 @@ func TestDoctor_ProjectNotInitialized(t *testing.T) {
 
 // L1-12: doctor never modifies anything on disk.
 func TestDoctor_ReadOnly(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -232,7 +210,7 @@ func TestDoctor_ReadOnly(t *testing.T) {
 // L1-13: outside a git repo, doctor's git check reports it, exit code
 // consistent with the policy chosen for init (L1-05): required, non-zero.
 func TestDoctor_OutsideGitRepo(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := t.TempDir()
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -250,7 +228,7 @@ func TestDoctor_OutsideGitRepo(t *testing.T) {
 
 // A1-01: herdr reports a supported 0.9.x version - ok line names it, exit 0.
 func TestDoctor_HerdrVersionSupported(t *testing.T) {
-	dir := fakeBinDir(t, "claude", "tmux")
+	dir := fakeBinDir(t, "claude")
 	writeStub(t, dir, "herdr", "echo 'herdr 0.9.0'")
 	t.Setenv("PATH", dir)
 	projectDir := initializedProject(t)
@@ -271,7 +249,7 @@ func TestDoctor_HerdrVersionSupported(t *testing.T) {
 // A1-02: herdr reports a version outside 0.9.x - warning, not a failure:
 // exit stays 0.
 func TestDoctor_HerdrVersionUnsupportedIsWarningOnly(t *testing.T) {
-	dir := fakeBinDir(t, "claude", "tmux")
+	dir := fakeBinDir(t, "claude")
 	writeStub(t, dir, "herdr", "echo 'herdr 0.10.0'")
 	t.Setenv("PATH", dir)
 	projectDir := initializedProject(t)
@@ -292,7 +270,7 @@ func TestDoctor_HerdrVersionUnsupportedIsWarningOnly(t *testing.T) {
 // A1-03: herdr --version fails or produces unparseable output - warning,
 // not a failure.
 func TestDoctor_HerdrVersionUndetectableIsWarningOnly(t *testing.T) {
-	dir := fakeBinDir(t, "claude", "tmux")
+	dir := fakeBinDir(t, "claude")
 	writeStub(t, dir, "herdr", "exit 1")
 	t.Setenv("PATH", dir)
 	projectDir := initializedProject(t)
@@ -313,7 +291,7 @@ func TestDoctor_HerdrVersionUndetectableIsWarningOnly(t *testing.T) {
 // A1-04: herdr missing entirely - only the existing "[missing] herdr" line
 // from checkBinary, no separate "herdr version" line.
 func TestDoctor_HerdrMissingHasNoSeparateVersionLine(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude"))
 	projectDir := initializedProject(t)
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -329,7 +307,7 @@ func TestDoctor_HerdrMissingHasNoSeparateVersionLine(t *testing.T) {
 // A skill that vexillum no longer ships (an old install left it behind) is not
 // reported by doctor.
 func TestDoctor_RetiredSkillNotListed(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 	writeSkillFile(t, projectDir, "retired-skill")
 	vexillumHome := t.TempDir()
@@ -346,7 +324,7 @@ func TestDoctor_RetiredSkillNotListed(t *testing.T) {
 // gh not installed is reported, informational only - it never affects
 // the exit code.
 func TestDoctor_GitHubCLINotInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -367,7 +345,7 @@ func TestDoctor_GitHubCLINotInstalled(t *testing.T) {
 
 // gh installed reports ok.
 func TestDoctor_GitHubCLIInstalled(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux", "gh"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "gh"))
 	projectDir := initializedProject(t)
 	vexillumHome := t.TempDir()
 	homeDir := t.TempDir()
@@ -386,7 +364,7 @@ func TestDoctor_GitHubCLIInstalled(t *testing.T) {
 // The first-party skills ship in the binary, so doctor reports their state
 // against the embedded copy and no longer hints at "npx skills add" for them.
 func TestDoctor_FirstPartySkills(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir, home := newProject(t)
 	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 	vexillumHome := t.TempDir()
@@ -460,7 +438,7 @@ func TestDoctor_SlotStates(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+			t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 			projectDir := initializedProject(t)
 			if tc.agents != "" {
 				writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), tc.agents)
@@ -492,7 +470,7 @@ func TestDoctor_ClaudeMDSlot(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+			t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 			projectDir := initializedProject(t)
 			writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), tc.claude)
 			var out bytes.Buffer
@@ -509,7 +487,7 @@ func TestDoctor_ClaudeMDSlot(t *testing.T) {
 	}
 
 	t.Run("after init with the default", func(t *testing.T) {
-		t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+		t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 		projectDir, home := newProject(t)
 		if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
 			t.Fatal(r.out, r.errOut)
@@ -521,7 +499,7 @@ func TestDoctor_ClaudeMDSlot(t *testing.T) {
 		}
 	})
 	t.Run("an AGENTS.md that appears later keeps the report on CLAUDE.md", func(t *testing.T) {
-		t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+		t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 		projectDir := initializedProject(t)
 		writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), current)
 		writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
@@ -534,7 +512,7 @@ func TestDoctor_ClaudeMDSlot(t *testing.T) {
 }
 
 func TestDoctor_ClaudeImport(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 	core, _ := install.SlotTemplate(slot.LangEN)
 	current, _ := slot.Upsert(englishAgents, core, false)
@@ -554,7 +532,7 @@ func TestDoctor_ClaudeImport(t *testing.T) {
 }
 
 func TestDoctor_ModelsInvalid(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 	writeFileT(t, filepath.Join(projectDir, ".vexillum", "models.json"), `{"default": {"model": "gpt"}}`)
 	var out bytes.Buffer
@@ -569,7 +547,7 @@ func TestDoctor_ModelsInvalid(t *testing.T) {
 // A project that is not initialized gets no project checks, just the one
 // "project initialized" line.
 func TestDoctor_NoProjectChecksWhenNotInitialized(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := t.TempDir()
 	initGitRepo(t, projectDir)
 	var out bytes.Buffer
@@ -602,7 +580,7 @@ func snapshotTree(t *testing.T, dir string) (string, error) {
 // doctor reports a different vx earlier in PATH as a warning (never a
 // failure), naming the one that wins.
 func TestDoctor_AnotherVXEarlierInPathWarns(t *testing.T) {
-	binDir := fakeBinDir(t, "claude", "herdr", "tmux", "vx")
+	binDir := fakeBinDir(t, "claude", "herdr", "vx")
 	t.Setenv("PATH", binDir)
 	projectDir := initializedProject(t)
 
@@ -622,7 +600,7 @@ func TestDoctor_AnotherVXEarlierInPathWarns(t *testing.T) {
 }
 
 func TestDoctor_NoVXConflictIsOK(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 
 	var out bytes.Buffer
@@ -637,7 +615,7 @@ func TestDoctor_NoVXConflictIsOK(t *testing.T) {
 // (HOME and PATH=/usr/bin:/bin), and warns with the fix when it cannot find
 // vx - even though the vx on the test's own PATH is fine.
 func TestDoctor_StopHookResolvingVXIsOK(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {
 		t.Fatal(err)
@@ -667,7 +645,7 @@ func TestDoctor_StopHookNotFindingVXWarnsWithTheFix(t *testing.T) {
 			t.Skipf("a real vx is installed at %s", p)
 		}
 	}
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux", "vx"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "vx"))
 	projectDir := initializedProject(t)
 	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {
 		t.Fatal(err)
@@ -687,7 +665,7 @@ func TestDoctor_StopHookNotFindingVXWarnsWithTheFix(t *testing.T) {
 }
 
 func TestDoctor_StopHookMissingWarnsToUpgrade(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 
 	var out bytes.Buffer
@@ -701,7 +679,7 @@ func TestDoctor_StopHookMissingWarnsToUpgrade(t *testing.T) {
 // Two sentinels alive at once are reported as a warning with the pids to stop,
 // and never fail doctor.
 func TestDoctor_WarnsWhenMoreThanOneSentinelIsAlive(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	t.Cleanup(doctorcheck.SetLiveSentinelPIDs(func() ([]int, error) { return []int{31337, 31338}, nil }))
 	projectDir := initializedProject(t)
 	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {

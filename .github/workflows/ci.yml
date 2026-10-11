@@ -56,7 +56,7 @@ jobs:
           fi
 
   # vx targets macOS first, so the same checks run there. Tests that need
-  # herdr, claude or tmux skip themselves when the binary is missing, the same
+  # herdr or claude skip themselves when the binary is missing, the same
   # way they do on the Linux job.
   test-macos:
     runs-on: macos-latest

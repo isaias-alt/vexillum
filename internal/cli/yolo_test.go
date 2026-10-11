@@ -101,7 +101,7 @@ func TestYoloFileIsNotGitIgnored(t *testing.T) {
 }
 
 func TestDoctor_Yolo(t *testing.T) {
-	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "tmux"))
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
 	projectDir := initializedProject(t)
 
 	run := func() (int, string) {

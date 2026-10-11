@@ -35,7 +35,6 @@ type Result struct {
 var installHints = map[string]string{
 	"claude": "install it from https://claude.com/claude-code",
 	"herdr":  "install it with 'brew install herdr' or from https://herdr.dev",
-	"tmux":   "install it with your package manager (for example 'brew install tmux')",
 	"gh":     "install it with 'brew install gh' or from https://cli.github.com",
 }
 
@@ -50,7 +49,7 @@ func Binary(label, binaryName string, required bool) Result {
 	if _, err := exec.LookPath(binaryName); err != nil {
 		detail := fmt.Sprintf("%s not found in PATH", binaryName)
 		if !required {
-			detail += " (optional control backend)"
+			detail += " (optional)"
 		}
 		if hint, ok := installHints[binaryName]; ok {
 			detail += " - " + hint
