@@ -36,6 +36,6 @@ You talk to a commander. It dispatches soldiers, each in its own camp, and a sen
 | `land` | fast-forward only; refuses a dirty checkout or a diverged branch; never forces |
 | `strike` | refuses while the camp has uncommitted or unlanded work |
 | `ship` | pushes only after every tribunal step passes, deterministically |
-| `redispatch` | the only operation that discards a camp, so the commander asks first |
+| `redispatch`, `strike --discard` | the only operations that discard a camp, so the commander asks first |
 
 The process itself is not sandboxed. See the [warning on the introduction](/docs).

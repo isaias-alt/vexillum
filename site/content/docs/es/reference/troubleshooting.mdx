@@ -33,7 +33,7 @@ Empezá con `vx doctor`: te dice qué falta. Los mensajes de error de vexillum e
 | El general confirmó que el trabajo del camp ya está en la base o abandonado, y strike igual se niega | `vx strike <task-id> --discard` hace strike igual e imprime cada commit y cambio que descartó. Solo con la aprobación del general. |
 | `strike refused: scout task ... has no report` | El reporte es el producto del scout. Hacé que lo escriba, o pasá `--force`. |
 | `'gh' is not installed` | `ship`, y aterrizar un PR enviado, necesitan el GitHub CLI. |
-| `vexillum failed at <step>, refusing to push` | Falló un paso del tribunal; no se hizo push de nada. Arreglalo en el camp y volvé a hacer ship. |
+| `vx: tribunal failed at <step>, refusing to push or open a pull request` | Falló un paso del tribunal; no se hizo push de nada. Arreglalo en el camp y volvé a hacer ship. |
 | `review blocked: N blocking finding(s)` | La revisión adversarial encontró un error o warning (info nunca bloquea). Leé los hallazgos en la salida; arreglalos en el camp, o reintentá con `ship --fix` para los `auto-fix`. |
 | `review blocked: incomplete coverage` | El revisor no reportó haber leído todos los archivos cambiados. Volvé a hacer ship. |
 | `task ... is running, not interrupted` | Solo una tarea `interrupted` puede re-despacharse. |
