@@ -8,8 +8,8 @@ vexillum ships through three channels. Most people want **stable**, which is wha
 | Channel | Version looks like | What it is | Promise |
 | --- | --- | --- | --- |
 | stable | `v0.1.0` | The official release, cut by hand. | The one to rely on. |
-| rc | `v0.1.1-rc.1` | A release candidate: the build that is about to become a stable release. | Close to final, published to be tried. |
-| canary | `v0.2.1-canary.20261004.gabc1234` | A build of the latest work, made automatically. | None. |
+| rc | `vX.Y.Z-rc.N` | A release candidate: the build that is about to become a stable release. | Close to final, published to be tried. |
+| canary | `v0.1.1-canary.20261011.gad39bc6` | A build of the latest work, made automatically. | None. |
 
 Stable is the only channel that reaches Homebrew. rc and canary builds are published as GitHub pre-releases, so they never replace the version `brew install` or the default install gives you.
 
@@ -41,12 +41,12 @@ The install script never installs a pre-release on its own: without options it i
 An rc (release candidate) is published before a stable release so the release itself can be tried. It is a GitHub pre-release and is not offered through Homebrew or by the default install. To install a specific one, name its version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --version v0.1.1-rc.1
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --version <rc-tag>
 ```
 
-Find the available versions on the [GitHub releases page](https://github.com/isaias-alt/vexillum/releases).
+Replace `<rc-tag>` with a real rc tag, of the form `vX.Y.Z-rc.N`. No rc has been published yet; find the available versions on the [GitHub releases page](https://github.com/isaias-alt/vexillum/releases).
 
-The first stable is `v0.1.0` and rc builds appear later. Running the script without `--version` installs the latest stable, through Homebrew when `brew` is present, and never the rc. To test the rc, pass `--version v0.1.1-rc.1`: it is a direct download that skips Homebrew.
+The first stable is `v0.1.0` and rc builds appear later. Running the script without `--version` installs the latest stable, through Homebrew when `brew` is present, and never the rc. To test an rc, pass `--version <rc-tag>`: it is a direct download that skips Homebrew.
 
 ## Canary
 
@@ -70,7 +70,7 @@ vx --version
   A canary can contain unfinished work, change behavior from one build to the next or break. Do not use it for work you cannot afford to interrupt. If something breaks, go back to stable.
 </Callout>
 
-Every canary is a separate build with its own version: the next patch after the latest stable, the build date and the commit it was built from, as in `v0.2.1-canary.20261004.gabc1234`. It documents itself on GitHub: open the release for its version to see what changed in that build, and read the project as it was at that version. Old canary builds are cleaned up after a while, so pin a canary only for as long as you are testing it.
+Every canary is a separate build with its own version: the next patch after the latest stable, the build date and the commit it was built from, as in `v0.1.1-canary.20261011.gad39bc6`. It documents itself on GitHub: open the release for its version to see what changed in that build, and read the project as it was at that version. Old canary builds are cleaned up after a while, so pin a canary only for as long as you are testing it.
 
 ### Go back to stable
 
@@ -91,6 +91,6 @@ These options go after `bash -s --` when you pipe the script:
 | --- | --- |
 | `--channel stable` | The default. Installs the latest stable release, through Homebrew when it is available. Never installs a pre-release. |
 | `--channel canary` | Installs the latest canary build by direct download. |
-| `--version <tag>` | Installs exactly that release by direct download, for example `v0.1.0` or `v0.1.1-rc.1`. The leading `v` is optional. |
+| `--version <tag>` | Installs exactly that release by direct download, for example `v0.1.0` or `vX.Y.Z-rc.N` for an rc. The leading `v` is optional. |
 
 `--channel` and `--version` cannot be combined: a version already names the exact release. `--help` prints the same list.
