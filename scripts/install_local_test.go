@@ -83,16 +83,16 @@ func TestInstallLocalFreshAndRollback(t *testing.T) {
 		t.Fatalf("first install: %v\n%s", err, out)
 	}
 	head := r.git("rev-parse", "--short=7", "HEAD")
-	got, err := exec.Command(filepath.Join(dest, "vx"), "--version").Output()
+	got, err := exec.Command(filepath.Join(dest, "vx-dev"), "--version").Output()
 	if err != nil || !strings.Contains(string(got), head) {
-		t.Fatalf("installed vx reports %q (err %v), want HEAD %s", got, err, head)
+		t.Fatalf("installed vx-dev reports %q (err %v), want HEAD %s", got, err, head)
 	}
-	if _, err := os.Stat(filepath.Join(dest, "vx.prev")); err == nil {
-		t.Error("vx.prev must not exist after the first install")
+	if _, err := os.Stat(filepath.Join(dest, "vx-dev.prev")); err == nil {
+		t.Error("vx-dev.prev must not exist after the first install")
 	}
 
-	// A second install keeps the first binary as vx.prev.
-	first, err := os.ReadFile(filepath.Join(dest, "vx"))
+	// A second install keeps the first binary as vx-dev.prev.
+	first, err := os.ReadFile(filepath.Join(dest, "vx-dev"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,19 +100,19 @@ func TestInstallLocalFreshAndRollback(t *testing.T) {
 	if out, err := runInstall(t, r, dest, nil); err != nil {
 		t.Fatalf("second install: %v\n%s", err, out)
 	}
-	prev, err := os.ReadFile(filepath.Join(dest, "vx.prev"))
+	prev, err := os.ReadFile(filepath.Join(dest, "vx-dev.prev"))
 	if err != nil {
-		t.Fatalf("vx.prev missing: %v", err)
+		t.Fatalf("vx-dev.prev missing: %v", err)
 	}
 	if string(prev) != string(first) {
-		t.Error("vx.prev is not the previously installed binary")
+		t.Error("vx-dev.prev is not the previously installed binary")
 	}
 	entries, err := os.ReadDir(dest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 2 {
-		t.Errorf("destination holds %d entries, want vx and vx.prev only", len(entries))
+		t.Errorf("destination holds %d entries, want vx-dev and vx-dev.prev only", len(entries))
 	}
 }
 

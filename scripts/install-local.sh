@@ -2,13 +2,16 @@
 set -euo pipefail
 
 # ============================================================================
-# install-local.sh - install a build of this checkout as the local vx.
+# install-local.sh - install a build of this checkout as the local vx-dev.
 #
 # For the maintainer's own machine: install only after landing with green
 # tests. It builds ./cmd/vx, refuses a dirty checkout or a branch other than
 # the base branch, checks that the fresh binary reports HEAD in --version,
-# keeps the previous binary as vx.prev (one-step rollback) and replaces vx
-# atomically (copy to a temp name in the same directory, then rename).
+# keeps the previous binary as vx-dev.prev (one-step rollback) and replaces
+# vx-dev atomically (copy to a temp name in the same directory, then rename).
+#
+# The dev build is installed as vx-dev, never as vx: the stable vx comes from
+# Homebrew and the two must not shadow each other.
 #
 # Environment:
 #   VX_INSTALL_DIR    destination directory (default ~/.local/bin)
@@ -33,6 +36,7 @@ done
 
 repo="${VX_INSTALL_REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
 dest="${VX_INSTALL_DIR:-$HOME/.local/bin}"
+name="vx-dev"
 base="${VX_INSTALL_BASE:-canary}"
 
 branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD)" || fail "not a git checkout: $repo"
@@ -57,17 +61,17 @@ case "$reported" in
 esac
 
 mkdir -p "$dest"
-if [ -f "$dest/vx" ]; then
-    cp -p "$dest/vx" "$dest/.vx.prev.$$"
-    mv -f "$dest/.vx.prev.$$" "$dest/vx.prev"
-    prev="kept previous binary as $dest/vx.prev"
+if [ -f "$dest/$name" ]; then
+    cp -p "$dest/$name" "$dest/.$name.prev.$$"
+    mv -f "$dest/.$name.prev.$$" "$dest/$name.prev"
+    prev="kept previous binary as $dest/$name.prev"
 else
     prev="no previous binary to keep"
 fi
-cp "$work/vx" "$dest/.vx.new.$$"
-chmod 755 "$dest/.vx.new.$$"
-mv -f "$dest/.vx.new.$$" "$dest/vx"
+cp "$work/vx" "$dest/.$name.new.$$"
+chmod 755 "$dest/.$name.new.$$"
+mv -f "$dest/.$name.new.$$" "$dest/$name"
 
-echo "installed $dest/vx"
+echo "installed $dest/$name"
 echo "$reported"
 echo "$prev"

@@ -53,7 +53,7 @@ Un pull request que cambia comandos, comportamiento, configuración o skills tam
 
 ## Instalar tu propio build
 
-Los maintainers pueden instalar el checkout actual como su `vx` local con `scripts/install-local.sh`. Se niega a instalar con un checkout sucio o en una rama que no sea `canary`, verifica que el `vx --version` del binario recién compilado reporte `HEAD`, guarda el binario anterior como `vx.prev` al lado para volver atrás en un paso, y reemplaza `vx` de forma atómica. Definí `VX_INSTALL_DIR` para cambiar el destino (por defecto `~/.local/bin`), o pasá `--force` para saltear las guardas de checkout limpio y de rama. Un build de desarrollo imprime su identidad, por ejemplo `vx dev (a1b2c3d, 2026-10-05, dirty)`.
+Los maintainers pueden instalar el checkout actual como su `vx-dev` local con `scripts/install-local.sh`. Se niega a instalar con un checkout sucio o en una rama que no sea `canary`, verifica que el `vx --version` del binario recién compilado reporte `HEAD`, guarda el binario anterior como `vx-dev.prev` al lado para volver atrás en un paso, y reemplaza `vx-dev` de forma atómica. El `vx` estable viene de Homebrew, así que el build de desarrollo nunca toma su nombre. Definí `VX_INSTALL_DIR` para cambiar el destino (por defecto `~/.local/bin`), o pasá `--force` para saltear las guardas de checkout limpio y de rama. Un build de desarrollo imprime su identidad, por ejemplo `vx dev (a1b2c3d, 2026-10-05, dirty)`.
 
 ## Alcance
 

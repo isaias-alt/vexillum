@@ -111,11 +111,12 @@ applies to a soldier doing a manual run as much as to a test:
 
 ## Installing your own build
 
-Maintainers can install a build of the current checkout as their local `vx`
+Maintainers can install a build of the current checkout as their local `vx-dev`
 with `scripts/install-local.sh`. It refuses a dirty checkout or a branch other
 than `canary` (install only after landing with green tests), checks that the
-fresh binary's `vx --version` reports HEAD, keeps the old binary as `vx.prev`
-next to it for a one-step rollback, and replaces `vx` atomically. A dev build
+fresh binary's `vx --version` reports HEAD, keeps the old binary as `vx-dev.prev`
+next to it for a one-step rollback, and replaces `vx-dev` atomically. The stable
+`vx` comes from Homebrew, so the dev build never takes its name. A dev build
 prints its identity, for example `vx dev (a1b2c3d, 2026-10-05, dirty)`.
 
 ```sh
