@@ -40,7 +40,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: release-tags
+  group: releases
   cancel-in-progress: false
 
 jobs:

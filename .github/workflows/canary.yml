@@ -25,7 +25,7 @@ permissions:
 
 # Shared with the stable release so two tag-cutting runs never overlap.
 concurrency:
-  group: release-tags
+  group: releases
   cancel-in-progress: false
 
 jobs:
