@@ -18,7 +18,7 @@ Requirements:
 - a git repository for your project
 - optional: `gh` (for `vx ship`)
 
-`vx doctor` checks all of it. `vx dispatch` only works inside a herdr pane.
+`vx doctor` checks that Claude Code, herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
 
 > **Warning:** soldiers run Claude Code with `--dangerously-skip-permissions`, as
 > your OS user, with no container or sandbox. Landing a mission is the approval
@@ -45,7 +45,7 @@ stability promise) or an exact version, pass an option to the script:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --channel canary
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --version v0.1.1-rc.1
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --version v0.1.0
 ```
 
 ## Usage

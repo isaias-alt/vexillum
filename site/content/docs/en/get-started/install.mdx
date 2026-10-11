@@ -13,7 +13,7 @@ vexillum supports macOS and Linux, on amd64 and arm64.
 - a git repository for your project
 - optional: `gh` (for `vx ship`)
 
-`vx doctor` checks all of it. `vx dispatch` only works inside a herdr pane.
+`vx doctor` checks that Claude Code, herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
 
 <Callout type="warn" title="Soldiers have full host access">
   A soldier runs Claude Code with `--dangerously-skip-permissions`, as your OS user, with no container or sandbox. Landing a mission is the approval gate: nothing reaches your project's real history until you approve it. Never dispatch against a repository or machine where reading credentials would be a problem.
