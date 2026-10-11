@@ -103,6 +103,11 @@ func (o Options) log(msg string) {
 type StepResult struct {
 	Step   Step
 	Passed bool
+	// Skipped is set when the step ran nothing because the project has
+	// nothing it knows how to check (e.g. no go.mod or package.json). A
+	// skipped step has Passed true so it never fails the run, but it did
+	// not verify anything: Detail says why.
+	Skipped bool
 	// Detail explains the outcome - command output on failure, the
 	// formatted review findings, or a short note on why a step was skipped
 	// (e.g. no lint command detected).

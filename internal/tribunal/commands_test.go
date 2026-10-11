@@ -15,6 +15,12 @@ func TestRunLint_NoMarkersSkips(t *testing.T) {
 	if !sr.Passed {
 		t.Error("expected a project with no go.mod/package.json to skip (pass), not fail")
 	}
+	if !sr.Skipped {
+		t.Error("expected the step to be reported as skipped, not as a run that passed")
+	}
+	if sr.Detail == "" {
+		t.Error("expected Detail to say why the step was skipped")
+	}
 }
 
 func TestRunTests_NoMarkersSkips(t *testing.T) {
@@ -25,6 +31,12 @@ func TestRunTests_NoMarkersSkips(t *testing.T) {
 	}
 	if !sr.Passed {
 		t.Error("expected a project with no go.mod/package.json to skip (pass), not fail")
+	}
+	if !sr.Skipped {
+		t.Error("expected the step to be reported as skipped, not as a run that passed")
+	}
+	if sr.Detail == "" {
+		t.Error("expected Detail to say why the step was skipped")
 	}
 }
 
@@ -75,8 +87,8 @@ func TestRunLint_GoVetPassesCleanCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runLint: %v", err)
 	}
-	if !sr.Passed {
-		t.Fatalf("expected clean code to pass go vet, got: %s", sr.Detail)
+	if !sr.Passed || sr.Skipped {
+		t.Fatalf("expected clean code to pass go vet without skipping, got: %+v", sr)
 	}
 }
 

@@ -546,9 +546,12 @@ func shipPRText(s prbody.Sanitizer, task state.Task, ship shipOptions, facts prb
 		}
 	}
 
-	var passed []string
+	var passed, skipped []string
 	for _, sr := range result.Steps {
-		if sr.Passed {
+		switch {
+		case sr.Skipped:
+			skipped = append(skipped, string(sr.Step))
+		case sr.Passed:
 			passed = append(passed, string(sr.Step))
 		}
 	}
@@ -568,6 +571,7 @@ func shipPRText(s prbody.Sanitizer, task state.Task, ship shipOptions, facts prb
 		TribunalName: tribunal.Name,
 		Facts:        facts,
 		Steps:        passed,
+		Skipped:      skipped,
 		FixRounds:    len(result.Earlier),
 		Notes:        notes,
 		Description:  description,
@@ -575,14 +579,17 @@ func shipPRText(s prbody.Sanitizer, task state.Task, ship shipOptions, facts prb
 	return title, body, dropped, nil
 }
 
-// printSteps writes one "[ok|FAILED] step" line per step, each preceded by
+// printSteps writes one "[ok|skipped|FAILED] step" line per step, each preceded by
 // prefix (the round label when the fix loop ran more than one round).
 func printSteps(w io.Writer, prefix string, steps []tribunal.StepResult) {
 	for _, sr := range steps {
-		status := "ok"
-		if !sr.Passed {
-			status = "FAILED"
+		switch {
+		case sr.Skipped:
+			fmt.Fprintf(w, "%s[skipped] %s - %s\n", prefix, sr.Step, sr.Detail)
+		case !sr.Passed:
+			fmt.Fprintf(w, "%s[FAILED] %s\n", prefix, sr.Step)
+		default:
+			fmt.Fprintf(w, "%s[ok] %s\n", prefix, sr.Step)
 		}
-		fmt.Fprintf(w, "%s[%s] %s\n", prefix, status, sr.Step)
 	}
 }

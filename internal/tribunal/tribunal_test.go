@@ -90,3 +90,16 @@ func TestHasFile(t *testing.T) {
 		t.Error("expected hasFile=true once the file exists")
 	}
 }
+
+func TestResultPassed_SkippedStepDoesNotFail(t *testing.T) {
+	r := Result{Steps: []StepResult{
+		{Step: StepLint, Passed: true, Skipped: true, Detail: "no lint command detected"},
+		{Step: StepTests, Passed: true, Skipped: true, Detail: "no test command detected"},
+	}}
+	if !r.Passed() {
+		t.Error("a run whose only steps were skipped must still pass")
+	}
+	if r.FailedStep() != nil {
+		t.Error("a skipped step is never the failed step")
+	}
+}

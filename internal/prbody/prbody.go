@@ -208,6 +208,10 @@ type Input struct {
 	Facts        Facts
 	// Steps are the tribunal steps that passed in the final round, in order.
 	Steps []string
+	// Skipped are the tribunal steps that ran nothing because the project
+	// has nothing for them to check; they are reported as skipped, never
+	// as passed.
+	Skipped []string
 	// FixRounds is how many fix rounds ran; review rounds are one more.
 	FixRounds int
 	// Notes are the review's info findings, one line each.
@@ -236,8 +240,8 @@ func Body(s Sanitizer, in Input) (string, int) {
 		sections = append(sections, "## Changes\n\n"+line)
 	}
 
-	if len(in.Steps) > 0 {
-		sections = append(sections, "## Verification\n\n"+verificationLine(in.TribunalName, in.Steps, in.FixRounds))
+	if len(in.Steps) > 0 || len(in.Skipped) > 0 {
+		sections = append(sections, "## Verification\n\n"+verificationLine(in.TribunalName, in.Steps, in.Skipped, in.FixRounds))
 	}
 
 	var notes []string
@@ -253,6 +257,9 @@ func Body(s Sanitizer, in Input) (string, int) {
 	}
 
 	footer := fmt.Sprintf("---\nvexillum mission %s, verified by %s: lint, tests, review, and docs all passed.", in.TaskID, in.TribunalName)
+	if len(in.Skipped) > 0 {
+		footer = fmt.Sprintf("---\nvexillum mission %s, verified by %s: %s passed, %s skipped.", in.TaskID, in.TribunalName, strings.Join(in.Steps, ", "), strings.Join(in.Skipped, ", "))
+	}
 	sections = append(sections, footer)
 	return strings.Join(sections, "\n\n"), dropped
 }
@@ -312,7 +319,11 @@ func diffSummary(f Facts) string {
 	return line + "."
 }
 
-func verificationLine(name string, steps []string, fixRounds int) string {
+func verificationLine(name string, steps, skipped []string, fixRounds int) string {
 	title := strings.ToUpper(name[:1]) + name[1:]
-	return fmt.Sprintf("%s steps passed: %s. %s, %s.", title, strings.Join(steps, ", "), plural(fixRounds+1, "review round"), plural(fixRounds, "fix round"))
+	line := fmt.Sprintf("%s steps passed: %s.", title, strings.Join(steps, ", "))
+	if len(skipped) > 0 {
+		line += fmt.Sprintf(" Skipped, nothing to run for this project: %s.", strings.Join(skipped, ", "))
+	}
+	return fmt.Sprintf("%s %s, %s.", line, plural(fixRounds+1, "review round"), plural(fixRounds, "fix round"))
 }

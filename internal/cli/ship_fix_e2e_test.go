@@ -286,7 +286,7 @@ func TestShipFixLoop_FixedInOneRoundThenApproved(t *testing.T) {
 	if want := []string{"review", "fix", "review"}; !equalStrings(e.callRoles(), want) {
 		t.Errorf("expected claude calls %v, got %v", want, e.callRoles())
 	}
-	if !strings.Contains(stdout, "round 1: [ok] lint") || !strings.Contains(stdout, "round 2: [ok] docs") {
+	if !strings.Contains(stdout, "round 1: [ok] lint") || !strings.Contains(stdout, "round 2: [skipped] docs") {
 		t.Errorf("expected both rounds' steps in the output, got:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "round 1 review findings (handed to the fixer):") || !strings.Contains(stdout, "SOMETHING_WRONG") {
@@ -345,7 +345,7 @@ func TestShipFixLoop_ConvergesInTwoRounds(t *testing.T) {
 	if want := []string{"review", "fix", "review", "fix", "review"}; !equalStrings(e.callRoles(), want) {
 		t.Errorf("expected claude calls %v, got %v", want, e.callRoles())
 	}
-	if !strings.Contains(stdout, "round 3: [ok] docs") {
+	if !strings.Contains(stdout, "round 3: [skipped] docs") {
 		t.Errorf("expected three rounds in the output, got:\n%s", stdout)
 	}
 	if tip := e.remoteTip(); tip != e.campGit("rev-parse", "HEAD") {

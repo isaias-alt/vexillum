@@ -614,12 +614,12 @@ func TestRunShip_PRTextNeverContainsThePrompt(t *testing.T) {
 			t.Errorf("the pull request text must not contain %q:\n%s", banned, args)
 		}
 	}
-	for _, want := range []string{"--title\nchange\n", "## What\n\n- change", "## Changes\n\n1 file changed, +1 -0. Areas touched: `(repo root)`.", "## Verification\n\nTribunal steps passed: lint, tests, review, docs. 1 review round, 0 fix rounds.", "vexillum mission "} {
+	for _, want := range []string{"--title\nchange\n", "## What\n\n- change", "## Changes\n\n1 file changed, +1 -0. Areas touched: `(repo root)`.", "## Verification\n\nTribunal steps passed: review. Skipped, nothing to run for this project: lint, tests, docs. 1 review round, 0 fix rounds.", "vexillum mission "} {
 		if !strings.Contains(args, want) {
 			t.Errorf("expected the pull request text to contain %q:\n%s", want, args)
 		}
 	}
-	if !strings.Contains(args, "verified by tribunal: lint, tests, review, and docs all passed.") {
+	if !strings.Contains(args, "verified by tribunal: review passed, lint, tests, docs skipped.") {
 		t.Errorf("expected the factual footer:\n%s", args)
 	}
 }
@@ -967,5 +967,18 @@ func TestRunShip_OverridesBeatTheReviewersText(t *testing.T) {
 	}
 	if !strings.Contains(args, "--title\nfeat: the reviewer title\n") || !strings.Contains(args, "## What\n\nCommander body.\n") || strings.Contains(args, "The reviewer description.") {
 		t.Errorf("expected --body to win and the reviewer title to stay:\n%s", args)
+	}
+}
+
+func TestPrintSteps_ReportsASkippedStepWithItsReason(t *testing.T) {
+	var out bytes.Buffer
+	printSteps(&out, "", []tribunal.StepResult{
+		{Step: tribunal.StepLint, Passed: true, Skipped: true, Detail: "no lint command detected (no go.mod or package.json)"},
+		{Step: tribunal.StepTests, Passed: true},
+		{Step: tribunal.StepReview, Passed: false},
+	})
+	want := "[skipped] lint - no lint command detected (no go.mod or package.json)\n[ok] tests\n[FAILED] review\n"
+	if out.String() != want {
+		t.Errorf("printSteps output:\n%q\nwant:\n%q", out.String(), want)
 	}
 }

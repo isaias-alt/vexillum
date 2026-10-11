@@ -168,6 +168,21 @@ func TestBody(t *testing.T) {
 		}
 	})
 
+	t.Run("skipped steps are not claimed as passed", func(t *testing.T) {
+		got, _ := Body(s, Input{TaskID: "x", TribunalName: "tribunal", Steps: []string{"review"}, Skipped: []string{"lint", "tests", "docs"}})
+		for _, want := range []string{
+			"## Verification\n\nTribunal steps passed: review. Skipped, nothing to run for this project: lint, tests, docs. 1 review round, 0 fix rounds.",
+			"---\nvexillum mission x, verified by tribunal: review passed, lint, tests, docs skipped.",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("expected %q in:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, "all passed") {
+			t.Errorf("must not claim every step passed:\n%s", got)
+		}
+	})
+
 	t.Run("minimal", func(t *testing.T) {
 		got, _ := Body(s, Input{TaskID: "x", TribunalName: "tribunal"})
 		want := "---\nvexillum mission x, verified by tribunal: lint, tests, review, and docs all passed."

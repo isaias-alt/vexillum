@@ -4,9 +4,9 @@ package tribunal
 // markers already sitting in campPath - no per-project tribunal config
 // to set up first (there's simply nothing to configure).
 // Neither marker present means "vx ship" is being used against a
-// project this pipeline doesn't yet know how to lint or test - Passed
-// stays true rather than failing a mission for tooling gaps outside its
-// control, but Detail says so plainly.
+// project this pipeline doesn't yet know how to lint or test - the step
+// is reported as Skipped (Passed stays true rather than failing a
+// mission for tooling gaps outside its control) and Detail says why.
 
 func runLint(campPath string) (StepResult, error) {
 	switch {
@@ -15,7 +15,7 @@ func runLint(campPath string) (StepResult, error) {
 	case hasFile(campPath, "package.json"):
 		return runCommand(StepLint, campPath, "npm", "run", "lint", "--if-present")
 	default:
-		return StepResult{Step: StepLint, Passed: true, Detail: "no lint command detected (no go.mod or package.json)"}, nil
+		return StepResult{Step: StepLint, Passed: true, Skipped: true, Detail: "no lint command detected (no go.mod or package.json)"}, nil
 	}
 }
 
@@ -26,6 +26,6 @@ func runTests(campPath string) (StepResult, error) {
 	case hasFile(campPath, "package.json"):
 		return runCommand(StepTests, campPath, "npm", "run", "test", "--if-present")
 	default:
-		return StepResult{Step: StepTests, Passed: true, Detail: "no test command detected (no go.mod or package.json)"}, nil
+		return StepResult{Step: StepTests, Passed: true, Skipped: true, Detail: "no test command detected (no go.mod or package.json)"}, nil
 	}
 }
