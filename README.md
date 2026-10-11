@@ -16,7 +16,7 @@ Requirements:
 - Claude Code, installed and logged in (subscription or API key)
 - [herdr](https://herdr.dev) (`brew install herdr` works)
 - a git repository for your project
-- optional: `gh` (for `vx ship`) and `tmux`
+- optional: `gh` (for `vx ship`)
 
 `vx doctor` checks all of it. `vx dispatch` only works inside a herdr pane.
 
