@@ -6,5 +6,9 @@
 // to change.
 package cmdname
 
-// Name is the one and only executable name vexillum installs.
+// Name is the executable name vexillum releases install.
 const Name = "vx"
+
+// DevName is the name scripts/install-local.sh gives the maintainer's own
+// build, so it never takes Name from the Homebrew install.
+const DevName = Name + "-dev"

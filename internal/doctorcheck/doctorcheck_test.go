@@ -170,3 +170,21 @@ func TestVXShadow_IgnoresNonExecutableAndRelativeEntries(t *testing.T) {
 		t.Errorf("expected ok, got %+v", result)
 	}
 }
+
+// A build installed under another name (vx-dev) is not shadowed by the vx on
+// PATH: it is not what "vx" runs by design, so doctor must not warn.
+func TestVXShadow_DifferentlyNamedBuildDoesNotWarn(t *testing.T) {
+	other := fakeVX(t)
+	dev := filepath.Join(t.TempDir(), "vx-dev")
+	if err := os.WriteFile(dev, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("writing fake vx-dev: %v", err)
+	}
+
+	result := vxShadow(dev, filepath.Dir(other))
+	if !result.OK || result.Warn {
+		t.Fatalf("a vx-dev build must not warn about the vx on PATH, got %+v", result)
+	}
+	if !strings.Contains(result.Detail, "vx-dev") || !strings.Contains(result.Detail, other) {
+		t.Errorf("detail should name vx-dev and the vx on PATH, got %q", result.Detail)
+	}
+}

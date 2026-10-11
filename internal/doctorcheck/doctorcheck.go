@@ -120,6 +120,16 @@ func vxShadow(exe, pathEnv string) Result {
 	self := realPath(exe)
 
 	first := firstOnPath(cmdname.Name, pathEnv)
+	// The maintainer's own build is installed as vx-dev, so typing "vx" never
+	// runs it and there is nothing for it to be shadowed by: say which vx
+	// answers instead of warning on every run.
+	if filepath.Base(exe) == cmdname.DevName {
+		detail := "not applicable, this is " + cmdname.DevName + " (" + self + ")"
+		if first != "" {
+			detail += "; '" + cmdname.Name + "' on PATH is " + first
+		}
+		return Result{Name: vxShadowName, OK: true, Detail: detail}
+	}
 	if first == "" {
 		return Result{Name: vxShadowName, OK: true, Detail: "no, " + cmdname.Name + " is not on PATH (running " + self + ")"}
 	}
