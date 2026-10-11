@@ -16,7 +16,7 @@ func TestFormatVersion(t *testing.T) {
 		{"dev full", "dev", full, "vx dev (a1b2c3d, 2026-10-05, dirty)"},
 		{"dev clean", "dev", VCS{Commit: "a1b2c3d", Time: "2026-10-05T12:34:56Z"}, "vx dev (a1b2c3d, 2026-10-05)"},
 		{"dev no vcs", "dev", VCS{}, "vx dev"},
-		{"release with commit", "1.2.3", full, "vx 1.2.3 (a1b2c3d)"},
+		{"release hides the commit", "1.2.3", full, "vx 1.2.3"},
 		{"release no vcs", "1.2.3", VCS{}, "vx 1.2.3"},
 	}
 	for _, tt := range tests {

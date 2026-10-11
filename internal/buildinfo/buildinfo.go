@@ -60,23 +60,23 @@ func shortCommit(rev string) string {
 	return rev
 }
 
-// FormatVersion renders the --version line for the binary called name. A dev
-// build shows its commit, commit date and dirty flag so the installed build is
-// identifiable; a release build keeps "name version" and appends only the
-// short commit when it is known.
+// FormatVersion renders the --version line for the binary called name. A
+// release build prints just "name version"; a dev build shows its commit,
+// commit date and dirty flag so the installed build is identifiable.
 func FormatVersion(name, version string, v VCS) string {
 	out := name + " " + version
+	if version != "dev" {
+		return out
+	}
 	var parts []string
 	if v.Commit != "" {
 		parts = append(parts, v.Commit)
 	}
-	if version == "dev" {
-		if day, _, _ := strings.Cut(v.Time, "T"); day != "" {
-			parts = append(parts, day)
-		}
-		if v.Dirty {
-			parts = append(parts, "dirty")
-		}
+	if day, _, _ := strings.Cut(v.Time, "T"); day != "" {
+		parts = append(parts, day)
+	}
+	if v.Dirty {
+		parts = append(parts, "dirty")
 	}
 	if len(parts) == 0 {
 		return out
