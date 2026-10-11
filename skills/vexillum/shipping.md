@@ -10,12 +10,15 @@ decide it is ready to land; the pipeline decides, deterministically.
 It runs vexillum's tribunal (lint, tests, an adversarial review of the diff by a
 fresh session that reads the diff itself, a docs check) against the mission's
 camp, synchronously, and only pushes and opens the pull request once every step
-has passed.
+has passed. Lint and tests run only for a Go project (`go.mod`) or a Node one
+(`package.json`), and the docs check only for Go (new exported declarations need
+a doc comment). In any other project those steps pass without running anything,
+so a green step there does not mean a check ran. Read the note each step prints.
 
 Requires the `gh` binary installed (`vx doctor` reports whether it is). `vx ship`
-refuses up front and says so if it is missing. There is no other setup: the
-pipeline runs entirely inside vexillum, with no external tool to install or
-configure.
+refuses up front and says so if it is missing. The pipeline itself runs inside
+vexillum, with no tool of its own to install or configure, but the review needs
+`claude` (already required to dispatch) and the push needs an `origin` remote.
 
 ## The general's later instructions count as intent
 

@@ -8,7 +8,7 @@ A finished mission leaves its camp in one of two ways. Both are explicit, and ne
 | | `vx land` | `vx ship` |
 | --- | --- | --- |
 | Result | local fast-forward of your checkout | a real GitHub pull request |
-| Review pipeline | none; you reviewed it | lint, tests, an adversarial review, a docs check |
+| Review pipeline | none; you reviewed it | lint, tests, an adversarial review, a docs check (lint and tests need a Go or Node project, docs only Go) |
 | Needs | a clean checkout | `gh` installed |
 | Leaves the machine | no | yes, it pushes to `origin` |
 
@@ -37,7 +37,7 @@ Runs, in order, inside the mission's camp, stopping at the first failure without
 1. **lint** - `go vet ./...` for a Go project, `npm run lint --if-present` for a Node one;
 2. **tests** - `go test ./...` or `npm run test --if-present`;
 3. **review** - an adversarial review of the diff by a fresh Claude Code session (see below);
-4. **docs** - for Go projects, new exported declarations must carry a doc comment.
+4. **docs** - for Go projects, new exported declarations must carry a doc comment. In any other project this step is skipped and reports as passed.
 
 ### The adversarial review
 
@@ -63,7 +63,7 @@ Without `--fix`, a blocking review only rejects the ship and prints the findings
 
 `ask-user` findings are never auto-fixed: if any blocking finding needs a human, `ship` rejects without a fix round. `--max-rounds` caps the fix rounds (default 2); running out without a passing review rejects the ship. `--timeout` caps each single reviewer or fixer run (default 20 minutes).
 
-With neither `go.mod` nor `package.json`, lint and tests pass with a note that nothing was detected. It is synchronous: when `ship` returns, the whole pipeline has settled. Only after every step passes does it push the camp branch to `origin` and run `gh pr create`. No agent decides whether or when that happens: it is the one action with an irreversible effect outside the machine.
+With neither `go.mod` nor `package.json`, lint and tests pass with a note that nothing was detected: nothing was run, so a pass there says nothing about the code. A Node project without a `lint` or `test` script passes the same way, because of `--if-present`. It is synchronous: when `ship` returns, the whole pipeline has settled. Only after every step passes does it push the camp branch to `origin` and run `gh pr create`. No agent decides whether or when that happens: it is the one action with an irreversible effect outside the machine.
 
 A mission in `done` or `shipped` can be shipped again to push follow-ups onto the same PR; it re-runs the full pipeline first. Whenever a pull request for the branch already exists, `vx ship` reuses it instead of opening a second one: it pushes to the same branch and refreshes the pull request's title and description from the new review (see below). A pull request that is already merged or closed cannot take more commits, so `vx ship` refuses before running anything.
 

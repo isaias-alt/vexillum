@@ -8,7 +8,7 @@ Una mission terminada sale de su camp de dos maneras. Las dos son explícitas, y
 | | `vx land` | `vx ship` |
 | --- | --- | --- |
 | Resultado | fast-forward local de tu checkout | un pull request real de GitHub |
-| Pipeline de revisión | ninguno; la revisaste vos | lint, tests, una revisión adversarial, un chequeo de docs |
+| Pipeline de revisión | ninguno; la revisaste vos | lint, tests, una revisión adversarial, un chequeo de docs (lint y tests requieren un proyecto Go o Node, docs solo Go) |
 | Necesita | un checkout limpio | `gh` instalado |
 | Sale de la máquina | no | sí, hace push a `origin` |
 
@@ -37,7 +37,7 @@ Corre, en orden, dentro del camp de la mission, y se detiene en el primer fallo 
 1. **lint** - `go vet ./...` en un proyecto Go, `npm run lint --if-present` en uno Node;
 2. **tests** - `go test ./...` o `npm run test --if-present`;
 3. **review** - una revisión adversarial del diff hecha por una sesión nueva de Claude Code (ver abajo);
-4. **docs** - en proyectos Go, las declaraciones exportadas nuevas deben llevar un comentario de documentación.
+4. **docs** - en proyectos Go, las declaraciones exportadas nuevas deben llevar un comentario de documentación. En cualquier otro proyecto este paso se saltea y figura como aprobado.
 
 ### La revisión adversarial
 
@@ -63,7 +63,7 @@ Sin `--fix`, una revisión que bloquea solo rechaza el ship e imprime los hallaz
 
 Los hallazgos `ask-user` nunca se auto-corrigen: si algún hallazgo bloqueante necesita a un humano, `ship` rechaza sin ronda de arreglo. `--max-rounds` limita las rondas de arreglo (por defecto 2); agotarlas sin una revisión que pase rechaza el ship. `--timeout` limita cada corrida de revisor o fixer (por defecto 20 minutos).
 
-Sin `go.mod` ni `package.json`, lint y tests pasan con una nota de que no se detectó nada. Es sincrónico: cuando `ship` vuelve, todo el pipeline terminó. Solo después de que pasan todos los pasos hace push de la branch del camp a `origin` y corre `gh pr create`. Ningún agente decide si eso ocurre ni cuándo: es la única acción con un efecto irreversible fuera de la máquina.
+Sin `go.mod` ni `package.json`, lint y tests pasan con una nota de que no se detectó nada: no se corrió nada, así que ese pase no dice nada sobre el código. Un proyecto Node sin script `lint` o `test` pasa igual, por el `--if-present`. Es sincrónico: cuando `ship` vuelve, todo el pipeline terminó. Solo después de que pasan todos los pasos hace push de la branch del camp a `origin` y corre `gh pr create`. Ningún agente decide si eso ocurre ni cuándo: es la única acción con un efecto irreversible fuera de la máquina.
 
 Una mission en `done` o `shipped` puede enviarse de nuevo para empujar seguimientos al mismo PR; vuelve a correr el pipeline completo primero. Siempre que ya exista un pull request para la branch, `vx ship` lo reutiliza en vez de abrir un segundo: hace push a la misma branch y refresca el título y la descripción del pull request con la nueva revisión (ver más abajo). Un pull request que ya está mergeado o cerrado no puede recibir más commits, así que `vx ship` se niega antes de correr nada.
 
