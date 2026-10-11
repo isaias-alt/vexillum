@@ -13,10 +13,10 @@ Usage:
 
 Refuses unless the camp is clean and (for a mission) landed. For a scout,
 also refuses unless its final report exists at
-~/.vexillum/projects/<project>/reports/<agent-name>.md - the report is
+~/.vexillum/projects/<project>/reports/<agent-name>-<task-id>.md - the report is
 the scout's work product, the same way a mission's is its landed commit.
 --force skips the report check (never the clean/landed camp check) - an
-explicit, logged escape hatch, never silent.
+explicit escape hatch, for use after explicit discard approval.
 
 A shipped mission lands when its pull request is merged, so strike checks
 that. When the camp's commits are not on the base branch yet, the refusal

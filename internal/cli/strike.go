@@ -25,10 +25,10 @@ Usage:
 
 Refuses unless the camp is clean and (for a mission) landed. For a scout,
 also refuses unless its final report exists at
-~/.vexillum/projects/<project>/reports/<agent-name>.md - the report is
+~/.vexillum/projects/<project>/reports/<agent-name>-<task-id>.md - the report is
 the scout's work product, the same way a mission's is its landed commit.
 --force skips the report check (never the clean/landed camp check) - an
-explicit, logged escape hatch, never silent.
+explicit escape hatch, for use after explicit discard approval.
 
 A shipped mission lands when its pull request is merged, so strike checks
 that. When the camp's commits are not on the base branch yet, the refusal
@@ -146,8 +146,8 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 	// landed commit is (checked by camp.Strike itself, via
 	// soldier.StrikeInHerdr below) - a mission never has one to check
 	// (internal/report's package doc), so this only ever applies to a
-	// scout. --force is the explicit, logged escape hatch, for use after
-	// explicit discard approval.
+	// scout. --force is the explicit escape hatch (it skips only this report
+	// check), for use after explicit discard approval.
 	if task.Kind == state.KindScout && !opts.Force && !report.Exists(projectRoot, task.HerdrAgentName, task.ID) {
 		fmt.Fprintf(stderr, cmdname.Name+": strike refused: scout task %s has no report at %s\n", taskID, report.Path(projectRoot, task.HerdrAgentName, task.ID))
 		fmt.Fprintln(stderr, cmdname.Name+": the report is the work product - have the soldier write it, or pass --force to strike anyway")

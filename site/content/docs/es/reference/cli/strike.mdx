@@ -13,11 +13,11 @@ Uso:
 
 Se rechaza a menos que el camp esté limpio y (para una mission) aterrizado.
 Para un scout, además se rechaza a menos que exista su reporte final en
-~/.vexillum/projects/<project>/reports/<agent-name>.md: el reporte es el
+~/.vexillum/projects/<project>/reports/<agent-name>-<task-id>.md: el reporte es el
 producto de trabajo del scout, igual que el de una mission es su commit
 aterrizado. --force omite la verificación del reporte (nunca la del camp
-limpio y aterrizado): una salida de emergencia explícita y registrada, nunca
-silenciosa.
+limpio y aterrizado): una salida de emergencia explícita, para usar tras una
+aprobación explícita de descarte.
 
 Una mission shipped aterriza cuando se hace merge de su pull request, así que
 strike verifica eso. Cuando los commits del camp todavía no están en la rama
