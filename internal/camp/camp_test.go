@@ -123,7 +123,7 @@ func TestStrike_RefusesDirtyCamp(t *testing.T) {
 	}
 }
 
-// L3-06: Strike refuses a camp whose branch has commits not yet landed
+// Strike refuses a camp whose branch has commits not yet landed
 // on the base branch.
 func TestStrike_RefusesUnlandedCamp(t *testing.T) {
 	project := initProjectRepo(t)
@@ -341,7 +341,7 @@ func TestLand_RefusesDirtyProjectCheckout(t *testing.T) {
 	}
 }
 
-// Capa 4 paso 3: N soldiers dispatched at once each call Acquire
+// N soldiers dispatched at once each call Acquire
 // concurrently (separate `vx dispatch` processes racing against the
 // same pool). Acquire's read-modify-write over pool.json (scan for an
 // idle slot, or compute len(pool.Slots)+1 for a new one, then save) has

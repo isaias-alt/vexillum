@@ -54,8 +54,8 @@ type Wake struct {
 	// its report file (internal/report) already exists at that exact
 	// moment - no new detection channel, this is just tickProject
 	// checking for it within the same poll that already reads the
-	// task's live herdr status (PRD asked for report detection to ride
-	// the existing tick, not add one). A commander draining this wake
+	// task's live herdr status (report detection rides the existing tick
+	// rather than adding one). A commander draining this wake
 	// can go straight to the polished report instead of the raw
 	// transcript in Output. Empty for a mission (which never has a
 	// report - see internal/report's package doc) or for a scout whose

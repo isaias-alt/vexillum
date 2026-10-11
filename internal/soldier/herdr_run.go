@@ -40,7 +40,7 @@ const (
 )
 
 // RunInHerdr runs task's prompt through a real, interactive Claude Code
-// session in a herdr pane inside c, instead of a headless one-shot
+// session in a herdr pane inside c, instead of a one-shot background
 // process - the soldier is visible and attachable, not silent in the
 // background.
 //
@@ -513,8 +513,8 @@ type PaneCloseError struct{ Err error }
 func (e *PaneCloseError) Error() string { return "closing soldier pane: " + e.Err.Error() }
 func (e *PaneCloseError) Unwrap() error { return e.Err }
 
-// DiscardInHerdr is StrikeInHerdr's destructive counterpart (PRD v2,
-// A.2): it throws away c (camp.Discard - a dead soldier's dirty,
+// DiscardInHerdr is StrikeInHerdr's destructive counterpart: it
+// throws away c (camp.Discard - a dead soldier's dirty,
 // possibly unlanded worktree) instead of insisting it's clean and
 // landed, then closes whatever herdr tab the task still had recorded.
 // The tab close is best-effort: a task reaching this point is normally

@@ -75,7 +75,7 @@ func GitHubCLI() Result {
 
 // HerdrVersion anchors the implicit assumption internal/herdr's
 // error-code parsing has always run under - herdr 0.9.x, verified live -
-// against a real, executable check (PRD v2, A.1). herdr not being on
+// against a real, executable check. herdr not being on
 // PATH at all is already reported by the "herdr" Binary check; this
 // returns a zero-value Result (an empty Name, skipped by the caller)
 // rather than a second line about the same absence.

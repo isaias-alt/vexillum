@@ -8,9 +8,9 @@ import (
 // exportedDeclPattern matches the start of an added line that introduces
 // a new top-level exported Go declaration - "func Name(...)", "func (r
 // *T) Name(...)", "type Name ...", "const Name ..." or "var Name ...".
-// It does not see into a grouped "const ( ... )" / "var ( ... )" block -
-// deliberately out of scope so the docs check stays light rather than
-// blocking the rest of the pipeline on it).
+// It does not see into a grouped "const ( ... )" / "var ( ... )" block:
+// that is deliberately out of scope so the docs check stays light rather
+// than blocking the rest of the pipeline on it.
 var exportedDeclPattern = regexp.MustCompile(`^(?:func|type|const|var)\s+(?:\([^)]*\)\s*)?([A-Z][A-Za-z0-9_]*)`)
 
 // runDocs checks that any exported Go declaration this mission's diff

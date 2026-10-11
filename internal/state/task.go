@@ -2,9 +2,8 @@
 // to JSON, and reads/writes it to <project root>/tasks/ - the caller
 // resolves that project root (see internal/project) before calling in;
 // this package only ever sees the root it's handed, not vexillumHome
-// directly. This is the base for restart-proofing in later layers, where
-// each task's state on disk is what a restarted vexillum reconciles
-// against.
+// directly. Each task's state on disk is what a restarted vexillum
+// reconciles against.
 package state
 
 import (
@@ -31,7 +30,7 @@ import (
 const SchemaVersion = schemaver.Current
 
 // Kind distinguishes a mission (delivers code changes, landed locally via
-// vx land - v1 never opens a real PR) from a scout (delivers a
+// vx land, or opened as a pull request via vx ship) from a scout (delivers a
 // report).
 type Kind string
 
@@ -92,7 +91,7 @@ const (
 	StatusStruck Status = "struck"
 )
 
-// Task is a mission or scout, serialized to JSON in ~/.vexillum/tasks/.
+// Task is a mission or scout, serialized to JSON in <project root>/tasks/.
 type Task struct {
 	SchemaVersion int       `json:"schema_version"`
 	ID            string    `json:"id"`
@@ -119,16 +118,15 @@ type Task struct {
 	// completion check - no SchemaVersion bump needed.
 	CampBase string `json:"camp_base,omitempty"`
 
-	// Soldier run result. ExitCode applies only to a headless run; a run in a real herdr
-	// pane (internal/soldier.RunInHerdr) has no process exit code, since
-	// it's an interactive agent session, not a one-shot command.
-	// Output holds the captured transcript either way.
+	// Soldier run result. A soldier runs in a real herdr pane
+	// (internal/soldier.RunInHerdr), an interactive agent session with no
+	// process exit code, so nothing sets ExitCode today. Output holds the
+	// captured transcript.
 	ExitCode *int   `json:"exit_code,omitempty"`
 	Output   string `json:"output,omitempty"`
 
 	// herdr pane assignment, set once a soldier runs in a real herdr
-	// pane (internal/soldier.RunInHerdr). Empty for a headless
-	// run.
+	// pane (internal/soldier.RunInHerdr). Empty until then.
 	HerdrWorkspaceID string `json:"herdr_workspace_id,omitempty"`
 	HerdrTabID       string `json:"herdr_tab_id,omitempty"`
 	HerdrPaneID      string `json:"herdr_pane_id,omitempty"`
@@ -151,15 +149,15 @@ type Task struct {
 	IdleUnconfirmedSince time.Time `json:"idle_unconfirmed_since,omitzero"`
 
 	// Redispatches counts how many times this task has been re-dispatched
-	// after going Interrupted (PRD v2, A.2) - zero means never. Re-dispatch
+	// after going Interrupted - zero means never. Re-dispatch
 	// reuses this same Task (same ID), so a re-dispatched task's identity
 	// stays stable rather than forking into a new one - same reasoning as
 	// AgentNotFoundSince: purely additive, no SchemaVersion bump needed.
 	Redispatches int `json:"redispatches,omitempty"`
 
-	// Model and Effort are the soldier's --model/--effort choice (ADR-05:
-	// the commander picks these by judgment from its AGENTS.md rules, this
-	// is only where the choice is recorded). Empty means the flag was
+	// Model and Effort are the soldier's --model/--effort choice (the
+	// commander picks these by judgment from its AGENTS.md rules, this is
+	// only where the choice is recorded). Empty means the flag was
 	// never passed to claude, which then falls back to its own default.
 	// A re-dispatch reuses whatever this task already carries. Purely
 	// additive, no SchemaVersion bump needed.

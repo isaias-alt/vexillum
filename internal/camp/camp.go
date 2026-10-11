@@ -470,8 +470,8 @@ func nonEmptyLines(s string) []string {
 	return lines
 }
 
-// Discard is Strike's deliberately destructive counterpart (PRD v2,
-// A.2): where Strike refuses anything but a clean, landed camp, Discard
+// Discard is Strike's deliberately destructive counterpart:
+// where Strike refuses anything but a clean, landed camp, Discard
 // throws away whatever's there - a dead soldier's half-finished working
 // tree and any commits it never landed - and returns the slot to the pool
 // clean, ready for immediate reuse (typically by a re-dispatch of the

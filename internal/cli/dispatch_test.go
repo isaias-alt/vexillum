@@ -210,7 +210,7 @@ func TestRunDispatch_Success(t *testing.T) {
 
 // A dispatch with --model/--effort threads both through to the real
 // claude launch (client.AgentStart's agentArgs) unexamined - vexillum
-// validates them but never decides which ones to use (ADR-05).
+// validates them but never decides which ones to use (the commander does).
 func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
 	project := initDispatchTestProject(t)
 	if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {

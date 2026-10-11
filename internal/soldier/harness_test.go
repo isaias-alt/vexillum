@@ -47,7 +47,7 @@ func TestValidateModelEffort(t *testing.T) {
 	}
 }
 
-// ClaudeCommand (the headless path) appends the same --model/--effort
+// ClaudeCommand (the one-shot path) appends the same --model/--effort
 // args as the herdr path (see TestRunInHerdr_PassesModelAndEffort),
 // omitting whichever one is unset.
 func TestClaudeCommand_ModelEffort(t *testing.T) {

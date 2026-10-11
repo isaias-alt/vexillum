@@ -871,7 +871,7 @@ func TestTick_DoesNotSettleATaskMovedOnDiskDuringTheTick(t *testing.T) {
 	}
 }
 
-// Capa 4 paso 5 (fault isolation), formalized: three tasks in one Tick
+// Fault isolation: three tasks in one Tick
 // call - one settles normally, one has its agent confirmed gone
 // (interrupted), one is still genuinely running - none of that interferes
 // with any of the others. Matches a live test: three real parallel

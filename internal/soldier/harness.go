@@ -14,11 +14,11 @@ type CommandSpec struct {
 
 // Harness abstracts the agent CLI vexillum drives to carry out a
 // soldier's prompt. It exists so a future harness beyond Claude Code
-// (Pi, deferred past v1 - AGENTS.md's "Harness único: Claude Code en la
-// v1") can be added by implementing this interface, instead of editing
-// every place that currently hardcodes Claude Code's own CLI shape.
+// (Pi, deferred - AGENTS.md's "Harness único: Claude Code") can be added
+// by implementing this interface, instead of editing every place that
+// currently hardcodes Claude Code's own CLI shape.
 //
-// v1 has exactly one implementation, ClaudeHarness - this is seam, not
+// There is exactly one implementation, ClaudeHarness - this is a seam, not
 // the multi-harness abstraction itself: nothing here selects between
 // harnesses, and defaultHarness is still the only one vexillum ever
 // constructs.
@@ -29,13 +29,15 @@ type Harness interface {
 	ValidateModelEffort(model, effort string) error
 
 	// ModelEffortArgs builds the extra CLI args for task's Model/Effort,
-	// omitting either that's unset. Shared between Command (the headless
-	// path) and RunInHerdr (the interactive path) so both stay in sync.
+	// omitting either that's unset. Shared between Command (the one-shot
+	// path the tribunal's reviewer and fixer use) and RunInHerdr (a
+	// soldier's interactive path) so both stay in sync.
 	ModelEffortArgs(task state.Task) []string
 
 	// Command builds the CommandSpec that runs task's prompt through the
-	// real harness CLI, unattended, inside a camp (internal/soldier.Run,
-	// the headless path).
+	// real harness CLI, unattended, inside a camp. A soldier does not use
+	// it (it runs interactively, see HerdrAgentKind): the tribunal's
+	// reviewer and fixer do (internal/tribunal).
 	Command(task state.Task) CommandSpec
 
 	// HerdrAgentKind is the agent kind string passed to herdr when
@@ -49,15 +51,15 @@ type Harness interface {
 	HerdrExtraArgs() []string
 }
 
-// defaultHarness is the Harness this build of vexillum drives. v1 only
-// ever constructs ClaudeHarness here - this is the one place that would
+// defaultHarness is the Harness this build of vexillum drives. Only
+// ClaudeHarness is ever constructed here - this is the one place that would
 // need to pick a different Harness once a second one exists.
 var defaultHarness Harness = ClaudeHarness{}
 
-// ClaudeHarness is vexillum's only Harness implementation in v1. It
-// wraps the real `claude` CLI, both headless (Command, used by Run) and
-// interactive inside a herdr pane (HerdrAgentKind/HerdrExtraArgs, used
-// by RunInHerdr).
+// ClaudeHarness is vexillum's only Harness implementation. It wraps the
+// real `claude` CLI, both one-shot (Command, used by the tribunal's
+// reviewer and fixer) and interactive inside a herdr pane
+// (HerdrAgentKind/HerdrExtraArgs, used by RunInHerdr).
 type ClaudeHarness struct{}
 
 const (
@@ -80,15 +82,15 @@ const (
 // It is turned off with the equivalent CLI flag (the
 // CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false env var would do the same). This only applies to a soldier's own
 // interactive session - never the commander's, which the general starts
-// directly, not vexillum; and never the headless Command path, which has
+// directly, not vexillum; and never the one-shot Command path, which has
 // no pane input box for a suggestion to sit in.
 var claudeHerdrExtraArgs = []string{claudeSkipPermissionsArg, "--prompt-suggestions", "false"}
 
 // claudeAllowedModels and claudeAllowedEfforts are the values vexillum
 // accepts for a soldier's --model/--effort flags, straight from `claude
 // --help` on the supported Claude Code CLI version. vexillum never
-// interprets them for routing (ADR-05 reserves that judgment for the
-// commander's own AGENTS.md) - it only checks a value is one claude
+// interprets them for routing (that judgment belongs to the commander's
+// own AGENTS.md) - it only checks a value is one claude
 // itself understands before passing it through verbatim.
 var (
 	claudeAllowedModels = map[string]bool{
@@ -166,7 +168,7 @@ func ValidateModelEffort(model, effort string) error {
 
 // ClaudeCommand builds the production CommandSpec for task via
 // defaultHarness. Named after Claude Code specifically (rather than
-// "HarnessCommand") because v1 has exactly one harness and callers
+// "HarnessCommand") because there is exactly one harness and callers
 // already reason about it as "the claude command" - see Harness's own
 // doc comment for why that's still fine to leave as a seam today.
 func ClaudeCommand(task state.Task) CommandSpec {

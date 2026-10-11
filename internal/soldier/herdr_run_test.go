@@ -228,7 +228,7 @@ func TestRunInHerdr_PersistsCampBase(t *testing.T) {
 	}
 }
 
-// A task carrying Model/Effort (set by the commander per ADR-05's rules,
+// A task carrying Model/Effort (set by the commander,
 // before dispatch ever reaches this package) gets them appended to the
 // real claude launch, unexamined - RunInHerdr never decides between them.
 func TestRunInHerdr_PassesModelAndEffort(t *testing.T) {
