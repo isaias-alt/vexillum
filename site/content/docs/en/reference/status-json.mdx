@@ -28,11 +28,11 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 | `id` | string | 16 hex characters |
 | `kind` | `"mission"` or `"scout"` | |
 | `prompt` | string | the original prompt |
-| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`; see [Missions and scouts](/docs/concepts/missions-and-scouts). A `shipped` task is waiting for its pull request to be merged, not stuck |
+| `status` | string | `pending`, `running`, `blocked`, `done`, `failed`, `interrupted`, `shipped`, `unconfirmed`, `struck`; see [Missions and scouts](/docs/concepts/missions-and-scouts). A `shipped` task is waiting for its pull request to be merged, not stuck. A `struck` task was `interrupted` or `failed` and its camp was returned with `vx strike` |
 | `created_at`, `updated_at` | RFC 3339 time | |
 | `camp_slot`, `camp_path`, `camp_branch` | number, string, string | set once a camp is acquired |
 | `camp_base` | string | branch the camp was forked from; may be empty |
-| `exit_code`, `output` | number, string | `output` is the captured transcript |
+| `output` | string | the captured transcript |
 | `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | the soldier's herdr pane |
 | `agent_not_found_since`, `idle_unconfirmed_since` | time | when the sentinel first saw the condition |
 | `redispatches` | number | how many times the task was re-dispatched |
