@@ -7,7 +7,7 @@ vexillum se publica por tres canales. La mayoría de la gente quiere **stable**,
 
 | Canal | Cómo se ve la versión | Qué es | Promesa |
 | --- | --- | --- | --- |
-| stable | `v0.1.0` | El release oficial, cortado a mano. | El que conviene usar. |
+| stable | `v0.1.1` | El release oficial, cortado a mano. | El que conviene usar. |
 | rc | `vX.Y.Z-rc.N` | Un release candidate: el build que está por convertirse en un stable. | Casi final, publicado para probarlo. |
 | canary | `v0.1.1-canary.20261011.gad39bc6` | Un build de lo último, hecho automáticamente. | Ninguna. |
 
@@ -29,7 +29,7 @@ brew install isaias-alt/tap/vexillum
   </CodeBlockTab>
   <CodeBlockTab value="curl">
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.1/scripts/install.sh | bash
 ```
   </CodeBlockTab>
 </CodeBlockTabs>
@@ -41,7 +41,7 @@ El script de instalación nunca instala un pre-release por su cuenta: sin opcion
 Un rc (release candidate) se publica antes de un release stable para poder probar el release en sí. Es un pre-release de GitHub y no se ofrece por Homebrew ni en la instalación por defecto. Para instalar uno en particular, nombrá su versión:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --version <rc-tag>
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.1/scripts/install.sh | bash -s -- --version <rc-tag>
 ```
 
 Reemplazá `<rc-tag>` por un tag de rc real, con la forma `vX.Y.Z-rc.N`. Todavía no se publicó ningún rc; las versiones disponibles están en la [página de releases de GitHub](https://github.com/isaias-alt/vexillum/releases).
@@ -57,7 +57,7 @@ La ejecución nocturna es opt-in. Solo corre cuando la variable de repositorio `
 Instalá el último canary con la opción `--channel`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash -s -- --channel canary
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.1/scripts/install.sh | bash -s -- --channel canary
 ```
 
 La instalación de un canary es siempre una descarga directa, aunque Homebrew esté en tu PATH. El script verifica el checksum sha256 del archivo, instala `vx` en `/usr/local/bin` (o en `~/.local/bin` cuando no podés escribir ahí) e imprime el build exacto que instaló:
@@ -78,7 +78,7 @@ Borrá el `vx` del canary del directorio que imprimió el mensaje de la instalac
 
 ```bash
 rm /usr/local/bin/vx
-curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.0/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.1/scripts/install.sh | bash
 ```
 
 Si antes instalaste con Homebrew, asegurate de que el `vx` que corre sea el que querés: `vx doctor` avisa cuando otro `vx` anterior en tu PATH tapa al que acabás de instalar.

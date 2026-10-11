@@ -11,7 +11,7 @@ test("the install redirect points at the script on the configured ref", async ()
 });
 
 test("the ref is a single named constant", () => {
-  assert.equal(INSTALL_SCRIPT_REF, "v0.1.0");
+  assert.equal(INSTALL_SCRIPT_REF, "v0.1.1");
   assert.equal(
     installScriptUrl("canary"),
     "https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh",
