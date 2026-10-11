@@ -3,9 +3,8 @@ name: Stable release
 
 # Cuts a stable release (or an rc) by hand. It validates the ref, requires
 # green CI for its tip, computes the next tag, creates an annotated tag and
-# releases it in this one job. A tag pushed with GITHUB_TOKEN does not start
-# release.yml, so that workflow is not involved (it stays for tags pushed by
-# hand).
+# releases it in this one job: there is no separate workflow triggered by tags,
+# so pushing a v* tag by hand publishes nothing.
 #
 # Ordinary stable and rc tags come from release/vX.Y branches; the first
 # release of a line can come from canary.
