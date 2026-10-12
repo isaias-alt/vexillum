@@ -27,7 +27,7 @@ Se construye por capas, sin pasar a la siguiente sin la anterior probada:
 1. Capa 1: CLI base (`init` + `doctor`). Sin procesos ni concurrencia.
 2. Capa 2: estado en disco (structs a JSON en `~/.vexillum/`).
 3. Capa 3: un proceso (un soldier en un camp, secuencial).
-4. Capa 4: concurrencia (N soldiers, sentinel sobre la socket API de herdr, restart-proof).
+4. Capa 4: concurrencia (N soldiers, sentinel que hace polling por la CLI de herdr, restart-proof).
 
 Trabajá en la capa activa. No adelantes código de capas futuras salvo pedido explícito.
 

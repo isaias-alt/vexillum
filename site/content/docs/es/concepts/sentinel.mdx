@@ -7,7 +7,7 @@ El sentinel es lo que te deja alejarte o trabajar en varias tareas a la vez. Vig
 
 ## Qué hace
 
-Corre un sentinel por máquina. Cada 5 segundos consulta el estado en vivo de herdr de cada tarea en `running`, en todos los proyectos que vexillum haya visto. Cuando una tarea termina (done o blocked) persiste el nuevo status y escribe un **wake** durable bajo el proyecto de esa tarea (`wakes/<task-id>.json`). También detecta tareas que pasaron a `interrupted` o `unconfirmed`, y solo después de confirmarlo durante una ventana, no por una sola observación.
+Corre un sentinel por máquina. Cada 5 segundos consulta el estado en vivo de herdr de cada tarea en `running`, en todos los proyectos que vexillum haya visto. Cuando una tarea termina (done o blocked) persiste el nuevo status y escribe un **wake** durable bajo el proyecto de esa tarea (`wakes/<task-id>.json`). También detecta tareas que pasaron a `interrupted` o `unconfirmed`, y solo después de confirmarlo durante una ventana, no por una sola observación. Para esas también despierta al commander.
 
 También vigila a los soldiers ya terminados cuyo camp sigue en su lugar: si uno vuelve a trabajar (le mandaron un prompt después de terminar), el sentinel devuelve su tarea a `running` sin un wake, así que su próximo fin es una transición como cualquier otra. Ver [Dar seguimiento a un soldier terminado](#dar-seguimiento-a-un-soldier-terminado).
 

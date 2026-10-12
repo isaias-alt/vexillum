@@ -3,7 +3,7 @@ title: State
 description: Everything vexillum remembers is plain JSON on disk, written atomically.
 ---
 
-vexillum keeps no daemon memory. Every fact it relies on is a file, so a restart (of vexillum, herdr, or your machine) loses nothing it knew.
+No background process (sentinel, forum server) holds state that is not on disk. Every fact it relies on is a file, so a restart (of vexillum, herdr, or your machine) loses nothing it knew.
 
 ## Layout
 

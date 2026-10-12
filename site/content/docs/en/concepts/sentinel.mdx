@@ -7,7 +7,7 @@ The sentinel is what lets you walk away or work on several tasks at once. It wat
 
 ## What it does
 
-One sentinel runs per machine. Every 5 seconds it polls the live herdr status of every task in `running`, across every project vexillum has seen. When a task settles (done or blocked) it persists the new status and writes a durable **wake** under that task's own project (`wakes/<task-id>.json`). It also notices tasks that became `interrupted` or `unconfirmed`, only after confirming over a window rather than on one observation.
+One sentinel runs per machine. Every 5 seconds it polls the live herdr status of every task in `running`, across every project vexillum has seen. When a task settles (done or blocked) it persists the new status and writes a durable **wake** under that task's own project (`wakes/<task-id>.json`). It also notices tasks that became `interrupted` or `unconfirmed`, only after confirming over a window rather than on one observation, and wakes the commander for those too.
 
 It also watches settled soldiers whose camp is still in place: if one is working again (it was prompted after it finished), the sentinel puts its task back to `running` without a wake, so its next finish is a transition like any other. See [Following up on a finished soldier](#following-up-on-a-finished-soldier).
 

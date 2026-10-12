@@ -77,7 +77,7 @@ const en: Dictionary = {
       },
       {
         term: "sentinel",
-        def: "Watches running soldiers and flags the commander when one needs human input.",
+        def: "Watches running soldiers and wakes the commander when one finishes, is blocked or is interrupted.",
       },
       {
         term: "mission / scout",
@@ -145,7 +145,7 @@ const es: Dictionary = {
       },
       {
         term: "sentinel",
-        def: "Vigila a los soldiers en ejecución y avisa al commander cuando uno necesita una decisión humana.",
+        def: "Vigila a los soldiers en ejecución y despierta al commander cuando uno termina, se bloquea o es interrumpido.",
       },
       {
         term: "mission / scout",
