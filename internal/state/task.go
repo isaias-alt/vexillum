@@ -410,21 +410,32 @@ func decodeTask(path string, data []byte) (Task, error) {
 	return t, nil
 }
 
-// List returns every task found in <project root>/tasks/, sorted by ID.
-// An empty or missing tasks directory yields an empty list, not an error.
-// If any task file is corrupt, List fails with an error naming that file
-// rather than silently skipping it or returning a partial list.
-func List(projectRoot string) ([]Task, error) {
+// Unreadable names a task file List could not load. Err already carries the
+// file's path.
+type Unreadable struct {
+	Path string
+	Err  error
+}
+
+// List returns every readable task found in <project root>/tasks/, sorted
+// by ID, and one Unreadable for each task file it had to skip (corrupt,
+// incomplete or written with an unsupported schema version). One bad file
+// never hides the healthy tasks beside it, but it is never dropped
+// silently either: the caller decides how to surface the skipped files.
+// An empty or missing tasks directory yields an empty list, not an error;
+// the error is only for a tasks directory that cannot be listed at all.
+func List(projectRoot string) ([]Task, []Unreadable, error) {
 	dir := tasksDir(projectRoot)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, fmt.Errorf("listing tasks directory: %w", err)
+		return nil, nil, fmt.Errorf("listing tasks directory: %w", err)
 	}
 
 	var tasks []Task
+	var skipped []Unreadable
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
@@ -432,15 +443,17 @@ func List(projectRoot string) ([]Task, error) {
 		path := filepath.Join(dir, entry.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", path, err)
+			skipped = append(skipped, Unreadable{Path: path, Err: fmt.Errorf("reading %s: %w", path, err)})
+			continue
 		}
 		t, err := decodeTask(path, data)
 		if err != nil {
-			return nil, err
+			skipped = append(skipped, Unreadable{Path: path, Err: err})
+			continue
 		}
 		tasks = append(tasks, t)
 	}
 
 	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
-	return tasks, nil
+	return tasks, skipped, nil
 }

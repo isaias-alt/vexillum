@@ -99,10 +99,16 @@ func runStatus(projectDir, vexillumHome string, jsonOutput bool, stdout, stderr 
 		return 1
 	}
 
-	tasks, err := state.List(projectRoot)
+	tasks, skipped, err := state.List(projectRoot)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": listing tasks: %v\n", err)
 		return 1
+	}
+	// One unreadable task file must not hide the rest of the project's
+	// tasks: warn on stderr (stdout stays the plain list or the JSON
+	// snapshot) and show what could be read.
+	for _, u := range skipped {
+		fmt.Fprintf(stderr, cmdname.Name+": warning: skipping unreadable task file: %v\n", u.Err)
 	}
 	if tasks == nil {
 		// A consumer parsing --json shouldn't have to special-case "no

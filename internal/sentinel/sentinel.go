@@ -119,6 +119,26 @@ const settleGracePeriod = 8 * time.Second
 // tick or two later is what herdr.APIError alone can't tell us.
 const notFoundConfirmWindow = 10 * time.Second
 
+// Tick sweeps every project with a throwaway Sweeper, so any warning it
+// would raise is dropped. Run keeps one Sweeper for its whole life instead,
+// which is what lets a persistent problem be warned about once.
+func Tick(vexillumHome string, client herdr.Client) (int, error) {
+	return NewSweeper(io.Discard).Tick(vexillumHome, client)
+}
+
+// Sweeper runs Tick sweeps and remembers which problems it already warned
+// about, so a file or project that stays broken is reported once, not on
+// every tick. The zero value is not usable; see NewSweeper.
+type Sweeper struct {
+	log    io.Writer
+	warned map[string]string // problem subject -> the warning line already logged
+}
+
+// NewSweeper returns a Sweeper that writes its warnings to log.
+func NewSweeper(log io.Writer) *Sweeper {
+	return &Sweeper{log: log, warned: map[string]string{}}
+}
+
 // Tick sweeps every project namespaced under vexillumHome
 // (vexillumHome/projects/*, see internal/project) and, within each,
 // checks every task currently marked running against its live herdr
@@ -126,34 +146,65 @@ const notFoundConfirmWindow = 10 * time.Second
 // it. Returns how many wakes it recorded across all projects. There's
 // one sentinel process per machine (see AcquireLock), so this is the
 // single place responsible for reconciling every project's tasks, not
-// just whichever one last called dispatch. A fatal error in one
-// project's sweep stops the whole Tick early, the same way a fatal error
-// already stopped a single-project Tick before projects existed - the
-// next Tick (5s later, see Run) picks up wherever this one left off.
-func Tick(vexillumHome string, client herdr.Client) (int, error) {
+// just whichever one last called dispatch.
+//
+// One broken thing never stops the rest of the sweep: a task file that
+// cannot be read (corrupt, or a schema version this build does not know) is
+// skipped on its own, and a project whose sweep fails is skipped as a
+// whole, while every other task and project is still processed. Each skip
+// is warned about in the Sweeper's log, once - again only if it changes or
+// is fixed and breaks anew. The returned error is only for failing to list
+// the projects at all.
+func (s *Sweeper) Tick(vexillumHome string, client herdr.Client) (int, error) {
 	roots, err := project.AllRoots(vexillumHome)
 	if err != nil {
 		return 0, fmt.Errorf("listing projects: %w", err)
 	}
 
+	problems := map[string]string{}
+	note := func(subject, line string) { problems[subject] = line }
+
 	woke := 0
 	for _, projectRoot := range roots {
-		n, err := tickProject(projectRoot, client)
+		n, err := tickProject(projectRoot, client, note)
 		woke += n
 		if err != nil {
-			return woke, err
+			note("project "+projectRoot, fmt.Sprintf("sentinel: warning: skipping project %s: %v", projectRoot, err))
 		}
 	}
+	s.warn(problems)
 	return woke, nil
+}
+
+// warn logs each problem not already logged with the same text, then
+// remembers exactly this tick's problems: one that cleared is forgotten, so
+// it is warned about again if it comes back.
+func (s *Sweeper) warn(problems map[string]string) {
+	subjects := make([]string, 0, len(problems))
+	for subject := range problems {
+		subjects = append(subjects, subject)
+	}
+	sort.Strings(subjects)
+	for _, subject := range subjects {
+		if line := problems[subject]; s.warned[subject] != line {
+			fmt.Fprintln(s.log, line)
+		}
+	}
+	s.warned = problems
 }
 
 // tickProject is Tick's per-project body: it never crosses project
 // boundaries, so a wake it records can only ever belong to the project
-// rooted at projectRoot.
-func tickProject(projectRoot string, client herdr.Client) (int, error) {
-	tasks, err := state.List(projectRoot)
+// rooted at projectRoot. Task files it has to skip are reported through
+// note and do not fail the project; the error is for the project's own
+// sweep failing.
+func tickProject(projectRoot string, client herdr.Client, note func(subject, line string)) (int, error) {
+	tasks, skipped, err := state.List(projectRoot)
 	if err != nil {
 		return 0, fmt.Errorf("listing tasks: %w", err)
+	}
+	for _, u := range skipped {
+		note("task "+u.Path, fmt.Sprintf("sentinel: warning: skipping unreadable task file: %v", u.Err))
 	}
 
 	if err := reopenActiveTasks(projectRoot, tasks, client); err != nil {
@@ -779,13 +830,23 @@ func wakeIsCurrent(projectRoot string, w Wake, leases func() map[string]bool) bo
 // the foreground of a long-lived background process the commander starts once
 // per machine.
 func Run(vexillumHome string, client herdr.Client, interval time.Duration, stdout io.Writer, retire func() string) (reason string) {
+	sweeper := NewSweeper(stdout)
+	lastErr := ""
 	for {
-		woke, err := Tick(vexillumHome, client)
+		woke, err := sweeper.Tick(vexillumHome, client)
 		switch {
 		case err != nil:
-			fmt.Fprintf(stdout, "sentinel: tick error: %v\n", err)
+			// Like a skipped file, a failure that persists is reported
+			// once, not on every tick.
+			if msg := err.Error(); msg != lastErr {
+				fmt.Fprintf(stdout, "sentinel: tick error: %v\n", err)
+				lastErr = msg
+			}
 		case woke > 0:
+			lastErr = ""
 			fmt.Fprintf(stdout, "sentinel: recorded %d wake(s)\n", woke)
+		default:
+			lastErr = ""
 		}
 		if retire != nil {
 			if reason := retire(); reason != "" {

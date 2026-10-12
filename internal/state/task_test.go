@@ -196,7 +196,7 @@ func TestList_ReturnsAllTasks(t *testing.T) {
 		t.Fatalf("Save scout: %v", err)
 	}
 
-	tasks, err := List(home)
+	tasks, _, err := List(home)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestList_ReturnsAllTasks(t *testing.T) {
 func TestList_EmptyWhenNoTasksDir(t *testing.T) {
 	home := t.TempDir()
 
-	tasks, err := List(home)
+	tasks, _, err := List(home)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -225,10 +225,10 @@ func TestList_EmptyWhenNoTasksDir(t *testing.T) {
 	}
 }
 
-// L2-08: List fails clearly, naming the offending file, when one of the
-// task files is corrupt - it doesn't skip it silently or return a partial
-// list.
-func TestList_FailsOnCorruptFile(t *testing.T) {
+// L2-08: List skips an unreadable task file instead of failing the whole
+// listing, hands back the healthy tasks, and names every skipped file with
+// the reason, so no task is hidden by a neighbour it shares a directory with.
+func TestList_SkipsUnreadableFilesAndReportsThem(t *testing.T) {
 	home := t.TempDir()
 	good, err := New(KindMission, "a healthy task")
 	if err != nil {
@@ -238,13 +238,37 @@ func TestList_FailsOnCorruptFile(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 	writeRawTask(t, home, "corrupt", []byte("not json at all"))
+	future := `{"schema_version":3,"id":"future","kind":"mission","status":"pending","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+	writeRawTask(t, home, "future", []byte(future))
 
-	_, err = List(home)
-	if err == nil {
-		t.Fatal("expected List to fail when a task file is corrupt")
+	tasks, skipped, err := List(home)
+	if err != nil {
+		t.Fatalf("List must not fail on an unreadable task file: %v", err)
 	}
-	if !strings.Contains(err.Error(), "corrupt.json") {
-		t.Errorf("expected error to name the corrupt file, got: %v", err)
+	if len(tasks) != 1 || tasks[0].ID != good.ID {
+		t.Fatalf("expected only the healthy task, got %+v", tasks)
+	}
+	if len(skipped) != 2 {
+		t.Fatalf("expected 2 skipped files, got %+v", skipped)
+	}
+	// os.ReadDir order is by name: corrupt.json, then future.json.
+	if !strings.HasSuffix(skipped[0].Path, "corrupt.json") || !strings.Contains(skipped[0].Err.Error(), "corrupt.json") {
+		t.Errorf("expected the corrupt file named in the first skip, got %+v", skipped[0])
+	}
+	if !strings.HasSuffix(skipped[1].Path, "future.json") || !strings.Contains(skipped[1].Err.Error(), "unsupported schema version 3") {
+		t.Errorf("expected the schema version named in the second skip, got %+v", skipped[1])
+	}
+}
+
+// A tasks path that is not a directory is not "no tasks": it is the one
+// listing failure List still reports as an error.
+func TestList_ErrorsWhenTasksDirIsUnreadable(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "tasks"), []byte("junk"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, _, err := List(home); err == nil {
+		t.Fatal("expected List to fail when the tasks path is not a directory")
 	}
 }
 

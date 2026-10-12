@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -218,9 +219,10 @@ func TestStatus_PlainText_ShowsBlockedQuestion(t *testing.T) {
 	}
 }
 
-// A corrupt task file is surfaced as an error, not silently dropped or
-// papered over - the same posture state.List itself takes.
-func TestStatus_CorruptTaskFileIsAnError(t *testing.T) {
+// A task file vx cannot read (corrupt, or another schema version) is
+// skipped with a warning on stderr: it must not hide the healthy tasks
+// next to it, and it is never dropped without a word.
+func TestStatus_UnreadableTaskFileIsSkippedWithAWarning(t *testing.T) {
 	projectDir, vexillumHome, projectRoot := statusProject(t)
 	saveTask(t, projectRoot, nil)
 
@@ -228,15 +230,28 @@ func TestStatus_CorruptTaskFileIsAnError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(tasksDir, "corrupt.json"), []byte("not json"), 0o644); err != nil {
 		t.Fatalf("writing corrupt task file: %v", err)
 	}
+	future := `{"schema_version":3,"id":"future","kind":"mission","status":"running","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(tasksDir, "future.json"), []byte(future), 0o644); err != nil {
+		t.Fatalf("writing future task file: %v", err)
+	}
 
 	var out, errOut bytes.Buffer
 	code := runStatus(projectDir, vexillumHome, true, &out, &errOut)
 
-	if code == 0 {
-		t.Fatalf("expected non-zero exit for a corrupt task file, got 0")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, errOut.String())
 	}
-	if errOut.Len() == 0 {
-		t.Errorf("expected an error message on stderr")
+	var snapshot statusSnapshot
+	if err := json.Unmarshal(out.Bytes(), &snapshot); err != nil {
+		t.Fatalf("stdout is not a valid snapshot: %v\n%s", err, out.String())
+	}
+	if len(snapshot.Tasks) != 1 {
+		t.Errorf("expected the one healthy task, got %d", len(snapshot.Tasks))
+	}
+	for _, want := range []string{"corrupt.json", "future.json", "unsupported schema version 3"} {
+		if !strings.Contains(errOut.String(), want) {
+			t.Errorf("expected stderr to mention %q, got:\n%s", want, errOut.String())
+		}
 	}
 }
 

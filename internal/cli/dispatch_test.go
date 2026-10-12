@@ -291,7 +291,7 @@ func TestRunDispatch_FinalSaveFails_DoesNotOverwriteRealOutcome(t *testing.T) {
 		t.Fatalf("restoring tasks dir permissions: %v", err)
 	}
 
-	tasks, err := state.List(projectRoot)
+	tasks, _, err := state.List(projectRoot)
 	if err != nil {
 		t.Fatalf("state.List: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestRunDispatch_PersistingAcquiredCampFails_SlotIsStruck(t *testing.T) {
 		t.Fatalf("restoring tasks dir permissions: %v", err)
 	}
 
-	tasks, err := state.List(projectRoot)
+	tasks, _, err := state.List(projectRoot)
 	if err != nil {
 		t.Fatalf("state.List: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestRunDispatch_CreateTabFails_TaskIsRecoverable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("project.Root: %v", err)
 	}
-	tasks, err := state.List(projectRoot)
+	tasks, _, err := state.List(projectRoot)
 	if err != nil {
 		t.Fatalf("state.List: %v", err)
 	}

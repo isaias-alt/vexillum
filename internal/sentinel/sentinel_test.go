@@ -1,6 +1,7 @@
 package sentinel_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1943,5 +1944,121 @@ func TestDrain_ConcurrentDrainsDeliverEachWakeOnce(t *testing.T) {
 		if n != 1 {
 			t.Errorf("wake for %s delivered %d times, want exactly once", id, n)
 		}
+	}
+}
+
+// writeFutureSchemaTask drops a task file written by a newer vexillum into
+// proj's tasks/, the way an unreadable file shows up in the wild.
+func writeFutureSchemaTask(t *testing.T, proj string) string {
+	t.Helper()
+	dir := filepath.Join(proj, "tasks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "future.json")
+	body := `{"schema_version":3,"id":"future","kind":"mission","status":"running","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// An unreadable task file in one project (here a newer schema version, the
+// field case: "unsupported schema version 3 (expected 0)") used to abort the
+// whole Tick, so a soldier finishing in a healthy project stayed running
+// forever. The healthy project's soldier must still settle, and so must a
+// healthy task sitting beside the unreadable file.
+func TestTick_UnreadableTaskFileDoesNotBlockHealthyTasks(t *testing.T) {
+	home := t.TempDir()
+	broken := projectRoot(home, "aaa-broken") // sweeps before the healthy project
+	healthy := projectRoot(home, "zzz-healthy")
+	writeFutureSchemaTask(t, broken)
+	sibling := newRunningTask(t, broken, "vx-sibling")
+	task := newRunningTask(t, healthy, "vx-healthy")
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-sibling": "done", "vx-healthy": "done"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick must not fail on an unreadable task file: %v", err)
+	}
+	if woke != 2 {
+		t.Errorf("expected 2 wakes, got %d", woke)
+	}
+	for _, c := range []struct {
+		root string
+		id   string
+	}{{healthy, task.ID}, {broken, sibling.ID}} {
+		got, err := state.Load(c.root, c.id)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if got.Status != state.StatusDone {
+			t.Errorf("task %s in %s: expected done, got %s", c.id, c.root, got.Status)
+		}
+	}
+}
+
+// A project whose sweep fails outright (here: tasks/ is a file, so it cannot
+// be listed) is skipped; the projects after it are still processed.
+func TestTick_UnreadableProjectDoesNotBlockOtherProjects(t *testing.T) {
+	home := t.TempDir()
+	badRoot := projectRoot(home, "aaa-bad")
+	if err := os.MkdirAll(badRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(badRoot, "tasks"), []byte("junk"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	healthy := projectRoot(home, "zzz-healthy")
+	task := newRunningTask(t, healthy, "vx-healthy")
+
+	var log bytes.Buffer
+	client := &fakeHerdr{statuses: map[string]string{"vx-healthy": "done"}}
+	woke, err := sentinel.NewSweeper(&log).Tick(home, client)
+	if err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+	got, _ := state.Load(healthy, task.ID)
+	if got.Status != state.StatusDone {
+		t.Errorf("expected the healthy project's task done, got %s", got.Status)
+	}
+	if !strings.Contains(log.String(), "skipping project "+badRoot) {
+		t.Errorf("expected a warning naming the skipped project, got %q", log.String())
+	}
+}
+
+// The sentinel polls every few seconds: a file that stays unreadable is
+// warned about once, not once per tick, and warned about again if it is
+// fixed and later breaks again.
+func TestSweeper_WarnsOncePerProblem(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	path := writeFutureSchemaTask(t, proj)
+	client := &fakeHerdr{}
+
+	var log bytes.Buffer
+	sweeper := sentinel.NewSweeper(&log)
+	for i := 0; i < 3; i++ {
+		if _, err := sweeper.Tick(home, client); err != nil {
+			t.Fatalf("Tick %d: %v", i, err)
+		}
+	}
+	warning := "sentinel: warning: skipping unreadable task file: " + path + ": unsupported schema version 3 (expected 0)\n"
+	if log.String() != warning {
+		t.Fatalf("expected exactly one warning across 3 ticks:\nwant %q\n got %q", warning, log.String())
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sweeper.Tick(home, client); err != nil {
+		t.Fatalf("Tick after fix: %v", err)
+	}
+	writeFutureSchemaTask(t, proj)
+	if _, err := sweeper.Tick(home, client); err != nil {
+		t.Fatalf("Tick after re-break: %v", err)
+	}
+	if got := strings.Count(log.String(), "unsupported schema version 3"); got != 2 {
+		t.Errorf("expected the re-broken file to be warned about again (2 warnings total), got %d:\n%s", got, log.String())
 	}
 }
