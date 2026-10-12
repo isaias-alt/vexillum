@@ -14,7 +14,7 @@ set -euo pipefail
 #                             release and never a pre-release; canary installs
 #                             the latest canary build, by direct download
 #   --version <tag>           install exactly this release, for example v0.1.0
-#                             or v0.1.1-rc.1, by direct download. The leading
+#                             or v0.1.1, by direct download. The leading
 #                             "v" is optional. Cannot be combined with --channel
 #   -h, --help                print this help
 #
@@ -55,7 +55,7 @@ Usage: install.sh [--channel stable|canary] [--version <tag>]
                             canary build by direct download, without Homebrew
                             and with no stability promise.
   --version <tag>           install exactly this release (for example v0.1.0 or
-                            v0.1.1-rc.1) by direct download, without Homebrew.
+                            v0.1.1) by direct download, without Homebrew.
                             Cannot be combined with --channel.
   -h, --help                print this help
 USAGE
@@ -88,7 +88,7 @@ parse_args() {
     fi
     if [ -n "$version" ]; then
         printf '%s' "$version" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
-            || fatal "Invalid version: ${version} (want a release tag such as v0.1.0 or v0.1.1-rc.1)"
+            || fatal "Invalid version: ${version} (want a release tag such as v0.1.0 or v0.1.1)"
         REQUESTED_VERSION="v${version#v}"
     fi
 }
