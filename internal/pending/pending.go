@@ -158,41 +158,40 @@ func Add(projectRoot, text string, options []string, recommended int) (Item, err
 	return item, nil
 }
 
-// List returns every pending decision, oldest first (ties by id). A
-// missing directory yields an empty list. A corrupt file fails the whole
-// listing with an error naming it, same as state.List, rather than being
-// silently skipped.
-func List(projectRoot string) ([]Item, error) {
+// Unreadable names a pending decision file List could not load. Err
+// already carries the file's path.
+type Unreadable struct {
+	Path string
+	Err  error
+}
+
+// List returns every readable pending decision, oldest first (ties by id),
+// and one Unreadable for each file it had to skip (corrupt, incomplete,
+// out-of-range recommendation or an unsupported schema version). One bad
+// file never hides the healthy decisions beside it, but it is never dropped
+// silently either: the caller decides how to surface the skipped files, same
+// as state.List. A missing directory yields an empty list; the error is only
+// for a pending directory that cannot be listed at all.
+func List(projectRoot string) ([]Item, []Unreadable, error) {
 	entries, err := os.ReadDir(dir(projectRoot))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, fmt.Errorf("listing pending decisions: %w", err)
+		return nil, nil, fmt.Errorf("listing pending decisions: %w", err)
 	}
 
 	var items []Item
+	var skipped []Unreadable
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
 		p := filepath.Join(dir(projectRoot), entry.Name())
-		data, err := os.ReadFile(p)
+		item, err := load(p)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", p, err)
-		}
-		var item Item
-		if err := json.Unmarshal(data, &item); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", p, err)
-		}
-		if item.ID == "" || item.Text == "" {
-			return nil, fmt.Errorf("%s: incomplete pending decision (missing id or text)", p)
-		}
-		if !schemaver.Supported(item.SchemaVersion) {
-			return nil, fmt.Errorf("%s: unsupported schema version %d (expected %d)", p, item.SchemaVersion, SchemaVersion)
-		}
-		if err := validateRecommended(len(item.Options), item.Recommended); err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
+			skipped = append(skipped, Unreadable{Path: p, Err: err})
+			continue
 		}
 		items = append(items, item)
 	}
@@ -203,7 +202,29 @@ func List(projectRoot string) ([]Item, error) {
 		}
 		return items[i].ID < items[j].ID
 	})
-	return items, nil
+	return items, skipped, nil
+}
+
+// load reads and validates one pending decision file. Every error names p.
+func load(p string) (Item, error) {
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return Item{}, fmt.Errorf("reading %s: %w", p, err)
+	}
+	var item Item
+	if err := json.Unmarshal(data, &item); err != nil {
+		return Item{}, fmt.Errorf("parsing %s: %w", p, err)
+	}
+	if item.ID == "" || item.Text == "" {
+		return Item{}, fmt.Errorf("%s: incomplete pending decision (missing id or text)", p)
+	}
+	if !schemaver.Supported(item.SchemaVersion) {
+		return Item{}, fmt.Errorf("%s: unsupported schema version %d (expected %d)", p, item.SchemaVersion, SchemaVersion)
+	}
+	if err := validateRecommended(len(item.Options), item.Recommended); err != nil {
+		return Item{}, fmt.Errorf("%s: %w", p, err)
+	}
+	return item, nil
 }
 
 // Clear removes the pending decision with the given id. It wraps

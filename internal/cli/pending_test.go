@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -156,5 +158,40 @@ func TestPending_AddDoubleDashEndsFlags(t *testing.T) {
 	_, out, _ := runPendingT(t, project, home, "list")
 	if !strings.Contains(out, "drop the --force flag?") {
 		t.Errorf("list = %q, want the text after -- kept verbatim", out)
+	}
+}
+
+// A pending file vx cannot read must not hide the healthy decisions next to
+// it: list shows them, exits 0, and warns on stderr naming the bad file.
+func TestPending_ListSkipsUnreadableFileWithAWarning(t *testing.T) {
+	project, home := t.TempDir(), t.TempDir()
+	if code, _, errOut := runPendingT(t, project, home, "add", "healthy decision"); code != 0 {
+		t.Fatalf("add = %d %q", code, errOut)
+	}
+	dirs, err := filepath.Glob(filepath.Join(home, "projects", "*", "pending"))
+	if err != nil || len(dirs) != 1 {
+		t.Fatalf("locating the pending dir: %v %v", dirs, err)
+	}
+	if err := os.WriteFile(filepath.Join(dirs[0], "00000000.json"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	future := `{"schema_version":3,"id":"1a2b3c4d","text":"x","created_at":"2026-01-01T00:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(dirs[0], "1a2b3c4d.json"), []byte(future), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := runPendingT(t, project, home, "list")
+	if code != 0 || !strings.Contains(out, "healthy decision") {
+		t.Fatalf("list = %d %q %q, want the healthy decision and exit 0", code, out, errOut)
+	}
+	for _, want := range []string{"00000000.json", "1a2b3c4d.json", "unsupported schema version 3"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("stderr should mention %q, got:\n%s", want, errOut)
+		}
+	}
+
+	code, out, errOut = runPendingT(t, project, home, "list", "--json")
+	if code != 0 || !json.Valid([]byte(out)) || !strings.Contains(out, "healthy decision") || !strings.Contains(errOut, "00000000.json") {
+		t.Fatalf("list --json = %d %q %q", code, out, errOut)
 	}
 }

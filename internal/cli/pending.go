@@ -199,9 +199,15 @@ func runPending(projectDir, vexillumHome string, args []string, stdout, stderr i
 		}
 		fmt.Fprintf(stdout, "cleared pending decision %s\n", id)
 	case "list":
-		items, err := pending.List(projectRoot)
+		items, skipped, err := pending.List(projectRoot)
 		if err != nil {
 			return fail(err)
+		}
+		// One unreadable pending file must not hide the rest: warn on
+		// stderr (stdout stays the plain list or the JSON snapshot) and
+		// show what could be read.
+		for _, u := range skipped {
+			fmt.Fprintf(stderr, cmdname.Name+": warning: skipping unreadable pending decision file: %v\n", u.Err)
 		}
 		if items == nil {
 			// Same reasoning as status --json: no "null" for an empty list.

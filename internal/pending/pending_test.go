@@ -31,7 +31,7 @@ func TestAddListClear_RoundTrip(t *testing.T) {
 	}
 
 	// Reload strictly from disk: oldest first.
-	items, err := pending.List(root)
+	items, _, err := pending.List(root)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestAddListClear_RoundTrip(t *testing.T) {
 	if err := pending.Clear(root, a.ID); err != nil {
 		t.Fatalf("Clear: %v", err)
 	}
-	items, err = pending.List(root)
+	items, _, err = pending.List(root)
 	if err != nil {
 		t.Fatalf("List after clear: %v", err)
 	}
@@ -55,9 +55,9 @@ func TestAddListClear_RoundTrip(t *testing.T) {
 }
 
 func TestList_MissingDirIsEmpty(t *testing.T) {
-	items, err := pending.List(filepath.Join(t.TempDir(), "nope"))
-	if err != nil || len(items) != 0 {
-		t.Fatalf("List = %v, %v; want empty, nil", items, err)
+	items, skipped, err := pending.List(filepath.Join(t.TempDir(), "nope"))
+	if err != nil || len(items) != 0 || len(skipped) != 0 {
+		t.Fatalf("List = %v, %v, %v; want empty, nil", items, skipped, err)
 	}
 }
 
@@ -95,18 +95,39 @@ func TestClear_UnknownAndInvalidIDs(t *testing.T) {
 	}
 }
 
-func TestList_CorruptFileNamesIt(t *testing.T) {
+// One corrupt file is skipped and named, and the healthy decision beside it
+// is still listed.
+func TestList_SkipsCorruptFileAndNamesIt(t *testing.T) {
 	root := t.TempDir()
-	if _, err := pending.Add(root, "ok", nil, 0); err != nil {
+	good, err := pending.Add(root, "ok", nil, 0)
+	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	bad := filepath.Join(root, "pending", "00000000.json")
 	if err := os.WriteFile(bad, []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := pending.List(root)
-	if err == nil || !strings.Contains(err.Error(), "00000000.json") {
-		t.Fatalf("List error = %v, want one naming the corrupt file", err)
+	items, skipped, err := pending.List(root)
+	if err != nil {
+		t.Fatalf("List must not fail on a corrupt file: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != good.ID {
+		t.Fatalf("items = %+v, want only the healthy decision", items)
+	}
+	if len(skipped) != 1 || skipped[0].Path != bad || !strings.Contains(skipped[0].Err.Error(), "00000000.json") {
+		t.Fatalf("skipped = %+v, want the corrupt file named", skipped)
+	}
+}
+
+// A pending path that is not a directory is not "no decisions": it is the
+// one listing failure List still reports as an error.
+func TestList_ErrorsWhenPendingDirIsUnreadable(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pending"), []byte("junk"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := pending.List(root); err == nil {
+		t.Fatal("expected List to fail when the pending path is not a directory")
 	}
 }
 
@@ -119,7 +140,7 @@ func TestAdd_WithOptionsRoundTrips(t *testing.T) {
 	if len(a.Options) != 2 || a.Options[0] != "ship now" || a.Recommended != 1 {
 		t.Fatalf("Add = %+v, want trimmed options and recommended 1", a)
 	}
-	items, err := pending.List(root)
+	items, _, err := pending.List(root)
 	if err != nil || len(items) != 1 {
 		t.Fatalf("List = %v, %v", items, err)
 	}
@@ -145,7 +166,7 @@ func TestAdd_RejectsBadOptions(t *testing.T) {
 		if _, err := pending.Add(root, "q", c.options, c.recommended); err == nil {
 			t.Errorf("%s: expected an error", c.name)
 		}
-		if items, _ := pending.List(root); len(items) != 0 {
+		if items, _, _ := pending.List(root); len(items) != 0 {
 			t.Errorf("%s: a rejected item was saved: %+v", c.name, items)
 		}
 	}
@@ -163,7 +184,7 @@ func TestList_ReadsItemWithoutOptions(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "1a2b3c4d.json"), []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	items, err := pending.List(root)
+	items, _, err := pending.List(root)
 	if err != nil || len(items) != 1 {
 		t.Fatalf("List = %v, %v", items, err)
 	}
@@ -182,8 +203,12 @@ func TestList_RejectsRecommendedOutOfRange(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "1a2b3c4d.json"), []byte(bad), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pending.List(root); err == nil || !strings.Contains(err.Error(), "1a2b3c4d.json") {
-		t.Fatalf("List error = %v, want one naming the file", err)
+	items, skipped, err := pending.List(root)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("List = %v, %v", items, err)
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0].Err.Error(), "1a2b3c4d.json") {
+		t.Fatalf("skipped = %+v, want one naming the file", skipped)
 	}
 }
 
@@ -197,7 +222,11 @@ func TestList_RefusesFutureSchemaVersion(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "1a2b3c4d.json"), []byte(future), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pending.List(root); err == nil || !strings.Contains(err.Error(), "schema version 2") {
-		t.Errorf("List error = %v, want an unsupported schema version error", err)
+	items, skipped, err := pending.List(root)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("List = %v, %v", items, err)
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0].Err.Error(), "schema version 2") {
+		t.Errorf("skipped = %+v, want an unsupported schema version error", skipped)
 	}
 }
