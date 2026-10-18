@@ -1562,6 +1562,43 @@ func TestTick_BlockedTransitionUsesModalParserWhenVisibleCaptureMatches(t *testi
 	}
 }
 
+// A pi soldier blocked per herdr is read as prose even when the visible pane
+// would parse as Claude Code's selector: Pi has no such modal, so its
+// decision is never one a digit key press could answer.
+func TestTick_PiBlockedTransitionIsAlwaysProse(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+	task.Harness = "pi"
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	client := &fakeHerdr{
+		statuses:          map[string]string{"vx-do-the-thing": "blocked"},
+		readOutput:        "Which cloud provider should this deploy to?\n\n1. AWS\n2. GCP\n",
+		readVisibleOutput: askUserQuestionCapture,
+	}
+
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusBlocked {
+		t.Fatalf("status = %s, want blocked", persisted.Status)
+	}
+	if persisted.Decision == nil || persisted.Decision.Kind != state.DecisionKindProse {
+		t.Fatalf("expected a prose-shaped decision for a pi soldier, got %+v", persisted.Decision)
+	}
+	if persisted.Decision.Question != "Which cloud provider should this deploy to?" {
+		t.Errorf("Question = %q", persisted.Decision.Question)
+	}
+}
+
 // A mission that goes idle/done but left a needs-decision: line in its
 // fresh output is recorded Blocked, not Done - the only way a plain-prose
 // question (no AskUserQuestion tool call) can reach StatusBlocked at all,

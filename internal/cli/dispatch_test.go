@@ -273,7 +273,7 @@ func TestRunDispatch_PersistsTheHarness(t *testing.T) {
 // A reserved harness with no implementation is refused before a camp is
 // acquired or a task written, with a clear error.
 func TestRunDispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
-	for _, harness := range []string{"pi", "opencode", "gemini"} {
+	for _, harness := range []string{"opencode", "gemini"} {
 		t.Run(harness, func(t *testing.T) {
 			project := initDispatchTestProject(t)
 			if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
@@ -305,15 +305,16 @@ func TestRunDispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
 	}
 }
 
-// resolveProfile hands the profile's harness back, and a profile naming a
-// reserved harness fails the model/effort validation Dispatch runs next.
+// resolveProfile hands the profile's harness back; a pi profile passes the
+// model/effort validation Dispatch runs next, and one naming a reserved
+// harness fails it.
 func TestResolveProfile_Harness(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(project, ".vexillum"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	models := `{"profiles": {"pi-scout": {"model": "m", "effort": "e", "when": "x", "harness": "pi"}, "mission-big": {"harness": "claude"}}}`
+	models := `{"profiles": {"pi-scout": {"model": "anthropic/claude-haiku-4-5", "effort": "low", "when": "x", "harness": "pi"}, "oc-scout": {"model": "m", "effort": "e", "when": "x", "harness": "opencode"}, "mission-big": {"harness": "claude"}}}`
 	if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(models), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -334,8 +335,20 @@ func TestResolveProfile_Harness(t *testing.T) {
 	if err != nil || h != "pi" {
 		t.Fatalf("pi-scout = %q %q %q, %v", m, e, h, err)
 	}
+	if err := soldier.ValidateModelEffort(h, m, e); err != nil {
+		t.Errorf("validating the pi profile: %v", err)
+	}
+	// An explicit --model still wins over the profile, and is validated as pi's.
+	m, e, h, _ = resolveProfile(project, home, "pi-scout", "sonnet", "")
+	if err := soldier.ValidateModelEffort(h, m, e); err == nil || !strings.Contains(err.Error(), "provider/id") {
+		t.Errorf("a claude alias on a pi profile: got %v, want a provider/id error", err)
+	}
+	m, e, h, err = resolveProfile(project, home, "oc-scout", "", "")
+	if err != nil || h != "opencode" {
+		t.Fatalf("oc-scout = %q %q %q, %v", m, e, h, err)
+	}
 	if err := soldier.ValidateModelEffort(h, m, e); err == nil || !strings.Contains(err.Error(), "not implemented yet") {
-		t.Errorf("validating the pi profile: got %v, want a not-implemented error", err)
+		t.Errorf("validating the opencode profile: got %v, want a not-implemented error", err)
 	}
 }
 

@@ -70,7 +70,7 @@ func TestRunModelsShowsAnExplicitHarness(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(project, ".vexillum"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	models := `{"profiles": {"mission-big": {"harness": "claude"}, "pi-scout": {"model": "m", "effort": "e", "when": "x", "harness": "pi"}}}`
+	models := `{"profiles": {"mission-big": {"harness": "claude"}, "pi-scout": {"model": "openai/gpt-5", "effort": "low", "when": "x", "harness": "pi"}}}`
 	if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(models), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestRunModelsShowsAnExplicitHarness(t *testing.T) {
 	if code := runModels(project, home, &out, &errOut); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut.String())
 	}
-	for _, want := range []string{"mission-big  (sonnet, high, harness claude)", "pi-scout  (m, e, harness pi)", "scout-facts  (haiku, low)\n"} {
+	for _, want := range []string{"mission-big  (sonnet, high, harness claude)", "pi-scout  (openai/gpt-5, low, harness pi)", "scout-facts  (haiku, low)\n"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output missing %q:\n%s", want, out.String())
 		}

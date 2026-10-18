@@ -317,7 +317,7 @@ func TestRunRedispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("project.Root: %v", err)
 	}
-	task.Harness = "pi"
+	task.Harness = "opencode"
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestRunRedispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
 	if code := runRedispatch(project, home, "w1", task.ID, client, &out, &out); code == 0 {
 		t.Fatal("expected a non-zero exit")
 	}
-	if !strings.Contains(out.String(), "pi") || !strings.Contains(out.String(), "not implemented yet") {
+	if !strings.Contains(out.String(), "opencode") || !strings.Contains(out.String(), "not implemented yet") {
 		t.Errorf("expected a clear error naming the harness, got: %s", out.String())
 	}
 	reloaded, err := state.Load(projectRoot, task.ID)
