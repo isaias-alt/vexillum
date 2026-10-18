@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
@@ -314,6 +315,63 @@ func Save(projectRoot string, t Task) error {
 		return fmt.Errorf("saving task %s: %w", t.ID, err)
 	}
 	return nil
+}
+
+// Update is a locked read-modify-write of one task: it loads the task, hands
+// it to fn, and saves it when fn reports true. The lock is an exclusive flock
+// on <project root>/tasks/.lock, held across the load, fn and the save, so two
+// Update calls on the same project never interleave - across processes too,
+// which is the point: the sentinel and a command like "vx land" both move a
+// task, and the one that loaded its copy first must not overwrite the other's
+// write with it. fn sees the record as it is on disk right now, not a
+// snapshot taken earlier, and must stay short (no herdr or git calls): it
+// holds the lock for every task of the project.
+//
+// Only Update callers exclude each other; a plain Save takes no lock. A task
+// that does not exist yields an error wrapping os.ErrNotExist without calling
+// fn. Update reports whether it saved.
+func Update(projectRoot, id string, fn func(*Task) (bool, error)) (bool, error) {
+	unlock, err := lockTasks(projectRoot)
+	if err != nil {
+		return false, err
+	}
+	defer unlock()
+
+	task, err := Load(projectRoot, id)
+	if err != nil {
+		return false, err
+	}
+	save, err := fn(&task)
+	if err != nil || !save {
+		return false, err
+	}
+	if err := Save(projectRoot, task); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// lockTasks takes the exclusive lock Update holds. flock releases itself if
+// the holding process dies mid-section, so a crash never leaves other callers
+// blocked on a stale lock. The ".lock" name does not end in ".json", so List
+// never mistakes it for a task.
+func lockTasks(projectRoot string) (unlock func(), err error) {
+	dir := tasksDir(projectRoot)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("creating tasks directory: %w", err)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("opening tasks lock: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("locking tasks: %w", err)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
 }
 
 // ownedKeys is every top-level JSON key Task declares.

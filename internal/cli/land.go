@@ -133,26 +133,26 @@ func runLand(projectDir, vexillumHome, taskID string, client herdr.Client, stdou
 // recordLanded settles the task record of a mission that has just landed.
 // A task that was settled and then asked for more work (a rebase, say) is
 // running again when the commander lands it, and a running task whose pane
-// is gone is exactly what the sentinel marks interrupted. The task is
-// re-read first so a sentinel write since land started is not undone. Only
+// is gone is exactly what the sentinel marks interrupted. The record is
+// updated under the tasks lock from what is on disk now, so a sentinel write
+// since land started is neither undone nor left to overwrite this one. Only
 // the open states move to done, the state a landed mission rests in; a
 // terminal one (interrupted, failed, struck, shipped) is left alone.
 func recordLanded(projectRoot, taskID string) error {
-	task, err := state.Load(projectRoot, taskID)
+	_, err := state.Update(projectRoot, taskID, func(task *state.Task) (bool, error) {
+		switch task.Status {
+		case state.StatusRunning, state.StatusBlocked, state.StatusUnconfirmed:
+		default:
+			return false, nil
+		}
+		task.Status = state.StatusDone
+		task.UpdatedAt = time.Now().UTC()
+		task.IdleUnconfirmedSince = time.Time{}
+		task.AgentNotFoundSince = time.Time{}
+		return true, nil
+	})
 	if err != nil {
-		return fmt.Errorf("reloading task: %w", err)
-	}
-	switch task.Status {
-	case state.StatusRunning, state.StatusBlocked, state.StatusUnconfirmed:
-	default:
-		return nil
-	}
-	task.Status = state.StatusDone
-	task.UpdatedAt = time.Now().UTC()
-	task.IdleUnconfirmedSince = time.Time{}
-	task.AgentNotFoundSince = time.Time{}
-	if err := state.Save(projectRoot, task); err != nil {
-		return fmt.Errorf("saving task: %w", err)
+		return fmt.Errorf("recording task: %w", err)
 	}
 	return nil
 }

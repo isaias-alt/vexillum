@@ -2,10 +2,12 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -519,5 +521,115 @@ func TestLoad_RefusesVersionJustPastLegacy(t *testing.T) {
 	writeRawTask(t, home, "deadbeef", []byte(`{"schema_version":4,"id":"deadbeef","kind":"mission","status":"pending","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`))
 	if _, err := Load(home, "deadbeef"); err == nil {
 		t.Fatal("expected an error loading schema_version 4")
+	}
+}
+
+// Update saves what fn changed, from the record on disk at that moment.
+func TestUpdate_SavesWhatTheCallbackChanged(t *testing.T) {
+	root := t.TempDir()
+	task, err := New(KindMission, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(root, task); err != nil {
+		t.Fatal(err)
+	}
+
+	saved, err := Update(root, task.ID, func(cur *Task) (bool, error) {
+		cur.Status = StatusDone
+		return true, nil
+	})
+	if err != nil || !saved {
+		t.Fatalf("Update: saved=%v err=%v", saved, err)
+	}
+	got, err := Load(root, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusDone {
+		t.Errorf("expected done, got %s", got.Status)
+	}
+}
+
+// A callback that reports false changes nothing, even if it edited its copy.
+func TestUpdate_LeavesTheRecordAloneWhenTheCallbackDeclines(t *testing.T) {
+	root := t.TempDir()
+	task, err := New(KindMission, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(root, task); err != nil {
+		t.Fatal(err)
+	}
+
+	saved, err := Update(root, task.ID, func(cur *Task) (bool, error) {
+		cur.Status = StatusFailed
+		return false, nil
+	})
+	if err != nil || saved {
+		t.Fatalf("Update: saved=%v err=%v", saved, err)
+	}
+	got, err := Load(root, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusPending {
+		t.Errorf("expected the record untouched, got %s", got.Status)
+	}
+}
+
+// A missing task is reported as not existing and never reaches the callback;
+// the lock file Update takes is not mistaken for a task.
+func TestUpdate_MissingTask(t *testing.T) {
+	root := t.TempDir()
+	called := false
+	_, err := Update(root, "0123456789abcdef", func(*Task) (bool, error) {
+		called = true
+		return true, nil
+	})
+	if !errors.Is(err, os.ErrNotExist) || called {
+		t.Fatalf("expected a not-exist error without calling fn, got err=%v called=%v", err, called)
+	}
+	tasks, skipped, err := List(root)
+	if err != nil || len(tasks) != 0 || len(skipped) != 0 {
+		t.Errorf("expected the lock file to be invisible to List, got %v %v %v", tasks, skipped, err)
+	}
+}
+
+// Concurrent read-modify-writes must not lose updates: each Update sees the
+// result of the one before it.
+func TestUpdate_SerializesConcurrentCallers(t *testing.T) {
+	root := t.TempDir()
+	task, err := New(KindMission, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(root, task); err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 16
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := Update(root, task.ID, func(cur *Task) (bool, error) {
+				cur.Redispatches++
+				return true, nil
+			})
+			if err != nil {
+				t.Errorf("Update: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	got, err := Load(root, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Redispatches != workers {
+		t.Errorf("expected %d increments, got %d", workers, got.Redispatches)
 	}
 }

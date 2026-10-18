@@ -1725,6 +1725,80 @@ func TestTick_ReopensSettledTaskWhenItsAgentIsWorkingAgain(t *testing.T) {
 	}
 }
 
+// probeHook is a herdr whose AgentStatus runs a callback after the pane has
+// answered "working", as a slow herdr call does while another command runs.
+type probeHook struct {
+	fakeHerdr
+	during func()
+}
+
+func (p *probeHook) AgentStatus(name string) (string, error) {
+	status, err := p.fakeHerdr.AgentStatus(name)
+	if p.during != nil {
+		during := p.during
+		p.during = nil
+		during()
+	}
+	return status, err
+}
+
+// The race: the sentinel saw a settled task whose pane was working and was
+// about to reopen it, and "vx land" struck the camp (closing the pane) in
+// the meantime. Reopening from the stale snapshot would leave a running
+// record for a pane that is gone, which the sentinel then marks interrupted.
+// The landed record must stay as it is.
+func TestTick_ReopenYieldsToACampStruckDuringTheProbe(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := savedTask(t, proj, state.StatusDone)
+	leaseCamp(t, proj, task.ID)
+
+	client := &probeHook{
+		fakeHerdr: fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}},
+		during:    func() { strikeCamp(t, proj) },
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if got.Status != state.StatusDone {
+		t.Fatalf("expected the struck task to stay done, got %s", got.Status)
+	}
+}
+
+// The same guard against a record that moved: a task another command
+// changed since the sentinel listed it is not reopened over that change.
+func TestTick_ReopenYieldsToATaskMovedDuringTheProbe(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := savedTask(t, proj, state.StatusDone)
+	leaseCamp(t, proj, task.ID)
+
+	client := &probeHook{
+		fakeHerdr: fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "working"}},
+		during: func() {
+			moved := task
+			moved.Status = state.StatusStruck
+			if err := state.Save(proj, moved); err != nil {
+				t.Errorf("state.Save: %v", err)
+			}
+		},
+	}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if got.Status != state.StatusStruck {
+		t.Fatalf("expected the moved task left alone, got %s", got.Status)
+	}
+}
+
 func TestTick_ReopensBlockedUnconfirmedAndShippedTasksToo(t *testing.T) {
 	for _, status := range []state.Status{state.StatusBlocked, state.StatusUnconfirmed, state.StatusShipped} {
 		t.Run(string(status), func(t *testing.T) {

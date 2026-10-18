@@ -132,3 +132,68 @@ func TestRunLand_LeavesATerminalRecordAlone(t *testing.T) {
 		t.Errorf("expected the done record untouched, got %s updated %s (was %s)", got.Status, got.UpdatedAt, updatedAt)
 	}
 }
+
+// raceHerdr lands the mission while the sentinel is probing its pane: the
+// pane still answers "working", but by the time the sentinel writes, the
+// camp is struck and the pane closed.
+type raceHerdr struct {
+	goneHerdr
+	during func()
+}
+
+func (r *raceHerdr) AgentStatus(name string) (string, error) {
+	if r.during != nil {
+		during := r.during
+		r.during = nil
+		during()
+		return "working", nil
+	}
+	return r.goneHerdr.AgentStatus(name)
+}
+
+// A settled mission whose soldier was prompted by hand (the record still says
+// done, the pane is working) is landed while the sentinel is probing it for
+// the reopen. The sentinel must not reopen the record over the land: it would
+// be running with no pane and turn interrupted. The landed record stays done
+// through every later pass.
+func TestRunLand_SentinelReopenDoesNotUndoTheLand(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.HerdrAgentName = "vx-do-a-thing"
+	task.HerdrTabID = "T1"
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &raceHerdr{}
+	client.during = func() {
+		var stdout, stderr bytes.Buffer
+		if code := runLand(project, home, task.ID, &client.goneHerdr, &stdout, &stderr); code != 0 {
+			t.Errorf("land failed (%d): %s%s", code, stdout.String(), stderr.String())
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+			t.Fatalf("Tick %d: woke=%d err=%v", i, woke, err)
+		}
+		got, err := state.Load(projectRoot, task.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != state.StatusDone {
+			t.Fatalf("pass %d: expected the landed mission to stay done, got %s", i, got.Status)
+		}
+		if !got.AgentNotFoundSince.IsZero() {
+			t.Errorf("pass %d: expected no not-found mark on a landed mission, got %s", i, got.AgentNotFoundSince)
+		}
+	}
+	if !client.tabClosed {
+		t.Fatalf("expected the land to close the soldier's tab")
+	}
+}

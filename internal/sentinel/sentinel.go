@@ -342,11 +342,27 @@ func reopenActiveTasks(projectRoot string, tasks []state.Task, client herdr.Clie
 			continue
 		}
 
-		task.Status = state.StatusRunning
-		task.UpdatedAt = time.Now().UTC()
-		task.IdleUnconfirmedSince = time.Time{}
-		task.AgentNotFoundSince = time.Time{}
-		if err := state.Save(projectRoot, task); err != nil {
+		// The probe above can take a while, and the task list is older still:
+		// "vx land" or "vx strike" may have struck the camp and closed the
+		// pane since, and reopening the task then would leave a running
+		// record with no pane, which turns interrupted. So reopen only if,
+		// under the tasks lock, the record is still what this pass saw and
+		// the camp is still leased.
+		_, err = state.Update(projectRoot, task.ID, func(current *state.Task) (bool, error) {
+			if current.Status != task.Status {
+				return false, nil
+			}
+			leased, err := camp.LeasedTasks(projectRoot)
+			if err != nil || !leased[current.ID] {
+				return false, nil
+			}
+			current.Status = state.StatusRunning
+			current.UpdatedAt = time.Now().UTC()
+			current.IdleUnconfirmedSince = time.Time{}
+			current.AgentNotFoundSince = time.Time{}
+			return true, nil
+		})
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("reopening task %s: %w", task.ID, err)
 		}
 	}
@@ -361,22 +377,21 @@ func reopenActiveTasks(projectRoot string, tasks []state.Task, client herdr.Clie
 // undo it, for instance by marking a landed mission interrupted because its
 // pane was closed. Every transition tickProject makes out of Running goes
 // through here, so a task that is no longer Running is left exactly as it
-// is and no wake is recorded for it.
+// is and no wake is recorded for it. The check and the write happen under
+// state.Update's lock, so a command that lands between them cannot be undone
+// either.
 func saveIfRunning(projectRoot string, task state.Task) (bool, error) {
-	current, err := state.Load(projectRoot, task.ID)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+	saved, err := state.Update(projectRoot, task.ID, func(current *state.Task) (bool, error) {
+		if current.Status != state.StatusRunning {
 			return false, nil
 		}
-		return false, err
-	}
-	if current.Status != state.StatusRunning {
+		*current = task
+		return true, nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
-	if err := state.Save(projectRoot, task); err != nil {
-		return false, err
-	}
-	return true, nil
+	return saved, err
 }
 
 // settleTransition persists task's straightforward transition out of
