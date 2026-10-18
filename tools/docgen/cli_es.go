@@ -157,6 +157,11 @@ stale, editada a mano o faltante), si los perfiles de modelo de models.json son
 válidos, y si el modo yolo está activado (el commander aterriza una mission
 terminada sin preguntar).
 
+Cuando un perfil de modelo selecciona el harness pi, o hay un binario pi en el
+PATH, doctor también informa sobre Pi: el binario, su versión y si la
+integración de herdr para pi está instalada ('herdr integration install pi').
+Solo advierten; una configuración sin Pi no ve ninguna de estas líneas.
+
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando
 encuentra un binario vx al correr desde un entorno vacío (solo HOME y
@@ -187,9 +192,14 @@ Uso:
 Una mission cambia código y entrega algo para aterrizar; un scout solo
 investiga y reporta (por defecto: mission).
 
---model y --effort se pasan tal cual al CLI real de claude (--model: haiku,
-sonnet, opus, fable; --effort: low, medium, high, xhigh, max). vexillum solo
-valida que el valor sea uno que claude acepta: nunca elige uno por vos.
+--model y --effort se pasan tal cual al CLI real del harness. En claude (el
+valor por defecto): --model haiku, sonnet, opus o fable; --effort low, medium,
+high, xhigh o max. En un perfil que selecciona el harness pi: --model es un
+provider/id como anthropic/claude-sonnet-5 (se convierte en pi --model) y
+--effort es un nivel de thinking, off, minimal, low, medium, high, xhigh o max
+(se convierte en pi --thinking, que pi ajusta a lo que el modelo soporta).
+vexillum solo valida que el valor tenga la forma correcta para el harness:
+nunca elige uno por vos.
 
 --profile <name> busca el modelo y el effort en la tabla de perfiles ('vx
 models' la lista: <project>/.vexillum/models.json sobre el
@@ -200,21 +210,27 @@ de la tabla. Qué perfil conviene a una tarea lo decidís vos. Ver la skill
 vexillum.
 
 Un perfil también puede nombrar, en models.json, el harness (el CLI de agente)
-en el que corre su soldier; sin uno es claude. El harness queda registrado en la
-tarea y 'vx redispatch' lo conserva. "pi" y "opencode" están reservados: elegir
-un perfil que nombre uno es un error hasta que se implementen.
+en el que corre su soldier: "claude" (el valor por defecto cuando no nombra
+ninguno) o "pi". El harness queda registrado en la tarea y 'vx redispatch' lo
+conserva. "opencode" está reservado: elegir un perfil que lo nombre es un error
+hasta que se implemente. A un soldier de pi se le responde con texto libre
+cuando se bloquea (no tiene un selector donde pulsar una tecla), y necesita el
+CLI pi en el PATH.
 
-Corre una sesión real e interactiva de Claude Code en un pane de herdr, dentro
-de un git worktree nuevo, aislado del árbol de trabajo propio de este proyecto,
-con --dangerously-skip-permissions: el soldier tiene acceso total al host bajo
+Corre una sesión real e interactiva del harness (Claude Code por defecto, con
+--dangerously-skip-permissions; pi no tiene prompts de permisos que saltear y
+arranca con --approve para que nunca se detenga a preguntar si confía en el
+camp) en un pane de herdr, dentro de un git worktree nuevo, aislado del árbol de
+trabajo propio de este proyecto: el soldier tiene acceso total al host bajo
 el usuario del sistema operativo que invoca (sin contenedor, chroot ni otro
 sandbox); el worktree solo acota dónde caen sus commits, no lo que puede leer,
 escribir o exfiltrar en otro lugar de la máquina. Nada llega al historial real
 del proyecto hasta que 'vx land' se aprueba explícitamente; nunca despaches
 contra un prompt, un repositorio o una máquina donde leer estado sensible del
 host sería un problema. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane
-administrado por herdr) y que herdr y claude estén en el PATH; si falta alguno
-lo dice y termina antes de crear nada ('vx doctor' revisa tu configuración).
+administrado por herdr) y que herdr y el CLI del harness (claude, o pi) estén
+en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
+revisa tu configuración).
 
 Vuelve rápido: solo espera una breve sonda de arranque, no la tarea
 completa del soldier. Un prompt trivial puede terminar dentro de esa ventana e
@@ -241,9 +257,11 @@ a 'vx dispatch --profile <name>'.
 
 Esto es una tabla de consulta, no un router: qué perfil conviene a una tarea es
 un juicio del commander, hecho a partir de las líneas "when". Un archivo de
-modelos que no es JSON válido, que nombra un modelo o un effort que claude no
-acepta, o que nombra un harness desconocido, es un error que nombra el archivo
-y el campo.
+modelos que no es JSON válido, que nombra un modelo o un effort que su harness
+no acepta (claude: haiku, sonnet, opus, fable y low a max; pi: un modelo
+provider/id como anthropic/claude-sonnet-5 y un nivel de thinking off a max), o
+que nombra un harness desconocido, es un error que nombra el archivo y el
+campo.
 `,
 	},
 
@@ -285,9 +303,10 @@ re-dispatch, no una reanudación: el camp sucio de la tarea (el árbol de trabaj
 y los commits que nunca aterrizó) se descarta, se crea un camp nuevo y la
 mission se relanza desde su prompt original como si se acabara de despachar:
 no se recupera nada del trabajo parcial ni de la sesión de agente del soldier
-muerto. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane administrado por
-herdr) y que herdr y claude estén en el PATH; si falta alguno lo dice y termina
-antes de crear nada.
+muerto. La tarea se relanza en el harness con el que se despachó. Requiere
+HERDR_WORKSPACE_ID (corré esto desde un pane administrado por herdr) y que herdr
+y el CLI de ese harness (claude, o pi) estén en el PATH; si falta alguno lo dice
+y termina antes de crear nada.
 `,
 	},
 
@@ -307,7 +326,8 @@ AskUserQuestion de Claude Code, <answer> (el texto exacto de una opción, o su
 número renderizado, contando desde 1) se entrega como una única pulsación de
 tecla, el mismo mecanismo que usaría una persona al elegir en ese menú, salvo
 que se resuelva a "Type something.", que recurre a texto plano como todas las
-demás decisiones.
+demás decisiones. Un soldier de pi no tiene ese selector, así que su respuesta
+siempre se entrega como texto plano.
 
 Una vez entregada la respuesta, también se registra en la tarea como una
 enmienda (campo "amendments" en 'vx status --json'), junto con la pregunta que

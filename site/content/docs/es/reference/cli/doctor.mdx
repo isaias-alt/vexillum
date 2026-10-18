@@ -16,6 +16,11 @@ stale, editada a mano o faltante), si los perfiles de modelo de models.json son
 válidos, y si el modo yolo está activado (el commander aterriza una mission
 terminada sin preguntar).
 
+Cuando un perfil de modelo selecciona el harness pi, o hay un binario pi en el
+PATH, doctor también informa sobre Pi: el binario, su versión y si la
+integración de herdr para pi está instalada ('herdr integration install pi').
+Solo advierten; una configuración sin Pi no ve ninguna de estas líneas.
+
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando
 encuentra un binario vx al correr desde un entorno vacío (solo HOME y

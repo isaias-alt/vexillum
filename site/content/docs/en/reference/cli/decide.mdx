@@ -19,7 +19,8 @@ field "decision" of 'vx status --json'. If the open question came from Claude Co
 AskUserQuestion selector, <answer> (an option's exact text, or its 1-based
 rendered number) is delivered as a single key press (the same mechanism a
 human picking from that menu would use) unless it resolves to "Type
-something.", which falls back to plain text like every other decision.
+something.", which falls back to plain text like every other decision. A pi
+soldier has no such selector, so its answer is always delivered as plain text.
 
 Once the answer is delivered it is also recorded on the task as an amendment
 (field "amendments" in 'vx status --json'), together with the question it answered,
