@@ -19,6 +19,8 @@ El mismo hook también lleva **forum wakes**: cuando un usuario manda feedback d
 
 Herdr informa un turno como idle en el momento en que el agente se detiene, y el panel todavía puede estar pintando el final de su último mensaje. Antes de registrar a un soldier como `done` (o `blocked`), el sentinel lee el panel hasta que dos lecturas separadas por un segundo coinciden, así que la salida guardada con el wake contiene el reporte final del soldier. Un panel que nunca se estabiliza solo demora el wake unos segundos; la tarea queda entonces como `done` con una nota al final de su `output` que dice que el reporte final puede faltar, y `vx prompt` puede pedírselo al soldier. La misma nota aparece cuando el panel no se puede leer en absoluto.
 
+Un turno idle cuyo último resumen dice `N ... still running` (por ejemplo `1 shell still running`) no es final: el soldier lanzó trabajo en segundo plano y despertará cuando termine. El sentinel mantiene la tarea en `running` sin un wake, y a los 10 minutos la marca como `done` con una nota al final de su `output` que dice que el reporte puede no existir.
+
 Un soldier solo queda registrado como `blocked` por una línea `needs-decision:` que escribió en su último turno, después del final del prompt despachado, con texto real. La línea de plantilla del prompt, o cualquier placeholder entre ángulos, nunca cuenta, ni tampoco una pregunta que ya respondiste o descartaste.
 
 ## Mantenerse al día
@@ -92,5 +94,7 @@ vx prompt <task-id> "agregá también una entrada al changelog"
 Devuelve la tarea a `running`, entrega el texto y se asegura de que haya un sentinel vigilando, así que el próximo fin del soldier vuelve a despertar al commander. Solo se puede mandar un prompt a una tarea `done`, `shipped` o `unconfirmed` a cuyo camp todavía no se le hizo strike (una shipped pasa a `running` y se asienta como `done`, no `shipped`, porque los commits nuevos no están en su pull request hasta que `vx ship` corra de nuevo); una tarea `blocked` se responde con `vx decide` y una `interrupted` con `vx redispatch`.
 
 Mandarle el prompt al pane a mano (`herdr agent prompt`) sigue funcionando como respaldo: el sentinel reabre una tarea terminada que ve trabajando otra vez. Esa detección es por polling, así que un seguimiento muy corto que termina entre dos polls puede escapársele, por eso `vx prompt` es el camino soportado.
+
+El sentinel sondea el panel antes de reabrir, y solo reabre una tarea que sigue terminada al guardar, así que una tarea que `vx land` o `vx strike` cerró mientras tanto sigue cerrada.
 
 Ver la [referencia de `sentinel`](/es/docs/reference/cli/sentinel) para el uso completo.
