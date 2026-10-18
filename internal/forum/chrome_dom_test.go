@@ -233,3 +233,11 @@ func TestChromeTopbar_DegradesAtNarrowWidths(t *testing.T) {
 		}
 	}
 }
+
+// The conversation and the queued list share one scroll area: the reviewer's
+// own queue or send follows to the bottom, something else arriving only keeps
+// a reviewer who was already at the bottom there, and a reviewer who scrolled
+// up to read is never moved.
+func TestChromeScroll_FollowsTheReviewersOwnQueueAndSend(t *testing.T) {
+	runChromeNodeTest(t, "chrome_follow_test.js")
+}

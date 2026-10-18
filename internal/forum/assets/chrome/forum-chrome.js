@@ -15,6 +15,7 @@
   let version = 0;
   let artifactVersion = "";
   let renderedTranscriptKey = "";
+  let renderedQueueKey = "";
 
   // ----------------------------------------------------------------- theme
 
@@ -35,7 +36,13 @@
 
   // ---------------------------------------------------------------- server
 
+  // Requests that put the reviewer's own words (or findings) in the queue or
+  // send them: the conversation follows them to the bottom (see render).
+  const followed = (method, path) => method === "POST" && (path === "/queue" || path === "/send" || path === "/layout/queue");
+
   async function api(method, path, body, signal) {
+    // Mark before the request: the live feed can deliver the result first.
+    if (followed(method, path)) followMyAction();
     const headers = { "X-Forum-Token": boot.token };
     const raw = body instanceof Blob; // an image upload: the bytes themselves
     if (body !== undefined) headers["Content-Type"] = raw ? "application/octet-stream" : "application/json";
@@ -53,6 +60,7 @@
       /* non-JSON error body */
     }
     if (!response.ok) {
+      if (followed(method, path)) followUntil = 0;
       const error = new Error((data && data.error) || "HTTP " + response.status);
       error.status = response.status;
       error.code = data && data.code;
@@ -173,9 +181,29 @@
     return node;
   }
 
+  // The conversation and the queued list share one scroll area (the queue sits
+  // under the transcript), so one rule keeps both in view. The reviewer's own
+  // queue or send follows the content to the bottom once, whatever they had
+  // scrolled to. Anything else (an agent reply, the queue changing from another
+  // tab) only keeps a reviewer who was already near the bottom there, and never
+  // moves one who scrolled up to read.
+  const NEAR_BOTTOM_PX = 80;
+  const FOLLOW_WINDOW_MS = 8000;
+  let followUntil = 0;
+
+  // followMyAction marks that the next render with new content is the result of
+  // the reviewer's own queue or send; it lapses if no such render arrives.
+  function followMyAction() {
+    followUntil = Date.now() + FOLLOW_WINDOW_MS;
+  }
+
   function render(snap) {
     snapshot = snap;
     const ended = snap.status === "ended";
+    const scroller = $("scroll");
+    const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    const follow = followUntil > Date.now();
+    let changed = false;
 
     const badge = $("sessionBadge");
     badge.textContent = ended ? "Ended" : "Open";
@@ -267,8 +295,8 @@
       ? "Each Send to Agent starts a round. " + answered + " of " + snap.round + (snap.round === 1 ? " round" : " rounds") + " answered."
       : "";
 
-    renderLog(snap);
-    renderQueue(snap.queued || [], ended, (snap.round || 0) + 1);
+    changed = renderLog(snap);
+    if (renderQueue(snap.queued || [], ended, (snap.round || 0) + 1)) changed = true;
     syncQueueKeys(queueKeys(snap.queued || []));
     syncRoundKeys(roundKeysOf(snap));
     syncMarks(snap);
@@ -285,6 +313,15 @@
     $("input").disabled = ended;
     $("queueBtn").disabled = ended;
     updateButtons();
+
+    // After everything above: the banners and the queue change the height of
+    // the scroll area and its content.
+    if (follow && changed) {
+      followUntil = 0;
+      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight;
+    } else if (gap < NEAR_BOTTOM_PX) {
+      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight - gap;
+    }
   }
 
   function updateButtons() {
@@ -308,11 +345,9 @@
     const answeredThrough = snap.answered_through || 0;
     const key = transcript.length + ":" + (transcript.length ? transcript[transcript.length - 1].id : "") + ":" + (snap.round || 0) + ":" + answeredThrough;
     $("emptyLog").hidden = transcript.length > 0;
-    if (key === renderedTranscriptKey) return;
+    if (key === renderedTranscriptKey) return false;
     renderedTranscriptKey = key;
 
-    const scroll = $("scroll");
-    const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
     const log = $("log");
     log.replaceChildren();
     let group = null;
@@ -365,7 +400,7 @@
       }
       list.append(item);
     }
-    if (nearBottom) scroll.scrollTop = scroll.scrollHeight;
+    return true;
   }
 
   function formatTime(iso) {
@@ -373,7 +408,11 @@
     return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  // renderQueue reports whether the list of queued prompts changed.
   function renderQueue(queued, ended, nextRound) {
+    const key = queued.map((p) => p.uid).join(",") + ":" + nextRound;
+    const changed = key !== renderedQueueKey;
+    renderedQueueKey = key;
     const section = $("queuedSection");
     section.hidden = queued.length === 0;
     $("queuedCount").textContent = queued.length ? "(" + queued.length + ")" : "";
@@ -401,6 +440,7 @@
       item.append(remove);
       list.append(item);
     }
+    return changed;
   }
 
 
