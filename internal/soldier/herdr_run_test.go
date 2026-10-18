@@ -141,6 +141,17 @@ func newMissionTask(t *testing.T) state.Task {
 	return task
 }
 
+// runInHerdr is soldier.RunInHerdr for a task that was not saved yet. The real
+// caller (internal/cli) saves the task, camp fields included, before it
+// calls in, and RunInHerdr updates that record in place.
+func runInHerdr(t *testing.T, home, workspaceID string, task state.Task, c camp.Camp, client herdr.Client) (state.Task, error) {
+	t.Helper()
+	if err := state.Save(testProjectRoot(t, home), task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+	return soldier.RunInHerdr(home, workspaceID, task, c, client)
+}
+
 func newScoutTask(t *testing.T, prompt string) state.Task {
 	t.Helper()
 	task, err := state.New(state.KindScout, prompt)
@@ -165,7 +176,7 @@ func TestRunInHerdr_Success(t *testing.T) {
 		readOutput:   "soldier transcript",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -211,7 +222,7 @@ func TestRunInHerdr_PersistsCampBase(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -240,7 +251,7 @@ func TestRunInHerdr_PassesModelAndEffort(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+	if _, err := runInHerdr(t, home, "w1", task, c, client); err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 
@@ -261,7 +272,7 @@ func TestRunInHerdr_ScoutPromptIncludesReportInstructions(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -299,7 +310,7 @@ func TestRunInHerdr_MissionPromptHasNoReportInstructions(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -337,7 +348,7 @@ func TestRunInHerdr_PromptIncludesPauseInstructions(t *testing.T) {
 
 			client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-			got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+			got, err := runInHerdr(t, home, "w1", task, c, client)
 			if err != nil {
 				t.Fatalf("RunInHerdr: %v", err)
 			}
@@ -371,7 +382,7 @@ func TestRunInHerdr_ScoutReportPathUsesDisambiguatedName(t *testing.T) {
 		promptStatus: "done",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -404,7 +415,7 @@ func TestRunInHerdr_WriteAheadRunningState(t *testing.T) {
 	var sawRunning bool
 	checkingClient := &checkingHerdr{fakeHerdr: client, projectRoot: testProjectRoot(t, home), taskID: task.ID, sawRunning: &sawRunning}
 
-	if _, err := soldier.RunInHerdr(home, "w1", task, c, checkingClient); err != nil {
+	if _, err := runInHerdr(t, home, "w1", task, c, checkingClient); err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 	if !sawRunning {
@@ -437,7 +448,7 @@ func TestRunInHerdr_Blocked(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "blocked"}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -460,7 +471,7 @@ func TestRunInHerdr_BlockedExtractsDecision(t *testing.T) {
 		readOutput: "Which database should this use?\n\n1. Postgres\n2. SQLite\n",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -492,7 +503,7 @@ func TestRunInHerdr_DoneHasNoDecision(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done", readOutput: "all done"}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -517,7 +528,7 @@ func TestRunInHerdr_TimeoutHandsOffToSentinel(t *testing.T) {
 		promptErr: &herdr.APIError{Code: "timeout", Message: "agent prompt wait timed out"},
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: expected no error on a quick-settle timeout, got: %v", err)
 	}
@@ -547,7 +558,7 @@ func TestRunInHerdr_NonTimeoutPromptErrorFails(t *testing.T) {
 		promptErr: fmt.Errorf("herdr socket exploded"),
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {
 		t.Fatal("expected an error for a non-timeout prompt failure")
 	}
@@ -571,7 +582,7 @@ func TestRunInHerdr_NotRunningFailsWithClearMessage(t *testing.T) {
 		promptErr: &herdr.APIError{Code: "agent_not_running", Message: "agent is no longer running in the target pane"},
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {
 		t.Fatal("expected an error when the pane closed before prompting")
 	}
@@ -598,7 +609,7 @@ func TestRunInHerdr_RetriesPaneBusy(t *testing.T) {
 		promptStatus: "done",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -623,7 +634,7 @@ func TestRunInHerdr_GivesUpOnPersistentPaneBusy(t *testing.T) {
 		busyForCalls: 100,
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {
 		t.Fatal("expected an error when the pane never stops being busy")
 	}
@@ -650,7 +661,7 @@ func TestRunInHerdr_RetriesStalledPrompt(t *testing.T) {
 		promptStatus:          "done",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -675,7 +686,7 @@ func TestRunInHerdr_GivesUpOnPersistentlyStalledPrompt(t *testing.T) {
 		promptStalledForCalls: 100,
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {
 		t.Fatal("expected an error when the prompt never stops being stalled")
 	}
@@ -701,7 +712,7 @@ func TestRunInHerdr_FallsBackOnNameCollision(t *testing.T) {
 		promptStatus: "done",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -754,7 +765,7 @@ func TestRunInHerdr_DisambiguatedNameStaysWithinLengthLimit(t *testing.T) {
 		promptStatus: "done",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -783,7 +794,7 @@ func TestRunInHerdr_DismissesTrustDialog(t *testing.T) {
 		promptStatus: "done",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -812,7 +823,7 @@ func TestRunInHerdr_UnrecognizedStartupBlockFails(t *testing.T) {
 		readOutput: "Pick a theme:\n❯ Dark\n  Light",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {
 		t.Fatal("expected an error for an unrecognized startup block")
 	}
@@ -834,13 +845,17 @@ func TestRunInHerdr_CreateTabFails(t *testing.T) {
 
 	client := &fakeHerdr{createTabErr: &herdr.APIError{Code: "not_found", Message: "workspace not found"}}
 
-	_, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	_, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {
 		t.Fatal("expected an error when the herdr tab can't be created")
 	}
 
-	if _, loadErr := state.Load(testProjectRoot(t, home), task.ID); loadErr == nil {
-		t.Error("expected no task state to be persisted when the tab was never created")
+	persisted, loadErr := state.Load(testProjectRoot(t, home), task.ID)
+	if loadErr != nil {
+		t.Fatalf("Load: %v", loadErr)
+	}
+	if persisted.Status != task.Status || persisted.HerdrTabID != "" {
+		t.Errorf("expected the saved task untouched when the tab was never created, got %+v", persisted)
 	}
 }
 
@@ -902,7 +917,7 @@ func TestRunInHerdr_DeclaredPauseNeverSettlesDoneFromQuickSettle(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "idle"}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -939,7 +954,7 @@ func TestRunInHerdr_RealCompletionStillSettlesDoneFromQuickSettle(t *testing.T) 
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -965,7 +980,7 @@ func TestRunInHerdr_BackgroundWorkNeverSettlesDoneFromQuickSettle(t *testing.T) 
 		readOutput: "⏺ waiting for background job\n\n✻ Brewed for 6s · done 3:37 PM · 1 shell still running\n\n❯\n",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -1256,7 +1271,7 @@ func TestRunInHerdr_BlockedUsesModalParserWhenVisibleCaptureMatches(t *testing.T
 		readVisibleOutput: capture,
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -1287,7 +1302,7 @@ func TestRunInHerdr_BlockedFallsBackToProseWhenVisibleCaptureIsNotModal(t *testi
 		readVisibleOutput: "", // no recognizable modal footer
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -1314,7 +1329,7 @@ func TestRunInHerdr_NeedsDecisionLineForcesBlocked(t *testing.T) {
 		readOutput: "I've looked into it.\n\nneeds-decision: should this use Postgres or SQLite?\n",
 	}
 
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -1346,7 +1361,7 @@ func TestRunInHerdr_PromptIncludesNeedsDecisionInstructions(t *testing.T) {
 
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
 
-	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+	if _, err := runInHerdr(t, home, "w1", task, c, client); err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 
@@ -1367,7 +1382,7 @@ func TestRunInHerdr_EchoedPromptDoesNotBlockAFinishedSoldier(t *testing.T) {
 
 	// First run only to learn the exact prompt a soldier is sent.
 	first := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
-	if _, err := soldier.RunInHerdr(t.TempDir(), "w1", newMissionTask(t), c, first); err != nil {
+	if _, err := runInHerdr(t, t.TempDir(), "w1", newMissionTask(t), c, first); err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 	if len(first.promptCalls) != 1 {
@@ -1377,7 +1392,7 @@ func TestRunInHerdr_EchoedPromptDoesNotBlockAFinishedSoldier(t *testing.T) {
 
 	task := newMissionTask(t)
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done", readOutput: pane}
-	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -1391,7 +1406,7 @@ func TestRunInHerdr_EchoedPromptDoesNotBlockAFinishedSoldier(t *testing.T) {
 	// The same pane, but the soldier really asks after the prompt.
 	client.readOutput = pane + "needs-decision: keep the old API or break it?\n"
 	task = newMissionTask(t)
-	got, err = soldier.RunInHerdr(home, "w1", task, c, client)
+	got, err = runInHerdr(t, home, "w1", task, c, client)
 	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
@@ -1407,7 +1422,7 @@ func TestRunInHerdr_PromptCarriesTheTemplateAndTrailer(t *testing.T) {
 	home := t.TempDir()
 	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/x"}
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
-	if _, err := soldier.RunInHerdr(home, "w1", newMissionTask(t), c, client); err != nil {
+	if _, err := runInHerdr(t, home, "w1", newMissionTask(t), c, client); err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 	prompt := client.promptCalls[0]

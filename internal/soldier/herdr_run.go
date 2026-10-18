@@ -94,9 +94,22 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	task.HerdrAgentName = agentName
 	task.Status = state.StatusRunning
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+		current.CampSlot = task.CampSlot
+		current.CampPath = task.CampPath
+		current.CampBranch = task.CampBranch
+		current.CampBase = task.CampBase
+		current.HerdrWorkspaceID = task.HerdrWorkspaceID
+		current.HerdrTabID = task.HerdrTabID
+		current.HerdrPaneID = task.HerdrPaneID
+		current.HerdrAgentName = task.HerdrAgentName
+		current.Status = task.Status
+		current.UpdatedAt = task.UpdatedAt
+	})
+	if err != nil {
 		return task, fmt.Errorf("persisting running state: %w", err)
 	}
+	task = saved
 
 	agentName, err = startAgent(client, agentName, task.ID, paneID, defaultHarness.ModelEffortArgs(task))
 	if err != nil {
@@ -108,9 +121,14 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		// disambiguated one. Persist the name that's actually live.
 		task.HerdrAgentName = agentName
 		task.UpdatedAt = time.Now().UTC()
-		if err := state.Save(projectRoot, task); err != nil {
+		saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+			current.HerdrAgentName = task.HerdrAgentName
+			current.UpdatedAt = task.UpdatedAt
+		})
+		if err != nil {
 			return task, fmt.Errorf("persisting disambiguated agent name: %w", err)
 		}
+		task = saved
 	}
 
 	// Mark the moment submission actually starts, not just when the task
@@ -120,9 +138,13 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	// settle-race grace period to this timestamp, and an earlier one
 	// would leave that guard covering the wrong window on a slow start.
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err = updateTask(projectRoot, task.ID, func(current *state.Task) {
+		current.UpdatedAt = task.UpdatedAt
+	})
+	if err != nil {
 		return task, fmt.Errorf("persisting pre-prompt state: %w", err)
 	}
+	task = saved
 
 	// Submit the prompt and probe briefly for a fast settle - not a full
 	// wait for completion. Dispatch never blocks on the whole task: the
@@ -178,7 +200,8 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		return failHerdrTask(projectRoot, task, fmt.Errorf("prompting soldier: %w", err))
 	}
 
-	if output, readErr := client.AgentRead(agentName, defaultReadLines); readErr == nil {
+	output, readErr := client.AgentRead(agentName, defaultReadLines)
+	if readErr == nil {
 		task.Output = output
 	}
 
@@ -186,11 +209,44 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	if task.Status == state.StatusBlocked {
 		task.Decision = blockedDecision(client, task, agentName, status, task.Output)
 	}
-	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err = updateTask(projectRoot, task.ID, func(current *state.Task) {
+		applySettled(current, task, readErr == nil)
+	})
+	if err != nil {
 		return task, fmt.Errorf("persisting final state: %w", err)
 	}
-	return task, nil
+	return saved, nil
+}
+
+// updateTask applies apply to the task's record as it is on disk right now,
+// under the tasks lock (state.Update), and returns the record as saved. apply
+// sets only the fields its caller owns, so a write the sentinel or another vx
+// command made since the caller loaded its copy is kept, not overwritten with
+// that copy. apply runs with the lock held: it must stay short, so anything
+// that needs herdr, git or the filesystem is computed before the call.
+func updateTask(projectRoot, id string, apply func(*state.Task)) (state.Task, error) {
+	var saved state.Task
+	_, err := state.Update(projectRoot, id, func(current *state.Task) (bool, error) {
+		apply(current)
+		saved = *current
+		return true, nil
+	})
+	return saved, err
+}
+
+// applySettled writes a settle's outcome onto current: the status, the
+// transcript when it was read (outputRead), the question when the soldier
+// settled blocked, and the time. The outcome itself (settled) was worked out
+// before the lock was taken.
+func applySettled(current *state.Task, settled state.Task, outputRead bool) {
+	if outputRead {
+		current.Output = settled.Output
+	}
+	current.Status = settled.Status
+	if settled.Status == state.StatusBlocked {
+		current.Decision = settled.Decision
+	}
+	current.UpdatedAt = time.Now().UTC()
 }
 
 // blockedDecision picks the right extractor for a task that just settled
@@ -281,15 +337,11 @@ func DismissBlocked(projectRoot string, task state.Task, client herdr.Client) (s
 	live, err := client.AgentStatus(task.HerdrAgentName)
 	if err != nil {
 		if herdr.IsNotFound(err) || herdr.IsNotRunning(err) {
-			task.Status = state.StatusInterrupted
-			task.UpdatedAt = time.Now().UTC()
-			if task.Output != "" {
-				task.Output += "\n\n"
-			}
-			task.Output += "[vexillum] this soldier's herdr pane is gone - marked interrupted. Use '" + cmdname.Name + " redispatch' instead."
-			if saveErr := state.Save(projectRoot, task); saveErr != nil {
+			saved, saveErr := markInterrupted(projectRoot, task.ID, "[vexillum] this soldier's herdr pane is gone - marked interrupted. Use '"+cmdname.Name+" redispatch' instead.")
+			if saveErr != nil {
 				return task, fmt.Errorf("persisting interrupted task (after: %v): %w", err, saveErr)
 			}
+			task = saved
 			return task, fmt.Errorf("the soldier's herdr pane is gone - marked interrupted, use '"+cmdname.Name+" redispatch' instead: %w", err)
 		}
 		return task, fmt.Errorf("reading the soldier's live status: %w", err)
@@ -298,25 +350,39 @@ func DismissBlocked(projectRoot string, task state.Task, client herdr.Client) (s
 		return task, fmt.Errorf("the soldier's pane is really blocked on a question - answer it with '%s decide %s <answer>'", cmdname.Name, task.ID)
 	}
 
+	// Flagged on this copy first: corroboratedStatus reads the flag, so the
+	// line that blocked the task cannot block it again.
 	if task.Decision != nil {
 		task.Decision.Dismissed = true
 		task.Decision.AnsweredAt = time.Now().UTC()
 	}
+	outputRead := false
 	if live == "working" {
 		task.Status = state.StatusRunning
 	} else {
 		if output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines); readErr == nil {
 			task.Output = output
+			outputRead = true
 		}
 		task.Status = corroboratedStatus(projectRoot, task, live)
 	}
-	task.UpdatedAt = time.Now().UTC()
-	task.IdleUnconfirmedSince = time.Time{}
-	task.AgentNotFoundSince = time.Time{}
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+		if current.Decision != nil {
+			current.Decision.Dismissed = true
+			current.Decision.AnsweredAt = time.Now().UTC()
+		}
+		if outputRead {
+			current.Output = task.Output
+		}
+		current.Status = task.Status
+		current.UpdatedAt = time.Now().UTC()
+		current.IdleUnconfirmedSince = time.Time{}
+		current.AgentNotFoundSince = time.Time{}
+	})
+	if err != nil {
 		return task, fmt.Errorf("persisting dismissed task: %w", err)
 	}
-	return task, nil
+	return saved, nil
 }
 
 // Reprompt sends text to a soldier that already settled (done, or
@@ -338,27 +404,34 @@ func DismissBlocked(projectRoot string, task state.Task, client herdr.Client) (s
 // verbatim: the soldier already has the pause and needs-decision conventions
 // from its original prompt.
 func Reprompt(projectRoot string, task state.Task, text string, client herdr.Client) (state.Task, error) {
-	previous := task
-
 	now := time.Now().UTC()
-	task.AddAmendment(state.AmendmentSourcePrompt, text, now)
-	task.Status = state.StatusRunning
-	task.UpdatedAt = now
-	task.IdleUnconfirmedSince = time.Time{}
-	task.AgentNotFoundSince = time.Time{}
-	if err := state.Save(projectRoot, task); err != nil {
-		return previous, fmt.Errorf("persisting running state: %w", err)
+	// before is the record as it was on disk when it went Running, which is
+	// what a prompt that cannot be delivered restores.
+	var before state.Task
+	running, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+		before = *current
+		current.AddAmendment(state.AmendmentSourcePrompt, text, now)
+		current.Status = state.StatusRunning
+		current.UpdatedAt = now
+		current.IdleUnconfirmedSince = time.Time{}
+		current.AgentNotFoundSince = time.Time{}
+	})
+	if err != nil {
+		return task, fmt.Errorf("persisting running state: %w", err)
 	}
+	task = running
 
 	status, err := promptWithStalledRetry(client, task.HerdrAgentName, text, quickSettleTimeoutMS)
 	if err != nil && !herdr.IsTimeout(err) {
-		if saveErr := state.Save(projectRoot, previous); saveErr != nil {
-			return previous, fmt.Errorf("restoring task after a failed prompt (%v): %w", err, saveErr)
+		if _, saveErr := updateTask(projectRoot, task.ID, func(current *state.Task) {
+			restoreAfterFailedPrompt(current, before, now)
+		}); saveErr != nil {
+			return before, fmt.Errorf("restoring task after a failed prompt (%v): %w", err, saveErr)
 		}
 		if herdr.IsNotRunning(err) || herdr.IsNotFound(err) {
-			return previous, fmt.Errorf("the soldier's herdr pane is gone, there is nothing to prompt: %w", err)
+			return before, fmt.Errorf("the soldier's herdr pane is gone, there is nothing to prompt: %w", err)
 		}
-		return previous, fmt.Errorf("prompting soldier: %w", err)
+		return before, fmt.Errorf("prompting soldier: %w", err)
 	}
 	if err != nil {
 		// Timeout: still working past the quick probe - the normal case for
@@ -367,18 +440,54 @@ func Reprompt(projectRoot string, task state.Task, text string, client herdr.Cli
 		return task, nil
 	}
 
-	if output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines); readErr == nil {
+	output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines)
+	if readErr == nil {
 		task.Output = output
 	}
 	task.Status = corroboratedStatus(projectRoot, task, status)
 	if task.Status == state.StatusBlocked {
 		task.Decision = blockedDecision(client, task, task.HerdrAgentName, status, task.Output)
 	}
-	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+		applySettled(current, task, readErr == nil)
+	})
+	if err != nil {
 		return task, fmt.Errorf("persisting final state: %w", err)
 	}
-	return task, nil
+	return saved, nil
+}
+
+// restoreAfterFailedPrompt takes back what Reprompt wrote when the prompt it
+// recorded could not be delivered: the amendment, and the Running status with
+// its timers, as they were in before. The amendment is the one added at the
+// given time; one a concurrent writer added since stays. The status and timers
+// are put back only while the record is still the Running that Reprompt wrote:
+// if the sentinel has moved it since (marking it interrupted because the pane
+// is gone, say), that is the newer truth and stays.
+func restoreAfterFailedPrompt(current *state.Task, before state.Task, at time.Time) {
+	isOurs := func(a state.Amendment) bool {
+		return a.Source == state.AmendmentSourcePrompt && a.At.Equal(at)
+	}
+	if n := len(current.Amendments); n > 0 && isOurs(current.Amendments[n-1]) {
+		// Ours is the newest: the list goes back to exactly what it was,
+		// including an oldest amendment the cap pushed out.
+		current.Amendments = before.Amendments
+	} else {
+		kept := current.Amendments[:0:0]
+		for _, a := range current.Amendments {
+			if !isOurs(a) {
+				kept = append(kept, a)
+			}
+		}
+		current.Amendments = kept
+	}
+	if current.Status != state.StatusRunning || !current.UpdatedAt.Equal(at) {
+		return
+	}
+	current.Status = before.Status
+	current.UpdatedAt = before.UpdatedAt
+	current.IdleUnconfirmedSince = before.IdleUnconfirmedSince
+	current.AgentNotFoundSince = before.AgentNotFoundSince
 }
 
 // finishAnswerBlocked is AnswerBlocked's shared tail, once the answer has
@@ -396,15 +505,11 @@ func Reprompt(projectRoot string, task state.Task, text string, client herdr.Cli
 func finishAnswerBlocked(projectRoot string, task state.Task, answer, chosen, status string, settleErr error, client herdr.Client) (state.Task, error) {
 	if settleErr != nil {
 		if herdr.IsNotRunning(settleErr) {
-			task.Status = state.StatusInterrupted
-			task.UpdatedAt = time.Now().UTC()
-			if task.Output != "" {
-				task.Output += "\n\n"
-			}
-			task.Output += "[vexillum] this soldier's herdr pane was already gone by the time its answer could be delivered - marked interrupted. Use '" + cmdname.Name + " redispatch' instead."
-			if saveErr := state.Save(projectRoot, task); saveErr != nil {
+			saved, saveErr := markInterrupted(projectRoot, task.ID, "[vexillum] this soldier's herdr pane was already gone by the time its answer could be delivered - marked interrupted. Use '"+cmdname.Name+" redispatch' instead.")
+			if saveErr != nil {
 				return task, fmt.Errorf("persisting interrupted task (after: %v): %w", settleErr, saveErr)
 			}
+			task = saved
 			return task, fmt.Errorf("the soldier's herdr pane is gone (not something vexillum did) - marked interrupted, use '"+cmdname.Name+" redispatch' instead: %w", settleErr)
 		}
 		if !herdr.IsTimeout(settleErr) {
@@ -416,16 +521,18 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, chosen, st
 		// Running.
 	}
 
-	if output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines); readErr == nil {
+	output, readErr := client.AgentRead(task.HerdrAgentName, defaultReadLines)
+	if readErr == nil {
 		task.Output = output
 	}
 
-	if task.Decision != nil {
-		task.Decision.Answer = answer
-		task.Decision.AnsweredAt = time.Now().UTC()
-	}
-	task.AddAmendment(state.AmendmentSourceDecide, decisionAmendmentText(task.Decision, chosen), time.Now().UTC())
+	// Worked out before the lock is taken: the amendment names the question
+	// this answer was given to, which the settle below may replace.
+	amendment := decisionAmendmentText(task.Decision, chosen)
 
+	// newDecision is the question the soldier settled back into, if any; it
+	// replaces the answered one.
+	var newDecision *state.Decision
 	if settleErr == nil {
 		task.Status = MapAgentStatus(status)
 		if _, pending := settle.BackgroundWorkPending(task.Output); pending && task.Status == state.StatusDone {
@@ -437,17 +544,47 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, chosen, st
 			// the same way a fresh block does, so the general sees the
 			// new question, not the one they just answered.
 			if d := ResolveBlockedDecision(client, task.HerdrAgentName, task.Output); d != nil {
-				task.Decision = d
+				newDecision = d
 			}
 		}
 	} else {
 		task.Status = state.StatusRunning
 	}
-	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+		now := time.Now().UTC()
+		if readErr == nil {
+			current.Output = task.Output
+		}
+		if current.Decision != nil {
+			current.Decision.Answer = answer
+			current.Decision.AnsweredAt = now
+		}
+		current.AddAmendment(state.AmendmentSourceDecide, amendment, now)
+		current.Status = task.Status
+		if newDecision != nil {
+			current.Decision = newDecision
+		}
+		current.UpdatedAt = now
+	})
+	if err != nil {
 		return task, fmt.Errorf("persisting answered task: %w", err)
 	}
-	return task, nil
+	return saved, nil
+}
+
+// markInterrupted records that a task's herdr pane is gone: it moves the task
+// to interrupted and appends note to its transcript. Both are applied to the
+// record as it is on disk now, so the transcript the sentinel kept up to date
+// is added to, not replaced.
+func markInterrupted(projectRoot, id, note string) (state.Task, error) {
+	return updateTask(projectRoot, id, func(current *state.Task) {
+		current.Status = state.StatusInterrupted
+		current.UpdatedAt = time.Now().UTC()
+		if current.Output != "" {
+			current.Output += "\n\n"
+		}
+		current.Output += note
+	})
 }
 
 // maxAmendmentQuestionRunes bounds the question quoted in a decide amendment,
@@ -727,10 +864,15 @@ func failHerdrTask(projectRoot string, task state.Task, cause error) (state.Task
 	task.Status = state.StatusFailed
 	task.Output = cause.Error()
 	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+		current.Status = task.Status
+		current.Output = task.Output
+		current.UpdatedAt = task.UpdatedAt
+	})
+	if err != nil {
 		return task, fmt.Errorf("persisting failed state (after: %v): %w", cause, err)
 	}
-	return task, cause
+	return saved, cause
 }
 
 // startAgent starts the soldier's interactive session. A never-before-seen
