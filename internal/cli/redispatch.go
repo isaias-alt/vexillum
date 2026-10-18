@@ -27,9 +27,10 @@ re-dispatch, not resumption: the task's dirty camp (working tree and any
 commits it never landed) is discarded, a fresh camp is created, and the
 mission is relaunched from its original prompt as if freshly dispatched -
 none of the dead soldier's partial work or agent session is recovered.
-Requires HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) and
-both herdr and claude on PATH; if any is missing it says so and exits before
-creating anything.
+The task is relaunched on the harness it was dispatched with. Requires
+HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) and both herdr
+and that harness's CLI (claude, or pi) on PATH; if any is missing it says so
+and exits before creating anything.
 `
 
 // Redispatch runs the "vx redispatch" command.
@@ -49,7 +50,7 @@ func Redispatch(args []string) int {
 		return 1
 	}
 
-	workspaceID, err := herdrPreconditions("redispatch", os.Getenv, exec.LookPath)
+	workspaceID, err := harnessPreconditions("redispatch", taskHarness(projectDir, vexillumHome, args[0]), os.Getenv, exec.LookPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
@@ -58,6 +59,25 @@ func Redispatch(args []string) int {
 	ensureSentinelRunning(vexillumHome, os.Stderr)
 
 	return runRedispatch(projectDir, vexillumHome, workspaceID, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
+}
+
+// taskHarness is the harness name recorded on the task with the given id, or
+// "" (claude) when it cannot be read: the caller only needs it to know which
+// CLI must be on PATH, and runRedispatch reports a missing or unreadable task
+// with its own, more specific message.
+func taskHarness(projectDir, vexillumHome, id string) string {
+	if state.ValidateID(id) != nil {
+		return ""
+	}
+	projectRoot, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		return ""
+	}
+	task, err := state.Load(projectRoot, id)
+	if err != nil {
+		return ""
+	}
+	return task.Harness
 }
 
 func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client herdr.Client, stdout, stderr io.Writer) int {

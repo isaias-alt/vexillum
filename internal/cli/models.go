@@ -23,7 +23,9 @@ that were read are listed at the end. Pass a profile to
 
 This is a lookup table, not a router: which profile fits a task is the
 commander's judgment, made from the "when" lines. A models file that is
-not valid JSON, names a model or effort claude does not accept, or names an
+not valid JSON, names a model or effort its harness does not accept (claude:
+haiku, sonnet, opus, fable and low to max; pi: a provider/id model such as
+anthropic/claude-sonnet-5 and a thinking level off to max), or names an
 unknown harness is an error naming the file and field.
 `
 

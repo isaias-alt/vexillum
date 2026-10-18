@@ -74,13 +74,25 @@ func refuseInsideVexillumHome(projectDir, vexillumHome string) error {
 // it, so the user sees it once and nothing (task, camp lease, sentinel) has
 // been left behind. getenv and lookPath are injected so tests control them.
 func herdrPreconditions(command string, getenv func(string) string, lookPath func(string) (string, error)) (string, error) {
+	return harnessPreconditions(command, soldier.HarnessClaude, getenv, lookPath)
+}
+
+// harnessPreconditions is herdrPreconditions for a soldier that runs on the
+// harness registered under harness ("" means claude): the CLI that must be on
+// PATH next to herdr is that harness's own, not always claude. A harness this
+// build cannot drive is an error too, before anything is started.
+func harnessPreconditions(command, harness string, getenv func(string) string, lookPath func(string) (string, error)) (string, error) {
 	workspaceID := getenv("HERDR_WORKSPACE_ID")
+	harnessBinary, err := soldier.HarnessBinary(harness)
+	if err != nil {
+		return "", fmt.Errorf("cannot %s from here, nothing was started: %w", command, err)
+	}
 
 	var problems []string
 	if workspaceID == "" {
 		problems = append(problems, "HERDR_WORKSPACE_ID is not set - "+command+" must run from inside a herdr-managed pane")
 	}
-	for _, tool := range []string{"herdr", "claude"} {
+	for _, tool := range []string{"herdr", harnessBinary} {
 		if _, err := lookPath(tool); err != nil {
 			problem := tool + " is not on PATH"
 			if hint := doctorcheck.InstallHint(tool); hint != "" {

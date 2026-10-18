@@ -23,10 +23,14 @@ Usage:
 A mission changes code and delivers something to land; a scout only
 investigates and reports back (default: mission).
 
---model and --effort are passed straight through to the real claude CLI
-(--model: haiku, sonnet, opus, fable; --effort: low, medium, high,
-xhigh, max). vexillum only validates the value is one claude accepts -
-it never picks one for you.
+--model and --effort are passed straight through to the harness's real CLI.
+On claude (the default): --model haiku, sonnet, opus or fable; --effort low,
+medium, high, xhigh or max. On a profile that selects the pi harness: --model
+is a provider/id such as anthropic/claude-sonnet-5 (it becomes pi --model) and
+--effort is a thinking level, off, minimal, low, medium, high, xhigh or max (it
+becomes pi --thinking, which pi clamps to what the model supports). vexillum
+only validates the value has the right shape for the harness - it never picks
+one for you.
 
 --profile <name> looks the model and effort up in the profile table
 ('` + cmdname.Name + ` models' lists it: <project>/.vexillum/models.json over the
@@ -36,22 +40,26 @@ an error listing the valid ones; "default" selects the table's default
 entry. Which profile fits a task is your call. See the vexillum skill.
 
 A profile may also name the harness (the agent CLI) its soldier runs on, in
-models.json; without one it is claude. The harness is recorded on the task
-and kept by '` + cmdname.Name + ` redispatch'. "pi" and "opencode" are reserved: choosing a
-profile that names one is an error until they are implemented.
+models.json: "claude" (the default when it names none) or "pi". The harness is
+recorded on the task and kept by '` + cmdname.Name + ` redispatch'. "opencode" is reserved:
+choosing a profile that names it is an error until it is implemented. A pi
+soldier is answered as free text when it blocks (it has no question selector
+to press a key in), and needs the pi CLI on PATH.
 
-Runs a real, interactive Claude Code session in a herdr pane, inside a
-fresh git worktree isolated from this project's own working tree, with
---dangerously-skip-permissions: the soldier has full host access under
+Runs a real, interactive session of the harness (Claude Code by default, with
+--dangerously-skip-permissions; pi has no permission prompts to skip and is
+started with --approve so it never stops to ask whether to trust the camp) in
+a herdr pane, inside a fresh git worktree isolated from this project's own
+working tree: the soldier has full host access under
 the invoking OS user (no container, chroot, or other sandbox) - the
 worktree only bounds where its commits land, not what it can read,
 write, or exfiltrate elsewhere on the machine. Nothing reaches the
 project's real history until '` + cmdname.Name + ` land' is explicitly approved;
 never dispatch against a prompt, repository, or machine where reading
 sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID (run
-this from inside a herdr-managed pane) and both herdr and claude on PATH; if
-any is missing it says so and exits before creating anything ('` + cmdname.Name + ` doctor'
-checks your setup).
+this from inside a herdr-managed pane) and both herdr and the harness's CLI
+(claude, or pi) on PATH; if any is missing it says so and exits before
+creating anything ('` + cmdname.Name + ` doctor' checks your setup).
 
 Returns quickly: it only waits out a short quick-settle probe, not the
 soldier's whole task. A trivial prompt may finish within that window and
@@ -89,7 +97,7 @@ func Dispatch(args []string) int {
 		return 1
 	}
 
-	workspaceID, err := herdrPreconditions("dispatch", os.Getenv, exec.LookPath)
+	workspaceID, err := harnessPreconditions("dispatch", harness, os.Getenv, exec.LookPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
