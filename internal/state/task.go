@@ -25,10 +25,19 @@ import (
 	"github.com/isaias-alt/vexillum/internal/schemaver"
 )
 
-// SchemaVersion is the current version of the Task JSON schema. Bump it
-// when Task's shape changes in a way that breaks reading older state
-// files.
-const SchemaVersion = schemaver.Current
+// SchemaVersion is the current version of the Task JSON schema, the one
+// New writes. Bump it when Task's shape changes in a way an older build
+// cannot honor, and keep OldestSchemaVersion at the oldest version this
+// build can still decode.
+//
+// Version 1 added Harness. A version 0 task file decodes with Harness
+// empty, which means the Claude Code harness, so it still loads; an older
+// build refuses a version 1 file instead of driving a task whose harness it
+// does not know as if it were claude.
+const SchemaVersion = 1
+
+// OldestSchemaVersion is the oldest Task schema version Load still reads.
+const OldestSchemaVersion = 0
 
 // Kind distinguishes a mission (delivers code changes, landed locally via
 // vx land, or opened as a pull request via vx ship) from a scout (delivers a
@@ -166,6 +175,13 @@ type Task struct {
 	// additive, no SchemaVersion bump needed.
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+
+	// Harness is the name of the agent CLI that runs this task's soldier
+	// (internal/soldier.HarnessFor), resolved from the dispatch profile and
+	// recorded when the task is created. Empty means claude: every task file
+	// written before this field existed (schema version 0) decodes to "".
+	// A re-dispatch reuses whatever this task already carries.
+	Harness string `json:"harness,omitempty"`
 
 	// Decision is the structured, durable record of what this task is (or
 	// most recently was) blocked on - see internal/soldier.ExtractDecision,
@@ -464,8 +480,8 @@ func decodeTask(path string, data []byte) (Task, error) {
 	if t.ID == "" || t.Kind == "" {
 		return Task{}, fmt.Errorf("%s: incomplete task (missing id or kind)", path)
 	}
-	if !schemaver.Supported(t.SchemaVersion) {
-		return Task{}, fmt.Errorf("%s: unsupported schema version %d (expected %d)", path, t.SchemaVersion, SchemaVersion)
+	if !schemaver.SupportedRange(t.SchemaVersion, OldestSchemaVersion, SchemaVersion) {
+		return Task{}, fmt.Errorf("%s: unsupported schema version %d (expected %d to %d)", path, t.SchemaVersion, OldestSchemaVersion, SchemaVersion)
 	}
 	return t, nil
 }

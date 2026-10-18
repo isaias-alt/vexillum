@@ -16,3 +16,16 @@ func TestSupported(t *testing.T) {
 		}
 	}
 }
+
+func TestSupportedRange(t *testing.T) {
+	for _, v := range []int{0, 1} {
+		if !schemaver.SupportedRange(v, 0, 1) {
+			t.Errorf("SupportedRange(%d, 0, 1) = false, want true", v)
+		}
+	}
+	for _, v := range []int{-1, 2, 999} {
+		if schemaver.SupportedRange(v, 0, 1) {
+			t.Errorf("SupportedRange(%d, 0, 1) = true, want false", v)
+		}
+	}
+}

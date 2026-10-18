@@ -2145,7 +2145,7 @@ func writeFutureSchemaTask(t *testing.T, proj string) string {
 }
 
 // An unreadable task file in one project (here a newer schema version, the
-// field case: "unsupported schema version 3 (expected 0)") used to abort the
+// field case: "unsupported schema version 3 (expected 0 to 1)") used to abort the
 // whole Tick, so a soldier finishing in a healthy project stayed running
 // forever. The healthy project's soldier must still settle, and so must a
 // healthy task sitting beside the unreadable file.
@@ -2224,7 +2224,7 @@ func TestSweeper_WarnsOncePerProblem(t *testing.T) {
 			t.Fatalf("Tick %d: %v", i, err)
 		}
 	}
-	warning := "sentinel: warning: skipping unreadable task file: " + path + ": unsupported schema version 3 (expected 0)\n"
+	warning := "sentinel: warning: skipping unreadable task file: " + path + ": unsupported schema version 3 (expected 0 to 1)\n"
 	if log.String() != warning {
 		t.Fatalf("expected exactly one warning across 3 ticks:\nwant %q\n got %q", warning, log.String())
 	}

@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -472,6 +473,7 @@ func TestOwnedKeys_CoversEveryTaskField(t *testing.T) {
 	task.Decision = &Decision{Question: "q"}
 	task.Amendments = []Amendment{{Text: "t"}}
 	task.LastPushedSHA = "abc"
+	task.Harness = "claude"
 
 	data, err := json.Marshal(task)
 	if err != nil {
@@ -631,5 +633,79 @@ func TestUpdate_SerializesConcurrentCallers(t *testing.T) {
 	}
 	if got.Redispatches != workers {
 		t.Errorf("expected %d increments, got %d", workers, got.Redispatches)
+	}
+}
+
+// A task file written before Harness existed (schema version 0) still loads,
+// and its empty Harness means claude.
+func TestLoad_TaskFileWithoutHarness(t *testing.T) {
+	home := t.TempDir()
+	old := `{"schema_version":0,"id":"deadbeef","kind":"mission","prompt":"p","status":"running","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+	writeRawTask(t, home, "deadbeef", []byte(old))
+
+	got, err := Load(home, "deadbeef")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Harness != "" {
+		t.Errorf("Harness = %q, want empty for a task file without the field", got.Harness)
+	}
+	if got.SchemaVersion != 0 {
+		t.Errorf("SchemaVersion = %d, want the file's own 0 preserved", got.SchemaVersion)
+	}
+}
+
+// New writes the current schema version, and a task's Harness survives a
+// save/load round trip.
+func TestSaveLoad_RoundTripsHarness(t *testing.T) {
+	home := t.TempDir()
+	task, err := New(KindMission, "harness round trip")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if task.SchemaVersion != SchemaVersion || SchemaVersion != 1 {
+		t.Fatalf("SchemaVersion = %d (const %d), want 1", task.SchemaVersion, SchemaVersion)
+	}
+	task.Harness = "claude"
+	if err := Save(home, task); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load(home, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Harness != "claude" {
+		t.Errorf("Harness = %q, want claude", got.Harness)
+	}
+}
+
+// A task with no harness omits the key, so claude tasks stay byte-compatible
+// with what an older build wrote apart from the schema version.
+func TestSave_OmitsEmptyHarness(t *testing.T) {
+	home := t.TempDir()
+	task, err := New(KindScout, "no harness")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := Save(home, task); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(home, "tasks", task.ID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"harness"`) {
+		t.Errorf("task file carries a harness key for an empty Harness:\n%s", data)
+	}
+}
+
+// The first version past the current one is refused, so an older build never
+// drives a task shape it does not know.
+func TestLoad_RejectsSchemaVersionAfterCurrent(t *testing.T) {
+	home := t.TempDir()
+	future := fmt.Sprintf(`{"schema_version":%d,"id":"deadbeef","kind":"mission","status":"pending","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`, SchemaVersion+1)
+	writeRawTask(t, home, "deadbeef", []byte(future))
+	if _, err := Load(home, "deadbeef"); err == nil {
+		t.Fatal("expected an error loading a task one schema version ahead of this build")
 	}
 }
