@@ -781,6 +781,113 @@ func TestTick_NeedsDecisionLinePaintedAfterIdleStillBlocks(t *testing.T) {
 	}
 }
 
+const (
+	// What Claude Code shows when its turn is over but a background job it
+	// started is not: the pane is idle for herdr, yet the soldier will write
+	// its real report once the job completes.
+	turnWithBackgroundJob = "⏺ waiting for background job\n\n✻ Brewed for 6s · done 3:37 PM · 1 shell still running\n\n❯\n"
+	finalTurnReport       = turnWithBackgroundJob + "⏺ Background command completed\n\n⏺ FINAL REPORT: committed d.txt\n\n✻ Sautéed for 3s · done 3:38 PM\n\n❯\n"
+)
+
+// The bug as a user hit it: a mission committed, then its turn ended with a
+// background job still running. herdr says idle and the commit is a strong
+// completion signal, but the report has not been written, so the sentinel must
+// keep the task running and wake nobody.
+func TestTick_TurnEndingOnBackgroundWorkIsNotDone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{turnWithBackgroundJob},
+	}
+	for range 2 {
+		woke, err := sentinel.Tick(home, client)
+		if err != nil || woke != 0 {
+			t.Fatalf("Tick: woke=%d err=%v, want no wake while the job runs", woke, err)
+		}
+	}
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Fatalf("expected running while background work is pending, got %s", got.Status)
+	}
+	if got.IdleUnconfirmedSince.IsZero() {
+		t.Error("expected the first held tick to stamp when the wait began")
+	}
+}
+
+// Once the job completes and the soldier writes its report, the next idle
+// settles the task done with the whole report in Output.
+func TestTick_SavesTheReportWrittenAfterBackgroundWork(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-time.Minute)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{finalTurnReport},
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusDone || got.Output != finalTurnReport {
+		t.Errorf("expected done with the final report, got %s %q", got.Status, got.Output)
+	}
+	if !got.IdleUnconfirmedSince.IsZero() {
+		t.Error("expected the wait mark cleared once the task settled")
+	}
+}
+
+// A job that never completes (a dev server left running) cannot keep a
+// finished task from being reported: past the bound it settles done, and the
+// output says the final report may not exist yet.
+func TestTick_BackgroundWorkThatNeverEndsSettlesWithANote(t *testing.T) {
+	defer sentinel.SetBackgroundWorkMaxWait(time.Minute)()
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-2 * time.Minute)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{turnWithBackgroundJob},
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusDone {
+		t.Fatalf("expected done after the bound, got %s", got.Status)
+	}
+	if !strings.HasPrefix(got.Output, turnWithBackgroundJob) || !strings.Contains(got.Output, "1 shell still running") || !strings.Contains(got.Output, "vx prompt") {
+		t.Errorf("expected the transcript followed by a note about the pending job, got %q", got.Output)
+	}
+}
+
 // movingHerdr runs onStatus inside every AgentStatus call, the moment a
 // command like vx land can move a task while the sentinel is mid-tick,
 // working from the task list it read before.

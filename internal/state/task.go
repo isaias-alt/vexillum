@@ -143,7 +143,9 @@ type Task struct {
 	// IdleUnconfirmedSince marks when internal/sentinel.Tick first
 	// observed this task's live herdr status as idle/done with neither a
 	// strong completion signal nor a currently valid declared pause
-	// (internal/pause) - zero means never. Same purely-additive reasoning
+	// (internal/pause), or with its turn ending on background work still
+	// running (settle.BackgroundWorkPending) - zero means never. Same
+	// purely-additive reasoning
 	// as AgentNotFoundSince: an older task file without it decodes to the
 	// zero value, which already means "never observed ambiguous".
 	IdleUnconfirmedSince time.Time `json:"idle_unconfirmed_since,omitzero"`

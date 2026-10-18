@@ -30,6 +30,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/pause"
 	"github.com/isaias-alt/vexillum/internal/project"
@@ -455,6 +456,9 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	switch {
 	case readErr != nil:
 		note = transcriptUnreadNote
+	case backgroundWorkIn(output) && !needsDecisionIn(task, output):
+		// Not a finished turn (see holdForBackgroundWork), so there is no
+		// last message to wait for: the pane is read again on a later tick.
 	case signalErr == nil && strong || needsDecisionIn(task, output):
 		var stable bool
 		if output, stable = awaitSettledTranscript(client, task.HerdrAgentName, output); !stable {
@@ -465,6 +469,19 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	if readErr == nil {
 		if d, found := soldier.FinalTurnNeedsDecision(task, output); found {
 			return settleNeedsDecision(projectRoot, task, output, d)
+		}
+	}
+
+	if readErr == nil {
+		if pending, found := settle.BackgroundWorkPending(output); found {
+			hold, giveUpNote, err := holdForBackgroundWork(projectRoot, task, pending)
+			if err != nil {
+				return false, err
+			}
+			if hold {
+				return false, nil
+			}
+			note = giveUpNote
 		}
 	}
 
@@ -495,6 +512,53 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 func needsDecisionIn(task state.Task, output string) bool {
 	_, found := soldier.FinalTurnNeedsDecision(task, output)
 	return found
+}
+
+func backgroundWorkIn(output string) bool {
+	_, found := settle.BackgroundWorkPending(output)
+	return found
+}
+
+// backgroundWorkMaxWait is how long a task whose turn ended with background
+// work still running (settle.BackgroundWorkPending) is held running before the
+// sentinel stops waiting for it. The soldier writes its final report when the
+// job completes, but a job that never does (a dev server left running) must
+// not keep a finished task from ever being reported.
+var backgroundWorkMaxWait = 10 * time.Minute
+
+// SetBackgroundWorkMaxWait swaps that bound and returns a function that
+// restores it. For tests.
+func SetBackgroundWorkMaxWait(d time.Duration) (restore func()) {
+	old := backgroundWorkMaxWait
+	backgroundWorkMaxWait = d
+	return func() { backgroundWorkMaxWait = old }
+}
+
+// holdForBackgroundWork decides what to do with an idle turn that Claude Code
+// reports as still having background work running (pending, for example "1
+// shell still running"). That is not the soldier's final turn: it will wake up
+// and write its report when the job completes, so settling it now would save
+// a transcript without one.
+//
+// hold is true while the sentinel should keep waiting: the task stays Running
+// with no wake, rechecked next tick. The first such tick stamps
+// IdleUnconfirmedSince, and once backgroundWorkMaxWait has passed since then
+// hold turns false with a note for the caller to save with the task's output,
+// so the gap is visible where the commander reads the result.
+func holdForBackgroundWork(projectRoot string, task state.Task, pending string) (hold bool, note string, err error) {
+	if task.IdleUnconfirmedSince.IsZero() {
+		task.IdleUnconfirmedSince = time.Now().UTC()
+		if _, err := saveIfRunning(projectRoot, task); err != nil {
+			return false, "", fmt.Errorf("recording background-work mark for task %s: %w", task.ID, err)
+		}
+		return true, "", nil
+	}
+	if time.Since(task.IdleUnconfirmedSince) < backgroundWorkMaxWait {
+		return true, "", nil
+	}
+	return false, fmt.Sprintf("[vexillum] the soldier's turn ended with background work still running (%s) and it was marked done after waiting %s for it, "+
+		"so its final report may not exist yet. Read the pane, or ask the soldier for the report with '%s prompt'.",
+		pending, backgroundWorkMaxWait, cmdname.Name), nil
 }
 
 // settleReadGap is how long awaitSettledTranscript waits between two reads

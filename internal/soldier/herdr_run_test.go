@@ -948,6 +948,40 @@ func TestRunInHerdr_RealCompletionStillSettlesDoneFromQuickSettle(t *testing.T) 
 	}
 }
 
+// The same bug through dispatch's own quick-settle probe: a mission that
+// committed fast and whose turn ended with a background job still running is
+// idle for herdr, but the soldier has not written its report. Settling it done
+// here would save a transcript without it, so it stays running for the
+// sentinel, which holds it until the job completes.
+func TestRunInHerdr_BackgroundWorkNeverSettlesDoneFromQuickSettle(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	campPath, base := newEmptyMissionCamp(t)
+	writeAndCommit(t, campPath, "output.txt", "soldier's work\n", "soldier's work")
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: campPath, Slot: 1, Branch: "vexillum/" + task.ID, Base: base}
+
+	client := &fakeHerdr{
+		tabID: "w1:t2", paneID: "w1:p2", promptStatus: "idle",
+		readOutput: "⏺ waiting for background job\n\n✻ Brewed for 6s · done 3:37 PM · 1 shell still running\n\n❯\n",
+	}
+
+	got, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Fatalf("expected the task to stay running while its background job runs, got %s", got.Status)
+	}
+
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("expected persisted status running, got %s", persisted.Status)
+	}
+}
+
 // newBlockedTask persists a task already in StatusBlocked with a real
 // decision attached - the shape internal/cli.Decide hands AnswerBlocked in
 // the real flow, after loading it fresh off disk.
