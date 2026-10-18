@@ -38,7 +38,8 @@ func fixable(sr StepResult) ([]Finding, bool) {
 // the step: re-reviewing an identical head would just repeat the findings.
 func runFix(campPath string, findings []Finding, opts Options, round int) (StepResult, error) {
 	prompt := buildFixPrompt(findings, opts.intent(), opts.Branch)
-	if _, err := runHarness(campPath, opts.Harness, state.Task{Prompt: prompt, Model: fixModel, Effort: fixEffort}, opts.timeout()); err != nil {
+	model, effort := opts.modelEffort(fixModel, fixEffort)
+	if _, err := runHarness(campPath, opts.Harness, state.Task{Prompt: prompt, Model: model, Effort: effort}, opts.timeout()); err != nil {
 		if errors.Is(err, errTimedOut) {
 			detail := fmt.Sprintf("the fixer %v", err)
 			if status, err := gitOutput(campPath, "status", "--porcelain"); err == nil && status != "" {

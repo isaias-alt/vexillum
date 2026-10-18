@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -62,6 +63,11 @@ type Options struct {
 	// Harness is state.Task.Harness, the agent CLI the mission ran on: the
 	// reviewer and the fixer run through it too. Empty means claude.
 	Harness string
+	// TaskModel and TaskEffort are state.Task.Model and Effort, the model and
+	// effort the mission ran with. The reviewer and the fixer use them on a
+	// harness whose models are not Claude's (see modelEffort).
+	TaskModel  string
+	TaskEffort string
 	// Fix turns on the review -> fix -> review loop. Off, a blocking review
 	// just fails the run.
 	Fix bool
@@ -74,6 +80,19 @@ type Options struct {
 	// Log, when set, receives one-line progress messages: a run is
 	// synchronous and a review can take minutes.
 	Log func(msg string)
+}
+
+// modelEffort is the model and effort one reviewer or fixer invocation runs
+// with. On claude they are the fixed claudeModel and claudeEffort, a
+// product choice (see reviewModel). Those are Claude Code aliases that mean
+// nothing to another harness, so there the invocation runs with the model and
+// effort the mission itself ran with, which are empty, meaning the harness's
+// own default, when its profile set none.
+func (o Options) modelEffort(claudeModel, claudeEffort string) (model, effort string) {
+	if o.Harness == "" || o.Harness == soldier.HarnessClaude {
+		return claudeModel, claudeEffort
+	}
+	return o.TaskModel, o.TaskEffort
 }
 
 // intent is the mission intent the reviewer and the fixer are given: the

@@ -207,7 +207,7 @@ func TestRunReview_UsesTheMissionsHarness(t *testing.T) {
 // A harness with no implementation never falls back to claude: the review
 // step errors out without invoking anything, so it can never read as a pass.
 func TestRunReview_RefusesAHarnessWithNoImplementation(t *testing.T) {
-	for _, harness := range []string{"pi", "opencode", "gemini"} {
+	for _, harness := range []string{"opencode", "gemini"} {
 		t.Run(harness, func(t *testing.T) {
 			dir := newTribunalRepo(t)
 			commitFile(t, dir, "change.txt", "hi\n")
@@ -225,5 +225,72 @@ func TestRunReview_RefusesAHarnessWithNoImplementation(t *testing.T) {
 				t.Errorf("claude must not be invoked, got %d calls", stub.calls())
 			}
 		})
+	}
+}
+
+// A Pi mission is reviewed by pi, not claude: one `pi -p` run with no session,
+// on the model and thinking level the mission itself ran with (the fixed
+// claude sonnet/high mean nothing to Pi), the prompt last after "--", and no
+// claude on PATH at all.
+func TestRunReview_PiRunsPiOnTheMissionsModel(t *testing.T) {
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "change.txt", "hi\n")
+	stub := newPiStub(t)
+	stub.out(0, reportJSON("", "change.txt"))
+
+	opts := Options{Branch: "b", Harness: "pi", TaskModel: "openrouter/foo/bar:free", TaskEffort: "low"}
+	sr, err := runReview(dir, "base", opts, "")
+	if err != nil {
+		t.Fatalf("runReview: %v", err)
+	}
+	if !sr.Passed || stub.calls() != 1 {
+		t.Fatalf("expected one passing pi invocation, got passed=%v calls=%d", sr.Passed, stub.calls())
+	}
+	// The recorded argv has one argument per line, and the prompt is many
+	// lines, so only the leading flags are compared.
+	args := strings.Split(stub.args(1), "\n")
+	want := []string{"-p", "--no-session", "--model", "openrouter/foo/bar:free", "--thinking", "low", "--"}
+	if len(args) <= len(want) || strings.Join(args[:len(want)], "|") != strings.Join(want, "|") {
+		t.Errorf("pi argv starts %q, want %q then the prompt", args[:min(len(args), len(want))], want)
+	}
+	if strings.Contains(stub.args(1), "sonnet") {
+		t.Errorf("the claude reviewer model leaked into pi's argv: %s", stub.args(1))
+	}
+	if !strings.Contains(stub.prompt(1), "Independent check of branch b against base") {
+		t.Errorf("the reviewer's brief was not the last argument: %q", stub.prompt(1))
+	}
+}
+
+// A Pi mission whose profile set no model leaves the choice to Pi: no
+// --model or --thinking at all.
+func TestRunReview_PiWithNoModelUsesPisDefault(t *testing.T) {
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "change.txt", "hi\n")
+	stub := newPiStub(t)
+	stub.out(0, reportJSON("", "change.txt"))
+
+	if _, err := runReview(dir, "base", Options{Branch: "b", Harness: "pi"}, ""); err != nil {
+		t.Fatalf("runReview: %v", err)
+	}
+	if a := stub.args(1); strings.Contains(a, "--model") || strings.Contains(a, "--thinking") {
+		t.Errorf("expected no model or thinking flags, got %s", a)
+	}
+}
+
+// Claude's reviewer keeps its fixed model and effort, whatever model the
+// mission ran with.
+func TestRunReview_ClaudeKeepsItsFixedModel(t *testing.T) {
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "change.txt", "hi\n")
+	stub := newClaudeStub(t)
+	stub.out(0, reportJSON("", "change.txt"))
+
+	opts := Options{Branch: "b", TaskModel: "haiku", TaskEffort: "low"}
+	if _, err := runReview(dir, "base", opts, ""); err != nil {
+		t.Fatalf("runReview: %v", err)
+	}
+	a := strings.Fields(stub.args(1))
+	if !strings.Contains(strings.Join(a, " "), "--model sonnet") || !strings.Contains(strings.Join(a, " "), "--effort high") {
+		t.Errorf("claude argv lost the fixed sonnet/high: %v", a)
 	}
 }

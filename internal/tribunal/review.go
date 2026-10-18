@@ -101,7 +101,8 @@ func runReview(campPath, base string, opts Options, fixStartSHA string) (StepRes
 			turn += "\n\nThe report you just gave was rejected: " + validationErr.Error() +
 				"\nReview once more and finish with a single corrected JSON object that follows the schema exactly."
 		}
-		out, err := runHarness(campPath, opts.Harness, state.Task{Prompt: turn, Model: reviewModel, Effort: reviewEffort}, opts.timeout())
+		model, effort := opts.modelEffort(reviewModel, reviewEffort)
+		out, err := runHarness(campPath, opts.Harness, state.Task{Prompt: turn, Model: model, Effort: effort}, opts.timeout())
 		if errors.Is(err, errTimedOut) {
 			return StepResult{Step: StepReview, Passed: false, Notes: notes,
 				Detail: fmt.Sprintf("the reviewer %v - a timeout is never treated as a pass", err)}, nil

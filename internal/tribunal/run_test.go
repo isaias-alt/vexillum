@@ -122,6 +122,37 @@ func TestRun_FixLoopFixesThenPasses(t *testing.T) {
 	}
 }
 
+// The same loop on a Pi mission: every reviewer and fixer run is a fresh
+// `pi -p --no-session` with the mission's own model and thinking level, never
+// claude's.
+func TestRun_FixLoopOnPi(t *testing.T) {
+	dir := newTribunalRepo(t)
+	commitFile(t, dir, "change.txt", "hi\n")
+	stub := newPiStub(t)
+	stub.out(1, reportJSON(finding("error", "auto-fix", "change.txt"), "change.txt"))
+	stub.hook(2, "echo fixed > fixed.txt")
+	stub.out(3, reportJSON("", "change.txt", "fixed.txt"))
+
+	result, err := Run(dir, "base", Options{Branch: "b", Fix: true, Harness: "pi", TaskModel: "anthropic/claude-haiku-4-5", TaskEffort: "minimal"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !result.Passed() || stub.calls() != 3 {
+		t.Fatalf("expected review, fix, review = 3 passing pi calls, got passed=%v calls=%d", result.Passed(), stub.calls())
+	}
+	for call := 1; call <= 3; call++ {
+		a := stub.args(call)
+		for _, want := range []string{"-p\n", "--no-session\n", "--model\nanthropic/claude-haiku-4-5\n", "--thinking\nminimal\n"} {
+			if !strings.Contains(a, want) {
+				t.Errorf("call %d: pi argv lacks %q", call, strings.TrimSpace(want))
+			}
+		}
+		if strings.Contains(a, "sonnet") || strings.Contains(a, "--effort") {
+			t.Errorf("call %d: claude's flags leaked into pi's argv", call)
+		}
+	}
+}
+
 // The loop is bounded: an endlessly failing review ends in a rejection
 // after MaxFixRounds fix rounds.
 func TestRun_FixLoopStopsAtMaxRounds(t *testing.T) {

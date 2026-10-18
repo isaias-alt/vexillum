@@ -21,6 +21,20 @@ type claudeStub struct {
 
 func newClaudeStub(t *testing.T) *claudeStub {
 	t.Helper()
+	return newStub(t, "claude", `printf '%s' "$2" > "$d/prompt.$n"`)
+}
+
+// newPiStub is the same stub under the name "pi": its prompt is the last
+// argument, after the "--" that ends the options.
+func newPiStub(t *testing.T) *claudeStub {
+	t.Helper()
+	return newStub(t, "pi", `for last; do :; done; printf '%s' "$last" > "$d/prompt.$n"`)
+}
+
+// newStub installs the scripted fake named binary; recordPrompt is the shell
+// line that saves the prompt from that CLI's argv.
+func newStub(t *testing.T, binary, recordPrompt string) *claudeStub {
+	t.Helper()
 	dir := gitOnlyPath(t)
 	for _, tool := range []string{"cat", "sleep"} {
 		real, err := exec.LookPath(tool)
@@ -38,14 +52,14 @@ n=$(cat "$d/count" 2>/dev/null || echo 0)
 n=$((n+1))
 echo $n > "$d/count"
 printf '%s\n' "$@" > "$d/args.$n"
-printf '%s' "$2" > "$d/prompt.$n"
+` + recordPrompt + `
 [ -f "$d/sleep.$n" ] && exec sleep 30
 [ -f "$d/hook.$n" ] && . "$d/hook.$n"
 if [ -f "$d/out.$n" ]; then cat "$d/out.$n"; elif [ -f "$d/out.last" ]; then cat "$d/out.last"; fi
 exit 0
 `
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(script), 0o755); err != nil {
-		t.Fatalf("writing claude stub: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, binary), []byte(script), 0o755); err != nil {
+		t.Fatalf("writing %s stub: %v", binary, err)
 	}
 	// The fixer's commit needs an identity.
 	t.Setenv("GIT_AUTHOR_NAME", "Test")
