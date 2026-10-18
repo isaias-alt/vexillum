@@ -17,10 +17,12 @@ Requirements:
 - [herdr](https://herdr.dev) (`brew install herdr` works)
 - a git repository for your project
 - optional: `gh` (for `vx ship`)
+- optional: [Pi](https://pi.dev), only if a model profile sets `"harness": "pi"` to run its soldiers on Pi instead of Claude Code
 
 `vx doctor` checks that Claude Code, herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
 
-> **Warning:** soldiers run Claude Code with `--dangerously-skip-permissions`, as
+> **Warning:** soldiers run Claude Code with `--dangerously-skip-permissions` (or
+> Pi, which has no permission prompts at all), as
 > your OS user, with no container or sandbox. Landing a mission is the approval
 > gate: nothing reaches your project's real history until you approve it. Never
 > dispatch against a repository or machine where reading credentials would be a problem.
