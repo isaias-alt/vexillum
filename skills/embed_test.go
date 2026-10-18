@@ -229,3 +229,31 @@ func TestVexillumSkillContract(t *testing.T) {
 		}
 	}
 }
+
+// TestVexillumSkillHardRule pins the commander's hard rule in the skill: it
+// never does a soldier's work, and the list of what it still does is explicit.
+func TestVexillumSkillHardRule(t *testing.T) {
+	skill, err := ReadFile("vexillum", "SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(skill)
+	i := strings.Index(text, "## Hard rule: you do not do the soldier's work")
+	if i < 0 {
+		t.Fatal("hard rule section missing from the vexillum skill")
+	}
+	section := text[i:]
+	if j := strings.Index(section[3:], "\n## "); j >= 0 {
+		section = section[:3+j]
+	}
+	for _, want := range []string{
+		"never write or modify project code", "scout", "mission", "NOT a verification",
+		"binnacles", "forum", "git log", "git status",
+		"dispatch, land, strike, ship, prompt", "decide, redispatch, pending, status, forum, yolo",
+		"only to the commander",
+	} {
+		if !strings.Contains(section, want) {
+			t.Errorf("hard rule section does not mention %q", want)
+		}
+	}
+}

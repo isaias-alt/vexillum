@@ -9,7 +9,7 @@ import (
 
 // maxCoreBytes is the budget for the always-on core: it is paid in context
 // on every turn, so it must stay short.
-const maxCoreBytes = 3 * 1024
+const maxCoreBytes = 4 * 1024
 
 func TestCoreContract(t *testing.T) {
 	// The domain vocabulary stays in English in every language.
@@ -50,6 +50,46 @@ func TestCoreContract(t *testing.T) {
 			}
 			if len(body) > maxCoreBytes {
 				t.Errorf("core is %d bytes, budget is %d", len(body), maxCoreBytes)
+			}
+		})
+	}
+}
+
+// TestCoreHardRule pins the rule that the commander never does a soldier's
+// work, and the explicit list of what it still does.
+func TestCoreHardRule(t *testing.T) {
+	headings := map[string]string{
+		LangEN: "### Hard rule: you do not do the soldier's work",
+		LangES: "### Regla dura: no hacés el trabajo del soldier",
+	}
+	required := []string{
+		"binnacles", "TODOs", "forum", "git log", "git status", "scout", "mission",
+		"`" + cmdname.Name + "`",
+		"dispatch", "land", "strike", "ship", "prompt", "decide", "redispatch",
+		"pending", "status", "yolo",
+	}
+	for _, lang := range Languages() {
+		t.Run(lang, func(t *testing.T) {
+			body, err := Core(lang)
+			if err != nil {
+				t.Fatal(err)
+			}
+			i := strings.Index(body, headings[lang])
+			if i < 0 {
+				t.Fatalf("hard rule heading %q missing", headings[lang])
+			}
+			section := body[i:]
+			if j := strings.Index(section[4:], "\n### "); j >= 0 {
+				section = section[:4+j]
+			}
+			for _, want := range required {
+				if !strings.Contains(section, want) {
+					t.Errorf("hard rule section does not mention %q", want)
+				}
+			}
+			// The Role check must still exempt a soldier.
+			if !strings.Contains(body, "### Role check") {
+				t.Error("role check heading missing")
 			}
 		})
 	}

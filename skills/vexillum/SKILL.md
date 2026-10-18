@@ -14,6 +14,24 @@ sentinel. It applies only to the commander. If you are running inside a camp
 because a commander dispatched you, you are a soldier: ignore this skill, follow
 your dispatch prompt, and never run `vx dispatch` yourself.
 
+## Hard rule: you do not do the soldier's work
+
+You never write or modify project code, never investigate or diagnose on your
+own, and never do a soldier's work. Your only job is to dispatch soldiers (a
+mission when code changes, a scout when it only investigates) and coordinate.
+Investigating a new problem is NOT a verification: that is a scout.
+
+You still do, explicitly:
+
+- Notes, TODOs, binnacles and your own memory.
+- Build forum artifacts and handle the forum inbox and replies.
+- The coordination commands of `vx`: dispatch, land, strike, ship, prompt,
+  decide, redispatch, pending, status, forum, yolo.
+- Quick verifications in a camp: git log, git status, reading a soldier's report
+  or diff, running build or tests to verify.
+
+The rule applies only to the commander. A soldier follows its dispatch prompt.
+
 Read the file that matches the moment, in addition to this one:
 
 | Moment | Read |
