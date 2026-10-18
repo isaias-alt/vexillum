@@ -1,0 +1,103 @@
+---
+title: Using Pi
+description: Run a model profile's soldiers on the Pi coding agent instead of Claude Code, including free and non-Anthropic models.
+---
+
+A model profile can name a **harness**, the agent CLI its soldiers run on. Claude Code is the default. With `"harness": "pi"` the soldiers of that profile run on [Pi](https://pi.dev), which can use almost any provider and model, including free tiers. The commander stays a Claude Code session, and a task keeps its harness through `vx redispatch`, `vx prompt`, `vx decide`, `vx land` and `vx strike`.
+
+This page describes what was checked against **Pi 1.3.0**. `vx doctor` warns on any other major series.
+
+<Callout type="warn" title="Free tiers can keep your code">
+  A soldier sends whatever it reads to the model provider: your prompts, the files it opens, command output and anything in your environment that a command prints. Many free model tiers log prompts and outputs and may use them for training, under terms that differ per provider and change over time. Read the provider's terms before you point a profile at a free model, and do not use one for private or proprietary code, or on a machine whose files or environment hold secrets. Pi, like Claude Code in vexillum, has full host access under your user.
+</Callout>
+
+## Set it up
+
+1. Install Pi. Either the installer or npm works:
+
+   ```bash
+   curl -fsSL https://pi.dev/install.sh | sh
+   npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+   ```
+
+2. Run `pi` once and log in to a provider with `/login`, or export the provider's API key. `pi --list-models` lists what your account can use.
+3. Install herdr's integration for Pi, so herdr reads a Pi soldier's state (working, idle) from Pi itself instead of from the screen:
+
+   ```bash
+   herdr integration install pi
+   ```
+
+4. Run `vx doctor`. When a profile selects `pi`, or a `pi` binary is on your `PATH`, it reports the binary, its version and the integration. They only warn: a missing piece never makes the environment not ready, and a setup without Pi sees none of these lines.
+
+## Add a profile
+
+Add a profile with `"harness": "pi"` to `.vexillum/models.json` (or the global `~/.vexillum/models.json`):
+
+```json
+{
+  "profiles": {
+    "pi-scout": {
+      "model": "anthropic/claude-haiku-4-5",
+      "effort": "low",
+      "when": "Scout whose question reduces to verifiable facts, run on Pi.",
+      "harness": "pi"
+    }
+  }
+}
+```
+
+```bash
+vx dispatch "which flags does the build script accept?" --kind scout --profile pi-scout
+```
+
+On a Pi profile the two fields mean:
+
+| Field | Value | Passed to Pi as |
+| --- | --- | --- |
+| `model` | `provider/id`, such as `anthropic/claude-haiku-4-5` or `openrouter/meta-llama/llama-4-scout:free` | `--model <provider/id>` |
+| `effort` | a thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max` | `--thinking <level>` |
+
+vexillum checks the **shape** only: a `model` must look like `provider/id`, and `effort` must be one of Pi's levels. Pi's models are whatever your providers offer, so it cannot check that a model exists; Pi reports that when the soldier starts. Pi also **clamps** a thinking level the model does not support to the nearest one it does, so `xhigh` on a model that stops at `high` runs at `high`. A claude alias such as `sonnet` is not a `provider/id`, and switching an existing profile to `pi` without giving it a `provider/id` model is an error that names the file and the field. A later layer is checked against the harness the profile ends up with, so a project file can retune a `pi` profile from the global base.
+
+### Model ids that end in `:free`
+
+Pi reads a `:level` suffix on `--model` as a thinking level, and some ids end in a colon segment of their own, such as OpenRouter's `:free`. vexillum never builds that suffix: keep the whole id in `model` and put the thinking level in `effort`, which is passed with `--thinking`. Pi matches an exact model id before it looks for a suffix, so `openrouter/meta-llama/llama-4-scout:free` is taken as the id it is. Do not write `...:free:high` in `model`.
+
+## What differs from a Claude Code soldier
+
+| Topic | Claude Code soldier | Pi soldier |
+| --- | --- | --- |
+| Permissions | `--dangerously-skip-permissions` | Pi has no permission prompts and no flag to skip. It has the same full host access, and landing is still the control: nothing reaches your history until you approve `vx land`. |
+| Project trust | vexillum dismisses Claude's "trust this folder" dialog | Started with `--approve`. Pi asks "Trust project folder?" and stops until someone answers when the camp has `.pi/` settings, extensions, skills, prompts, themes or system-prompt files, or a `.agents/skills` directory in it or a parent. Nobody is at a soldier's pane, and its default answer saves the decision in `~/.pi/agent/trust.json`. The cost: the project's committed `.pi/` extensions run in the soldier. A soldier can already run any command as you, so that adds no reach, but review a repository's `.pi/` before you dispatch on it. |
+| Terminal | normal | `--tui-mode regular`. Pi runs fullscreen on the terminal's alternate screen by default since 1.0.0, which has no scrollback to read. |
+| Rules | `CLAUDE.md`, which imports `AGENTS.md` | Pi reads `AGENTS.md` in each folder and, only when there is none, `CLAUDE.md`. It does not expand `@AGENTS.md`. Nothing extra is needed: the vexillum block lives in `AGENTS.md` (or in `CLAUDE.md` when the project has no `AGENTS.md`), and Pi reads whichever holds it. A project that has both files with different content shows a Pi soldier only `AGENTS.md`. |
+| Skills | the project's `.claude/skills` | none. Soldiers do not use skills in this release. |
+| Questions | Claude's question selector, answered with a key press | no selector. A soldier asks with a `needs-decision:` line, and `vx decide` delivers the answer as plain text. |
+| Wake | the sentinel reads the status from herdr | the same. The sentinel needs no extension for Pi, and the commander is woken as usual. |
+| `vx ship` | the tribunal's reviewer and fixer run `claude -p` on `sonnet` at high effort | they run `pi -p --no-session` on the model and thinking level the mission itself ran with, or Pi's default when the profile set none |
+
+## Blocked soldiers
+
+A Pi soldier that needs an answer ends its turn with a `needs-decision:` line, which is also how it asks in Claude Code when it does not use the selector. The task becomes `blocked` with the question stored as a prose `decision`:
+
+```bash
+vx status
+vx decide <task-id> "Use the existing helper"
+```
+
+Whatever you pass is typed into the soldier's pane as text. Option numbers mean nothing to Pi, so write the answer itself. `--dismiss` works as for any task. See [Blocked and interrupted](/docs/guides/blocked-and-interrupted).
+
+## Not in this release
+
+- A wake extension for Pi and a structured `ask_user` tool, which would let a Pi soldier ask without a text line.
+- Pi as the commander.
+- Skills for Pi soldiers.
+- OpenCode, a reserved harness name that is refused with a clear error.
+
+For a checklist to verify a Pi setup on a real machine, see `docs/verification/pi-soldier-checklist.md` in the repository.
+
+## Related
+
+- [models.json](/docs/reference/models-json)
+- [`vx dispatch`](/docs/reference/cli/dispatch) and [`vx doctor`](/docs/reference/cli/doctor)
+- [Blocked and interrupted](/docs/guides/blocked-and-interrupted)

@@ -1,0 +1,103 @@
+---
+title: Usar Pi
+description: Corré los soldiers de un perfil de modelo en el agente de código Pi en lugar de Claude Code, incluidos los modelos gratuitos y de otros proveedores.
+---
+
+Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Claude Code es el default. Con `"harness": "pi"` los soldiers de ese perfil corren en [Pi](https://pi.dev), que puede usar casi cualquier proveedor y modelo, incluidos los planes gratuitos. El commander sigue siendo una sesión de Claude Code, y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
+
+Esta página describe lo que se verificó contra **Pi 1.3.0**. `vx doctor` advierte con cualquier otra serie mayor.
+
+<Callout type="warn" title="Los planes gratuitos pueden quedarse con tu código">
+  Un soldier le manda al proveedor del modelo todo lo que lee: tus prompts, los archivos que abre, la salida de los comandos y lo que haya en tu entorno que un comando imprima. Muchos planes gratuitos de modelos registran prompts y salidas y pueden usarlos para entrenar, con términos que cambian según el proveedor y con el tiempo. Leé los términos del proveedor antes de apuntar un perfil a un modelo gratuito, y no uses uno con código privado o propietario, ni en una máquina cuyos archivos o entorno guarden secretos. Pi, igual que Claude Code en vexillum, tiene acceso total al host con tu usuario.
+</Callout>
+
+## Prepararlo
+
+1. Instalá Pi. Sirve el instalador o npm:
+
+   ```bash
+   curl -fsSL https://pi.dev/install.sh | sh
+   npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+   ```
+
+2. Corré `pi` una vez e iniciá sesión en un proveedor con `/login`, o exportá la API key del proveedor. `pi --list-models` lista lo que tu cuenta puede usar.
+3. Instalá la integración de herdr para Pi, así herdr lee el estado de un soldier de Pi (working, idle) del propio Pi en lugar de leer la pantalla:
+
+   ```bash
+   herdr integration install pi
+   ```
+
+4. Corré `vx doctor`. Cuando un perfil selecciona `pi`, o hay un binario `pi` en tu `PATH`, informa el binario, su versión y la integración. Solo advierten: una pieza faltante nunca deja el entorno como no listo, y una configuración sin Pi no ve ninguna de estas líneas.
+
+## Agregar un perfil
+
+Agregá un perfil con `"harness": "pi"` a `.vexillum/models.json` (o al global `~/.vexillum/models.json`):
+
+```json
+{
+  "profiles": {
+    "pi-scout": {
+      "model": "anthropic/claude-haiku-4-5",
+      "effort": "low",
+      "when": "Scout cuya pregunta se reduce a hechos verificables, corrido en Pi.",
+      "harness": "pi"
+    }
+  }
+}
+```
+
+```bash
+vx dispatch "which flags does the build script accept?" --kind scout --profile pi-scout
+```
+
+En un perfil de Pi los dos campos significan:
+
+| Campo | Valor | Se le pasa a Pi como |
+| --- | --- | --- |
+| `model` | `provider/id`, como `anthropic/claude-haiku-4-5` u `openrouter/meta-llama/llama-4-scout:free` | `--model <provider/id>` |
+| `effort` | un nivel de thinking: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` o `max` | `--thinking <level>` |
+
+vexillum revisa solo la **forma**: un `model` tiene que verse como `provider/id`, y `effort` tiene que ser uno de los niveles de Pi. Los modelos de Pi son los que ofrezcan tus proveedores, así que no puede comprobar que un modelo exista; eso lo informa Pi cuando arranca el soldier. Pi además **ajusta** un nivel de thinking que el modelo no soporta al más cercano que sí soporta, así que `xhigh` en un modelo que llega hasta `high` corre en `high`. Un alias de claude como `sonnet` no es un `provider/id`, y pasar un perfil existente a `pi` sin darle un modelo `provider/id` es un error que nombra el archivo y el campo. Una capa posterior se revisa contra el harness con el que termina el perfil, así que un archivo de proyecto puede retocar un perfil de `pi` de la base global.
+
+### Ids de modelo que terminan en `:free`
+
+Pi lee un sufijo `:level` en `--model` como un nivel de thinking, y algunos ids terminan en un segmento con dos puntos propio, como el `:free` de OpenRouter. vexillum nunca arma ese sufijo: dejá el id completo en `model` y poné el nivel de thinking en `effort`, que se pasa con `--thinking`. Pi busca un id de modelo exacto antes de buscar un sufijo, así que `openrouter/meta-llama/llama-4-scout:free` se toma como el id que es. No escribas `...:free:high` en `model`.
+
+## En qué se diferencia de un soldier de Claude Code
+
+| Tema | Soldier de Claude Code | Soldier de Pi |
+| --- | --- | --- |
+| Permisos | `--dangerously-skip-permissions` | Pi no tiene prompts de permisos ni un flag para saltearlos. Tiene el mismo acceso total al host, y aterrizar sigue siendo el control: nada llega a tu historial hasta que aprobás `vx land`. |
+| Confianza del proyecto | vexillum descarta el diálogo "trust this folder" de Claude | Arranca con `--approve`. Pi pregunta "Trust project folder?" y se queda esperando hasta que alguien responda cuando el camp tiene en `.pi/` settings, extensions, skills, prompts, themes o archivos de system prompt, o un directorio `.agents/skills` en él o en un padre. Nadie está en el pane de un soldier, y su respuesta por defecto guarda la decisión en `~/.pi/agent/trust.json`. El costo: las extensions de `.pi/` que el proyecto tenga commiteadas corren en el soldier. Un soldier ya puede correr cualquier comando como vos, así que eso no suma alcance, pero revisá el `.pi/` de un repositorio antes de despachar sobre él. |
+| Terminal | normal | `--tui-mode regular`. Desde 1.0.0 Pi corre en pantalla completa sobre la pantalla alternativa de la terminal por defecto, que no tiene scrollback para leer. |
+| Reglas | `CLAUDE.md`, que importa `AGENTS.md` | Pi lee `AGENTS.md` en cada carpeta y, solo si no hay, `CLAUDE.md`. No expande `@AGENTS.md`. No hace falta nada extra: el bloque de vexillum vive en `AGENTS.md` (o en `CLAUDE.md` cuando el proyecto no tiene `AGENTS.md`), y Pi lee el que lo tenga. Un proyecto con los dos archivos y contenido distinto le muestra a un soldier de Pi solo `AGENTS.md`. |
+| Skills | el `.claude/skills` del proyecto | ninguna. Los soldiers no usan skills en este release. |
+| Preguntas | el selector de preguntas de Claude, que se responde con una pulsación de tecla | no hay selector. Un soldier pregunta con una línea `needs-decision:`, y `vx decide` entrega la respuesta como texto plano. |
+| Despertar | el sentinel lee el estado de herdr | lo mismo. El sentinel no necesita ninguna extension para Pi, y el commander se despierta como siempre. |
+| `vx ship` | el reviewer y el fixer del tribunal corren `claude -p` en `sonnet` con effort high | corren `pi -p --no-session` con el modelo y el nivel de thinking con los que corrió la mission, o el default de Pi cuando el perfil no definió ninguno |
+
+## Soldiers blocked
+
+Un soldier de Pi que necesita una respuesta termina su turno con una línea `needs-decision:`, que es también como pregunta en Claude Code cuando no usa el selector. La tarea pasa a `blocked` con la pregunta guardada como una `decision` de prosa:
+
+```bash
+vx status
+vx decide <task-id> "Use the existing helper"
+```
+
+Lo que pases se escribe en el pane del soldier como texto. Los números de opción no significan nada para Pi, así que escribí la respuesta misma. `--dismiss` funciona como en cualquier tarea. Ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted).
+
+## No está en este release
+
+- Una extension de despertar para Pi y una herramienta `ask_user` estructurada, que le permitiría a un soldier de Pi preguntar sin una línea de texto.
+- Pi como commander.
+- Skills para los soldiers de Pi.
+- OpenCode, un nombre de harness reservado que se rechaza con un error claro.
+
+Para una checklist con la que verificar una configuración de Pi en una máquina real, mirá `docs/verification/pi-soldier-checklist.md` en el repositorio.
+
+## Relacionado
+
+- [models.json](/es/docs/reference/models-json)
+- [`vx dispatch`](/es/docs/reference/cli/dispatch) y [`vx doctor`](/es/docs/reference/cli/doctor)
+- [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted)

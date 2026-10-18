@@ -35,13 +35,13 @@ El archivo es JSON, en inglés:
 | Campo | Significado |
 | --- | --- |
 | `profiles.<name>` | Un perfil con nombre. El nombre no tiene espacios y no puede ser `default`. |
-| `profiles.<name>.model` | El modelo que se le pasa a Claude Code: `haiku`, `sonnet`, `opus` o `fable`. |
-| `profiles.<name>.effort` | El effort que se le pasa a Claude Code: `low`, `medium`, `high`, `xhigh` o `max`. |
+| `profiles.<name>.model` | El modelo que se le pasa al harness. En `claude`: `haiku`, `sonnet`, `opus` o `fable`. En `pi`: un `provider/id` como `anthropic/claude-sonnet-5`, que se pasa como `--model`. |
+| `profiles.<name>.effort` | El effort que se le pasa al harness. En `claude`: `low`, `medium`, `high`, `xhigh` o `max`. En `pi`: un nivel de thinking, `off`, `minimal`, `low`, `medium`, `high`, `xhigh` o `max`, que se pasa como `--thinking` (Pi lo ajusta a lo que el modelo soporta). |
 | `profiles.<name>.when` | Texto libre que le dice al commander cuándo aplica el perfil. No puede estar vacío. |
-| `profiles.<name>.harness` | Opcional. El CLI de agente en el que corren los soldiers del perfil. `claude` (Claude Code) es el default cuando el campo no está. `pi` y `opencode` son nombres reservados sin implementación todavía: el archivo carga, pero despachar con un perfil que nombre uno es un error. Cualquier otro nombre es un error que nombra el archivo y el campo. |
+| `profiles.<name>.harness` | Opcional. El CLI de agente en el que corren los soldiers del perfil. `claude` (Claude Code) es el default cuando el campo no está. `pi` corre los soldiers del perfil en el agente de código [Pi](/es/docs/guides/using-pi). `opencode` es un nombre reservado sin implementación todavía: el archivo carga, pero despachar con un perfil que lo nombre es un error. Cualquier otro nombre es un error que nombra el archivo y el campo. |
 | `default.model`, `default.effort` | El valor de respaldo cuando ningún perfil encaja. Mismos valores válidos. |
 
-Los campos desconocidos se rechazan, así que un error de tipeo no queda sin efecto en silencio. Un valor que Claude Code no aceptaría es un error que nombra el archivo y el campo. La entrada `default` no tiene `harness`: siempre corre en `claude`. El archivo no tiene `schema_version`; el parseo estricto ya hace que un vexillum más viejo rechace un archivo que usa un campo que no conoce.
+Los campos desconocidos se rechazan, así que un error de tipeo no queda sin efecto en silencio. Un valor que el harness del perfil no aceptaría es un error que nombra el archivo y el campo. Los valores se revisan después de combinar las capas, contra el harness con el que termina el perfil: un archivo de proyecto puede poner un modelo `provider/id` en un perfil `pi` que definió la base global, y pasar un perfil existente a `pi` falla hasta que su modelo sea un `provider/id`. Un modelo de `pi` se revisa solo por su forma, porque los modelos de Pi son los que ofrezcan tus proveedores; ver [Usar Pi](/es/docs/guides/using-pi). La entrada `default` no tiene `harness`: siempre corre en `claude`. El archivo no tiene `schema_version`; el parseo estricto ya hace que un vexillum más viejo rechace un archivo que usa un campo que no conoce.
 
 Los perfiles incluidos, en orden de prioridad (gana el primero que coincide):
 
@@ -91,6 +91,25 @@ vx dispatch "update the changelog wording" --kind mission --profile mission-mech
 ## Cómo lo usa el commander
 
 La [skill](/es/docs/concepts/skills) `vexillum` le indica al commander que corra `vx models`, lea las líneas `when` y elija el perfil que encaja con la tarea, y después despache con `--profile`. Elegir sigue siendo criterio, escrito en markdown. El archivo solo guarda los valores, así que cambiás un número en vez de reescribir prosa.
+
+## Un perfil en Pi
+
+Un perfil que corre en Pi nombra un modelo `provider/id`, un nivel de thinking como su effort, y el harness `pi`:
+
+```json
+{
+  "profiles": {
+    "pi-scout": {
+      "model": "anthropic/claude-haiku-4-5",
+      "effort": "low",
+      "when": "Scout cuya pregunta se reduce a hechos verificables, corrido en Pi.",
+      "harness": "pi"
+    }
+  }
+}
+```
+
+Dejá entero en `model` un id que termina en un segmento con dos puntos, como el `:free` de OpenRouter, y poné el nivel de thinking en `effort`; vexillum lo pasa con `--thinking` y nunca como sufijo. [Usar Pi](/es/docs/guides/using-pi) cubre la preparación, en qué se diferencia de un soldier de Claude Code y la privacidad de los planes gratuitos.
 
 ## Un ejemplo completo
 

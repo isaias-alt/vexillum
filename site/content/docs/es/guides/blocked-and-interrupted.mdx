@@ -14,6 +14,8 @@ vx decide <task-id> "Use the existing helper"
 
 `decide` entrega tu respuesta al pane todavía abierto del soldier y la registra contra la decision. Si la pregunta vino del selector de preguntas de Claude Code, pasá el texto exacto de una opción o su número (desde 1); se entrega como una sola pulsación de tecla, como si la hubieras elegido vos. La tarea vuelve a `running`, o termina de nuevo si el soldier acaba o hace otra pregunta enseguida.
 
+Un soldier de Pi no tiene selector de preguntas, así que su respuesta siempre se entrega como texto: escribí la respuesta misma, no un número de opción. Ver [Usar Pi](/es/docs/guides/using-pi).
+
 Solo una tarea `blocked` puede responderse. Si su pane en realidad ya no está, `decide` la marca `interrupted` y se niega.
 
 ### Una tarea bloqueada por error

@@ -37,7 +37,7 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 | `agent_not_found_since`, `idle_unconfirmed_since` | hora | cuándo el sentinel vio la condición por primera vez |
 | `redispatches` | number | cuántas veces se re-despachó la tarea |
 | `model`, `effort` | string | la elección del soldier; vacío significa el default de claude |
-| `harness` | string | el CLI de agente en el que corre el soldier, tomado del perfil del dispatch (`claude`); vacío significa `claude`, como en un archivo de tarea escrito antes de este campo |
+| `harness` | string | el CLI de agente en el que corre el soldier, tomado del perfil del dispatch (`claude` o `pi`); vacío significa `claude`, como en un archivo de tarea escrito antes de este campo |
 | `decision` | object | presente una vez que la tarea quedó blocked al menos una vez |
 | `amendments` | array | instrucciones que el general dio después del dispatch, con `vx prompt` y `vx decide` (no `--dismiss`); ver abajo |
 
