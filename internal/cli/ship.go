@@ -423,8 +423,10 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 	// Recorded at once: it is what lets a later ship recognize this tip as
 	// its own after the soldier rebases. The save at the end of the ship
 	// carries it too, so a failure here costs nothing yet.
-	task.LastPushedSHA = pushed
-	if err := state.Save(projectRoot, task); err != nil {
+	if _, err := state.Update(projectRoot, taskID, func(current *state.Task) (bool, error) {
+		current.LastPushedSHA = pushed
+		return true, nil
+	}); err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": pushed %s, but failed to record the pushed commit: %v\n", c.Branch, err)
 	}
 
@@ -439,9 +441,12 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 		}
 	}
 
-	task.Status = state.StatusShipped
-	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	if _, err := state.Update(projectRoot, taskID, func(current *state.Task) (bool, error) {
+		current.LastPushedSHA = pushed
+		current.Status = state.StatusShipped
+		current.UpdatedAt = time.Now().UTC()
+		return true, nil
+	}); err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": opened %s, but failed to record shipped status: %v\n", prURL, err)
 		return 1
 	}

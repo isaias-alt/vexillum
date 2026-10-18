@@ -120,32 +120,49 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 		}
 	}
 
-	task.Redispatches++
-	task.Status = state.StatusPending
-	task.CampSlot = 0
-	task.CampPath = ""
-	task.CampBranch = ""
-	task.CampBase = ""
-	task.HerdrWorkspaceID = ""
-	task.HerdrTabID = ""
-	task.HerdrPaneID = ""
-	task.HerdrAgentName = ""
-	task.Output = ""
-	task.ExitCode = nil
-	task.Decision = nil
-	// Clearing this is not cosmetic: a stale mark left over from the
-	// previous life of this task would let sentinel.Tick's
-	// notFoundConfirmWindow (already elapsed, since it's what got this
-	// task marked interrupted in the first place) condemn the freshly
-	// re-dispatched task back to interrupted on its very first
-	// AgentStatus hiccup.
-	task.AgentNotFoundSince = time.Time{}
-	task.UpdatedAt = time.Now().UTC()
-	if err := state.Save(projectRoot, task); err != nil {
+	// The reset is applied to the record on disk under the tasks lock, so a
+	// write made since this command loaded it (the sentinel's transcript
+	// refresh, say) is built on, not overwritten with the loaded copy.
+	task, err = updateRedispatchReset(projectRoot, taskID)
+	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": persisting reset task: %v\n", err)
 		return 1
 	}
 
 	fmt.Fprintf(stdout, "redispatching task %s (redispatch #%d)\n", task.ID, task.Redispatches)
 	return acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID, task, client, stdout, stderr)
+}
+
+// updateRedispatchReset puts a task back to the state of a fresh dispatch that
+// has not acquired a camp yet, and returns it as saved. It sets only the
+// fields a re-dispatch owns: the counter, the status, the old camp and herdr
+// assignment, the dead soldier's transcript, exit code and question.
+func updateRedispatchReset(projectRoot, taskID string) (state.Task, error) {
+	var reset state.Task
+	_, err := state.Update(projectRoot, taskID, func(task *state.Task) (bool, error) {
+		task.Redispatches++
+		task.Status = state.StatusPending
+		task.CampSlot = 0
+		task.CampPath = ""
+		task.CampBranch = ""
+		task.CampBase = ""
+		task.HerdrWorkspaceID = ""
+		task.HerdrTabID = ""
+		task.HerdrPaneID = ""
+		task.HerdrAgentName = ""
+		task.Output = ""
+		task.ExitCode = nil
+		task.Decision = nil
+		// Clearing this is not cosmetic: a stale mark left over from the
+		// previous life of this task would let sentinel.Tick's
+		// notFoundConfirmWindow (already elapsed, since it's what got this
+		// task marked interrupted in the first place) condemn the freshly
+		// re-dispatched task back to interrupted on its very first
+		// AgentStatus hiccup.
+		task.AgentNotFoundSince = time.Time{}
+		task.UpdatedAt = time.Now().UTC()
+		reset = *task
+		return true, nil
+	})
+	return reset, err
 }

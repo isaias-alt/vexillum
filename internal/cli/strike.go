@@ -177,9 +177,17 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 	// closed even when the herdr pane could not be: a half state would leave
 	// the task interrupted with nothing left to strike.
 	if task.Status == state.StatusInterrupted || task.Status == state.StatusFailed {
-		task.Status = state.StatusStruck
-		task.UpdatedAt = time.Now().UTC()
-		if err := state.Save(projectRoot, task); err != nil {
+		// Re-checked against the record on disk under the tasks lock: only
+		// a task still unfinished is closed, and nothing else is rewritten.
+		_, err := state.Update(projectRoot, taskID, func(current *state.Task) (bool, error) {
+			if current.Status != state.StatusInterrupted && current.Status != state.StatusFailed {
+				return false, nil
+			}
+			current.Status = state.StatusStruck
+			current.UpdatedAt = time.Now().UTC()
+			return true, nil
+		})
+		if err != nil {
 			fmt.Fprintf(stderr, cmdname.Name+": camp struck, but recording task %s as struck failed: %v\n", taskID, err)
 			fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' again to finish the cleanup\n", taskID)
 			return 1
