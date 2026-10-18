@@ -412,9 +412,10 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 	if newStatus == state.StatusBlocked {
 		// Reaching here means live == "blocked" (the only raw status
 		// MapAgentStatus maps to StatusBlocked) - herdr's own classifier
-		// caught it, almost always Claude Code's AskUserQuestion modal.
-		// See soldier.ResolveBlockedDecision.
-		task.Decision = soldier.ResolveBlockedDecision(client, task.HerdrAgentName, task.Output)
+		// caught it, almost always Claude Code's AskUserQuestion modal (a Pi
+		// soldier has none, its question is read as prose).
+		// See soldier.ResolveBlockedDecisionFor.
+		task.Decision = soldier.ResolveBlockedDecisionFor(task.Harness, client, task.HerdrAgentName, task.Output)
 	}
 	saved, err := saveIfRunning(projectRoot, task)
 	if err != nil {

@@ -249,14 +249,16 @@ func TestHarness_ExplicitClaudeAndOverrideAcrossLayers(t *testing.T) {
 	}
 
 	// A later layer overrides the harness without repeating the other fields.
-	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "pi"}}}`)
+	// opencode is reserved, so it has nothing to check the inherited values
+	// against yet.
+	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "opencode"}}}`)
 	tbl, err = Load(project, home)
 	if err != nil {
 		t.Fatal(err)
 	}
 	c, _ = tbl.Lookup("mission-big")
-	if c.Harness != "pi" || c.Model != "sonnet" || c.Effort != "high" {
-		t.Errorf("mission-big = %+v, want harness pi with model and effort inherited", c)
+	if c.Harness != "opencode" || c.Model != "sonnet" || c.Effort != "high" {
+		t.Errorf("mission-big = %+v, want harness opencode with model and effort inherited", c)
 	}
 }
 
@@ -265,7 +267,25 @@ func TestHarness_ExplicitClaudeAndOverrideAcrossLayers(t *testing.T) {
 // against claude's sets; choosing it fails at dispatch, not here.
 func TestHarness_ReservedNameLoads(t *testing.T) {
 	project, home := layout(t)
-	writeModels(t, projectModels(project), `{"profiles": {"pi-scout": {"model": "some-pi-model", "effort": "whatever", "when": "x", "harness": "pi"}}}`)
+	writeModels(t, projectModels(project), `{"profiles": {"oc-scout": {"model": "some-oc-model", "effort": "whatever", "when": "x", "harness": "opencode"}}}`)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := tbl.Lookup("oc-scout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c != (Choice{Model: "some-oc-model", Effort: "whatever", Harness: "opencode"}) {
+		t.Errorf("oc-scout = %+v", c)
+	}
+}
+
+// A pi profile takes a provider/id model, including an id that ends in
+// OpenRouter's ":free", and a thinking level as its effort.
+func TestHarness_PiProfile(t *testing.T) {
+	project, home := layout(t)
+	writeModels(t, projectModels(project), `{"profiles": {"pi-scout": {"model": "openrouter/some/model:free", "effort": "minimal", "when": "x", "harness": "pi"}}}`)
 	tbl, err := Load(project, home)
 	if err != nil {
 		t.Fatal(err)
@@ -274,8 +294,45 @@ func TestHarness_ReservedNameLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c != (Choice{Model: "some-pi-model", Effort: "whatever", Harness: "pi"}) {
+	if c != (Choice{Model: "openrouter/some/model:free", Effort: "minimal", Harness: "pi"}) {
 		t.Errorf("pi-scout = %+v", c)
+	}
+}
+
+// A later layer's model or effort for a profile is checked against the
+// harness the profile ends up with, not the claude default, so a project file
+// can retune a pi profile the global base defined; and switching a profile to
+// pi without giving it a provider/id model is refused.
+func TestHarness_ValuesAreCheckedAgainstTheMergedHarness(t *testing.T) {
+	project, home := layout(t)
+	writeModels(t, home, `{"profiles": {"pi-scout": {"model": "anthropic/claude-haiku-4-5", "effort": "low", "when": "x", "harness": "pi"}}}`)
+	writeModels(t, projectModels(project), `{"profiles": {"pi-scout": {"model": "openai/gpt-5", "effort": "minimal"}}}`)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatalf("a project layer retuning a pi profile: %v", err)
+	}
+	if c, _ := tbl.Lookup("pi-scout"); c != (Choice{Model: "openai/gpt-5", Effort: "minimal", Harness: "pi"}) {
+		t.Errorf("pi-scout = %+v", c)
+	}
+
+	project, home = layout(t)
+	path := writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "pi"}}}`)
+	_, err = Load(project, home)
+	if err == nil {
+		t.Fatal("switching mission-big to pi kept its claude alias model, expected an error")
+	}
+	for _, w := range []string{path, `profiles["mission-big"].model`, `"sonnet"`, "provider/id"} {
+		if !strings.Contains(err.Error(), w) {
+			t.Errorf("error %q does not contain %q", err, w)
+		}
+	}
+
+	project, home = layout(t)
+	// Its inherited effort "high" is a thinking level too, so giving the model
+	// alongside the harness is enough.
+	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "pi", "model": "anthropic/claude-sonnet-5"}}}`)
+	if _, err := Load(project, home); err != nil {
+		t.Errorf("switching to pi with a provider/id model: %v", err)
 	}
 }
 
@@ -285,10 +342,12 @@ func TestHarness_InvalidValues(t *testing.T) {
 		content string
 		want    []string
 	}{
-		{"unknown harness", `{"profiles": {"mission-big": {"harness": "gemini"}}}`, []string{`profiles["mission-big"].harness`, `unknown harness "gemini"`, "supported: claude", "pi, opencode"}},
+		{"unknown harness", `{"profiles": {"mission-big": {"harness": "gemini"}}}`, []string{`profiles["mission-big"].harness`, `unknown harness "gemini"`, "supported: claude, pi", "reserved, not implemented yet: opencode"}},
 		{"empty harness", `{"profiles": {"mission-big": {"harness": ""}}}`, []string{`profiles["mission-big"].harness: must not be empty`}},
 		{"case matters", `{"profiles": {"mission-big": {"harness": "Claude"}}}`, []string{`unknown harness "Claude"`}},
 		{"default has no harness", `{"default": {"harness": "claude"}}`, []string{"invalid JSON", "harness"}},
+		{"pi model must be provider/id", `{"profiles": {"mission-big": {"harness": "pi", "model": "sonnet", "effort": "high"}}}`, []string{`profiles["mission-big"].model`, `"sonnet"`, "provider/id"}},
+		{"pi effort is a thinking level", `{"profiles": {"mission-big": {"harness": "pi", "model": "a/b", "effort": "extreme"}}}`, []string{`profiles["mission-big"].effort`, `"extreme"`, "xhigh"}},
 		{"claude values still checked", `{"profiles": {"mission-big": {"harness": "claude", "model": "gpt"}}}`, []string{`profiles["mission-big"].model`, `"gpt"`}},
 	}
 	for _, c := range cases {

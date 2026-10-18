@@ -14,6 +14,26 @@ type CommandSpec struct {
 	Args    []string
 }
 
+// CommandOptions tune how Harness.Command builds the one-shot process.
+type CommandOptions struct {
+	// ReadOnly asks for a run that cannot change files, for a caller that
+	// only wants to look (a reviewer). A harness enforces it with its own CLI
+	// flags where it has any (Pi: an allowlist of read-only tools); one with
+	// none to offer (ClaudeHarness) ignores it, and the caller's prompt is
+	// then what keeps the run read-only.
+	ReadOnly bool
+}
+
+// TrustDialog describes the first-run "do you trust this folder" dialog a
+// harness's interactive session can stop on, so startAgent can recognize and
+// dismiss it. The zero value means the harness has none to dismiss.
+type TrustDialog struct {
+	// Marker is text, lowercase, that the pane shows while the dialog is up.
+	Marker string
+	// Keys are the logical keys (herdr agent send-keys) that accept it.
+	Keys []string
+}
+
 // Harness abstracts the agent CLI vexillum drives to carry out a
 // soldier's prompt. vexillum supports several harnesses (Claude Code, Pi and
 // OpenCode, see AGENTS.md's multi-harness rule), each selected per model
@@ -22,13 +42,18 @@ type CommandSpec struct {
 // means implementing this interface and registering it there, instead of
 // editing every place that hardcodes one CLI's shape.
 //
-// ClaudeHarness is the only implementation registered so far: Pi and
-// OpenCode are reserved names that HarnessFor refuses with a clear error
-// until their phase lands.
+// ClaudeHarness and PiHarness are the implementations registered so far:
+// OpenCode is a reserved name that HarnessFor refuses with a clear error
+// until its phase lands.
 type Harness interface {
-	// ValidateModelEffort checks model/effort against the fixed set of
-	// values this harness's CLI accepts. Either may be empty, meaning
-	// "don't pass this flag - let the harness use its own default".
+	// Binary is the executable this harness's CLI runs as: the one dispatch
+	// and doctor look for on PATH.
+	Binary() string
+
+	// ValidateModelEffort checks model/effort against what this harness's
+	// CLI accepts: a fixed set for Claude, shape-only and advisory for a
+	// harness whose models are not a closed list (Pi). Either may be empty,
+	// meaning "don't pass this flag - let the harness use its own default".
 	ValidateModelEffort(model, effort string) error
 
 	// ModelEffortArgs builds the extra CLI args for task's Model/Effort,
@@ -41,7 +66,7 @@ type Harness interface {
 	// real harness CLI, unattended, inside a camp. A soldier does not use
 	// it (it runs interactively, see HerdrAgentKind): the tribunal's
 	// reviewer and fixer do (internal/tribunal).
-	Command(task state.Task) CommandSpec
+	Command(task state.Task, opts CommandOptions) CommandSpec
 
 	// HerdrAgentKind is the agent kind string passed to herdr when
 	// starting a soldier's interactive pane (herdr.Client.AgentStart) -
@@ -52,6 +77,20 @@ type Harness interface {
 	// when starting the soldier's interactive agent (RunInHerdr), on top of task's Model/Effort args (added
 	// separately - see ModelEffortArgs).
 	HerdrExtraArgs() []string
+
+	// TrustDialog describes the folder-trust dialog the interactive session
+	// may open on in a never-seen camp, or the zero value when there is
+	// nothing for startAgent to dismiss (a harness that never asks, or one
+	// started with a flag that skips the question).
+	TrustDialog() TrustDialog
+
+	// QuestionModal reports whether the harness has a native question
+	// selector whose rendering vexillum parses (Claude Code's
+	// AskUserQuestion, see modal.go). When false, a blocked soldier's
+	// question is read as prose and answered as free text through the normal
+	// herdr prompt path, and the soldier's prompt does not mention a
+	// question tool it does not have.
+	QuestionModal() bool
 }
 
 // The harness names a model profile may select and a task records. HarnessClaude
@@ -66,13 +105,14 @@ const (
 // keyed by name.
 var harnesses = map[string]Harness{
 	HarnessClaude: ClaudeHarness{},
+	HarnessPi:     PiHarness{},
 }
 
 // reservedHarnesses are names vexillum has set aside for harnesses with no
 // implementation yet, in the order error messages list them. A model profile
 // may name one so the file does not have to change when it lands, but
 // HarnessFor refuses it.
-var reservedHarnesses = []string{HarnessPi, HarnessOpenCode}
+var reservedHarnesses = []string{HarnessOpenCode}
 
 // HarnessFor returns the Harness registered under name. An empty name means
 // HarnessClaude, which is what a task or profile written before the harness
@@ -132,6 +172,7 @@ func implementedHarnessNames() []string {
 type ClaudeHarness struct{}
 
 const (
+	claudeBinary         = "claude"
 	claudeHerdrAgentKind = "claude"
 
 	// claudeSkipPermissionsArg gives the soldier full host access under
@@ -211,7 +252,10 @@ func (ClaudeHarness) ModelEffortArgs(task state.Task) []string {
 // does reaches the project's real history until a human explicitly
 // approves it. Never dispatch a soldier against a prompt, repository, or
 // machine where reading sensitive host state would be a problem.
-func (h ClaudeHarness) Command(task state.Task) CommandSpec {
+//
+// opts.ReadOnly is ignored: Claude Code has no flag here that narrows it to
+// reading, so a read-only caller relies on its prompt.
+func (h ClaudeHarness) Command(task state.Task, _ CommandOptions) CommandSpec {
 	args := []string{"-p", task.Prompt, claudeSkipPermissionsArg}
 	args = append(args, h.ModelEffortArgs(task)...)
 	return CommandSpec{
@@ -220,12 +264,27 @@ func (h ClaudeHarness) Command(task state.Task) CommandSpec {
 	}
 }
 
+func (ClaudeHarness) Binary() string {
+	return claudeBinary
+}
+
 func (ClaudeHarness) HerdrAgentKind() string {
 	return claudeHerdrAgentKind
 }
 
 func (ClaudeHarness) HerdrExtraArgs() []string {
 	return append([]string{}, claudeHerdrExtraArgs...)
+}
+
+// TrustDialog is Claude Code's one-time workspace trust dialog. A camp is a
+// worktree of a project the general already trusted enough to run init on,
+// so it is accepted by moving to the "Yes" entry and confirming.
+func (ClaudeHarness) TrustDialog() TrustDialog {
+	return TrustDialog{Marker: "trust this folder", Keys: []string{"down", "enter"}}
+}
+
+func (ClaudeHarness) QuestionModal() bool {
+	return true
 }
 
 // ValidateModelEffort checks model and effort against the fixed set of
@@ -246,9 +305,24 @@ func ValidateModelEffort(harness, model, effort string) error {
 // reviewer and fixer run through it, so they use the same CLI as the
 // mission they judge.
 func HarnessCommand(harness string, task state.Task) (CommandSpec, error) {
+	return HarnessCommandWith(harness, task, CommandOptions{})
+}
+
+// HarnessCommandWith is HarnessCommand with CommandOptions.
+func HarnessCommandWith(harness string, task state.Task, opts CommandOptions) (CommandSpec, error) {
 	h, err := HarnessFor(harness)
 	if err != nil {
 		return CommandSpec{}, err
 	}
-	return h.Command(task), nil
+	return h.Command(task, opts), nil
+}
+
+// HarnessBinary is the executable of the harness registered under harness
+// ("" means claude).
+func HarnessBinary(harness string) (string, error) {
+	h, err := HarnessFor(harness)
+	if err != nil {
+		return "", err
+	}
+	return h.Binary(), nil
 }

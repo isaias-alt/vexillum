@@ -16,15 +16,17 @@
 //	  "default": {"model": "sonnet", "effort": "medium"}
 //	}
 //
-// "model" is one of haiku, sonnet, opus, fable. "effort" is one of low,
-// medium, high, xhigh, max (the values the claude CLI accepts, enforced by
-// soldier.ValidateModelEffort). "when" is free text telling the commander
-// when the profile applies. "harness" is optional and names the agent CLI the
-// profile's soldiers run on: "claude" (the default when absent), or the
-// reserved "pi" and "opencode", which load but cannot be dispatched until
-// they are implemented (soldier.HarnessFor). The default entry has no
-// harness: it is always claude. Unknown fields are rejected so a typo does
-// not silently do nothing. See testdata/example.json.
+// "model" and "effort" are checked by the profile's harness
+// (soldier.ValidateModelEffort): on claude "model" is one of haiku, sonnet,
+// opus, fable and "effort" one of low, medium, high, xhigh, max; on pi "model"
+// is a provider/id such as "anthropic/claude-sonnet-5" and "effort" is a
+// thinking level (off, minimal, low, medium, high, xhigh, max). "when" is free
+// text telling the commander when the profile applies. "harness" is optional
+// and names the agent CLI the profile's soldiers run on: "claude" (the default
+// when absent), "pi", or the reserved "opencode", which loads but cannot be
+// dispatched until it is implemented (soldier.HarnessFor). The default entry
+// has no harness: it is always claude. Unknown fields are rejected so a typo
+// does not silently do nothing. See testdata/example.json.
 //
 // models.json carries no schema_version: strict decoding already makes an
 // older vexillum refuse a file that uses a field it does not know, such as
@@ -215,7 +217,7 @@ func parse(where string, data []byte) (layer, error) {
 		if err := checkHarness(where, field, p.Harness); err != nil {
 			return layer{}, err
 		}
-		if err := checkValues(where, field, p.Harness, p.Model, p.Effort); err != nil {
+		if err := checkNotEmpty(where, field, p.Model, p.Effort); err != nil {
 			return layer{}, err
 		}
 		if p.When != nil && strings.TrimSpace(*p.When) == "" {
@@ -248,39 +250,66 @@ func checkHarness(where, field string, harness *string) error {
 	return nil
 }
 
-// checkValues validates whichever of model/effort is present, naming the
-// file and field in the error. It reuses the harness's own allowed sets so
-// the two can never disagree. harness is the layer's own harness field (nil
-// means the claude default). A reserved harness with no implementation has no
-// allowed sets to check against yet, so its model and effort are accepted
-// as written; they are validated by the harness once it exists.
+// checkNotEmpty rejects a model or effort that is present but empty. What
+// they may hold depends on the profile's harness, which a later layer can
+// still change, so the values themselves are checked once the layers are
+// merged (see checkProfileValues).
+func checkNotEmpty(where, field string, model, effort *string) error {
+	if model != nil && *model == "" {
+		return fmt.Errorf("%s: %s.model: must not be empty", where, field)
+	}
+	if effort != nil && *effort == "" {
+		return fmt.Errorf("%s: %s.effort: must not be empty", where, field)
+	}
+	return nil
+}
+
+// checkValues validates whichever of model/effort is present against the
+// harness named by harness (nil means the claude default), naming the file
+// and field in the error. It reuses the harness's own validation so the two
+// can never disagree. A reserved harness with no implementation has none to
+// check against yet, so its model and effort are accepted as written; they
+// are validated by the harness once it exists.
 func checkValues(where, field string, harness, model, effort *string) error {
 	name := ""
 	if harness != nil {
 		name = *harness
 	}
-	_, resolveErr := soldier.HarnessFor(name)
+	if err := checkNotEmpty(where, field, model, effort); err != nil {
+		return err
+	}
+	if _, err := soldier.HarnessFor(name); err != nil {
+		return nil
+	}
 	if model != nil {
-		if *model == "" {
-			return fmt.Errorf("%s: %s.model: must not be empty", where, field)
-		}
-		if resolveErr == nil {
-			if err := soldier.ValidateModelEffort(name, *model, ""); err != nil {
-				return fmt.Errorf("%s: %s.model: %w", where, field, err)
-			}
+		if err := soldier.ValidateModelEffort(name, *model, ""); err != nil {
+			return fmt.Errorf("%s: %s.model: %w", where, field, err)
 		}
 	}
 	if effort != nil {
-		if *effort == "" {
-			return fmt.Errorf("%s: %s.effort: must not be empty", where, field)
-		}
-		if resolveErr == nil {
-			if err := soldier.ValidateModelEffort(name, "", *effort); err != nil {
-				return fmt.Errorf("%s: %s.effort: %w", where, field, err)
-			}
+		if err := soldier.ValidateModelEffort(name, "", *effort); err != nil {
+			return fmt.Errorf("%s: %s.effort: %w", where, field, err)
 		}
 	}
 	return nil
+}
+
+// checkProfileValues validates a profile after a layer was merged into it,
+// against the profile's merged harness. A layer that sets only "model" on a
+// profile an earlier layer gave harness "pi" is checked as Pi's, not as the
+// claude default, and a layer that changes the harness re-checks the model
+// and effort it inherits: a profile cannot end up with a claude alias on Pi.
+func checkProfileValues(where string, cur *Profile, p *profileLayer) error {
+	field := `profiles["` + cur.Name + `"]`
+	var model, effort *string
+	if p.Model != nil || p.Harness != nil {
+		model = &cur.Model
+	}
+	if p.Effort != nil || p.Harness != nil {
+		effort = &cur.Effort
+	}
+	harness := cur.Harness
+	return checkValues(where, field, &harness, model, effort)
 }
 
 func profileNames(l layer) []string {
@@ -335,6 +364,9 @@ func (a *accumulator) apply(where string, l layer) error {
 		}
 		if p.Harness != nil {
 			cur.Harness = *p.Harness
+		}
+		if err := checkProfileValues(where, cur, p); err != nil {
+			return err
 		}
 	}
 	if l.Default != nil {

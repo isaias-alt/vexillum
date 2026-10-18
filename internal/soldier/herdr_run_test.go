@@ -282,7 +282,7 @@ func TestRunInHerdr_StartsTheTasksHarness(t *testing.T) {
 // A task naming a harness this build cannot drive fails before a tab is
 // created or an agent started, with the registry's own error.
 func TestRunInHerdr_RefusesAHarnessWithNoImplementation(t *testing.T) {
-	for _, harness := range []string{"pi", "opencode", "gemini"} {
+	for _, harness := range []string{"opencode", "gemini"} {
 		t.Run(harness, func(t *testing.T) {
 			home := t.TempDir()
 			task := newMissionTask(t)

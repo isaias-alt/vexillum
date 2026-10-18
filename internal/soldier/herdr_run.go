@@ -182,7 +182,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	// to trust an idle turn as done without either this or the kind's own
 	// strong completion signal.
 	promptText += pauseInstructions(pause.Path(projectRoot, task.HerdrAgentName))
-	promptText += needsDecisionInstructions()
+	promptText += needsDecisionInstructions(harness)
 	status, err := promptWithStalledRetry(client, agentName, promptText, quickSettleTimeoutMS)
 	if err != nil {
 		if herdr.IsTimeout(err) {
@@ -267,7 +267,7 @@ func applySettled(current *state.Task, settled state.Task, outputRead bool) {
 // genuinely blocked task must never end up with a nil Decision.
 func blockedDecision(client herdr.Client, task state.Task, agentName, liveStatus, output string) *state.Decision {
 	if MapAgentStatus(liveStatus) == state.StatusBlocked {
-		return ResolveBlockedDecision(client, agentName, output)
+		return ResolveBlockedDecisionFor(task.Harness, client, agentName, output)
 	}
 	if d, found := FinalTurnNeedsDecision(task, output); found {
 		return d
@@ -550,7 +550,7 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, chosen, st
 			// Settled straight back into another question - extract it
 			// the same way a fresh block does, so the general sees the
 			// new question, not the one they just answered.
-			if d := ResolveBlockedDecision(client, task.HerdrAgentName, task.Output); d != nil {
+			if d := ResolveBlockedDecisionFor(task.Harness, client, task.HerdrAgentName, task.Output); d != nil {
 				newDecision = d
 			}
 		}
@@ -726,10 +726,18 @@ func pauseInstructions(pausePath string) string {
 // "needs-decision:" status-line pattern (a structured,
 // grep-able signal, never inferred from free-form language - see
 // ExtractNeedsDecisionSignal, its consumer).
-func needsDecisionInstructions() string {
-	return "\n\n---\n\nIf you need a real decision or answer from the general before you can continue, and " +
+//
+// A harness without a question selector of its own (Pi) is not told about
+// one: the line is then its only way to ask.
+func needsDecisionInstructions(harness Harness) string {
+	when := "If you need a real decision or answer from the general before you can continue, and " +
 		"you are not using the AskUserQuestion tool for it, end your turn with a line in exactly this " +
-		"format (nothing else on that line):\n\n" +
+		"format (nothing else on that line):\n\n"
+	if !harness.QuestionModal() {
+		when = "If you need a real decision or answer from the general before you can continue, " +
+			"end your turn with a line in exactly this format (nothing else on that line):\n\n"
+	}
+	return "\n\n---\n\n" + when +
 		"  needs-decision: " + needsDecisionPlaceholder + "\n\n" +
 		"This is the only way vexillum can tell a genuine open question apart from your turn simply " +
 		"ending - without it, ordinary prose ending in a question mark is never detected, and your task " +
@@ -985,11 +993,15 @@ func startAgentOnce(client herdr.Client, harness Harness, name, paneID string, e
 		return err
 	}
 
-	output, readErr := client.AgentRead(name, 20)
-	if readErr != nil || !strings.Contains(strings.ToLower(output), "trust this folder") {
+	dialog := harness.TrustDialog()
+	if dialog.Marker == "" {
 		return err
 	}
-	if err := client.AgentSendKeys(name, "down", "enter"); err != nil {
+	output, readErr := client.AgentRead(name, 20)
+	if readErr != nil || !strings.Contains(strings.ToLower(output), dialog.Marker) {
+		return err
+	}
+	if err := client.AgentSendKeys(name, dialog.Keys...); err != nil {
 		return fmt.Errorf("dismissing workspace trust dialog: %w", err)
 	}
 

@@ -96,15 +96,15 @@ func TestHarnessFor_EmptyNameMeansClaude(t *testing.T) {
 	}
 }
 
-// Pi and OpenCode are reserved: selecting one fails with an error that says
-// so, and that it is not a typo.
+// OpenCode is reserved: selecting it fails with an error that says so, and
+// that it is not a typo.
 func TestHarnessFor_ReservedNamesAreNotImplemented(t *testing.T) {
-	for _, name := range []string{"pi", "opencode"} {
+	for _, name := range []string{"opencode"} {
 		h, err := soldier.HarnessFor(name)
 		if err == nil {
 			t.Fatalf("HarnessFor(%q) = %T, want an error", name, h)
 		}
-		for _, want := range []string{name, "not implemented yet", "supported: claude"} {
+		for _, want := range []string{name, "not implemented yet", "supported: claude, pi"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("HarnessFor(%q) error %q does not mention %q", name, err, want)
 			}
@@ -141,7 +141,7 @@ func TestKnownHarness(t *testing.T) {
 }
 
 func TestValidateModelEffort_UnknownHarness(t *testing.T) {
-	if err := soldier.ValidateModelEffort("pi", "sonnet", "high"); err == nil {
+	if err := soldier.ValidateModelEffort("opencode", "sonnet", "high"); err == nil {
 		t.Error("expected an error validating against a harness that is not implemented")
 	}
 	if err := soldier.ValidateModelEffort("claude", "sonnet", "high"); err != nil {
@@ -151,7 +151,7 @@ func TestValidateModelEffort_UnknownHarness(t *testing.T) {
 
 func TestHarnessCommand_UnknownHarness(t *testing.T) {
 	task := newTask(t)
-	for _, name := range []string{"pi", "opencode", "gemini"} {
+	for _, name := range []string{"opencode", "gemini"} {
 		if _, err := soldier.HarnessCommand(name, task); err == nil {
 			t.Errorf("HarnessCommand(%q): expected an error", name)
 		}

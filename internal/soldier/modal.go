@@ -170,6 +170,18 @@ func ResolveBlockedDecision(client herdr.Client, agentName, output string) *stat
 	return ExtractDecision(output)
 }
 
+// ResolveBlockedDecisionFor is ResolveBlockedDecision for a task run on the
+// harness registered under harness ("" means claude). A harness with no
+// question selector of its own (Pi) skips the modal parser and reads the
+// question as prose, so nothing on its pane can be mistaken for Claude Code's
+// AskUserQuestion rendering. Its answer is then free text, see AnswerBlocked.
+func ResolveBlockedDecisionFor(harness string, client herdr.Client, agentName, output string) *state.Decision {
+	if h, err := HarnessFor(harness); err == nil && !h.QuestionModal() {
+		return ExtractDecision(output)
+	}
+	return ResolveBlockedDecision(client, agentName, output)
+}
+
 // resolveModalAnswer maps answer against a modal Decision's rendered
 // Options - a 1-based index, or the option's exact text (trimmed,
 // case-insensitive) - to that option's rendered number and label. Reports
