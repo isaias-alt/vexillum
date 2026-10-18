@@ -14,7 +14,7 @@ No las cambies ni propongas alternativas sin que el general lo pida explícitame
 
 - **Lenguaje: Go.** No sugieras reescribir en otro lenguaje.
 - **Distribución: binario por brew/curl**, multiplataforma. No introduzcas dependencias de runtime (Node, Python) en el camino de instalación.
-- **Harness único: Claude Code** en la v1. Pi está diferido; no construyas la abstracción multi-harness todavía, solo dejá la costura preparada.
+- **Multi-harness: Claude Code, Pi y OpenCode**, elegido por perfil de modelo (`harness` en `models.json`; Claude Code es el default). El general levantó la regla anterior de "harness único". Se mantiene su espíritu: Go, sin dependencias de runtime en el camino de instalación (los harnesses son herramientas que vexillum orquesta y `doctor` verifica, no se instalan), y el binario solo hace plomería determinista (nada de ruteo ni razonamiento en Go). Cada harness se agrega por fases detrás de la interfaz `soldier.Harness` y el registro `soldier.HarnessFor`; un nombre reservado sin implementación falla con un error claro.
 - **Backend: herdr es el único backend.** tmux no está soportado. Dejá la costura preparada por si algún día hay otro backend, pero no construyas la abstracción multi-backend todavía.
 - **La inteligencia del commander vive en el AGENTS.md de producto (markdown), no en Go.** El binario hace plomería determinista. No reimplementes ruteo/razonamiento en Go.
 - **Vocabulario del dominio en inglés** (commander, soldier, mission, scout, camp, sentinel), en código y en voz del agente. Sin traducción.
