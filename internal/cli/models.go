@@ -16,16 +16,26 @@ Usage:
 
 Prints the merged profile table: the built-in defaults, overridden by the
 optional global ~/.vexillum/models.json, overridden by this project's
-.vexillum/models.json. Each profile shows its model and effort and a
-"when" line saying when it applies; the table's default entry and the files
+.vexillum/models.json. Each profile shows its model and effort (and its
+harness, when it sets one) and a "when" line saying when it applies; the table's default entry and the files
 that were read are listed at the end. Pass a profile to
 '` + cmdname.Name + ` dispatch --profile <name>'.
 
 This is a lookup table, not a router: which profile fits a task is the
 commander's judgment, made from the "when" lines. A models file that is
-not valid JSON, or names a model or effort claude does not accept, is an
-error naming the file and field.
+not valid JSON, names a model or effort claude does not accept, or names an
+unknown harness is an error naming the file and field.
 `
+
+// profileSummary is the parenthesized part of a profile's line: model and
+// effort, plus the harness when the profile sets one explicitly.
+func profileSummary(p models.Profile) string {
+	summary := p.Model + ", " + p.Effort
+	if p.Harness != "" {
+		summary += ", harness " + p.Harness
+	}
+	return summary
+}
 
 // Models runs the "vx models" command.
 func Models(args []string) int {
@@ -54,7 +64,7 @@ func runModels(projectDir, vexillumHome string, stdout, stderr io.Writer) int {
 	}
 
 	for _, p := range table.Profiles {
-		fmt.Fprintf(stdout, "%s  (%s, %s)\n  %s\n", p.Name, p.Model, p.Effort, p.When)
+		fmt.Fprintf(stdout, "%s  (%s)\n  %s\n", p.Name, profileSummary(p), p.When)
 	}
 	fmt.Fprintf(stdout, "%s  (%s, %s)\n  Nothing above fits. Fall back to it, do not reach for it on purpose.\n",
 		models.DefaultName, table.Default.Model, table.Default.Effort)

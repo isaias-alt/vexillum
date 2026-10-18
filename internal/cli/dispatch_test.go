@@ -13,6 +13,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -173,7 +174,7 @@ func TestRunDispatch_RefusesUninitializedProject(t *testing.T) {
 	home := t.TempDir()
 
 	var out bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", &fakeHerdr{}, &out, &out)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", "", &fakeHerdr{}, &out, &out)
 
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an uninitialized project")
@@ -195,7 +196,7 @@ func TestRunDispatch_Success(t *testing.T) {
 	client := &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done", readOutput: "did the thing"}
 
 	var out bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", client, &out, &out)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", "", client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -221,7 +222,7 @@ func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
 	client := &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done", readOutput: "did the thing"}
 
 	var out bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "haiku", "low", client, &out, &out)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "haiku", "low", "", client, &out, &out)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d: %s", code, out.String())
@@ -229,6 +230,112 @@ func TestRunDispatch_PassesModelEffortToClaude(t *testing.T) {
 	want := []string{"--dangerously-skip-permissions", "--prompt-suggestions", "false", "--model", "haiku", "--effort", "low"}
 	if !slices.Equal(client.lastAgentArgs, want) {
 		t.Errorf("got agent args %v, want %v", client.lastAgentArgs, want)
+	}
+}
+
+// dispatchedTask loads the one task a dispatch into a fresh home created.
+func dispatchedTask(t *testing.T, project, home string) state.Task {
+	t.Helper()
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	tasks, unreadable, err := state.List(projectRoot)
+	if err != nil || len(unreadable) != 0 || len(tasks) != 1 {
+		t.Fatalf("state.List = %d tasks, %d unreadable, %v; want exactly one readable task", len(tasks), len(unreadable), err)
+	}
+	return tasks[0]
+}
+
+// The harness resolved at dispatch is persisted on the task: an unset one is
+// recorded as claude, so the record never depends on a later default.
+func TestRunDispatch_PersistsTheHarness(t *testing.T) {
+	for _, harness := range []string{"", "claude"} {
+		t.Run("harness="+harness, func(t *testing.T) {
+			project := initDispatchTestProject(t)
+			if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
+				t.Fatalf("writing local config: %v", err)
+			}
+			home := t.TempDir()
+			client := &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done", readOutput: "did the thing"}
+
+			var out bytes.Buffer
+			if code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", harness, client, &out, &out); code != 0 {
+				t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+			}
+			if got := dispatchedTask(t, project, home).Harness; got != "claude" {
+				t.Errorf("task.Harness = %q, want claude", got)
+			}
+		})
+	}
+}
+
+// A reserved harness with no implementation is refused before a camp is
+// acquired or a task written, with a clear error.
+func TestRunDispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
+	for _, harness := range []string{"pi", "opencode", "gemini"} {
+		t.Run(harness, func(t *testing.T) {
+			project := initDispatchTestProject(t)
+			if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
+				t.Fatalf("writing local config: %v", err)
+			}
+			home := t.TempDir()
+			client := &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done"}
+
+			var out bytes.Buffer
+			code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", harness, client, &out, &out)
+
+			if code == 0 {
+				t.Fatal("expected a non-zero exit for a harness with no implementation")
+			}
+			if !strings.Contains(out.String(), harness) || !strings.Contains(out.String(), "supported: claude") {
+				t.Errorf("expected the error to name the harness and the supported ones, got: %s", out.String())
+			}
+			projectRoot, err := vxproject.Root(home, project)
+			if err != nil {
+				t.Fatalf("project.Root: %v", err)
+			}
+			if tasks, _, _ := state.List(projectRoot); len(tasks) != 0 {
+				t.Errorf("expected no task to be created, got %d", len(tasks))
+			}
+			if client.lastAgentArgs != nil || len(client.promptCalls) != 0 {
+				t.Errorf("expected no agent to be started, got args %v and %d prompts", client.lastAgentArgs, len(client.promptCalls))
+			}
+		})
+	}
+}
+
+// resolveProfile hands the profile's harness back, and a profile naming a
+// reserved harness fails the model/effort validation Dispatch runs next.
+func TestResolveProfile_Harness(t *testing.T) {
+	project := t.TempDir()
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".vexillum"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	models := `{"profiles": {"pi-scout": {"model": "m", "effort": "e", "when": "x", "harness": "pi"}, "mission-big": {"harness": "claude"}}}`
+	if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(models), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, h, err := resolveProfile(project, home, "mission-big", "", "")
+	if err != nil || h != "claude" {
+		t.Errorf("mission-big harness = %q, %v; want claude", h, err)
+	}
+	_, _, h, err = resolveProfile(project, home, "scout-facts", "", "")
+	if err != nil || h != "" {
+		t.Errorf("scout-facts harness = %q, %v; want none", h, err)
+	}
+	_, _, h, err = resolveProfile(project, home, "default", "", "")
+	if err != nil || h != "" {
+		t.Errorf("default harness = %q, %v; want none", h, err)
+	}
+	m, e, h, err := resolveProfile(project, home, "pi-scout", "", "")
+	if err != nil || h != "pi" {
+		t.Fatalf("pi-scout = %q %q %q, %v", m, e, h, err)
+	}
+	if err := soldier.ValidateModelEffort(h, m, e); err == nil || !strings.Contains(err.Error(), "not implemented yet") {
+		t.Errorf("validating the pi profile: got %v, want a not-implemented error", err)
 	}
 }
 
@@ -283,7 +390,7 @@ func TestRunDispatch_FinalSaveFails_DoesNotOverwriteRealOutcome(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", client, &out, &out)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", "", client, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected non-zero exit when the final save fails, got 0: %s", out.String())
 	}
@@ -336,7 +443,7 @@ func TestRunDispatch_PersistingAcquiredCampFails_SlotIsStruck(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(tasksDir, 0o755) })
 
 	var setupOut bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", &fakeHerdr{}, &setupOut, &setupOut)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", "", &fakeHerdr{}, &setupOut, &setupOut)
 	if code == 0 {
 		t.Fatal("expected non-zero exit when persisting the acquired camp fails")
 	}
@@ -358,7 +465,7 @@ func TestRunDispatch_PersistingAcquiredCampFails_SlotIsStruck(t *testing.T) {
 	// slot 2 instead of reusing it.
 	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done", readOutput: "did the thing"}
 	var out bytes.Buffer
-	if code := runDispatch(project, home, "w1", "do another thing", state.KindMission, "", "", client, &out, &out); code != 0 {
+	if code := runDispatch(project, home, "w1", "do another thing", state.KindMission, "", "", "", client, &out, &out); code != 0 {
 		t.Fatalf("expected the follow-up dispatch to succeed, got exit %d: %s", code, out.String())
 	}
 	if !strings.Contains(out.String(), "camp_slot=1 ") {
@@ -380,7 +487,7 @@ func TestRunDispatch_CreateTabFails_TaskIsRecoverable(t *testing.T) {
 	client := &fakeHerdr{createTabErr: &herdr.APIError{Code: "not_found", Message: "workspace not found"}}
 
 	var out bytes.Buffer
-	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", client, &out, &out)
+	code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", "", client, &out, &out)
 	if code == 0 {
 		t.Fatalf("expected non-zero exit when CreateTab fails, got 0: %s", out.String())
 	}
@@ -777,35 +884,35 @@ func TestResolveProfile(t *testing.T) {
 	home := t.TempDir()
 
 	t.Run("no profile is a no-op", func(t *testing.T) {
-		m, e, err := resolveProfile(project, home, "", "haiku", "")
+		m, e, _, err := resolveProfile(project, home, "", "haiku", "")
 		if err != nil || m != "haiku" || e != "" {
 			t.Errorf("got %q %q %v", m, e, err)
 		}
 	})
 	t.Run("profile fills both", func(t *testing.T) {
-		m, e, err := resolveProfile(project, home, "mission-big", "", "")
+		m, e, _, err := resolveProfile(project, home, "mission-big", "", "")
 		if err != nil || m != "sonnet" || e != "high" {
 			t.Errorf("got %q %q %v", m, e, err)
 		}
 	})
 	t.Run("explicit flags win", func(t *testing.T) {
-		m, e, err := resolveProfile(project, home, "mission-big", "opus", "")
+		m, e, _, err := resolveProfile(project, home, "mission-big", "opus", "")
 		if err != nil || m != "opus" || e != "high" {
 			t.Errorf("got %q %q %v", m, e, err)
 		}
-		m, e, err = resolveProfile(project, home, "mission-big", "", "max")
+		m, e, _, err = resolveProfile(project, home, "mission-big", "", "max")
 		if err != nil || m != "sonnet" || e != "max" {
 			t.Errorf("got %q %q %v", m, e, err)
 		}
 	})
 	t.Run("default", func(t *testing.T) {
-		m, e, err := resolveProfile(project, home, "default", "", "")
+		m, e, _, err := resolveProfile(project, home, "default", "", "")
 		if err != nil || m != "sonnet" || e != "medium" {
 			t.Errorf("got %q %q %v", m, e, err)
 		}
 	})
 	t.Run("unknown lists the valid ones", func(t *testing.T) {
-		_, _, err := resolveProfile(project, home, "nope", "", "")
+		_, _, _, err := resolveProfile(project, home, "nope", "", "")
 		if err == nil || !strings.Contains(err.Error(), "scout-facts") || !strings.Contains(err.Error(), `"nope"`) {
 			t.Errorf("got %v", err)
 		}
@@ -817,7 +924,7 @@ func TestResolveProfile(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(`{"profiles": {"mission-big": {"model": "opus"}}}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		m, e, err := resolveProfile(project, home, "mission-big", "", "")
+		m, e, _, err := resolveProfile(project, home, "mission-big", "", "")
 		if err != nil || m != "opus" || e != "high" {
 			t.Errorf("got %q %q %v", m, e, err)
 		}
@@ -826,7 +933,7 @@ func TestResolveProfile(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(`{"default": {"model": "x"}}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := resolveProfile(project, home, "mission-big", "", ""); err == nil {
+		if _, _, _, err := resolveProfile(project, home, "mission-big", "", ""); err == nil {
 			t.Error("expected an error")
 		}
 	})

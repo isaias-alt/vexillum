@@ -213,3 +213,100 @@ func TestUnreadableFileIsAnError(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+// A profile without a harness field resolves to the empty harness name,
+// which means claude; none of the built-in profiles sets one.
+func TestHarness_AbsentMeansClaude(t *testing.T) {
+	project, home := layout(t)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range tbl.Profiles {
+		if p.Harness != "" {
+			t.Errorf("built-in profile %s has harness %q, want none", p.Name, p.Harness)
+		}
+	}
+	c, err := tbl.Lookup("mission-big")
+	if err != nil || c.Harness != "" {
+		t.Errorf("mission-big = %+v, %v; want no harness", c, err)
+	}
+	if tbl.Default.Harness != "" {
+		t.Errorf("default harness = %q, want none", tbl.Default.Harness)
+	}
+}
+
+func TestHarness_ExplicitClaudeAndOverrideAcrossLayers(t *testing.T) {
+	project, home := layout(t)
+	writeModels(t, home, `{"profiles": {"mission-big": {"harness": "claude"}}}`)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := tbl.Lookup("mission-big")
+	if c != (Choice{Model: "sonnet", Effort: "high", Harness: "claude"}) {
+		t.Errorf("mission-big = %+v, want the explicit claude harness with model and effort inherited", c)
+	}
+
+	// A later layer overrides the harness without repeating the other fields.
+	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "pi"}}}`)
+	tbl, err = Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ = tbl.Lookup("mission-big")
+	if c.Harness != "pi" || c.Model != "sonnet" || c.Effort != "high" {
+		t.Errorf("mission-big = %+v, want harness pi with model and effort inherited", c)
+	}
+}
+
+// A new profile may name a reserved harness. It loads (the file does not have
+// to change when the harness lands) and its model and effort are not checked
+// against claude's sets; choosing it fails at dispatch, not here.
+func TestHarness_ReservedNameLoads(t *testing.T) {
+	project, home := layout(t)
+	writeModels(t, projectModels(project), `{"profiles": {"pi-scout": {"model": "some-pi-model", "effort": "whatever", "when": "x", "harness": "pi"}}}`)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := tbl.Lookup("pi-scout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c != (Choice{Model: "some-pi-model", Effort: "whatever", Harness: "pi"}) {
+		t.Errorf("pi-scout = %+v", c)
+	}
+}
+
+func TestHarness_InvalidValues(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{"unknown harness", `{"profiles": {"mission-big": {"harness": "gemini"}}}`, []string{`profiles["mission-big"].harness`, `unknown harness "gemini"`, "supported: claude", "pi, opencode"}},
+		{"empty harness", `{"profiles": {"mission-big": {"harness": ""}}}`, []string{`profiles["mission-big"].harness: must not be empty`}},
+		{"case matters", `{"profiles": {"mission-big": {"harness": "Claude"}}}`, []string{`unknown harness "Claude"`}},
+		{"default has no harness", `{"default": {"harness": "claude"}}`, []string{"invalid JSON", "harness"}},
+		{"claude values still checked", `{"profiles": {"mission-big": {"harness": "claude", "model": "gpt"}}}`, []string{`profiles["mission-big"].model`, `"gpt"`}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			project, home := layout(t)
+			path := writeModels(t, projectModels(project), c.content)
+			_, err := Load(project, home)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if !strings.Contains(err.Error(), path) {
+				t.Errorf("error %q does not name the file %s", err, path)
+			}
+			for _, w := range c.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error %q does not contain %q", err, w)
+				}
+			}
+		})
+	}
+}

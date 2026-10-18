@@ -101,7 +101,7 @@ func runReview(campPath, base string, opts Options, fixStartSHA string) (StepRes
 			turn += "\n\nThe report you just gave was rejected: " + validationErr.Error() +
 				"\nReview once more and finish with a single corrected JSON object that follows the schema exactly."
 		}
-		out, err := runClaude(campPath, state.Task{Prompt: turn, Model: reviewModel, Effort: reviewEffort}, opts.timeout())
+		out, err := runHarness(campPath, opts.Harness, state.Task{Prompt: turn, Model: reviewModel, Effort: reviewEffort}, opts.timeout())
 		if errors.Is(err, errTimedOut) {
 			return StepResult{Step: StepReview, Passed: false, Notes: notes,
 				Detail: fmt.Sprintf("the reviewer %v - a timeout is never treated as a pass", err)}, nil
@@ -168,10 +168,15 @@ func changedFiles(campPath, baseSHA, targetSHA string) ([]string, error) {
 	return files, nil
 }
 
-// runClaude runs one headless claude invocation in campPath through the
-// soldier harness's command spec, bounded by timeout.
-func runClaude(campPath string, task state.Task, timeout time.Duration) (string, error) {
-	spec := soldier.ClaudeCommand(task)
+// runHarness runs one headless invocation of the mission's harness ("" means
+// claude) in campPath through that harness's command spec, bounded by
+// timeout. A harness with no implementation is an error, never a silent
+// fallback to claude: the reviewer must judge with the CLI the mission ran on.
+func runHarness(campPath, harness string, task state.Task, timeout time.Duration) (string, error) {
+	spec, err := soldier.HarnessCommand(harness, task)
+	if err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, spec.Command, spec.Args...)
@@ -182,7 +187,7 @@ func runClaude(campPath string, task state.Task, timeout time.Duration) (string,
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", fmt.Errorf("%w after %s", errTimedOut, timeout)
 	}

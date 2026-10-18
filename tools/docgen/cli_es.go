@@ -199,6 +199,11 @@ es un error que lista los válidos; "default" selecciona la entrada por defecto
 de la tabla. Qué perfil conviene a una tarea lo decidís vos. Ver la skill
 vexillum.
 
+Un perfil también puede nombrar, en models.json, el harness (el CLI de agente)
+en el que corre su soldier; sin uno es claude. El harness queda registrado en la
+tarea y 'vx redispatch' lo conserva. "pi" y "opencode" están reservados: elegir
+un perfil que nombre uno es un error hasta que se implementen.
+
 Corre una sesión real e interactiva de Claude Code en un pane de herdr, dentro
 de un git worktree nuevo, aislado del árbol de trabajo propio de este proyecto,
 con --dangerously-skip-permissions: el soldier tiene acceso total al host bajo
@@ -229,14 +234,16 @@ Uso:
 Imprime la tabla de perfiles combinada: los valores por defecto incluidos,
 sobrescritos por el ~/.vexillum/models.json global opcional, sobrescritos por
 el .vexillum/models.json de este proyecto. Cada perfil muestra su modelo y su
-effort y una línea "when" que dice cuándo se aplica; al final se listan la
+effort (y su harness, cuando lo define) y una línea "when" que dice cuándo se
+aplica; al final se listan la
 entrada por defecto de la tabla y los archivos que se leyeron. Pasá un perfil
 a 'vx dispatch --profile <name>'.
 
 Esto es una tabla de consulta, no un router: qué perfil conviene a una tarea es
 un juicio del commander, hecho a partir de las líneas "when". Un archivo de
-modelos que no es JSON válido, o que nombra un modelo o un effort que claude
-no acepta, es un error que nombra el archivo y el campo.
+modelos que no es JSON válido, que nombra un modelo o un effort que claude no
+acepta, o que nombra un harness desconocido, es un error que nombra el archivo
+y el campo.
 `,
 	},
 
@@ -432,7 +439,7 @@ primero).
 --json imprime en cambio un único objeto JSON:
 
   {
-    "schema_version": 0,
+    "schema_version": 1,
     "generated_at": "2026-09-24T12:00:00Z",
     "project_root": "/abs/path/to/this project's ~/.vexillum namespace",
     "tasks": [ ... ]

@@ -2,6 +2,8 @@ package soldier
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -13,15 +15,16 @@ type CommandSpec struct {
 }
 
 // Harness abstracts the agent CLI vexillum drives to carry out a
-// soldier's prompt. It exists so a future harness beyond Claude Code
-// (Pi, deferred - AGENTS.md's "Harness único: Claude Code") can be added
-// by implementing this interface, instead of editing every place that
-// currently hardcodes Claude Code's own CLI shape.
+// soldier's prompt. vexillum supports several harnesses (Claude Code, Pi and
+// OpenCode, see AGENTS.md's multi-harness rule), each selected per model
+// profile and recorded on the task as state.Task.Harness; HarnessFor is the
+// registry that turns that name into an implementation. Adding a harness
+// means implementing this interface and registering it there, instead of
+// editing every place that hardcodes one CLI's shape.
 //
-// There is exactly one implementation, ClaudeHarness - this is a seam, not
-// the multi-harness abstraction itself: nothing here selects between
-// harnesses, and defaultHarness is still the only one vexillum ever
-// constructs.
+// ClaudeHarness is the only implementation registered so far: Pi and
+// OpenCode are reserved names that HarnessFor refuses with a clear error
+// until their phase lands.
 type Harness interface {
 	// ValidateModelEffort checks model/effort against the fixed set of
 	// values this harness's CLI accepts. Either may be empty, meaning
@@ -51,12 +54,78 @@ type Harness interface {
 	HerdrExtraArgs() []string
 }
 
-// defaultHarness is the Harness this build of vexillum drives. Only
-// ClaudeHarness is ever constructed here - this is the one place that would
-// need to pick a different Harness once a second one exists.
-var defaultHarness Harness = ClaudeHarness{}
+// The harness names a model profile may select and a task records. HarnessClaude
+// is the default, the one a profile or task without a harness means.
+const (
+	HarnessClaude   = "claude"
+	HarnessPi       = "pi"
+	HarnessOpenCode = "opencode"
+)
 
-// ClaudeHarness is vexillum's only Harness implementation. It wraps the
+// harnesses is the registry HarnessFor reads: the implemented harnesses,
+// keyed by name.
+var harnesses = map[string]Harness{
+	HarnessClaude: ClaudeHarness{},
+}
+
+// reservedHarnesses are names vexillum has set aside for harnesses with no
+// implementation yet, in the order error messages list them. A model profile
+// may name one so the file does not have to change when it lands, but
+// HarnessFor refuses it.
+var reservedHarnesses = []string{HarnessPi, HarnessOpenCode}
+
+// HarnessFor returns the Harness registered under name. An empty name means
+// HarnessClaude, which is what a task or profile written before the harness
+// field existed carries. A reserved name that is not implemented yet and an
+// unknown name are different errors, so a typo is not mistaken for a
+// harness that is merely on its way.
+func HarnessFor(name string) (Harness, error) {
+	if name == "" {
+		name = HarnessClaude
+	}
+	if h, ok := harnesses[name]; ok {
+		return h, nil
+	}
+	if isReservedHarness(name) {
+		return nil, fmt.Errorf("harness %q is not implemented yet (supported: %s)", name, strings.Join(implementedHarnessNames(), ", "))
+	}
+	return nil, fmt.Errorf("unknown harness %q (supported: %s; reserved, not implemented yet: %s)",
+		name, strings.Join(implementedHarnessNames(), ", "), strings.Join(reservedHarnesses, ", "))
+}
+
+// KnownHarness reports whether name is a harness vexillum knows about,
+// implemented or reserved. models.json uses it to reject a typo in a
+// profile's "harness" at load time without requiring the harness to be
+// implemented yet. An empty name is known: it means HarnessClaude.
+func KnownHarness(name string) bool {
+	if name == "" {
+		return true
+	}
+	if _, ok := harnesses[name]; ok {
+		return true
+	}
+	return isReservedHarness(name)
+}
+
+func isReservedHarness(name string) bool {
+	for _, r := range reservedHarnesses {
+		if r == name {
+			return true
+		}
+	}
+	return false
+}
+
+func implementedHarnessNames() []string {
+	names := make([]string, 0, len(harnesses))
+	for n := range harnesses {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// ClaudeHarness is the Harness for the `claude` CLI (Claude Code). It wraps the
 // real `claude` CLI, both one-shot (Command, used by the tribunal's
 // reviewer and fixer) and interactive inside a herdr pane
 // (HerdrAgentKind/HerdrExtraArgs, used by RunInHerdr).
@@ -159,18 +228,27 @@ func (ClaudeHarness) HerdrExtraArgs() []string {
 	return append([]string{}, claudeHerdrExtraArgs...)
 }
 
-// ValidateModelEffort checks model and effort against defaultHarness's
-// fixed set of accepted values. Either may be empty, meaning "don't pass
-// this flag - let the harness use its own default".
-func ValidateModelEffort(model, effort string) error {
-	return defaultHarness.ValidateModelEffort(model, effort)
+// ValidateModelEffort checks model and effort against the fixed set of
+// accepted values of the harness registered under harness ("" means
+// claude). Either may be empty, meaning "don't pass this flag - let the
+// harness use its own default". An unknown or unimplemented harness is the
+// error HarnessFor returns.
+func ValidateModelEffort(harness, model, effort string) error {
+	h, err := HarnessFor(harness)
+	if err != nil {
+		return err
+	}
+	return h.ValidateModelEffort(model, effort)
 }
 
-// ClaudeCommand builds the production CommandSpec for task via
-// defaultHarness. Named after Claude Code specifically (rather than
-// "HarnessCommand") because there is exactly one harness and callers
-// already reason about it as "the claude command" - see Harness's own
-// doc comment for why that's still fine to leave as a seam today.
-func ClaudeCommand(task state.Task) CommandSpec {
-	return defaultHarness.Command(task)
+// HarnessCommand builds the production CommandSpec for task through the
+// harness registered under harness ("" means claude). The tribunal's
+// reviewer and fixer run through it, so they use the same CLI as the
+// mission they judge.
+func HarnessCommand(harness string, task state.Task) (CommandSpec, error) {
+	h, err := HarnessFor(harness)
+	if err != nil {
+		return CommandSpec{}, err
+	}
+	return h.Command(task), nil
 }

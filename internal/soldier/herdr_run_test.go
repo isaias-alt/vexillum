@@ -261,6 +261,50 @@ func TestRunInHerdr_PassesModelAndEffort(t *testing.T) {
 	}
 }
 
+// A task whose harness is explicitly claude starts the same claude agent as a
+// task without the field.
+func TestRunInHerdr_StartsTheTasksHarness(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	task.Harness = "claude"
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+	if _, err := runInHerdr(t, home, "w1", task, c, client); err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if client.startCalls != 1 {
+		t.Errorf("expected the soldier to be started once, got %d", client.startCalls)
+	}
+}
+
+// A task naming a harness this build cannot drive fails before a tab is
+// created or an agent started, with the registry's own error.
+func TestRunInHerdr_RefusesAHarnessWithNoImplementation(t *testing.T) {
+	for _, harness := range []string{"pi", "opencode", "gemini"} {
+		t.Run(harness, func(t *testing.T) {
+			home := t.TempDir()
+			task := newMissionTask(t)
+			task.Harness = harness
+			c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+			client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+
+			_, err := runInHerdr(t, home, "w1", task, c, client)
+			if err == nil {
+				t.Fatal("expected an error for a harness with no implementation")
+			}
+			if !strings.Contains(err.Error(), harness) {
+				t.Errorf("expected the error to name the harness %q, got: %v", harness, err)
+			}
+			if client.startCalls != 0 || len(client.promptCalls) != 0 {
+				t.Errorf("nothing should have been started, got %d starts and %d prompts", client.startCalls, len(client.promptCalls))
+			}
+		})
+	}
+}
+
 // A scout's submitted prompt is the original prompt plus instructions
 // pointing at its own report file (internal/report.Path) - a mission's
 // is not, since a mission never has a report to write (internal/report's

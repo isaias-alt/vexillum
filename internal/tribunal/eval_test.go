@@ -537,7 +537,7 @@ func fixOnce(t *testing.T, id string, findings []Finding, intent string, setup f
 	setup(r)
 	head := r.head()
 	prompt := buildFixPrompt(findings, intent, "vexillum/"+strings.Split(id, "-")[0])
-	out, err := runClaude(r.repo, state.Task{Prompt: prompt, Model: fixModel, Effort: fixEffort}, 25*time.Minute)
+	out, err := runHarness(r.repo, "", state.Task{Prompt: prompt, Model: fixModel, Effort: fixEffort}, 25*time.Minute)
 	if err != nil {
 		t.Fatalf("fixer: %v", err)
 	}

@@ -274,6 +274,74 @@ func TestRunRedispatch_Success(t *testing.T) {
 	}
 }
 
+// A re-dispatch keeps the harness the task was dispatched with, and a task
+// without the field (written before it existed) stays that way.
+func TestRunRedispatch_KeepsTheTasksHarness(t *testing.T) {
+	for _, harness := range []string{"", "claude"} {
+		t.Run("harness="+harness, func(t *testing.T) {
+			project := initDispatchTestProject(t)
+			home := t.TempDir()
+			task := interruptedTestTask(t, project, home)
+			projectRoot, err := vxproject.Root(home, project)
+			if err != nil {
+				t.Fatalf("project.Root: %v", err)
+			}
+			task.Harness = harness
+			if err := state.Save(projectRoot, task); err != nil {
+				t.Fatalf("state.Save: %v", err)
+			}
+
+			client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done", readOutput: "did the thing"}
+			var out bytes.Buffer
+			if code := runRedispatch(project, home, "w1", task.ID, client, &out, &out); code != 0 {
+				t.Fatalf("expected exit 0, got %d: %s", code, out.String())
+			}
+			reloaded, err := state.Load(projectRoot, task.ID)
+			if err != nil {
+				t.Fatalf("state.Load: %v", err)
+			}
+			if reloaded.Harness != harness {
+				t.Errorf("Harness = %q after redispatch, want %q", reloaded.Harness, harness)
+			}
+		})
+	}
+}
+
+// A task whose harness this build cannot drive is refused before its old camp
+// is discarded, leaving it exactly as it was.
+func TestRunRedispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task := interruptedTestTask(t, project, home)
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	task.Harness = "pi"
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{tabID: "w2:t2", paneID: "w2:p2", promptStatus: "done"}
+	var out bytes.Buffer
+	if code := runRedispatch(project, home, "w1", task.ID, client, &out, &out); code == 0 {
+		t.Fatal("expected a non-zero exit")
+	}
+	if !strings.Contains(out.String(), "pi") || !strings.Contains(out.String(), "not implemented yet") {
+		t.Errorf("expected a clear error naming the harness, got: %s", out.String())
+	}
+	reloaded, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if reloaded.Status != state.StatusInterrupted || reloaded.Redispatches != 0 || reloaded.CampSlot != task.CampSlot {
+		t.Errorf("task changed by a refused redispatch: %+v", reloaded)
+	}
+	if _, err := os.Stat(filepath.Join(task.CampPath, "unlanded.txt")); err != nil {
+		t.Errorf("the old camp was touched: %v", err)
+	}
+}
+
 // Redispatching a task that carries a stale Decision from its previous,
 // now-superseded blocked life must clear it - otherwise 'vx status
 // --json' would keep reporting a moot question on a task that isn't

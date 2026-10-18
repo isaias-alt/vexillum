@@ -11,7 +11,7 @@
 //
 //	{
 //	  "profiles": {
-//	    "<name>": {"model": "sonnet", "effort": "high", "when": "..."}
+//	    "<name>": {"model": "sonnet", "effort": "high", "when": "...", "harness": "claude"}
 //	  },
 //	  "default": {"model": "sonnet", "effort": "medium"}
 //	}
@@ -19,8 +19,16 @@
 // "model" is one of haiku, sonnet, opus, fable. "effort" is one of low,
 // medium, high, xhigh, max (the values the claude CLI accepts, enforced by
 // soldier.ValidateModelEffort). "when" is free text telling the commander
-// when the profile applies. Unknown fields are rejected so a typo does not
-// silently do nothing. See testdata/example.json.
+// when the profile applies. "harness" is optional and names the agent CLI the
+// profile's soldiers run on: "claude" (the default when absent), or the
+// reserved "pi" and "opencode", which load but cannot be dispatched until
+// they are implemented (soldier.HarnessFor). The default entry has no
+// harness: it is always claude. Unknown fields are rejected so a typo does
+// not silently do nothing. See testdata/example.json.
+//
+// models.json carries no schema_version: strict decoding already makes an
+// older vexillum refuse a file that uses a field it does not know, such as
+// "harness", which is the guard a version number would add.
 //
 // # Layers
 //
@@ -32,7 +40,8 @@
 //
 // The merge is per field: a layer may override just the "effort" of an
 // existing profile, add a whole new profile, or change only "default.model".
-// A profile that exists in no earlier layer must set model, effort and when.
+// A profile that exists in no earlier layer must set model, effort and when;
+// harness is always optional.
 // A profile cannot be removed, only redefined. The reserved name "default"
 // cannot be used as a profile name; it selects the default entry in
 // `vx dispatch --profile default`.
@@ -75,12 +84,17 @@ type Profile struct {
 	Model  string
 	Effort string
 	When   string
+	// Harness is the profile's explicit harness name, or "" when no layer
+	// set one, which means soldier.HarnessClaude.
+	Harness string
 }
 
-// Choice is a model and effort to pass to the harness.
+// Choice is a model and effort to pass to the harness, and the harness name
+// to run them on ("" means soldier.HarnessClaude).
 type Choice struct {
-	Model  string
-	Effort string
+	Model   string
+	Effort  string
+	Harness string
 }
 
 // Table is the merged result of all layers.
@@ -102,7 +116,7 @@ func (t Table) Lookup(name string) (Choice, error) {
 	}
 	for _, p := range t.Profiles {
 		if p.Name == name {
-			return Choice{Model: p.Model, Effort: p.Effort}, nil
+			return Choice{Model: p.Model, Effort: p.Effort, Harness: p.Harness}, nil
 		}
 	}
 	return Choice{}, fmt.Errorf("unknown profile %q (valid profiles: %s)", name, strings.Join(t.Names(), ", "))
@@ -125,9 +139,10 @@ type layer struct {
 }
 
 type profileLayer struct {
-	Model  *string `json:"model"`
-	Effort *string `json:"effort"`
-	When   *string `json:"when"`
+	Model   *string `json:"model"`
+	Effort  *string `json:"effort"`
+	When    *string `json:"when"`
+	Harness *string `json:"harness"`
 }
 
 type choiceLayer struct {
@@ -197,7 +212,10 @@ func parse(where string, data []byte) (layer, error) {
 		if p == nil {
 			return layer{}, fmt.Errorf("%s: %s: must be an object with model, effort and when", where, field)
 		}
-		if err := checkValues(where, field, p.Model, p.Effort); err != nil {
+		if err := checkHarness(where, field, p.Harness); err != nil {
+			return layer{}, err
+		}
+		if err := checkValues(where, field, p.Harness, p.Model, p.Effort); err != nil {
 			return layer{}, err
 		}
 		if p.When != nil && strings.TrimSpace(*p.When) == "" {
@@ -205,31 +223,61 @@ func parse(where string, data []byte) (layer, error) {
 		}
 	}
 	if l.Default != nil {
-		if err := checkValues(where, "default", l.Default.Model, l.Default.Effort); err != nil {
+		if err := checkValues(where, "default", nil, l.Default.Model, l.Default.Effort); err != nil {
 			return layer{}, err
 		}
 	}
 	return l, nil
 }
 
+// checkHarness validates a profile's harness name when present: it must be
+// one vexillum knows about, implemented or reserved, so a typo is an error at
+// load time while a reserved name is not (it fails at dispatch instead, see
+// soldier.HarnessFor).
+func checkHarness(where, field string, harness *string) error {
+	if harness == nil {
+		return nil
+	}
+	if *harness == "" {
+		return fmt.Errorf("%s: %s.harness: must not be empty (omit it for the default, claude)", where, field)
+	}
+	if !soldier.KnownHarness(*harness) {
+		_, err := soldier.HarnessFor(*harness)
+		return fmt.Errorf("%s: %s.harness: %w", where, field, err)
+	}
+	return nil
+}
+
 // checkValues validates whichever of model/effort is present, naming the
 // file and field in the error. It reuses the harness's own allowed sets so
-// the two can never disagree.
-func checkValues(where, field string, model, effort *string) error {
+// the two can never disagree. harness is the layer's own harness field (nil
+// means the claude default). A reserved harness with no implementation has no
+// allowed sets to check against yet, so its model and effort are accepted
+// as written; they are validated by the harness once it exists.
+func checkValues(where, field string, harness, model, effort *string) error {
+	name := ""
+	if harness != nil {
+		name = *harness
+	}
+	_, resolveErr := soldier.HarnessFor(name)
 	if model != nil {
 		if *model == "" {
 			return fmt.Errorf("%s: %s.model: must not be empty", where, field)
 		}
-		if err := soldier.ValidateModelEffort(*model, ""); err != nil {
-			return fmt.Errorf("%s: %s.model: %w", where, field, err)
+		if resolveErr == nil {
+			if err := soldier.ValidateModelEffort(name, *model, ""); err != nil {
+				return fmt.Errorf("%s: %s.model: %w", where, field, err)
+			}
 		}
 	}
 	if effort != nil {
 		if *effort == "" {
 			return fmt.Errorf("%s: %s.effort: must not be empty", where, field)
 		}
-		if err := soldier.ValidateModelEffort("", *effort); err != nil {
-			return fmt.Errorf("%s: %s.effort: %w", where, field, err)
+		if resolveErr == nil {
+			if err := soldier.ValidateModelEffort(name, "", *effort); err != nil {
+				return fmt.Errorf("%s: %s.effort: %w", where, field, err)
+			}
 		}
 	}
 	return nil
@@ -284,6 +332,9 @@ func (a *accumulator) apply(where string, l layer) error {
 		}
 		if p.When != nil {
 			cur.When = *p.When
+		}
+		if p.Harness != nil {
+			cur.Harness = *p.Harness
 		}
 	}
 	if l.Default != nil {

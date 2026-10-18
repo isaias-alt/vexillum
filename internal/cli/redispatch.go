@@ -78,6 +78,14 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 		return 1
 	}
 
+	// The task keeps the harness it was dispatched with. One this build
+	// cannot drive is refused before the old camp is discarded, so the task
+	// is left as it was.
+	if _, err := soldier.HarnessFor(task.Harness); err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": task %s: %v\n", taskID, err)
+		return 1
+	}
+
 	if task.Status != state.StatusInterrupted {
 		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not interrupted - only an interrupted task can be re-dispatched (a done mission is landed with '"+cmdname.Name+" land' and struck; a running one is left alone)\n", taskID, task.Status)
 		return 1

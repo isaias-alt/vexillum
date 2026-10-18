@@ -63,3 +63,25 @@ func TestRunModelsShowsMergedFilesAndErrors(t *testing.T) {
 		t.Errorf("stderr: %s", errOut.String())
 	}
 }
+
+// A profile that sets a harness shows it; the rest keep the plain form.
+func TestRunModelsShowsAnExplicitHarness(t *testing.T) {
+	project, home := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".vexillum"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	models := `{"profiles": {"mission-big": {"harness": "claude"}, "pi-scout": {"model": "m", "effort": "e", "when": "x", "harness": "pi"}}}`
+	if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(models), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := runModels(project, home, &out, &errOut); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	for _, want := range []string{"mission-big  (sonnet, high, harness claude)", "pi-scout  (m, e, harness pi)", "scout-facts  (haiku, low)\n"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output missing %q:\n%s", want, out.String())
+		}
+	}
+}

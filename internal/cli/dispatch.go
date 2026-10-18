@@ -35,6 +35,11 @@ optional ~/.vexillum/models.json over the built-in defaults). An explicit
 an error listing the valid ones; "default" selects the table's default
 entry. Which profile fits a task is your call. See the vexillum skill.
 
+A profile may also name the harness (the agent CLI) its soldier runs on, in
+models.json; without one it is claude. The harness is recorded on the task
+and kept by '` + cmdname.Name + ` redispatch'. "pi" and "opencode" are reserved: choosing a
+profile that names one is an error until they are implemented.
+
 Runs a real, interactive Claude Code session in a herdr pane, inside a
 fresh git worktree isolated from this project's own working tree, with
 --dangerously-skip-permissions: the soldier has full host access under
@@ -74,12 +79,12 @@ func Dispatch(args []string) int {
 		return 1
 	}
 
-	model, effort, err = resolveProfile(projectDir, vexillumHome, profile, model, effort)
+	model, effort, harness, err := resolveProfile(projectDir, vexillumHome, profile, model, effort)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
-	if err := soldier.ValidateModelEffort(model, effort); err != nil {
+	if err := soldier.ValidateModelEffort(harness, model, effort); err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}
@@ -92,22 +97,24 @@ func Dispatch(args []string) int {
 
 	ensureSentinelRunning(vexillumHome, os.Stderr)
 
-	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, model, effort, herdr.CLI{}, os.Stdout, os.Stderr)
+	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, model, effort, harness, herdr.CLI{}, os.Stdout, os.Stderr)
 }
 
 // resolveProfile fills model and effort from the named profile, leaving any
-// value the caller passed explicitly untouched. An empty profile is a no-op.
-func resolveProfile(projectDir, vexillumHome, profile, model, effort string) (string, string, error) {
+// value the caller passed explicitly untouched, and returns the profile's
+// harness name ("" when it sets none, which means claude). An empty profile
+// is a no-op that returns the caller's values and no harness.
+func resolveProfile(projectDir, vexillumHome, profile, model, effort string) (string, string, string, error) {
 	if profile == "" {
-		return model, effort, nil
+		return model, effort, "", nil
 	}
 	table, err := models.Load(projectDir, vexillumHome)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	choice, err := table.Lookup(profile)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if model == "" {
 		model = choice.Model
@@ -115,7 +122,7 @@ func resolveProfile(projectDir, vexillumHome, profile, model, effort string) (st
 	if effort == "" {
 		effort = choice.Effort
 	}
-	return model, effort, nil
+	return model, effort, choice.Harness, nil
 }
 
 func parseDispatchArgs(args []string) (prompt string, kind state.Kind, model, effort, profile string, err error) {
@@ -164,9 +171,19 @@ func parseDispatchArgs(args []string) (prompt string, kind state.Kind, model, ef
 	return strings.Join(promptParts, " "), kind, model, effort, profile, nil
 }
 
-func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind state.Kind, model, effort string, client herdr.Client, stdout, stderr io.Writer) int {
+// runDispatch creates the task and runs it. harness is the name the chosen
+// profile resolved to ("" means claude); it is recorded on the task as the
+// harness its soldier, and later its re-dispatch and its tribunal, run on.
+func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind state.Kind, model, effort, harness string, client herdr.Client, stdout, stderr io.Writer) int {
 	if !scaffold.ProjectInitialized(projectDir) {
 		fmt.Fprintln(stderr, cmdname.Name+": project not initialized, run '"+cmdname.Name+" init' first")
+		return 1
+	}
+	if harness == "" {
+		harness = soldier.HarnessClaude
+	}
+	if _, err := soldier.HarnessFor(harness); err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
@@ -177,6 +194,7 @@ func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind stat
 	}
 	task.Model = model
 	task.Effort = effort
+	task.Harness = harness
 
 	return acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID, task, client, stdout, stderr)
 }

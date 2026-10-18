@@ -59,6 +59,9 @@ type Options struct {
 	// asks for is not reported as unrequested. They come from the task's
 	// state file, never from a file in the camp.
 	TaskAmendments []state.Amendment
+	// Harness is state.Task.Harness, the agent CLI the mission ran on: the
+	// reviewer and the fixer run through it too. Empty means claude.
+	Harness string
 	// Fix turns on the review -> fix -> review loop. Off, a blocking review
 	// just fails the run.
 	Fix bool

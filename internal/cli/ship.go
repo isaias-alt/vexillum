@@ -349,6 +349,7 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 	opts := ship.Tribunal
 	opts.Branch = c.Branch
 	opts.TaskPrompt = task.Prompt
+	opts.Harness = task.Harness
 	opts.TaskAmendments = task.Amendments
 	opts.Log = func(msg string) { fmt.Fprintf(stderr, "%s: %s\n", tribunal.Name, msg) }
 	result, err := tribunal.Run(c.Path, task.CampBase, opts)

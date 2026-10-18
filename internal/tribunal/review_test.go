@@ -182,3 +182,48 @@ func TestOptionsIntent_FeedsTheFixerToo(t *testing.T) {
 		}
 	}
 }
+
+// The reviewer runs through the mission's harness: an empty or explicit
+// claude harness invokes claude as before.
+func TestRunReview_UsesTheMissionsHarness(t *testing.T) {
+	for _, harness := range []string{"", "claude"} {
+		t.Run("harness="+harness, func(t *testing.T) {
+			dir := newTribunalRepo(t)
+			commitFile(t, dir, "change.txt", "hi\n")
+			stub := newClaudeStub(t)
+			stub.out(0, reportJSON("", "change.txt"))
+
+			sr, err := runReview(dir, "base", Options{Branch: "b", Harness: harness}, "")
+			if err != nil {
+				t.Fatalf("runReview: %v", err)
+			}
+			if !sr.Passed || stub.calls() != 1 {
+				t.Fatalf("expected one passing claude invocation, got passed=%v calls=%d", sr.Passed, stub.calls())
+			}
+		})
+	}
+}
+
+// A harness with no implementation never falls back to claude: the review
+// step errors out without invoking anything, so it can never read as a pass.
+func TestRunReview_RefusesAHarnessWithNoImplementation(t *testing.T) {
+	for _, harness := range []string{"pi", "opencode", "gemini"} {
+		t.Run(harness, func(t *testing.T) {
+			dir := newTribunalRepo(t)
+			commitFile(t, dir, "change.txt", "hi\n")
+			stub := newClaudeStub(t)
+			stub.out(0, reportJSON("", "change.txt"))
+
+			_, err := runReview(dir, "base", Options{Branch: "b", Harness: harness}, "")
+			if err == nil {
+				t.Fatal("expected an error for a harness with no implementation")
+			}
+			if !strings.Contains(err.Error(), harness) {
+				t.Errorf("expected the error to name the harness %q, got: %v", harness, err)
+			}
+			if stub.calls() != 0 {
+				t.Errorf("claude must not be invoked, got %d calls", stub.calls())
+			}
+		})
+	}
+}

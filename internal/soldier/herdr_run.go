@@ -39,8 +39,8 @@ const (
 	promptStalledRetryDelay  = 500 * time.Millisecond
 )
 
-// RunInHerdr runs task's prompt through a real, interactive Claude Code
-// session in a herdr pane inside c, instead of a one-shot background
+// RunInHerdr runs task's prompt through a real, interactive session of the
+// task's harness (Harness, Claude Code by default) in a herdr pane inside c, instead of a one-shot background
 // process - the soldier is visible and attachable, not silent in the
 // background.
 //
@@ -77,6 +77,13 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		return task, fmt.Errorf("resolving project root: %w", err)
 	}
 
+	// Resolved before anything is created, so a task naming a harness this
+	// build cannot drive fails here and not halfway through a launch.
+	harness, err := HarnessFor(task.Harness)
+	if err != nil {
+		return task, fmt.Errorf("resolving task harness: %w", err)
+	}
+
 	agentName := herdrAgentName(task)
 
 	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName)
@@ -111,7 +118,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	}
 	task = saved
 
-	agentName, err = startAgent(client, agentName, task.ID, paneID, defaultHarness.ModelEffortArgs(task))
+	agentName, err = startAgent(client, harness, agentName, task.ID, paneID, harness.ModelEffortArgs(task))
 	if err != nil {
 		return failHerdrTask(projectRoot, task, err)
 	}
@@ -893,11 +900,11 @@ func failHerdrTask(projectRoot string, task state.Task, cause error) (state.Task
 // parallel), startAgent falls back once to a name disambiguated with a
 // slice of taskID and returns whichever name actually ended up live -
 // the caller needs that exact name for every later call.
-func startAgent(client herdr.Client, candidateName, taskID, paneID string, extraArgs []string) (string, error) {
-	err := startAgentWithBusyRetry(client, candidateName, paneID, extraArgs)
+func startAgent(client herdr.Client, harness Harness, candidateName, taskID, paneID string, extraArgs []string) (string, error) {
+	err := startAgentWithBusyRetry(client, harness, candidateName, paneID, extraArgs)
 	if herdr.IsNameTaken(err) {
 		fallback := disambiguatedName(candidateName, taskID)
-		fbErr := startAgentWithBusyRetry(client, fallback, paneID, extraArgs)
+		fbErr := startAgentWithBusyRetry(client, harness, fallback, paneID, extraArgs)
 		if fbErr != nil {
 			return fallback, fmt.Errorf("starting soldier agent: %w", fbErr)
 		}
@@ -909,11 +916,11 @@ func startAgent(client herdr.Client, candidateName, taskID, paneID string, extra
 	return candidateName, nil
 }
 
-func startAgentWithBusyRetry(client herdr.Client, name, paneID string, extraArgs []string) error {
-	err := startAgentOnce(client, name, paneID, extraArgs)
+func startAgentWithBusyRetry(client herdr.Client, harness Harness, name, paneID string, extraArgs []string) error {
+	err := startAgentOnce(client, harness, name, paneID, extraArgs)
 	for attempt := 1; attempt < paneBusyMaxAttempts && herdr.IsPaneBusy(err); attempt++ {
 		time.Sleep(paneBusyRetryDelay)
-		err = startAgentOnce(client, name, paneID, extraArgs)
+		err = startAgentOnce(client, harness, name, paneID, extraArgs)
 	}
 	return err
 }
@@ -965,9 +972,9 @@ func disambiguatedName(candidateName, taskID string) string {
 	return trimmed + "-" + suffix
 }
 
-func startAgentOnce(client herdr.Client, name, paneID string, extraArgs []string) error {
-	args := append(defaultHarness.HerdrExtraArgs(), extraArgs...)
-	err := client.AgentStart(name, defaultHarness.HerdrAgentKind(), paneID, args...)
+func startAgentOnce(client herdr.Client, harness Harness, name, paneID string, extraArgs []string) error {
+	args := append(harness.HerdrExtraArgs(), extraArgs...)
+	err := client.AgentStart(name, harness.HerdrAgentKind(), paneID, args...)
 	if err == nil {
 		return nil
 	}
