@@ -26,7 +26,7 @@ The file is JSON, in English:
 ```json
 {
   "profiles": {
-    "<name>": { "model": "sonnet", "effort": "high", "when": "..." }
+    "<name>": { "model": "sonnet", "effort": "high", "when": "...", "harness": "claude" }
   },
   "default": { "model": "sonnet", "effort": "medium" }
 }
@@ -38,9 +38,10 @@ The file is JSON, in English:
 | `profiles.<name>.model` | The model passed to Claude Code: `haiku`, `sonnet`, `opus` or `fable`. |
 | `profiles.<name>.effort` | The effort passed to Claude Code: `low`, `medium`, `high`, `xhigh` or `max`. |
 | `profiles.<name>.when` | Free text that tells the commander when the profile applies. It must not be empty. |
+| `profiles.<name>.harness` | Optional. The agent CLI the profile's soldiers run on. `claude` (Claude Code) is the default when the field is absent. `pi` and `opencode` are reserved names with no implementation yet: the file loads, but dispatching with a profile that names one is an error. Any other name is an error that names the file and the field. |
 | `default.model`, `default.effort` | The fallback when no profile fits. Same valid values. |
 
-Unknown fields are rejected, so a typo does not silently do nothing. A value Claude Code would not accept is an error that names the file and the field.
+Unknown fields are rejected, so a typo does not silently do nothing. A value Claude Code would not accept is an error that names the file and the field. The `default` entry has no `harness`: it always runs on `claude`. The file has no `schema_version`; the strict parsing already makes an older vexillum refuse a file that uses a field it does not know.
 
 The built-in profiles, in priority order (the first that matches wins):
 
@@ -58,14 +59,14 @@ The built-in profiles, in priority order (the first that matches wins):
 The merge is **per field**, not per file:
 
 - A layer can override just one field of an existing profile, such as `effort`, and the rest is inherited.
-- A **new** profile must set `model`, `effort` and `when`, because there is nothing to inherit from.
+- A **new** profile must set `model`, `effort` and `when`, because there is nothing to inherit from. `harness` is always optional.
 - A profile cannot be deleted, only redefined.
 - `default` can be changed one field at a time.
 - `default` is a **reserved name**: it cannot be used as a profile name. It selects the default entry in `vx dispatch --profile default`.
 
 ## Reading it with `vx models`
 
-`vx models` is read-only. It prints every profile as `name  (model, effort)` followed by its `when` line, then the default, then the files that were merged:
+`vx models` is read-only. It prints every profile as `name  (model, effort)` (with `, harness <name>` added when the profile sets one) followed by its `when` line, then the default, then the files that were merged:
 
 ```text
 scout-facts  (haiku, low)
@@ -85,7 +86,7 @@ See [`vx models`](/docs/reference/cli/models).
 vx dispatch "update the changelog wording" --kind mission --profile mission-mechanical
 ```
 
-`--profile <name>` looks up the model and effort. An explicit `--model` or `--effort` **wins** over the profile, field by field. An unknown profile is an error that lists the valid ones, and `--profile default` selects the default entry. See [`vx dispatch`](/docs/reference/cli/dispatch).
+`--profile <name>` looks up the model, effort and harness. The harness is recorded on the task and kept when it is re-dispatched. An explicit `--model` or `--effort` **wins** over the profile, field by field. An unknown profile is an error that lists the valid ones, and `--profile default` selects the default entry. See [`vx dispatch`](/docs/reference/cli/dispatch).
 
 ## How the commander uses it
 

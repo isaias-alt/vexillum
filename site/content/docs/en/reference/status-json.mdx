@@ -11,7 +11,7 @@ prints one JSON object. It is read-only and adds nothing to the persisted task: 
 
 ```json
 {
-  "schema_version": 0,
+  "schema_version": 1,
   "generated_at": "2026-09-24T12:00:00Z",
   "project_root": "/abs/path/to/this project's ~/.vexillum namespace",
   "tasks": []
@@ -24,7 +24,7 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `schema_version` | number | version of the task file schema |
+| `schema_version` | number | version of the task file schema; this build writes `1` and still reads `0` |
 | `id` | string | 16 hex characters |
 | `kind` | `"mission"` or `"scout"` | |
 | `prompt` | string | the original prompt |
@@ -37,6 +37,7 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 | `agent_not_found_since`, `idle_unconfirmed_since` | time | when the sentinel first saw the condition |
 | `redispatches` | number | how many times the task was re-dispatched |
 | `model`, `effort` | string | the soldier's choice; empty means claude's default |
+| `harness` | string | the agent CLI the soldier runs on, from the dispatch profile (`claude`); empty means `claude`, as in a task file written before this field existed |
 | `decision` | object | present once the task has blocked at least once |
 | `amendments` | array | instructions the general gave after dispatch, via `vx prompt` and `vx decide` (not `--dismiss`); see below |
 

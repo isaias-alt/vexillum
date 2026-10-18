@@ -26,6 +26,11 @@ optional ~/.vexillum/models.json over the built-in defaults). An explicit
 an error listing the valid ones; "default" selects the table's default
 entry. Which profile fits a task is your call. See the vexillum skill.
 
+A profile may also name the harness (the agent CLI) its soldier runs on, in
+models.json; without one it is claude. The harness is recorded on the task
+and kept by 'vx redispatch'. "pi" and "opencode" are reserved: choosing a
+profile that names one is an error until they are implemented.
+
 Runs a real, interactive Claude Code session in a herdr pane, inside a
 fresh git worktree isolated from this project's own working tree, with
 --dangerously-skip-permissions: the soldier has full host access under

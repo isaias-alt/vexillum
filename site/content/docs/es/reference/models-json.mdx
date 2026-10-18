@@ -26,7 +26,7 @@ El archivo es JSON, en inglés:
 ```json
 {
   "profiles": {
-    "<name>": { "model": "sonnet", "effort": "high", "when": "..." }
+    "<name>": { "model": "sonnet", "effort": "high", "when": "...", "harness": "claude" }
   },
   "default": { "model": "sonnet", "effort": "medium" }
 }
@@ -38,9 +38,10 @@ El archivo es JSON, en inglés:
 | `profiles.<name>.model` | El modelo que se le pasa a Claude Code: `haiku`, `sonnet`, `opus` o `fable`. |
 | `profiles.<name>.effort` | El effort que se le pasa a Claude Code: `low`, `medium`, `high`, `xhigh` o `max`. |
 | `profiles.<name>.when` | Texto libre que le dice al commander cuándo aplica el perfil. No puede estar vacío. |
+| `profiles.<name>.harness` | Opcional. El CLI de agente en el que corren los soldiers del perfil. `claude` (Claude Code) es el default cuando el campo no está. `pi` y `opencode` son nombres reservados sin implementación todavía: el archivo carga, pero despachar con un perfil que nombre uno es un error. Cualquier otro nombre es un error que nombra el archivo y el campo. |
 | `default.model`, `default.effort` | El valor de respaldo cuando ningún perfil encaja. Mismos valores válidos. |
 
-Los campos desconocidos se rechazan, así que un error de tipeo no queda sin efecto en silencio. Un valor que Claude Code no aceptaría es un error que nombra el archivo y el campo.
+Los campos desconocidos se rechazan, así que un error de tipeo no queda sin efecto en silencio. Un valor que Claude Code no aceptaría es un error que nombra el archivo y el campo. La entrada `default` no tiene `harness`: siempre corre en `claude`. El archivo no tiene `schema_version`; el parseo estricto ya hace que un vexillum más viejo rechace un archivo que usa un campo que no conoce.
 
 Los perfiles incluidos, en orden de prioridad (gana el primero que coincide):
 
@@ -58,14 +59,14 @@ Los perfiles incluidos, en orden de prioridad (gana el primero que coincide):
 La combinación es **por campo**, no por archivo:
 
 - Una capa puede pisar un solo campo de un perfil existente, como `effort`, y el resto se hereda.
-- Un perfil **nuevo** tiene que definir `model`, `effort` y `when`, porque no hay de dónde heredar.
+- Un perfil **nuevo** tiene que definir `model`, `effort` y `when`, porque no hay de dónde heredar. `harness` siempre es opcional.
 - Un perfil no se puede borrar, solo redefinir.
 - `default` se puede cambiar de a un campo.
 - `default` es un **nombre reservado**: no se puede usar como nombre de perfil. Selecciona la entrada por defecto en `vx dispatch --profile default`.
 
 ## Leerlo con `vx models`
 
-`vx models` es de solo lectura. Imprime cada perfil como `name  (model, effort)` seguido de su línea `when`, después el default, y al final los archivos que se combinaron:
+`vx models` es de solo lectura. Imprime cada perfil como `name  (model, effort)` (con `, harness <name>` agregado cuando el perfil define uno) seguido de su línea `when`, después el default, y al final los archivos que se combinaron:
 
 ```text
 scout-facts  (haiku, low)
@@ -85,7 +86,7 @@ Mirá [`vx models`](/es/docs/reference/cli/models).
 vx dispatch "update the changelog wording" --kind mission --profile mission-mechanical
 ```
 
-`--profile <name>` busca el modelo y el effort. Un `--model` o `--effort` explícito **gana** sobre el perfil, campo por campo. Un perfil desconocido es un error que lista los válidos, y `--profile default` selecciona la entrada por defecto. Ver [`vx dispatch`](/es/docs/reference/cli/dispatch).
+`--profile <name>` busca el modelo, el effort y el harness. El harness queda registrado en la tarea y se conserva cuando se la vuelve a despachar. Un `--model` o `--effort` explícito **gana** sobre el perfil, campo por campo. Un perfil desconocido es un error que lista los válidos, y `--profile default` selecciona la entrada por defecto. Ver [`vx dispatch`](/es/docs/reference/cli/dispatch).
 
 ## Cómo lo usa el commander
 

@@ -26,6 +26,11 @@ es un error que lista los válidos; "default" selecciona la entrada por defecto
 de la tabla. Qué perfil conviene a una tarea lo decidís vos. Ver la skill
 vexillum.
 
+Un perfil también puede nombrar, en models.json, el harness (el CLI de agente)
+en el que corre su soldier; sin uno es claude. El harness queda registrado en la
+tarea y 'vx redispatch' lo conserva. "pi" y "opencode" están reservados: elegir
+un perfil que nombre uno es un error hasta que se implementen.
+
 Corre una sesión real e interactiva de Claude Code en un pane de herdr, dentro
 de un git worktree nuevo, aislado del árbol de trabajo propio de este proyecto,
 con --dangerously-skip-permissions: el soldier tiene acceso total al host bajo
