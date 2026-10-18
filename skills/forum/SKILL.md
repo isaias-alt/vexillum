@@ -46,13 +46,25 @@ work out from the conversation what would be worth showing.
    the project also started the listener (the output says `listener: running`).
 4. **When feedback arrives you are woken.** The Stop hook's await surfaces a
    line like `forum session <file>: 2 new messages (ended: false). Run vx forum
-   inbox.` Run `vx forum inbox` (see "The inbox"), read the prompts, act on them
-   (edit the artifact when they ask for changes: the browser reloads it by
-   itself), then **answer in the browser**:
-   `vx forum reply .vexillum/forum/plan.html --reply "Done: switched to the Pro plan"`
-   (or `--reply-file <path>`, `-` for stdin, for long replies). It posts and
-   returns at once; it never waits. Finally confirm what you handled with
-   `vx forum inbox --ack <uid>...`.
+   inbox.` Run `vx forum inbox` (see "The inbox"), read the prompts, then
+   **update the artifact first, answer second**:
+   - **The artifact is the record.** Whenever the feedback changes or decides
+     something (an answer to a question, a picked option, a requested edit, a
+     rejected idea), edit the artifact file so the page shows the new state
+     (the browser reloads it by itself). Skip the edit only when the feedback
+     truly changes nothing (a thanks, a question about the page that needs no
+     change to it). A reply alone leaves the page stale against what was
+     decided, and the next reader trusts the page.
+   - **The chat complements the artifact, never replaces it.** After editing,
+     answer in the browser with a brief summary of what changed in the
+     artifact (what you added, removed or reworded, and where), not a
+     substitute for the change:
+     `vx forum reply .vexillum/forum/plan.html --reply "Done: switched to the Pro plan (pricing table and the recommendation card updated)"`
+     (or `--reply-file <path>`, `-` for stdin, for long replies). It posts and
+     returns at once; it never waits. If the artifact has not changed since
+     the user's last send, `vx forum reply` prints a warning on stderr: edit
+     the artifact and answer again if you skipped it by mistake.
+   - Finally confirm what you handled with `vx forum inbox --ack <uid>...`.
 5. **Send to Agent keeps the review going; only Send & End authorizes
    implementing.** A plain Send to Agent is feedback on the artifact: revise
    it, answer, and keep the loop. A **Send & End** (`status: ended`, `ended:
@@ -226,8 +238,9 @@ next_step: <what to do now>
   them. Feedback is **confirmed** once the command has printed it - read the
   whole response; it is not delivered again, except `redelivered: true` prompts
   after a poll that died before confirming (see "Several sessions").
-- `status: feedback` - act on the prompts, then poll again (usually with
-  `--reply`).
+- `status: feedback` - act on the prompts (update the artifact when they
+  change or decide something), then poll again (usually with `--reply`
+  summarizing what changed).
 - `status: ended` - the session ended (`ended_by` says who). Prompts, if any,
   are the **final** feedback (Send & End): apply them. **Stop polling** and do
   not reopen the session uninvited.
@@ -291,7 +304,8 @@ by itself as soon as you answer in any way: post a reply (`vx forum reply`, or
 `poll --reply`), edit the artifact file (the page reloads), or start polling
 again with nothing pending. Neither the poll that delivers the feedback nor the
 listener's "Received" line (nor the listener polling again) clears it. So: do
-the work, then reply; do not sit on a delivered message. It never traps the user:
+the work (edit the artifact), then reply with a short summary of what changed;
+do not sit on a delivered message. It never traps the user:
 after 30 seconds it offers **Stop waiting** (and Escape starts working), which
 returns the panel to the "not listening" hint if nothing arrived. It is not
 shown for **Send & End**.
@@ -303,7 +317,8 @@ reply, or the artifact changing after the send; the listener's notice is not an
 answer), then **answered**; your replies
 are tied to the round they answer, and queued messages say which round they
 will start. A reply always answers the round in progress, so reply after the
-user's latest send, not before.
+user's latest send, not before. The artifact edit is what really closes a
+round on the page, so make it before the reply, and let the reply summarize it.
 
 **Several tabs.** The same session can be open in more than one browser tab or
 window; every tab shows the same queue, transcript, listening state and end

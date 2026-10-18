@@ -165,8 +165,10 @@ func (c *Client) Ack(ctx context.Context, file, delivery string) error {
 }
 
 // Reply shows text (markdown) in the browser's conversation panel.
-func (c *Client) Reply(ctx context.Context, file, text string) error {
-	return c.do(ctx, http.MethodPost, "/api/agent/reply", agentFileRequest{File: file, Text: text}, nil)
+func (c *Client) Reply(ctx context.Context, file, text string) (ReplyResponse, error) {
+	var out ReplyResponse
+	err := c.do(ctx, http.MethodPost, "/api/agent/reply", agentFileRequest{File: file, Text: text}, &out)
+	return out, err
 }
 
 // End ends the session as the agent.

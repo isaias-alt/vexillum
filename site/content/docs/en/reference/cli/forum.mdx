@@ -71,7 +71,9 @@ only. It does not mark anything read: forum inbox --ack <uid>... confirms the
 uids you handled (the ones printed), and an unconfirmed prompt is shown again.
 forum reply posts the agent's markdown answer (--reply, or --reply-file; - is
 stdin) to the review panel and answers the round without blocking, so a
-commander that does not poll can answer.
+commander that does not poll can answer. When the artifact file has not changed
+since the user's last send, it warns on stderr: the reply should summarize an
+artifact edit, not replace it.
 
 forum end ends the session as the agent (a plain forum <html-file> reopens
 it later). forum stop shuts the background listener and server down.

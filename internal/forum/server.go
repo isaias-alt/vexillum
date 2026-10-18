@@ -368,11 +368,20 @@ func (s *Server) handleAgentReply(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.hub.Reply(key, req.Text); err != nil {
+	unchanged, err := s.hub.ReplyChecked(key, req.Text)
+	if err != nil {
 		writeHubError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+	writeJSON(w, http.StatusOK, ReplyResponse{Status: "sent", ArtifactUnchanged: unchanged})
+}
+
+// ReplyResponse is the body of POST /api/agent/reply. ArtifactUnchanged is
+// true when the reply answers a round whose artifact file has not changed
+// since the user's send.
+type ReplyResponse struct {
+	Status            string `json:"status"`
+	ArtifactUnchanged bool   `json:"artifact_unchanged,omitempty"`
 }
 
 // RelayResponse is the body of POST /api/agent/relay.

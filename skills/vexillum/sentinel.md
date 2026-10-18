@@ -31,8 +31,9 @@ forum session <file>: 2 new messages (ended: false). Run vx forum inbox.
 ```
 
 That is not a soldier status and needs no `vx status`. Follow the `forum` skill:
-run `vx forum inbox`, act on the prompts, answer with `vx forum reply <file>
---reply "<what you did>"` (it does not block), then confirm what you handled
+run `vx forum inbox`, act on the prompts (update the artifact whenever the
+feedback changes or decides something), answer with `vx forum reply <file>
+--reply "<what changed in the artifact>"` (it does not block), then confirm what you handled
 with `vx forum inbox --ack <uid>...`. You never poll for it. The wake is a
 doorbell, delivered once: the inbox is the truth, so after a restart or a long
 absence run `vx forum inbox` to see anything unread. `(ended: true)` means the

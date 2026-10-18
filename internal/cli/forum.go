@@ -86,7 +86,9 @@ only. It does not mark anything read: forum inbox --ack <uid>... confirms the
 uids you handled (the ones printed), and an unconfirmed prompt is shown again.
 forum reply posts the agent's markdown answer (--reply, or --reply-file; - is
 stdin) to the review panel and answers the round without blocking, so a
-commander that does not poll can answer.
+commander that does not poll can answer. When the artifact file has not changed
+since the user's last send, it warns on stderr: the reply should summarize an
+artifact edit, not replace it.
 
 forum end ends the session as the agent (a plain forum <html-file> reopens
 it later). forum stop shuts the background listener and server down.
@@ -409,7 +411,11 @@ func runForumPoll(ctx context.Context, home string, args []string, stdin io.Read
 	}
 
 	if a.hasReply {
-		if err := client.Reply(ctx, abs, reply); err != nil {
+		if res, err := client.Reply(ctx, abs, reply); err == nil {
+			if res.ArtifactUnchanged {
+				fmt.Fprintln(stderr, artifactUnchangedWarning)
+			}
+		} else {
 			var ae *forum.APIError
 			switch {
 			case errors.As(err, &ae) && ae.Code == "no_session":
@@ -751,6 +757,8 @@ func runForumInbox(projectRoot string, args []string, stdout, stderr io.Writer) 
 	return 0
 }
 
+const artifactUnchangedWarning = cmdname.Name + ": warning: the artifact has not changed since the user's last send; if the feedback changed or decided something, update the artifact too (the chat only complements it)"
+
 // runForumReply posts the agent's answer to a session's panel without
 // blocking (poll --reply posts and then waits; the commander no longer polls).
 func runForumReply(ctx context.Context, home string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -814,7 +822,11 @@ func runForumReply(ctx context.Context, home string, args []string, stdin io.Rea
 		return 1
 	}
 	status := "sent"
-	if err := client.Reply(ctx, abs, reply); err != nil {
+	if res, err := client.Reply(ctx, abs, reply); err == nil {
+		if res.ArtifactUnchanged {
+			fmt.Fprintln(stderr, artifactUnchangedWarning)
+		}
+	} else {
 		var ae *forum.APIError
 		switch {
 		case errors.As(err, &ae) && ae.Code == "no_session":

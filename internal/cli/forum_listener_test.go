@@ -473,3 +473,44 @@ func TestForumStop_StopsTheListenerFirst(t *testing.T) {
 		t.Errorf("nothing was running, yet: %q", out.String())
 	}
 }
+
+func TestForumReply_WarnsWhenTheArtifactDidNotChangeSinceTheSend(t *testing.T) {
+	inProcessSpawn(t)
+	home := t.TempDir()
+	file := writeArtifact(t)
+	var out, errb bytes.Buffer
+	if code := runForumOpen(context.Background(), home, []string{file, "--no-open"}, &out, &errb); code != 0 {
+		t.Fatalf("open exit %d: %s", code, errb.String())
+	}
+	browserSend(t, home, file, "make it blue")
+
+	errb.Reset()
+	if code := runForumReply(context.Background(), home, []string{file, "--reply", "Done"}, strings.NewReader(""), &out, &errb); code != 0 {
+		t.Fatalf("reply exit %d: %s", code, errb.String())
+	}
+	if !strings.Contains(errb.String(), "warning: the artifact has not changed") {
+		t.Errorf("no warning for an unchanged artifact; stderr:\n%s", errb.String())
+	}
+}
+
+func TestForumReply_NoWarningWhenTheArtifactChanged(t *testing.T) {
+	inProcessSpawn(t)
+	home := t.TempDir()
+	file := writeArtifact(t)
+	var out, errb bytes.Buffer
+	if code := runForumOpen(context.Background(), home, []string{file, "--no-open"}, &out, &errb); code != 0 {
+		t.Fatalf("open exit %d: %s", code, errb.String())
+	}
+	browserSend(t, home, file, "make it blue")
+	if err := os.WriteFile(file, []byte("<html><body><p style=\"color:blue\">hi, now blue</p></body></html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	errb.Reset()
+	if code := runForumReply(context.Background(), home, []string{file, "--reply", "Done: page is blue"}, strings.NewReader(""), &out, &errb); code != 0 {
+		t.Fatalf("reply exit %d: %s", code, errb.String())
+	}
+	if strings.Contains(errb.String(), "warning") {
+		t.Errorf("unexpected warning after an artifact edit; stderr:\n%s", errb.String())
+	}
+}

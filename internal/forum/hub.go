@@ -577,23 +577,32 @@ func (h *Hub) End(key, by string) error {
 
 // Reply posts an agent message (markdown) to key's conversation panel.
 func (h *Hub) Reply(key, text string) error {
+	_, err := h.ReplyChecked(key, text)
+	return err
+}
+
+// ReplyChecked is Reply that also reports whether the reply is the first
+// answer to a round whose artifact file has not changed since the user's send:
+// the chat then holds a decision the artifact does not show yet.
+func (h *Hub) ReplyChecked(key, text string) (artifactUnchanged bool, err error) {
 	text = clip(strings.TrimSpace(text), maxReplyChars)
 	if text == "" {
-		return fmt.Errorf("reply is empty")
+		return false, fmt.Errorf("reply is empty")
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	l, err := h.get(key)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := l.endedErr(); err != nil {
-		return err
+		return false, err
 	}
 	id, err := newID("m_")
 	if err != nil {
-		return err
+		return false, err
 	}
+	artifactUnchanged = l.rec.Round > l.rec.AnsweredThrough && l.rec.RoundArtifact != "" && artifactVersion(l.rec.File) == l.rec.RoundArtifact
 	h.beat(l)
 	// A reply answers the round in progress: nothing is awaited any more.
 	if err := h.commit(l, func(rec *sessionRecord) error {
@@ -604,13 +613,13 @@ func (h *Hub) Reply(key, text string) error {
 		rec.Commander = ""
 		return nil
 	}); err != nil {
-		return err
+		return false, err
 	}
 	if err := h.appendTranscript(l, Message{ID: id, Role: RoleAgent, Text: text, At: h.opts.Now().UTC(), Round: l.rec.Round}); err != nil {
-		return err
+		return false, err
 	}
 	h.bump(l)
-	return nil
+	return artifactUnchanged, nil
 }
 
 // RelayResult is what Relay reports back to the listener.
