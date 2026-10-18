@@ -35,6 +35,7 @@ type Result struct {
 var installHints = map[string]string{
 	"claude": "install it from https://claude.com/claude-code",
 	"herdr":  "install it with 'brew install herdr' or from https://herdr.dev",
+	"pi":     "install it with 'curl -fsSL https://pi.dev/install.sh | sh' or 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent'",
 	"gh":     "install it with 'brew install gh' or from https://cli.github.com",
 }
 

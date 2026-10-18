@@ -22,6 +22,11 @@ edited by hand, or missing), whether the model profiles in models.json are
 valid, and whether yolo mode is on (the commander lands a finished mission
 without asking).
 
+When a model profile selects the pi harness, or a pi binary is on PATH, doctor
+also reports on Pi: the binary, its version, and whether herdr's integration for
+pi is installed ('herdr integration install pi'). They only ever warn; a setup
+without Pi sees none of these lines.
+
 It also checks the sentinel Stop hook, the one that wakes the commander when a
 soldier finishes: whether it is registered in .claude/settings.json, whether
 its command finds a ` + cmdname.Name + ` binary when run from a bare environment (only HOME and
@@ -73,6 +78,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.ProjectInitialized(projectDir),
 		doctorcheck.GitRepo(projectDir),
 	}
+	checks = append(checks, doctorcheck.PiChecks(projectDir, vexillumHome)...)
 	if scaffold.ProjectInitialized(projectDir) {
 		checks = append(checks, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
 	}
