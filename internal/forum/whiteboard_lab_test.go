@@ -4,7 +4,6 @@ package forum_test
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 	"syscall"
 	"testing"
@@ -109,7 +108,7 @@ func runLab(t *testing.T, env *testEnv, key, theme string, diagrams []string, sc
 	env.setArtifact(labPage(key, token, theme, diagrams, script))
 	get := captureReports(t, env)
 	for attempt := 0; attempt < 2; attempt++ {
-		cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
+		cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
 			fmt.Sprintf("--window-size=%d,%d", width, height), "--user-data-dir="+t.TempDir(), env.ts.URL+"/a/"+key+"/artifact.html?theme="+theme)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if err := cmd.Start(); err != nil {

@@ -4,7 +4,6 @@ package forum_test
 
 import (
 	"net/http"
-	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,7 +61,7 @@ func startQueueFormRun(t *testing.T, prequeue bool) *queueFormRun {
 		run.reports = append(run.reports, r.URL.Query().Get("v"))
 		run.mu.Unlock()
 	})
-	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
+	cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
 		"--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+run.key)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {

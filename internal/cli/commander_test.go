@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -191,8 +192,17 @@ func doctorOutput(t *testing.T, commander []string, tools ...string) (int, strin
 	if r := doInit(projectDir, t.TempDir(), setupOptions{Yes: true, Commander: commander}, "", false); r.code != 0 {
 		t.Fatalf("init exit %d: %s%s", r.code, r.out, r.errOut)
 	}
+	// The Stop hook probe looks for vx under $HOME/.local/bin among other
+	// places; a fake there makes the "finds vx" line the same on a machine
+	// with vx installed and on CI without it.
+	homeDir := t.TempDir()
+	fakeVXDir := filepath.Join(homeDir, ".local", "bin")
+	if err := os.MkdirAll(fakeVXDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeStub(t, fakeVXDir, "vx", "exit 0")
 	var out bytes.Buffer
-	code := runDoctor(projectDir, t.TempDir(), t.TempDir(), &out)
+	code := runDoctor(projectDir, t.TempDir(), homeDir, &out)
 	return code, out.String()
 }
 

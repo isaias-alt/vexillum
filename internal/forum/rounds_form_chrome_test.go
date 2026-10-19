@@ -4,7 +4,6 @@ package forum_test
 
 import (
 	"net/http"
-	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
@@ -42,7 +41,7 @@ func TestRounds_RealChrome_DecisionFormShowsSentAndAnswered(t *testing.T) {
 		reports = append(reports, r.URL.Query().Get("v"))
 		mu.Unlock()
 	})
-	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
+	cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
 		"--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+key)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {

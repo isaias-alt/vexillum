@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -101,7 +100,7 @@ func whiteboardSavesRecord(t *testing.T, source string) []byte {
 <h2>Flow</h2><div class="mermaid">` + source + `
 </div></body></html>`)
 
-	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
+	cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
 		"--window-size=1500,800", "--user-data-dir="+t.TempDir(), env.ts.URL+"/session/"+key)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
@@ -149,7 +148,7 @@ func TestWhiteboard_RealChrome_AFrameThatCannotStartSaysWhy(t *testing.T) {
 		}
 	})
 
-	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
+	cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
 		"--user-data-dir="+t.TempDir(), env.ts.URL+"/a/"+key+"/artifact.html")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {

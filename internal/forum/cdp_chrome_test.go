@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -64,7 +63,7 @@ type cdpMessage struct {
 func startCDPChrome(t *testing.T, chrome, url string) *cdpBrowser {
 	t.Helper()
 	profile := t.TempDir()
-	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
+	cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
 		"--remote-debugging-port=0", "--user-data-dir="+profile, "about:blank")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {

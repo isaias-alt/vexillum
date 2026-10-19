@@ -33,6 +33,14 @@ func headlessChrome(t *testing.T) string {
 	return ""
 }
 
+// chromeCmd builds the command for a headless Chrome test run. The mock
+// keychain and the basic password store keep Chrome from touching the macOS
+// keychain, which pops a "Keychain Not Found" dialog under a throwaway HOME.
+// Callers still pass their own --user-data-dir.
+func chromeCmd(chrome string, args ...string) *exec.Cmd {
+	return exec.Command(chrome, append([]string{"--use-mock-keychain", "--password-store=basic"}, args...)...)
+}
+
 // auditMessage is the "forum:layout" message the audit posts to its parent.
 type auditMessage struct {
 	Type                   string               `json:"type"`
@@ -88,7 +96,7 @@ func auditInChrome(t *testing.T, artifact string, dpr float64) auditMessage {
 		}
 	})
 
-	cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
+	cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--window-size=1100,800",
 		fmt.Sprintf("--force-device-scale-factor=%v", dpr), "--user-data-dir="+t.TempDir(), env.ts.URL+"/__host")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {

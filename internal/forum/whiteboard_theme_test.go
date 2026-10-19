@@ -10,7 +10,6 @@ import (
 	"image/png"
 	"math"
 	"net/http"
-	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
@@ -308,7 +307,7 @@ func captureReports(t *testing.T, env *testEnv) func(string) (string, bool) {
 func reportFromChrome(t *testing.T, chrome, url string, get func(string) (string, bool), key string) string {
 	t.Helper()
 	for attempt := 0; attempt < 2; attempt++ {
-		cmd := exec.Command(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
+		cmd := chromeCmd(chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
 			"--window-size=1300,900", "--user-data-dir="+t.TempDir(), url)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if err := cmd.Start(); err != nil {
