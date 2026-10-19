@@ -343,3 +343,48 @@ func TestCLI_run_HerdrNotInstalled(t *testing.T) {
 		t.Errorf("expected the error to name the failed run, got: %v", err)
 	}
 }
+
+// AgentGet takes a pane id as well as a name and reads the harness kind, pane
+// and working directories out of the agent object.
+func TestCLI_AgentGet_ReadsTheAgent(t *testing.T) {
+	rec := filepath.Join(t.TempDir(), "args")
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "agent get") printf '%s\n' "$@" > '`+rec+`'; echo '{"result":{"agent":{"agent":"opencode","pane_id":"w1:p2","name":"cmd","cwd":"/p","foreground_cwd":"/p/sub","focused":true},"type":"agent_info"}}' ;;
+esac`))
+
+	got, err := CLI{}.AgentGet("w1:p2")
+	if err != nil {
+		t.Fatalf("AgentGet: %v", err)
+	}
+	want := AgentInfo{Kind: "opencode", PaneID: "w1:p2", Name: "cmd", Cwd: "/p", ForegroundCwd: "/p/sub", Focused: true}
+	if got != want {
+		t.Errorf("AgentGet = %+v, want %+v", got, want)
+	}
+	raw, _ := os.ReadFile(rec)
+	if strings.TrimSpace(strings.ReplaceAll(string(raw), "\n", " ")) != "agent get w1:p2" {
+		t.Errorf("herdr was called with %q", raw)
+	}
+}
+
+func TestCLI_AgentGet_UnknownTargetIsNotFound(t *testing.T) {
+	t.Setenv("PATH", herdrStub(t, `echo '{"error":{"code":"agent_not_found","message":"agent target x not found"}}' >&2; exit 1`))
+	_, err := CLI{}.AgentGet("x")
+	if !IsNotFound(err) {
+		t.Fatalf("AgentGet error = %v, want agent_not_found", err)
+	}
+}
+
+func TestCLI_AgentList_ReadsEveryAgent(t *testing.T) {
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "agent list") echo '{"result":{"agents":[{"agent":"claude","pane_id":"w1:p1","cwd":"/a"},{"agent":"pi","pane_id":"w1:p2","name":"vx-x","cwd":"/b"}],"type":"agent_list"}}' ;;
+esac`))
+
+	got, err := CLI{}.AgentList()
+	if err != nil {
+		t.Fatalf("AgentList: %v", err)
+	}
+	want := []AgentInfo{{Kind: "claude", PaneID: "w1:p1", Cwd: "/a"}, {Kind: "pi", PaneID: "w1:p2", Name: "vx-x", Cwd: "/b"}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("AgentList = %+v, want %+v", got, want)
+	}
+}

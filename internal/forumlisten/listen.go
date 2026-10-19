@@ -22,7 +22,9 @@ import (
 	"io"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/commanderreg"
 	"github.com/isaias-alt/vexillum/internal/forum"
+	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/inbox"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 )
@@ -58,8 +60,12 @@ type Options struct {
 	// sessions came or went. Default 5s.
 	RefreshEvery time.Duration
 	// Commander reports whether a commander session is known for projectRoot.
-	// Default: a live "vx sentinel await" for it (sentinel.HasLiveAwaiter).
+	// Default: a live "vx sentinel await" for it (sentinel.HasLiveAwaiter), or
+	// else a live entry of the commander registry (internal/commanderreg).
 	Commander func(projectRoot string) bool
+	// Herdr answers the registry lookups of the default Commander. Default:
+	// the real herdr CLI.
+	Herdr herdr.Locator
 	// Log receives one line per event; nil discards.
 	Log io.Writer
 	// Now overrides the clock.
@@ -84,7 +90,15 @@ func (o *Options) defaults() {
 	}
 	if o.Commander == nil {
 		home := o.Home
-		o.Commander = func(root string) bool { return sentinel.HasLiveAwaiter(home, root) }
+		locator := o.Herdr
+		if locator == nil {
+			locator = herdr.CLI{}
+		}
+		o.Commander = func(root string) bool {
+			// The await comes first and settles it alone, so a project with a
+			// Claude commander never asks herdr anything.
+			return sentinel.HasLiveAwaiter(home, root) || commanderreg.Live(root, home, locator)
+		}
 	}
 	if o.Now == nil {
 		o.Now = time.Now

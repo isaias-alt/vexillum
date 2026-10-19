@@ -10,6 +10,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/models"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -118,8 +119,23 @@ func Dispatch(args []string) int {
 	}
 
 	ensureSentinelRunning(vexillumHome, os.Stderr)
+	registerDispatchCommander(projectDir, vexillumHome)
 
 	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, model, effort, harness, herdr.CLI{}, os.Stdout, os.Stderr)
+}
+
+// registerDispatchCommander registers the commander that ran "dispatch" in its
+// project's registry. Nothing is written for a project that is not initialized,
+// which runDispatch refuses anyway.
+func registerDispatchCommander(projectDir, vexillumHome string) {
+	if !scaffold.ProjectInitialized(projectDir) {
+		return
+	}
+	projectRoot, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		return
+	}
+	registerCommander(projectRoot, projectDir, os.Stderr)
 }
 
 // resolveProfile fills model and effort from the named profile, leaving any

@@ -276,6 +276,11 @@ func runForumOpen(ctx context.Context, home string, args []string, stdout, stder
 	switch {
 	case root == "":
 	default:
+		// The listener asks the registry whether a commander is there, so the
+		// commander that opens the session is on record before it starts.
+		if cwd, cerr := os.Getwd(); cerr == nil {
+			registerCommander(root, cwd, stderr)
+		}
 		if lerr := ensureForumListener(home); lerr != nil {
 			fmt.Fprintf(stderr, cmdname.Name+": warning: could not start the forum listener (poll the session yourself): %v\n", lerr)
 		} else {

@@ -83,6 +83,35 @@ type Client interface {
 	TabClose(tabID string) error
 }
 
+// AgentInfo is what vexillum reads about one live agent pane from
+// `herdr agent get` / `herdr agent list`: enough to tell which harness runs
+// there and where, not its status (Client.AgentStatus covers that).
+type AgentInfo struct {
+	// Kind is herdr's agent kind for the pane ("claude", "pi", "opencode"),
+	// the harness name vexillum uses.
+	Kind   string
+	PaneID string
+	// Name is the agent name; empty for an agent started by hand rather than
+	// through `herdr agent start`.
+	Name string
+	// Cwd and ForegroundCwd are the pane's working directories as herdr
+	// reports them; either may be empty.
+	Cwd           string
+	ForegroundCwd string
+	Focused       bool
+}
+
+// Locator finds agents by pane. It is separate from Client because only the
+// commander registry (internal/commanderreg) needs it, and because it takes a
+// pane id where Client takes an agent name ("herdr agent get" accepts both).
+type Locator interface {
+	// AgentGet returns the agent in the pane (or of the name) target. An
+	// unknown target is an *APIError that IsNotFound recognizes.
+	AgentGet(target string) (AgentInfo, error)
+	// AgentList returns every live agent herdr knows.
+	AgentList() ([]AgentInfo, error)
+}
+
 // APIError is a structured error herdr returned on stderr (CLI exit
 // status 1). Code is one of herdr's stable error codes (e.g.
 // "agent_not_ready", "agent_blocked").
@@ -296,6 +325,49 @@ func (CLI) AgentWait(name string, until []string, timeoutMS int) (string, error)
 func (CLI) TabClose(tabID string) error {
 	_, err := run("tab", "close", tabID)
 	return err
+}
+
+func (CLI) AgentGet(target string) (AgentInfo, error) {
+	result, err := run("agent", "get", target)
+	if err != nil {
+		return AgentInfo{}, err
+	}
+	agent, _ := result["agent"].(map[string]any)
+	if agent == nil {
+		return AgentInfo{}, fmt.Errorf("unexpected agent get response: %v", result)
+	}
+	return agentInfo(agent), nil
+}
+
+func (CLI) AgentList() ([]AgentInfo, error) {
+	result, err := run("agent", "list")
+	if err != nil {
+		return nil, err
+	}
+	raw, _ := result["agents"].([]any)
+	agents := make([]AgentInfo, 0, len(raw))
+	for _, item := range raw {
+		if agent, ok := item.(map[string]any); ok {
+			agents = append(agents, agentInfo(agent))
+		}
+	}
+	return agents, nil
+}
+
+func agentInfo(agent map[string]any) AgentInfo {
+	str := func(key string) string {
+		v, _ := agent[key].(string)
+		return v
+	}
+	focused, _ := agent["focused"].(bool)
+	return AgentInfo{
+		Kind:          str("agent"),
+		PaneID:        str("pane_id"),
+		Name:          str("name"),
+		Cwd:           str("cwd"),
+		ForegroundCwd: str("foreground_cwd"),
+		Focused:       focused,
+	}
 }
 
 // run executes a herdr command that returns a JSON envelope
