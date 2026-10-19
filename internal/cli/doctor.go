@@ -42,6 +42,14 @@ any other is a warning), a warning when an older 1.x install shadows a 2.x one
 in PATH (it names both), and whether herdr's integration for opencode is
 installed and current ('herdr integration install opencode').
 
+For a pi commander doctor checks, in place of the Stop hook, that
+.pi/extensions/vexillum-wake.ts is there and equal to the copy this binary
+carries (current, stale or edited by hand), that .pi/settings.json lists
+../.claude/skills so Pi sees the skills, whether Pi has been told to trust the
+folder (it reads ~/.pi/agent/trust.json and never writes it; with no answer
+saved it warns that Pi will ask once), and that the extension's await finds a
+` + cmdname.Name + ` binary from the environment doctor runs in. They only warn.
+
 It also checks the sentinel Stop hook, the one that wakes the commander when a
 soldier finishes: whether it is registered in .claude/settings.json, whether
 its command finds a ` + cmdname.Name + ` binary when run from a bare environment (only HOME and

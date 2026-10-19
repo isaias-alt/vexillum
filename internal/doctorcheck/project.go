@@ -20,9 +20,10 @@ import (
 // an older version, models.json, yolo mode, and the sentinel Stop hook with
 // the sentinel behind it. The CLAUDE.md import and the Stop hook are
 // Claude Code's, so they are checked only when claude is one of the
-// project's commander harnesses (see Commanders). Every check is read-only, and none is Required: a
-// stale or missing piece is something to fix with init or upgrade, not a
-// reason to call the environment unusable.
+// project's commander harnesses (see Commanders); the Pi wake extension, its
+// settings and the folder's trust (PiWake) only when pi is. Every check is
+// read-only, and none is Required: a stale or missing piece is something to
+// fix with init or upgrade, not a reason to call the environment unusable.
 func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
 	commanders, _ := Commanders(projectDir)
 	claude := slices.Contains(commanders, soldier.HarnessClaude)
@@ -34,6 +35,9 @@ func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
 		out = append(out, ClaudeImport(projectDir))
 	}
 	out = append(out, Skills(projectDir)...)
+	if slices.Contains(commanders, soldier.HarnessPi) {
+		out = append(out, PiWake(projectDir, homeDir)...)
+	}
 	out = append(out, Models(projectDir, vexillumHome))
 	out = append(out, Yolo(projectDir))
 	if claude {

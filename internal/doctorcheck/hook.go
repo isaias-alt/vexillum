@@ -72,16 +72,25 @@ func HookResolves(command, homeDir string) Result {
 	if command != scaffold.SentinelHookCommand {
 		fix = "run '" + cmdname.Name + " upgrade' to rewrite the hook so it does not depend on PATH, and " + fix
 	}
+	return probeAwait(hookResolves, command, []string{"HOME=" + homeDir, "PATH=" + hookProbePath}, "a minimal environment", " (HOME and PATH="+hookProbePath+" only)", fix)
+}
 
+// probeAwait runs command (the shell script of an await wrapper) with exactly env, from an
+// empty directory, and reports under name whether it found a vx binary. envName
+// says what the environment is, for the message, and envNote is appended to the
+// "not found" one. See HookResolves.
+func probeAwait(name, command string, env []string, envName, envNote, fix string) Result {
 	dir, err := os.MkdirTemp("", "vx-hook-probe-")
 	if err != nil {
-		return Result{Name: hookResolves, Warn: true, Detail: "could not run the probe: " + err.Error()}
+		return Result{Name: name, Warn: true, Detail: "could not run the probe: " + err.Error()}
 	}
 	defer os.RemoveAll(dir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), hookProbeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "/usr/bin/env", "-i", "HOME="+homeDir, "PATH="+hookProbePath, "sh", "-c", command)
+	// An absolute /bin/sh: the environment under test may have no PATH to find
+	// one in, and that is not what the probe is about.
+	cmd := exec.CommandContext(ctx, "/usr/bin/env", append(append([]string{"-i"}, env...), "/bin/sh", "-c", command)...)
 	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -96,13 +105,13 @@ func HookResolves(command, homeDir string) Result {
 	var exitErr *exec.ExitError
 	switch {
 	case ctx.Err() != nil:
-		return Result{Name: hookResolves, OK: true, Detail: "found with a minimal environment (it was still waiting when the probe stopped it)"}
+		return Result{Name: name, OK: true, Detail: "found with " + envName + " (it was still waiting when the probe stopped it)"}
 	case strings.Contains(stderr.String(), scaffold.SentinelHookNotFoundMessage), errors.As(runErr, &exitErr) && exitErr.ExitCode() == 127:
-		return Result{Name: hookResolves, Warn: true, Detail: "not found with a minimal environment (HOME and PATH=" + hookProbePath + " only), so the commander is never woken; " + fix}
+		return Result{Name: name, Warn: true, Detail: "not found with " + envName + envNote + ", so the commander is never woken; " + fix}
 	case runErr != nil && !errors.As(runErr, &exitErr):
-		return Result{Name: hookResolves, Warn: true, Detail: "could not run the probe: " + runErr.Error()}
+		return Result{Name: name, Warn: true, Detail: "could not run the probe: " + runErr.Error()}
 	}
-	return Result{Name: hookResolves, OK: true, Detail: "found with a minimal environment"}
+	return Result{Name: name, OK: true, Detail: "found with " + envName}
 }
 
 // liveSentinelPIDs lists every "vx sentinel" process of the user. A variable
