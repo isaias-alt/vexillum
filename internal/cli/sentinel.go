@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/buildinfo"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/opencodeapi"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 )
@@ -155,7 +155,8 @@ func Sentinel(args []string) int {
 	}
 
 	fmt.Fprintf(os.Stdout, "sentinel: polling %s every %s as %s %s (ctrl-c to stop)\n", vexillumHome, sentinelPollInterval, cmdname.Name, build.Version)
-	reason := sentinel.Run(vexillumHome, herdr.CLI{}, sentinelPollInterval, os.Stdout, build.Stale)
+	injector := sentinel.NewOpenCodeInjector(vexillumHome, herdr.CLI{}, opencodeapi.CLI{}, os.Stdout)
+	reason := sentinel.RunInjecting(vexillumHome, herdr.CLI{}, injector, sentinelPollInterval, os.Stdout, build.Stale)
 	fmt.Fprintf(os.Stdout, "sentinel: retiring, %s - the next %s dispatch, prompt or Stop hook await starts a fresh one\n", reason, cmdname.Name)
 	return 0
 }
@@ -316,14 +317,10 @@ func gitToplevel(dir string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// drainWakes consumes both kinds of pending wake of the project: soldier status
-// changes (sentinel.Drain) and forum feedback (sentinel.DrainForum). Whatever
-// one drain returned is kept even if the other failed, since a drained wake is
-// already consumed.
+// drainWakes consumes both kinds of pending wake of the project; see
+// sentinel.DrainAll.
 func drainWakes(projectRoot string) ([]sentinel.Wake, []sentinel.ForumWake, error) {
-	wakes, werr := sentinel.Drain(projectRoot)
-	forumWakes, ferr := sentinel.DrainForum(projectRoot)
-	return wakes, forumWakes, errors.Join(werr, ferr)
+	return sentinel.DrainAll(projectRoot)
 }
 
 func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
@@ -377,38 +374,8 @@ func runSentinelAwait(projectRoot string, maxWait, pollInterval time.Duration, s
 	}
 }
 
-// wakeReason is the text the Stop hook (or drain) hands the commander: one
-// section for soldier status changes, one for forum feedback waiting in the
-// inbox. A forum wake names the session and how many messages wait, never their
-// text: that is read with "vx forum inbox".
+// wakeReason is the text the Stop hook (or drain) hands the commander; see
+// sentinel.WakeReason, which the sentinel's OpenCode injector shares.
 func wakeReason(wakes []sentinel.Wake, forumWakes []sentinel.ForumWake) string {
-	var sections []string
-	if len(wakes) > 0 {
-		var lines []string
-		for _, w := range wakes {
-			lines = append(lines, fmt.Sprintf("- %s %s: %s -> %s", w.Kind, w.TaskID, w.OldStatus, w.NewStatus))
-		}
-		sections = append(sections, "A vexillum soldier's status changed:\n"+
-			strings.Join(lines, "\n")+
-			"\nCheck on it (and report to the general, or land/strike as appropriate) before ending your turn.")
-	}
-	if len(forumWakes) > 0 {
-		var lines []string
-		for _, w := range forumWakes {
-			noun := "new messages"
-			if w.Count == 1 {
-				noun = "new message"
-			}
-			lines = append(lines, fmt.Sprintf("forum session %s: %d %s (ended: %t). Run %s forum inbox.", singleLine(w.File), w.Count, noun, w.Ended, cmdname.Name))
-		}
-		sections = append(sections, "Forum feedback is waiting for you:\n"+
-			strings.Join(lines, "\n")+
-			"\nRead it, act on it, and answer with "+cmdname.Name+" forum reply before ending your turn.")
-	}
-	return strings.Join(sections, "\n\n")
-}
-
-// singleLine keeps a user-chosen path from breaking the wake text's lines.
-func singleLine(s string) string {
-	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
+	return sentinel.WakeReason(wakes, forumWakes)
 }

@@ -793,7 +793,16 @@ func recordWake(projectRoot string, task state.Task, old, newStatus state.Status
 		DetectedAt: time.Now().UTC(),
 		ReportPath: reportPath,
 	}
-	return atomicfile.WriteJSON(wakePath(projectRoot, task.ID), w)
+	return writeWake(projectRoot, w)
+}
+
+// writeWake writes w to its task's wake file under projectRoot, replacing an
+// earlier one.
+func writeWake(projectRoot string, w Wake) error {
+	if err := os.MkdirAll(wakesDir(projectRoot), 0o755); err != nil {
+		return err
+	}
+	return atomicfile.WriteJSON(wakePath(projectRoot, w.TaskID), w)
 }
 
 // Drain returns the pending wakes for the project rooted at projectRoot
@@ -917,6 +926,13 @@ func wakeIsCurrent(projectRoot string, w Wake, leases func() map[string]bool) bo
 // the foreground of a long-lived background process the commander starts once
 // per machine.
 func Run(vexillumHome string, client herdr.Client, interval time.Duration, stdout io.Writer, retire func() string) (reason string) {
+	return RunInjecting(vexillumHome, client, nil, interval, stdout, retire)
+}
+
+// RunInjecting is Run with an OpenCode injector (see OpenCodeInjector) swept
+// after every tick, so a wake the tick just recorded reaches an OpenCode
+// commander in the same pass. A nil injector makes it Run.
+func RunInjecting(vexillumHome string, client herdr.Client, injector *OpenCodeInjector, interval time.Duration, stdout io.Writer, retire func() string) (reason string) {
 	sweeper := NewSweeper(stdout)
 	lastErr := ""
 	for {
@@ -934,6 +950,9 @@ func Run(vexillumHome string, client herdr.Client, interval time.Duration, stdou
 			fmt.Fprintf(stdout, "sentinel: recorded %d wake(s)\n", woke)
 		default:
 			lastErr = ""
+		}
+		if injector != nil {
+			injector.Sweep()
 		}
 		if retire != nil {
 			if reason := retire(); reason != "" {

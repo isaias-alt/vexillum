@@ -366,6 +366,33 @@ esac`))
 	}
 }
 
+// agent_status and agent_session come through; a session that is not an id (or
+// no session at all, an OpenCode pane before its first message) reads empty.
+func TestCLI_AgentGet_ReadsStatusAndSession(t *testing.T) {
+	for name, tc := range map[string]struct {
+		agent       string
+		wantStatus  string
+		wantSession string
+	}{
+		"id":      {`"agent_status":"idle","agent_session":{"agent":"opencode","kind":"id","source":"herdr:opencode","value":"ses_abc"}`, "idle", "ses_abc"},
+		"none":    {`"agent_status":"idle"`, "idle", ""},
+		"null":    {`"agent_status":"working","agent_session":null`, "working", ""},
+		"a path":  {`"agent_status":"blocked","agent_session":{"kind":"path","value":"/x/y.jsonl"}`, "blocked", ""},
+		"no data": {`"pane_id":"w1:p2"`, "", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("PATH", herdrStub(t, `echo '{"result":{"agent":{"agent":"opencode",`+tc.agent+`},"type":"agent_info"}}'`))
+			got, err := CLI{}.AgentGet("w1:p2")
+			if err != nil {
+				t.Fatalf("AgentGet: %v", err)
+			}
+			if got.Status != tc.wantStatus || got.Session != tc.wantSession {
+				t.Errorf("status=%q session=%q, want %q and %q", got.Status, got.Session, tc.wantStatus, tc.wantSession)
+			}
+		})
+	}
+}
+
 func TestCLI_AgentGet_UnknownTargetIsNotFound(t *testing.T) {
 	t.Setenv("PATH", herdrStub(t, `echo '{"error":{"code":"agent_not_found","message":"agent target x not found"}}' >&2; exit 1`))
 	_, err := CLI{}.AgentGet("x")

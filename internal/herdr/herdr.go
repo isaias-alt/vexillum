@@ -99,6 +99,13 @@ type AgentInfo struct {
 	Cwd           string
 	ForegroundCwd string
 	Focused       bool
+	// Status is the agent_status herdr reports (idle, working, blocked, done,
+	// unknown); empty when herdr does not say.
+	Status string
+	// Session is the id of the harness session open in the pane
+	// (agent_session), as the harness itself names it. Empty until herdr knows
+	// one: an OpenCode pane has none before its first message is sent.
+	Session string
 }
 
 // Locator finds agents by pane. It is separate from Client because only the
@@ -360,6 +367,12 @@ func agentInfo(agent map[string]any) AgentInfo {
 		return v
 	}
 	focused, _ := agent["focused"].(bool)
+	session := ""
+	if s, ok := agent["agent_session"].(map[string]any); ok {
+		if kind, _ := s["kind"].(string); kind == "id" {
+			session, _ = s["value"].(string)
+		}
+	}
 	return AgentInfo{
 		Kind:          str("agent"),
 		PaneID:        str("pane_id"),
@@ -367,6 +380,8 @@ func agentInfo(agent map[string]any) AgentInfo {
 		Cwd:           str("cwd"),
 		ForegroundCwd: str("foreground_cwd"),
 		Focused:       focused,
+		Status:        str("agent_status"),
+		Session:       session,
 	}
 }
 
