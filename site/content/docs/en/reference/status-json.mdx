@@ -40,6 +40,7 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 | `harness` | string | the agent CLI the soldier runs on, from the dispatch profile (`claude`, `pi` or `opencode`); empty means `claude`, as in a task file written before this field existed |
 | `harness_major` | number | for an `opencode` task, the OpenCode series it was dispatched on (`1` or `2`), detected from `opencode --version` and kept by `vx redispatch`; absent for other harnesses |
 | `harness_version` | string | for an `opencode` task, the full version found at dispatch, such as `2.0.32`; absent for other harnesses |
+| `harness_session` | string | for an `opencode` 2.x task with a model, the id of the OpenCode session created for its soldier (`ses_...`), reused by `vx redispatch`; absent otherwise |
 | `decision` | object | present once the task has blocked at least once |
 | `amendments` | array | instructions the general gave after dispatch, via `vx prompt` and `vx decide` (not `--dismiss`); see below |
 

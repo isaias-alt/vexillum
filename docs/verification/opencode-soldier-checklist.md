@@ -7,15 +7,30 @@ for someone with a working OpenCode to confirm the rest on a real machine.
 
 ## What was checked, and what was not
 
-- **V2 (2.0.32), run live.** The launch recipe (agent file, `opencode.json`,
-  `--auto`), a scout and a mission end to end, `vx prompt`, `vx decide` on a
-  question form (by option number and by typed text) and on a permission
-  prompt (Allow once, Reject), landing and striking, redispatch with the files
-  re-provisioned, the collision failure, the doctor lines, and the one-shot
-  command used by `vx ship`. All of it ran in a throwaway directory with a
-  throwaway `HOME` and XDG directories, on the free zero-retention Zen models
-  only, with trivial prompts. The captured `opencode run --format json` output
-  of a success and of an error is in `internal/soldier/testdata/`.
+- **V2 (2.0.32), run live.** A scout and a mission end to end, `vx prompt`,
+  `vx decide` on a question form (by option number and by typed text) and on a
+  permission prompt (Allow once, Reject), landing and striking, the doctor
+  lines, and the one-shot command used by `vx ship`. All of it ran in a
+  throwaway directory with a throwaway `HOME` and XDG directories, on the free
+  zero-retention Zen models only, with trivial prompts. That run used the first
+  launch recipe (an agent file and an `opencode.json` written into the camp),
+  which vexillum no longer uses. The captured `opencode run --format json`
+  output of a success and of an error is in `internal/soldier/testdata/`.
+- **V2 (2.0.32), the session launch, run live.** The current launch (a session
+  created through the background service, then `opencode --auto --session
+  <id>`) ran through a real `vx dispatch` in a real herdr pane, against a
+  throwaway `HOME` and XDG directories and its own service, with a local
+  capture server standing in for the model provider (the free Zen models
+  answer 403 outside OpenCode, so no real model answered). It covered: a
+  project tracking its own `opencode.json` with a default agent, model, agent
+  and permission denies, the same as `opencode.jsonc`, and a project with its
+  own `.opencode/agents/vx-soldier.md`; the footer and the request that reached
+  the provider carrying the profile's model and variant; nothing written into
+  the camp; a service stopped at dispatch time and started by vexillum with a
+  config layer set in the dispatching environment; a re-dispatch that reused
+  the session; and a provider, model and variant OpenCode does not list being
+  refused at dispatch. Not covered: a real model round trip, and a session
+  whose last turn was still in flight when its pane was lost.
 - **V1 (1.x): never run.** No V1 was available. The launch comes from the
   v1.18.29 and v1.19.3 sources and docs (the TUI takes `--model`, `--agent`,
   `--auto` and `--prompt`, and has no variant option; an agent's `variant`
@@ -162,11 +177,11 @@ Look at the new herdr tab, and in the camp (`camp_path` in `vx status --json`):
 
 | Observe | Pass |
 | --- | --- |
-| The tab's process | `opencode --auto`, with no `--model`. `ps ax -o args | grep 'opencode --auto'`. |
-| Camp files | `.opencode/agents/vx-soldier.md` exists with `model: "<provider>/<model>"`, and `opencode.json` has `default_agent` and `model`. |
-| Excluded | `git -C <camp> status --short` is empty, and `git -C <camp> rev-parse --git-path info/exclude` names a file that lists `/.opencode/` and `/opencode.json`. |
+| The tab's process | `opencode --auto --session ses_...`, with no `--model`. `ps ax -o args | grep 'opencode --auto'`. |
+| The session | `vx status --json` has `"harness_session": "ses_..."`, and `opencode api GET /api/session/<that id>` (run with the same `HOME` and XDG directories) shows `model` with the `providerID`, `id` and `variant` of the profile, and `location.directory` equal to the camp. It has no `permissions`. |
+| Nothing written | `git -C <camp> status --short --ignored` is empty, the camp has no `opencode.json` and no `.opencode/` that the project does not track, and `git -C <camp> rev-parse --git-path info/exclude` names a file with no `opencode` line. |
 | Environment | `OPENCODE_DISABLE_AUTOUPDATE=1` is set for the opencode process (`ps eww -p <pid>` on macOS, `/proc/<pid>/environ` on Linux). |
-| The model | The pane's footer shows the model you configured, not the default. |
+| The model | The pane's footer shows the model you configured (and the variant, for example `· high`), not the default. |
 | No dialog | No dialog stops the start, and the prompt reaches the editor without anyone pressing a key. |
 | The prompt | The pane shows the dispatched prompt, ending with the instructions to write a report under `~/.vexillum/projects/<id>/reports/`. |
 | herdr state | While OpenCode works, `herdr agent get <agent-name>` shows `working`; when it finishes, `idle`. |
@@ -190,30 +205,63 @@ Pass:
 
 - The tab behaves as in step 3.
 - `vx status` shows `done`, and in the camp `git log --oneline` shows
-  `add hello` ahead of `main`, and `git status` is clean (the provisioned files
-  are not part of the commit).
+  `add hello` ahead of `main`, and `git status` is clean (vexillum wrote no
+  file into the camp).
 - `vx land <task-id>` prints `landed:` and `struck:`, `hello.txt` exists in
   `~/oc-check`, `git log -1 --format=%s` there is `add hello`, and
-  `~/oc-check/opencode.json` does **not** exist (the files were only in the
-  camp). The tab is closed.
+  `~/oc-check/opencode.json` does **not** exist (vexillum never writes one). The tab is closed.
 
-## 5. V2: collision with a project's own configuration
+## 5. V2: a project's own configuration is left alone, an unknown model is refused
+
+Give the throwaway repository a configuration of its own, with a default agent
+that has a model, an agent, and a permission deny, and commit it. For example:
 
 ```sh
-printf '{}\n' > ~/oc-check/opencode.json
+cat > ~/oc-check/opencode.json <<'EOF'
+{
+  "default_agent": "proj-agent",
+  "agent": {
+    "proj-agent": {"mode": "primary", "description": "project agent", "model": "<provider>/<another model>"}
+  },
+  "permission": {"edit": {".env": "deny"}}
+}
+EOF
 git -C ~/oc-check add opencode.json
 git -C ~/oc-check -c user.name=t -c user.email=t@example.com commit -qm "project opencode config"
 vx dispatch "Say hello." --kind scout --profile oc-scout
 ```
 
-Pass: dispatch prints `status=failed` and an error naming `opencode.json`,
-"is tracked by the project" and "never overwrites or merges", exits non-zero,
-and starts no tab. `vx status` shows the task `failed`, and `vx strike
-<task-id>` removes it. The project's file is unchanged. Repeat with
-`opencode.jsonc`, and with a tracked `.opencode/agents/vx-soldier.md`: same
-result. A tracked `.opencode/commands/x.md` is **not** a collision.
+Pass:
 
-Then `git -C ~/oc-check rm -q opencode.json && git -C ~/oc-check -c user.name=t -c user.email=t@example.com commit -qm "drop it"`.
+- The dispatch succeeds. Nothing is refused, and `opencode.json` in the camp is
+  byte-identical to the committed one (`git -C <camp> diff HEAD --stat` is
+  empty).
+- The pane's footer shows the project's agent (`Proj-Agent`) with the
+  **profile's** model, not the project's model.
+- The agent's rules still carry the project's deny: `opencode api GET
+  /api/agent -H "x-opencode-directory: <camp>"` lists `edit .env deny` for
+  `proj-agent`.
+
+Repeat with the same content in `opencode.jsonc` (with a comment and a
+trailing comma, and `opencode.json` removed), and with a tracked
+`.opencode/agents/vx-soldier.md` (a `mode: primary` agent with a distinctive
+line in its body): same result, and with the second one the footer shows
+`Vx-Soldier` with the profile's model and the agent's body is the system
+prompt. None of these is a collision.
+
+An unknown model is refused at dispatch, not at the first prompt. Dispatch with
+a model of `<provider>/nope`, then `<provider>/<model>#nope`, then `nope/x`:
+
+```sh
+vx dispatch "x" --kind scout --profile oc-scout --model '<provider>/nope'
+```
+
+Pass: `status=failed`, exit non-zero, and an error `cannot start this soldier on
+<provider>/nope: OpenCode's provider "<provider>" has no model "nope"; its
+models: ...` naming models that exist. The variant case names the model's
+variants (or says it declares none), the provider case names the providers. No
+tab and no session are created (`opencode api GET /api/session` is unchanged),
+and `vx strike <task-id> --force` removes the failed task.
 
 ## 6. V2: a blocked question form
 
@@ -269,15 +317,16 @@ Skip this part if you cannot provoke a prompt, and say so in the table.
    model's variants. Make a profile with `"model": "<provider>/<model>#<variant>"`
    and dispatch a one-line scout.
 
-   Pass: the agent file has `model: "<provider>/<model>#<variant>"`, the
-   `opencode.json` `model` has **no** variant, and the pane footer shows the
-   variant (for example `· high`).
+   Pass: the session (`opencode api GET /api/session/<id>`) shows the variant,
+   and the pane footer shows it (for example `· high`). If you can point
+   `opencode.json` at a local server standing in for the provider, the request
+   that reaches it carries the variant's setting (for example
+   `reasoning_effort`).
 2. Make a profile whose variant the model does **not** have, such as
    `<provider>/<model>#nope`.
 
-   Pass, and this is OpenCode's behavior: the soldier starts and the footer
-   shows **no** variant (the 2.x TUI drops an unknown variant silently).
-   Report it if instead the start fails.
+   Pass: the dispatch is refused before a pane exists, with `has no variant
+   "nope"` and the model's variants (see step 5).
 3. The one-shot is stricter. In the throwaway repository:
 
    ```sh
@@ -307,10 +356,20 @@ Redispatch:
 3. Wait for `vx status` to show it `interrupted` (allow a few minutes).
 4. `vx redispatch <task-id>`.
 
-Pass: it prints `redispatching task ...`, a fresh tab appears, the camp has
-`.opencode/agents/vx-soldier.md` and `opencode.json` again (re-provisioned),
+Pass: it prints `redispatching task ...`, a fresh tab appears,
 `vx status --json` has `"harness": "opencode"`, `"harness_major": 2` and
-`"redispatches": 1`. `ps` shows `opencode --auto` again.
+`"redispatches": 1`, and `ps` shows `opencode --auto --session ses_...` with the
+**same** session id as before (`harness_session` is unchanged and `opencode api
+GET /api/session` lists no new session). The footer still shows the profile's
+model and variant: the model belongs to the session, so it survives a restart.
+
+A lost session: delete the session (`opencode api DELETE /api/session/<id>`),
+interrupt the task again and redispatch. Pass: a new session is created and
+recorded, and the soldier starts on it with the same model.
+
+One thing to report if you see it: a session whose turn was still running in
+the service when its pane was lost. The service keeps running a turn without
+its TUI, so the re-dispatched prompt may queue behind it.
 
 Version guard: with a task `interrupted` on 2.x, put a 1.x `opencode` first in
 `PATH` and run `vx redispatch <task-id>`. Pass: it refuses with `was dispatched
@@ -393,6 +452,12 @@ Report the exact text of anything that differs.
 
 ## 12. Things only time can show
 
+- **Who starts the service.** Stop the service (`opencode service stop`), then
+  dispatch from a shell that has `OPENCODE_CONFIG_CONTENT='{"username":"X"}'`
+  (and `OPENCODE_CONFIG` and `OPENCODE_CONFIG_DIR`) set. Pass: the dispatch
+  works, `opencode service status` shows a URL, and the service's environment
+  (`ps eww -p <pid of opencode serve --service>`) holds none of the three
+  variables. A service that was already running is not restarted.
 Not steps to pass or fail, but to watch for during a real use, and to report:
 
 - **Auto-update.** Run a soldier across an OpenCode release if you can. With
@@ -412,16 +477,16 @@ Not steps to pass or fail, but to watch for during a real use, and to report:
 | --- | --- | --- |
 | 1 doctor and integration | | |
 | 2 profiles and validation | | |
-| 3 V2 scout: process, files, exclude, env, states, report | | |
+| 3 V2 scout: process, session, nothing written, env, states, report | | |
 | 4 V2 mission: commit, land, strike | | |
-| 5 V2 collision | | |
+| 5 V2 project's own config left alone, unknown model refused | | |
 | 6 V2 question form: number, typed text, refusals | | |
 | 7 plain text, dismiss, permission prompt | | |
 | 8 V2 variants | | |
-| 9 prompt, redispatch, version guard | | |
+| 9 prompt, redispatch (same session, lost session), version guard | | |
 | 10 tribunal | | |
 | 11 V1: every sub-step (1 to 9) | | |
-| 12 auto-update, what's new, several soldiers | | |
+| 12 who starts the service, auto-update, what's new, several soldiers | | |
 
 When you report back, include `vx doctor`, `opencode --version`,
 `herdr --version`, the OS, and for any failed step the exact command, what you

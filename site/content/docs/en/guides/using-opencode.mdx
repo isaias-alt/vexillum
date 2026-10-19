@@ -7,7 +7,7 @@ A model profile can name a **harness**, the agent CLI its soldiers run on. With 
 
 OpenCode has two generations that share the `opencode` command, and vexillum drives both:
 
-- **2.x** (checked against **2.0.32**). Its TUI has no `--model` flag, so vexillum writes the model into files in the camp.
+- **2.x** (checked against **2.0.32**). Its TUI has no `--model` flag, so vexillum creates the soldier's session on that model through OpenCode's background service and opens it.
 - **1.x**, from **1.18.29**. Its TUI takes `--model`.
 
 `vx dispatch` runs `opencode --version` and records the major series on the task, and `vx redispatch`, `vx prompt` and `vx decide` use the same one. A task dispatched on 2.x is not relaunched on 1.x: install the series it was dispatched on, or strike it and dispatch again. Nothing about the version is cached between commands.
@@ -66,38 +66,39 @@ On an OpenCode profile the two fields mean:
 | `model` | `provider/model`, with an optional `#variant`, such as `opencode/glm-5.3-flash-free` or `anthropic/claude-sonnet-5#high` | the soldier starts on that model, and on that variant when there is one |
 | `effort` | any plain label, such as `low` or `medium` | recorded on the task and shown in `vx status`, **never passed to OpenCode** |
 
-vexillum checks the **shape** only: OpenCode's models are whatever your providers offer, so it cannot check that a model exists; OpenCode reports that when the soldier starts. Effort is not mapped to a variant because variant names differ per model: one model's `high` is another model's error. A variant is used only when the profile writes one after the `#`.
+vexillum checks the **shape** when it reads the profile. On 2.x, `vx dispatch` also checks the provider, model and variant against what OpenCode lists for the camp (see [Which model a soldier gets](#which-model-a-soldier-gets)); on 1.x OpenCode reports a model it does not have when the soldier starts. Effort is not mapped to a variant because variant names differ per model: one model's `high` is another model's error. A variant is used only when the profile writes one after the `#`.
 
-The two ways a variant the model does not have is handled differ, and both are OpenCode's, not vexillum's. A one-shot (`vx ship`'s reviewer and fixer, which use `opencode run`) fails with `Variant unavailable for <model>: <variant>`. The 2.x TUI a soldier runs in drops the unknown variant **silently** and runs the model without one. The footer of the soldier's pane shows the variant, such as `· high`, only when it was applied; check it the first time you use a variant.
+A variant the model does not have is an error. On 2.x `vx dispatch` refuses it and names the variants the model has. A one-shot (`vx ship`'s reviewer and fixer, which use `opencode run`) fails with `Variant unavailable for <model>: <variant>`. The footer of the soldier's pane shows the variant, such as `· high`, when it applies; check it the first time you use a variant.
 
-## What vexillum writes in the camp
+## Which model a soldier gets
 
-On 2.x the TUI cannot be told a model on its command line, so vexillum provisions two files in the soldier's camp before it starts:
+On 2.x the TUI cannot be told a model on its command line, and the configuration that decides the model is read by OpenCode's shared background service, not by the TUI. A file written into the camp, or an environment variable on the pane, would either clash with a project's own OpenCode configuration or be ignored. So `vx dispatch` gives each soldier a session of its own:
 
-- `.opencode/agents/vx-soldier.md`, an agent whose `model` is `provider/model#variant`.
-- `opencode.json`, which makes that agent the default (`default_agent`) and sets the model as a fallback.
+1. **The service.** vexillum makes sure OpenCode's background service is running. If it is not, vexillum starts it itself with `opencode service start`, from an environment with `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR` and `OPENCODE_CONFIG_CONTENT` removed. The service reads those variables once, when it starts, and keeps them for every OpenCode window that connects to it afterwards. `opencode api` would start a stopped service with whatever environment its caller has, and so would the soldier's own TUI, so vexillum starts the service first and never leaves it to them. A service that is already running is used as it is.
+2. **The check.** vexillum asks the service which models it can run for the camp and checks the profile's provider, model and variant against that list. When one is not there, the dispatch fails before any pane exists and names what does exist, for example `OpenCode's provider "anthropic" has no model "claude-sonnet-9"; its models: ...`. The task is left `failed`, and `vx strike` removes it.
+3. **The session.** vexillum creates a session located in the camp, with the profile's model and variant, titled `vexillum <task-id>`. It sets **no agent** and **no permission rules**.
+4. **The start.** The soldier starts as `opencode --auto --session <id>`, with `OPENCODE_DISABLE_AUTOUPDATE=1` in its pane.
 
-Both are added to the repository's `info/exclude`, so the camp stays clean and `vx land` never sees them. On 1.x nothing is written: the model goes with `--model`, and a variant with the `OPENCODE_CONFIG_CONTENT` environment variable of the soldier's pane. Both generations set `OPENCODE_DISABLE_AUTOUPDATE=1`, so a running soldier is not updated under you.
+A session's model ranks above the project's own `model` and above its default agent's own model, so a project that sets its own default agent or model does not override the profile. Only the soldier's own agent runs on the session's model: OpenCode's built-in subagents keep the models they are configured with, and the soldier can still switch model in its TUI.
 
-vexillum **never overwrites or merges** a project's OpenCode configuration. If the camp already has an `opencode.json`, an `opencode.jsonc`, or a `.opencode/agents/vx-soldier.md`, because the project tracks one, `vx dispatch` fails before it starts anything and names the file. There is no merge policy, and none is planned: pick a different approach for that repository (a profile on another harness) or move the project's file. A project's other `.opencode/` content, such as its own agents, commands or plugins, is not a collision.
+**Nothing is written into the camp or the project**, no environment variable carries configuration, and no line is added to `info/exclude`. A project's own `opencode.json` or `opencode.jsonc`, its agents (even one named `vx-soldier`), its default agent and its permission denies apply exactly as they do when you run OpenCode there. A repository that tracks OpenCode configuration dispatches like any other, and a mission can create `opencode.json` or `.opencode/` without `git add -f`. A task with no model starts a plain OpenCode on the project's defaults, with no session.
 
-Two side effects to know:
+The session id is recorded on the task (`harness_session` in `vx status --json`). `vx redispatch` opens the same session again when the service still has it and it is located in the camp the task gets back, so the conversation continues. If the service lost it (it was deleted, or the service's data was reset) or the camp is another one, vexillum creates a new session. `vx strike` does not delete the session: it stays in OpenCode's session list, titled `vexillum <task-id>`, until you delete it there.
 
-- `info/exclude` is shared by all of a repository's worktrees, including the main checkout. While it lists `/opencode.json` and `/.opencode/`, an **untracked** `opencode.json` in your main checkout is hidden from `git status`. Tracked files are not affected.
-- A mission that has to *create* `opencode.json` or `.opencode/` as part of its work needs `git add -f`, because those paths are excluded. Say so in its prompt.
+On 1.x nothing is created or written: the model goes with `--model`, and a variant with the `OPENCODE_CONFIG_CONTENT` environment variable of the soldier's pane. Both generations set `OPENCODE_DISABLE_AUTOUPDATE=1`, so a running soldier is not updated under you.
 
-Files vexillum wrote are removed before the next launch only if they are byte-identical to what it wrote, so an edit you made to one is never deleted.
+Older versions of vexillum wrote `.opencode/agents/vx-soldier.md` and `opencode.json` into the camp of a 2.x soldier and added `/.opencode/` and `/opencode.json` to the repository's `info/exclude`. A reused camp that still holds those files has them removed before the next launch, but only when they are byte-identical to what vexillum wrote, so an edit of yours is never deleted. The lines in `info/exclude` are left alone, because a soldier started by an older version may still depend on them. They do nothing now, apart from hiding an **untracked** `opencode.json` in your main checkout from `git status`; delete them from `.git/info/exclude` when no older soldier is running.
 
 ## Permissions
 
-A soldier starts with `--auto`, which approves every permission that is not explicitly denied. vexillum writes **no permission rules** of its own. In 2.x the last matching rule wins, so a wildcard rule in the camp's config would override the denies in your own OpenCode config. Without a rule of its own, your denies keep applying inside a soldier. As with every harness, landing is the control: nothing reaches your history until you approve `vx land`.
+A soldier starts with `--auto`, which approves every permission that is not explicitly denied. vexillum sets **no permission rules** of its own, in the session or anywhere else. In 2.x the last matching rule wins, so a wildcard rule of vexillum's would override the denies in your own OpenCode config. Without a rule of its own, your denies keep applying inside a soldier. As with every harness, landing is the control: nothing reaches your history until you approve `vx land`.
 
 ## What differs from a Claude Code soldier
 
 | Topic | Claude Code soldier | OpenCode soldier |
 | --- | --- | --- |
 | Permissions | `--dangerously-skip-permissions` | `--auto`; your own `deny` rules still apply. See above. |
-| Model | `--model` and `--effort` | `--model` on 1.x; the camp's agent file and `opencode.json` on 2.x. Effort is recorded, not passed. |
+| Model | `--model` and `--effort` | `--model` on 1.x; a session created for the soldier on 2.x. Effort is recorded, not passed. |
 | First prompt | typed into the pane | delivered through `herdr agent prompt` once the pane is ready. `vx dispatch` waits for an `agent_not_ready` start error to clear before it treats the start as failed. |
 | Rules | `CLAUDE.md`, which imports `AGENTS.md` | OpenCode reads `AGENTS.md` and, only when there is none, `CLAUDE.md`. It does **not** expand `@AGENTS.md` or any other `@file` reference inside them. The vexillum block lives in `AGENTS.md` (or in `CLAUDE.md` when the project has no `AGENTS.md`), and OpenCode reads whichever holds it. |
 | Plugins | n/a | **V1 plugins do not run in V2.** A project that relies on one for its workflow behaves differently under a 2.x soldier. |
@@ -120,7 +121,6 @@ herdr itself rejects `herdr agent prompt` with `agent_blocked` while a pane is b
 
 ## Not in this release
 
-- Merging with a project's own OpenCode configuration.
 - Mapping `effort` to a variant.
 - Structured answers for a question form of several questions.
 - Skills for OpenCode soldiers.

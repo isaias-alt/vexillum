@@ -40,6 +40,7 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 | `harness` | string | el CLI de agente en el que corre el soldier, tomado del perfil del dispatch (`claude`, `pi` u `opencode`); vacío significa `claude`, como en un archivo de tarea escrito antes de este campo |
 | `harness_major` | number | en una tarea de `opencode`, la serie de OpenCode con la que se despachó (`1` o `2`), detectada con `opencode --version` y conservada por `vx redispatch`; ausente en los demás harnesses |
 | `harness_version` | string | en una tarea de `opencode`, la versión completa encontrada al despachar, como `2.0.32`; ausente en los demás harnesses |
+| `harness_session` | string | en una tarea de `opencode` 2.x con modelo, el id de la sesión de OpenCode creada para su soldier (`ses_...`), que `vx redispatch` reutiliza; ausente en los demás casos |
 | `decision` | object | presente una vez que la tarea quedó blocked al menos una vez |
 | `amendments` | array | instrucciones que el general dio después del dispatch, con `vx prompt` y `vx decide` (no `--dismiss`); ver abajo |
 
