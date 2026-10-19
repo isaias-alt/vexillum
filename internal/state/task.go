@@ -236,6 +236,13 @@ type Decision struct {
 	// internal/soldier.FinalTurnNeedsDecision). Purely additive, no
 	// SchemaVersion bump needed.
 	Dismissed bool `json:"dismissed,omitempty"`
+
+	// QuestionID is the id of the question a DecisionKindAsk Decision
+	// recorded (internal/piask.Question.ID), what an answer is addressed to
+	// and what tells a question already answered or dismissed from a new
+	// one. Empty for every other kind. Purely additive, no SchemaVersion
+	// bump needed.
+	QuestionID string `json:"question_id,omitempty"`
 }
 
 // DecisionKind distinguishes how a Decision's shape needs to be answered
@@ -246,12 +253,15 @@ type Decision struct {
 // else (DecisionKindProse, including the zero value for an older or
 // unset Decision) is answered as plain text through the normal prompt
 // path, exactly as every Decision was answered before this field
-// existed.
+// existed. DecisionKindAsk came from a question a Pi soldier put through
+// vexillum's ask_user tool (internal/piask): it is answered through the file
+// that tool waits on, and carries the question's id in Decision.QuestionID.
 type DecisionKind string
 
 const (
 	DecisionKindProse DecisionKind = "prose"
 	DecisionKindModal DecisionKind = "modal"
+	DecisionKindAsk   DecisionKind = "ask"
 )
 
 // New creates a Task of the given kind with a fresh unique ID, in
