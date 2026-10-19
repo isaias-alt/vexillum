@@ -132,6 +132,33 @@ func TestLoadExampleTestdata(t *testing.T) {
 	}
 }
 
+// The example files under docs/examples are what the "Models for other
+// harnesses" guide shows, so they must load and keep naming the harness they
+// are an example for.
+func TestLoadDocsExamples(t *testing.T) {
+	for _, harness := range []string{"opencode", "pi"} {
+		data, err := os.ReadFile(filepath.Join("..", "..", "docs", "examples", "models."+harness+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		project, home := layout(t)
+		writeModels(t, projectModels(project), string(data))
+		tbl, err := Load(project, home)
+		if err != nil {
+			t.Fatalf("%s example: %v", harness, err)
+		}
+		for _, name := range []string{"scout-facts", "scout-judgment", "mission-big"} {
+			c, err := tbl.Lookup(name)
+			if err != nil {
+				t.Fatalf("%s example: %v", harness, err)
+			}
+			if c.Harness != harness {
+				t.Errorf("%s example: %s runs on %q", harness, name, c.Harness)
+			}
+		}
+	}
+}
+
 func TestLookup(t *testing.T) {
 	project, home := layout(t)
 	tbl, err := Load(project, home)

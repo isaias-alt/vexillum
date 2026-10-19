@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "scout-facts": {
+      "harness": "pi",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "effort": "low"
+    },
+    "scout-judgment": {
+      "harness": "pi",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "effort": "medium"
+    },
+    "mission-big": {
+      "harness": "pi",
+      "model": "opencode/deepseek-v4-pro",
+      "effort": "high"
+    }
+  }
+}

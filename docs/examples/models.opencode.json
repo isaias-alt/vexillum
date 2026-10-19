@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "scout-facts": {
+      "harness": "opencode",
+      "model": "opencode/glm-5.3-flash-free",
+      "effort": "low"
+    },
+    "scout-judgment": {
+      "harness": "opencode",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "effort": "medium"
+    },
+    "mission-big": {
+      "harness": "opencode",
+      "model": "opencode/deepseek-v4-pro",
+      "effort": "high"
+    }
+  }
+}
