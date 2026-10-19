@@ -37,7 +37,9 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 | `agent_not_found_since`, `idle_unconfirmed_since` | hora | cuándo el sentinel vio la condición por primera vez |
 | `redispatches` | number | cuántas veces se re-despachó la tarea |
 | `model`, `effort` | string | la elección del soldier; vacío significa el default de claude |
-| `harness` | string | el CLI de agente en el que corre el soldier, tomado del perfil del dispatch (`claude` o `pi`); vacío significa `claude`, como en un archivo de tarea escrito antes de este campo |
+| `harness` | string | el CLI de agente en el que corre el soldier, tomado del perfil del dispatch (`claude`, `pi` u `opencode`); vacío significa `claude`, como en un archivo de tarea escrito antes de este campo |
+| `harness_major` | number | en una tarea de `opencode`, la serie de OpenCode con la que se despachó (`1` o `2`), detectada con `opencode --version` y conservada por `vx redispatch`; ausente en los demás harnesses |
+| `harness_version` | string | en una tarea de `opencode`, la versión completa encontrada al despachar, como `2.0.32`; ausente en los demás harnesses |
 | `decision` | object | presente una vez que la tarea quedó blocked al menos una vez |
 | `amendments` | array | instrucciones que el general dio después del dispatch, con `vx prompt` y `vx decide` (no `--dismiss`); ver abajo |
 

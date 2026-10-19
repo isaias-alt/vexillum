@@ -22,7 +22,7 @@ You talk to a commander. It dispatches soldiers, each in its own camp, and a sen
 ## Decisions that are settled
 
 - **Go**, shipped as a binary by Homebrew and curl, with no runtime dependencies.
-- **Claude Code** is the harness for the commander and, by default, for every soldier. A model profile can run its soldiers on **Pi** instead; the binary reaches both through one `Harness` interface.
+- **Claude Code** is the harness for the commander and, by default, for every soldier. A model profile can run its soldiers on **Pi** or **OpenCode** instead; the binary reaches all of them through one `Harness` interface.
 - **herdr** hosts the panes the soldiers run in.
 - **Intelligence is markdown, not Go.** The binary does deterministic plumbing; routing and judgment live in the AGENTS.md core and the skills.
 - **Domain vocabulary stays in English** (commander, soldier, mission, scout, camp, sentinel) in every language.

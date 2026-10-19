@@ -16,6 +16,8 @@ vx decide <task-id> "Use the existing helper"
 
 A Pi soldier has no question selector. It asks through an `ask_user` tool that vexillum gives it, and your answer (an option's exact text or number, or any text) is written to the file that tool waits on; nothing is typed into its pane. When it asked with a plain `needs-decision:` line instead, the answer is typed as text: write the answer itself, not an option number. See [Using Pi](/docs/guides/using-pi).
 
+An OpenCode soldier is answered with key presses on the screens vexillum recognizes (a permission prompt, a question form) and as text otherwise; `always allow` is never chosen for you. See [Using OpenCode](/docs/guides/using-opencode).
+
 Only a `blocked` task can be answered. If its pane is actually gone, `decide` marks it `interrupted` and refuses.
 
 ### A task blocked by mistake

@@ -1,0 +1,136 @@
+---
+title: Usar OpenCode
+description: Corré los soldiers de un perfil de modelo en OpenCode en lugar de Claude Code, en OpenCode 1.x o 2.x, incluidos sus modelos gratuitos de Zen.
+---
+
+Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Con `"harness": "opencode"` los soldiers de ese perfil corren en [OpenCode](https://opencode.ai), que puede usar muchos proveedores y modelos, incluidos los gratuitos. El commander sigue siendo una sesión de Claude Code, y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
+
+OpenCode tiene dos generaciones que comparten el comando `opencode`, y vexillum maneja las dos:
+
+- **2.x** (verificada contra **2.0.32**). Su TUI no tiene el flag `--model`, así que vexillum escribe el modelo en archivos del camp.
+- **1.x**, desde **1.18.29**. Su TUI acepta `--model`.
+
+`vx dispatch` corre `opencode --version` y registra la serie mayor en la tarea, y `vx redispatch`, `vx prompt` y `vx decide` usan la misma. Una tarea despachada en 2.x no se relanza en 1.x: instalá la serie con la que se despachó, o hacé strike y despachá de nuevo. Nada de la versión se guarda en caché entre comandos.
+
+<Callout type="warn" title="Solo algunos modelos gratuitos no retienen tu código">
+  Un soldier le manda al proveedor del modelo todo lo que lee: tus prompts, los archivos que abre, la salida de los comandos y lo que haya en tu entorno que un comando imprima. De los modelos gratuitos de OpenCode Zen, al escribir esta página solo `glm-5.3-flash-free`, `deepseek-v4.1-flash-free`, `longcat-2.5-preview-free` y `space-bunny-free` estaban documentados como de retención cero. Los demás modelos gratuitos registran prompts y salidas. Los términos cambian, así que leelos antes de apuntar un perfil a un modelo gratuito, y no uses uno con código privado o propietario, ni en una máquina cuyos archivos o entorno guarden secretos. OpenCode, igual que Claude Code en vexillum, tiene acceso total al host con tu usuario.
+</Callout>
+
+<Callout type="warn" title="Solo OpenCode 2.x se verificó en vivo">
+  El lanzamiento en 2.x, el manejo de pantallas bloqueadas y el one-shot que usa `vx ship` se probaron en un OpenCode 2.0.32 real. Los caminos de 1.x salen de las fuentes de 1.18.29 y 1.19.3 y están cubiertos por tests contra un `opencode` falso que informa 1.x, no por un 1.x real. `docs/verification/opencode-soldier-checklist.md` en el repositorio lista cada paso que falta confirmar.
+</Callout>
+
+## Prepararlo
+
+1. Instalá OpenCode, corré `opencode` una vez y conectá un proveedor. Los modelos gratuitos de Zen no necesitan clave. `opencode models` lista lo que podés usar.
+2. Instalá la integración de herdr para OpenCode, así herdr lee el estado de un soldier (working, idle, blocked) del propio OpenCode en lugar de leer la pantalla:
+
+   ```bash
+   herdr integration install opencode
+   ```
+
+3. Corré el TUI de OpenCode una vez después de **cada actualización de OpenCode**, antes de despachar. Una versión nueva puede mostrar un diálogo de "what's new" en su primer arranque. Nadie está en el pane de un soldier para cerrarlo, así que el soldier se quedaría ahí.
+4. Corré `vx doctor`. Cuando un perfil selecciona `opencode`, o hay un binario `opencode` en tu `PATH`, informa el binario, su versión (1.x desde 1.18.29, o 2.x), si una instalación 1.x más vieja tapa a una 2.x anterior en el `PATH`, y la integración de herdr. Solo advierten: una pieza faltante nunca deja el entorno como no listo, y una configuración sin OpenCode no ve ninguna de estas líneas.
+
+## Agregar un perfil
+
+Agregá un perfil con `"harness": "opencode"` a `.vexillum/models.json` (o al global `~/.vexillum/models.json`). El mismo perfil sirve en 1.x y en 2.x:
+
+```json
+{
+  "profiles": {
+    "opencode-scout": {
+      "model": "opencode/glm-5.3-flash-free",
+      "effort": "low",
+      "when": "Scout whose question reduces to verifiable facts, run on a free zero-retention model.",
+      "harness": "opencode"
+    },
+    "opencode-mission": {
+      "model": "anthropic/claude-sonnet-5#high",
+      "effort": "medium",
+      "when": "Mission on OpenCode with Sonnet at its high variant.",
+      "harness": "opencode"
+    }
+  }
+}
+```
+
+```bash
+vx dispatch "which flags does the build script accept?" --kind scout --profile opencode-scout
+```
+
+En un perfil de OpenCode los dos campos significan:
+
+| Campo | Valor | Qué pasa |
+| --- | --- | --- |
+| `model` | `provider/model`, con un `#variant` opcional, como `opencode/glm-5.3-flash-free` o `anthropic/claude-sonnet-5#high` | el soldier arranca con ese modelo, y con ese variant cuando hay uno |
+| `effort` | cualquier etiqueta simple, como `low` o `medium` | se registra en la tarea y se muestra en `vx status`, **nunca se le pasa a OpenCode** |
+
+vexillum solo revisa la **forma**: los modelos de OpenCode son lo que ofrezcan tus proveedores, así que no puede comprobar que un modelo exista; OpenCode lo informa cuando el soldier arranca. El effort no se convierte en un variant porque los nombres de variant cambian según el modelo: el `high` de un modelo es el error de otro. Un variant se usa solo cuando el perfil lo escribe después del `#`.
+
+Cómo se trata un variant que el modelo no tiene difiere según el camino, y las dos conductas son de OpenCode, no de vexillum. Un one-shot (el reviewer y el fixer de `vx ship`, que usan `opencode run`) falla con `Variant unavailable for <model>: <variant>`. El TUI de 2.x en el que corre un soldier descarta el variant desconocido **en silencio** y corre el modelo sin variant. El pie del pane del soldier muestra el variant, como `· high`, solo cuando se aplicó; revisalo la primera vez que uses un variant.
+
+## Qué escribe vexillum en el camp
+
+En 2.x al TUI no se le puede decir un modelo por la línea de comandos, así que vexillum escribe dos archivos en el camp del soldier antes de arrancarlo:
+
+- `.opencode/agents/vx-soldier.md`, un agente cuyo `model` es `provider/model#variant`.
+- `opencode.json`, que lo deja como agente por defecto (`default_agent`) y fija el modelo como respaldo.
+
+Los dos se agregan al `info/exclude` del repositorio, así el camp queda limpio y `vx land` nunca los ve. En 1.x no se escribe nada: el modelo va con `--model`, y un variant con la variable de entorno `OPENCODE_CONFIG_CONTENT` del pane del soldier. Las dos generaciones fijan `OPENCODE_DISABLE_AUTOUPDATE=1`, para que un soldier en marcha no se actualice por debajo.
+
+vexillum **nunca sobrescribe ni mezcla** la configuración de OpenCode de un proyecto. Si el camp ya tiene un `opencode.json`, un `opencode.jsonc` o un `.opencode/agents/vx-soldier.md` porque el proyecto lo versiona, `vx dispatch` falla antes de arrancar nada y nombra el archivo. No hay política de mezcla, y no está planeada: elegí otro enfoque para ese repositorio (un perfil de otro harness) o mové el archivo del proyecto. El resto del contenido de `.opencode/` de un proyecto, como sus propios agentes, comandos o plugins, no es una colisión.
+
+Dos efectos secundarios que conviene conocer:
+
+- `info/exclude` lo comparten todos los worktrees de un repositorio, incluido tu checkout principal. Mientras liste `/opencode.json` y `/.opencode/`, un `opencode.json` **sin versionar** en tu checkout principal queda oculto de `git status`. Los archivos versionados no se ven afectados.
+- Una mission que tenga que *crear* `opencode.json` o `.opencode/` como parte de su trabajo necesita `git add -f`, porque esas rutas están excluidas. Decilo en su prompt.
+
+Los archivos que escribió vexillum se quitan antes del siguiente arranque solo si son idénticos byte a byte a lo que escribió, así que una edición tuya nunca se borra.
+
+## Permisos
+
+Un soldier arranca con `--auto`, que aprueba todo permiso que no esté negado explícitamente. vexillum **no escribe reglas de permisos** propias. En 2.x gana la última regla que coincide, así que una regla comodín en la configuración del camp pisaría los deny de tu propia configuración de OpenCode. Sin una regla propia, tus deny siguen valiendo dentro de un soldier. Como con todo harness, aterrizar es el control: nada llega a tu historial hasta que aprobás `vx land`.
+
+## Qué cambia respecto de un soldier de Claude Code
+
+| Tema | Soldier de Claude Code | Soldier de OpenCode |
+| --- | --- | --- |
+| Permisos | `--dangerously-skip-permissions` | `--auto`; tus reglas `deny` siguen valiendo. Ver arriba. |
+| Modelo | `--model` y `--effort` | `--model` en 1.x; el archivo de agente del camp y `opencode.json` en 2.x. El effort se registra, no se pasa. |
+| Primer prompt | se tipea en el pane | se entrega con `herdr agent prompt` cuando el pane está listo. `vx dispatch` espera a que se despeje un error de arranque `agent_not_ready` antes de tratar el arranque como fallido. |
+| Reglas | `CLAUDE.md`, que importa `AGENTS.md` | OpenCode lee `AGENTS.md` y, solo cuando no hay, `CLAUDE.md`. **No** expande `@AGENTS.md` ni ninguna otra referencia `@archivo` dentro de ellos. El bloque de vexillum vive en `AGENTS.md` (o en `CLAUDE.md` cuando el proyecto no tiene `AGENTS.md`), y OpenCode lee el que lo tenga. |
+| Plugins | n/a | **Los plugins de V1 no corren en V2.** Un proyecto que dependa de uno para su flujo se comporta distinto con un soldier de 2.x. |
+| Skills | las `.claude/skills` del proyecto | ninguna. En esta versión los soldiers no usan skills. |
+| Preguntas | el selector de preguntas de Claude | el formulario de preguntas y el prompt de permiso propios de OpenCode. Ver abajo. |
+| `vx ship` | el reviewer y el fixer del tribunal corren `claude -p` | corren `opencode run --auto --format json` con el modelo y el variant de la mission, sin entrada por stdin |
+
+## Soldiers bloqueados
+
+Con `--auto` un prompt de permiso es raro, y la forma habitual en que un soldier de OpenCode se bloquea es su formulario de preguntas. `vx decide` responde lo que reconoce, solo en 2.x, y vuelve a leer el pane justo antes de teclear para no escribir nunca en una pantalla que ya cambió:
+
+| Pantalla | `vx decide <task-id> <answer>` |
+| --- | --- |
+| Prompt de permiso | `allow once` pulsa Enter. `reject` pulsa Esc, y el soldier ve "The user declined this tool call". `always allow` se **rechaza**: puede guardar una regla para siempre, y una respuesta de una línea no puede cargar esa decisión. |
+| Formulario de pregunta | el número de una opción (`2`) o su texto exacto la elige con pulsaciones de flecha abajo y Enter. Cualquier otro texto se teclea en el campo "Type your own answer" del formulario, una pulsación por carácter, así que se limita a **ASCII imprimible**. Un número suelto que no es una opción se rechaza en lugar de teclearlo. |
+| Una pantalla que vexillum no conoce, o cualquiera de 1.x | se rechaza, sin teclear nada. Conectate al pane con herdr y respondé ahí. |
+| Sin pantalla bloqueada (el soldier terminó su turno con una línea `needs-decision:`) | la respuesta se entrega como texto plano, como con cualquier otro harness |
+
+herdr mismo rechaza `herdr agent prompt` con `agent_blocked` mientras un pane está bloqueado, y por eso una respuesta tecleada entra con pulsaciones de teclas. Ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted).
+
+## Fuera de esta versión
+
+- Mezclar con la configuración de OpenCode propia de un proyecto.
+- Convertir `effort` en un variant.
+- Respuestas estructuradas para un formulario de varias preguntas.
+- OpenCode como commander.
+- Skills para los soldiers de OpenCode.
+
+Para una checklist que verifique una configuración de OpenCode, 1.x en particular, en una máquina real, mirá `docs/verification/opencode-soldier-checklist.md` en el repositorio.
+
+## Relacionado
+
+- [models.json](/es/docs/reference/models-json)
+- [`vx dispatch`](/es/docs/reference/cli/dispatch), [`vx decide`](/es/docs/reference/cli/decide) y [`vx doctor`](/es/docs/reference/cli/doctor)
+- [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted)
+- [Usar Pi](/es/docs/guides/using-pi)

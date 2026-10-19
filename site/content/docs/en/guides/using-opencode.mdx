@@ -1,0 +1,136 @@
+---
+title: Using OpenCode
+description: Run a model profile's soldiers on OpenCode instead of Claude Code, on OpenCode 1.x or 2.x, including its free Zen models.
+---
+
+A model profile can name a **harness**, the agent CLI its soldiers run on. With `"harness": "opencode"` the soldiers of that profile run on [OpenCode](https://opencode.ai), which can use many providers and models, including free ones. The commander stays a Claude Code session, and a task keeps its harness through `vx redispatch`, `vx prompt`, `vx decide`, `vx land` and `vx strike`.
+
+OpenCode has two generations that share the `opencode` command, and vexillum drives both:
+
+- **2.x** (checked against **2.0.32**). Its TUI has no `--model` flag, so vexillum writes the model into files in the camp.
+- **1.x**, from **1.18.29**. Its TUI takes `--model`.
+
+`vx dispatch` runs `opencode --version` and records the major series on the task, and `vx redispatch`, `vx prompt` and `vx decide` use the same one. A task dispatched on 2.x is not relaunched on 1.x: install the series it was dispatched on, or strike it and dispatch again. Nothing about the version is cached between commands.
+
+<Callout type="warn" title="Only some free models keep your code private">
+  A soldier sends whatever it reads to the model provider: your prompts, the files it opens, command output and anything in your environment that a command prints. Of OpenCode Zen's free models, only `glm-5.3-flash-free`, `deepseek-v4.1-flash-free`, `longcat-2.5-preview-free` and `space-bunny-free` were documented as zero-retention when this page was written. The other free models log prompts and outputs. Terms change, so read them before you point a profile at a free model, and do not use one for private or proprietary code, or on a machine whose files or environment hold secrets. OpenCode, like Claude Code in vexillum, has full host access under your user.
+</Callout>
+
+<Callout type="warn" title="Only OpenCode 2.x was verified live">
+  The 2.x launch, the blocked-screen handling and the one-shot used by `vx ship` were run on a real OpenCode 2.0.32. The 1.x paths come from the 1.18.29 and 1.19.3 sources and are covered by tests against a fake `opencode` that reports 1.x, not by a real 1.x. `docs/verification/opencode-soldier-checklist.md` in the repository lists every step still to confirm.
+</Callout>
+
+## Set it up
+
+1. Install OpenCode, then run `opencode` once and connect a provider. The free Zen models need no key. `opencode models` lists what you can use.
+2. Install herdr's integration for OpenCode, so herdr reads a soldier's state (working, idle, blocked) from OpenCode itself instead of from the screen:
+
+   ```bash
+   herdr integration install opencode
+   ```
+
+3. Run the OpenCode TUI once after **each OpenCode upgrade**, before you dispatch. A new version can show a "what's new" dialog on its first start. Nobody is at a soldier's pane to dismiss it, so the soldier would sit on it.
+4. Run `vx doctor`. When a profile selects `opencode`, or an `opencode` binary is on your `PATH`, it reports the binary, its version (1.x from 1.18.29, or 2.x), whether an older 1.x install shadows a 2.x one earlier in `PATH`, and the herdr integration. They only warn: a missing piece never makes the environment not ready, and a setup without OpenCode sees none of these lines.
+
+## Add a profile
+
+Add a profile with `"harness": "opencode"` to `.vexillum/models.json` (or the global `~/.vexillum/models.json`). The same profile works on 1.x and 2.x:
+
+```json
+{
+  "profiles": {
+    "opencode-scout": {
+      "model": "opencode/glm-5.3-flash-free",
+      "effort": "low",
+      "when": "Scout whose question reduces to verifiable facts, run on a free zero-retention model.",
+      "harness": "opencode"
+    },
+    "opencode-mission": {
+      "model": "anthropic/claude-sonnet-5#high",
+      "effort": "medium",
+      "when": "Mission on OpenCode with Sonnet at its high variant.",
+      "harness": "opencode"
+    }
+  }
+}
+```
+
+```bash
+vx dispatch "which flags does the build script accept?" --kind scout --profile opencode-scout
+```
+
+On an OpenCode profile the two fields mean:
+
+| Field | Value | What happens |
+| --- | --- | --- |
+| `model` | `provider/model`, with an optional `#variant`, such as `opencode/glm-5.3-flash-free` or `anthropic/claude-sonnet-5#high` | the soldier starts on that model, and on that variant when there is one |
+| `effort` | any plain label, such as `low` or `medium` | recorded on the task and shown in `vx status`, **never passed to OpenCode** |
+
+vexillum checks the **shape** only: OpenCode's models are whatever your providers offer, so it cannot check that a model exists; OpenCode reports that when the soldier starts. Effort is not mapped to a variant because variant names differ per model: one model's `high` is another model's error. A variant is used only when the profile writes one after the `#`.
+
+The two ways a variant the model does not have is handled differ, and both are OpenCode's, not vexillum's. A one-shot (`vx ship`'s reviewer and fixer, which use `opencode run`) fails with `Variant unavailable for <model>: <variant>`. The 2.x TUI a soldier runs in drops the unknown variant **silently** and runs the model without one. The footer of the soldier's pane shows the variant, such as `· high`, only when it was applied; check it the first time you use a variant.
+
+## What vexillum writes in the camp
+
+On 2.x the TUI cannot be told a model on its command line, so vexillum provisions two files in the soldier's camp before it starts:
+
+- `.opencode/agents/vx-soldier.md`, an agent whose `model` is `provider/model#variant`.
+- `opencode.json`, which makes that agent the default (`default_agent`) and sets the model as a fallback.
+
+Both are added to the repository's `info/exclude`, so the camp stays clean and `vx land` never sees them. On 1.x nothing is written: the model goes with `--model`, and a variant with the `OPENCODE_CONFIG_CONTENT` environment variable of the soldier's pane. Both generations set `OPENCODE_DISABLE_AUTOUPDATE=1`, so a running soldier is not updated under you.
+
+vexillum **never overwrites or merges** a project's OpenCode configuration. If the camp already has an `opencode.json`, an `opencode.jsonc`, or a `.opencode/agents/vx-soldier.md`, because the project tracks one, `vx dispatch` fails before it starts anything and names the file. There is no merge policy, and none is planned: pick a different approach for that repository (a profile on another harness) or move the project's file. A project's other `.opencode/` content, such as its own agents, commands or plugins, is not a collision.
+
+Two side effects to know:
+
+- `info/exclude` is shared by all of a repository's worktrees, including the main checkout. While it lists `/opencode.json` and `/.opencode/`, an **untracked** `opencode.json` in your main checkout is hidden from `git status`. Tracked files are not affected.
+- A mission that has to *create* `opencode.json` or `.opencode/` as part of its work needs `git add -f`, because those paths are excluded. Say so in its prompt.
+
+Files vexillum wrote are removed before the next launch only if they are byte-identical to what it wrote, so an edit you made to one is never deleted.
+
+## Permissions
+
+A soldier starts with `--auto`, which approves every permission that is not explicitly denied. vexillum writes **no permission rules** of its own. In 2.x the last matching rule wins, so a wildcard rule in the camp's config would override the denies in your own OpenCode config. Without a rule of its own, your denies keep applying inside a soldier. As with every harness, landing is the control: nothing reaches your history until you approve `vx land`.
+
+## What differs from a Claude Code soldier
+
+| Topic | Claude Code soldier | OpenCode soldier |
+| --- | --- | --- |
+| Permissions | `--dangerously-skip-permissions` | `--auto`; your own `deny` rules still apply. See above. |
+| Model | `--model` and `--effort` | `--model` on 1.x; the camp's agent file and `opencode.json` on 2.x. Effort is recorded, not passed. |
+| First prompt | typed into the pane | delivered through `herdr agent prompt` once the pane is ready. `vx dispatch` waits for an `agent_not_ready` start error to clear before it treats the start as failed. |
+| Rules | `CLAUDE.md`, which imports `AGENTS.md` | OpenCode reads `AGENTS.md` and, only when there is none, `CLAUDE.md`. It does **not** expand `@AGENTS.md` or any other `@file` reference inside them. The vexillum block lives in `AGENTS.md` (or in `CLAUDE.md` when the project has no `AGENTS.md`), and OpenCode reads whichever holds it. |
+| Plugins | n/a | **V1 plugins do not run in V2.** A project that relies on one for its workflow behaves differently under a 2.x soldier. |
+| Skills | the project's `.claude/skills` | none. Soldiers do not use skills in this release. |
+| Questions | Claude's question selector | OpenCode's own question form and permission prompt. See below. |
+| `vx ship` | the tribunal's reviewer and fixer run `claude -p` | they run `opencode run --auto --format json` on the mission's model and variant, with no input on stdin |
+
+## Blocked soldiers
+
+With `--auto` a permission prompt is rare, and the usual way an OpenCode soldier blocks is its question form. `vx decide` answers what it can recognize, on 2.x only, and reads the pane again right before it types so it never types into a screen that has moved on:
+
+| Screen | `vx decide <task-id> <answer>` |
+| --- | --- |
+| Permission prompt | `allow once` presses Enter. `reject` presses Esc, and the soldier sees "The user declined this tool call". `always allow` is **refused**: it may save a rule for good, and a one-line answer cannot carry that decision. |
+| Question form | an option's number (`2`) or its exact text selects it with arrow-down presses and Enter. Any other text is typed into the form's "Type your own answer" field, one key press per character, so it is limited to **printable ASCII**. A bare number that is not an option is refused instead of typed. |
+| A screen vexillum does not know, or any 1.x screen | refused, with nothing typed. Attach to the pane with herdr and answer there. |
+| No blocked screen (the soldier ended its turn with a `needs-decision:` line) | the answer is delivered as plain text, like every other harness |
+
+herdr itself rejects `herdr agent prompt` with `agent_blocked` while a pane is blocked, which is why a typed answer goes in through key presses. See [Blocked and interrupted](/docs/guides/blocked-and-interrupted).
+
+## Not in this release
+
+- Merging with a project's own OpenCode configuration.
+- Mapping `effort` to a variant.
+- Structured answers for a question form of several questions.
+- OpenCode as the commander.
+- Skills for OpenCode soldiers.
+
+For a checklist to verify an OpenCode setup, 1.x in particular, on a real machine, see `docs/verification/opencode-soldier-checklist.md` in the repository.
+
+## Related
+
+- [models.json](/docs/reference/models-json)
+- [`vx dispatch`](/docs/reference/cli/dispatch), [`vx decide`](/docs/reference/cli/decide) and [`vx doctor`](/docs/reference/cli/doctor)
+- [Blocked and interrupted](/docs/guides/blocked-and-interrupted)
+- [Using Pi](/docs/guides/using-pi)

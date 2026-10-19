@@ -35,10 +35,10 @@ The file is JSON, in English:
 | Field | Meaning |
 | --- | --- |
 | `profiles.<name>` | A named profile. The name has no whitespace and is not `default`. |
-| `profiles.<name>.model` | The model passed to the harness. On `claude`: `haiku`, `sonnet`, `opus` or `fable`. On `pi`: a `provider/id` such as `anthropic/claude-sonnet-5`, passed as `--model`. |
-| `profiles.<name>.effort` | The effort passed to the harness. On `claude`: `low`, `medium`, `high`, `xhigh` or `max`. On `pi`: a thinking level, `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`, passed as `--thinking` (Pi clamps it to what the model supports). |
+| `profiles.<name>.model` | The model passed to the harness. On `claude`: `haiku`, `sonnet`, `opus` or `fable`. On `pi`: a `provider/id` such as `anthropic/claude-sonnet-5`, passed as `--model`. On `opencode`: a `provider/model` with an optional `#variant`, such as `opencode/glm-5.3-flash-free` or `anthropic/claude-sonnet-5#high`. |
+| `profiles.<name>.effort` | The effort passed to the harness. On `claude`: `low`, `medium`, `high`, `xhigh` or `max`. On `pi`: a thinking level, `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`, passed as `--thinking` (Pi clamps it to what the model supports). On `opencode`: any plain label, which is recorded on the task and never passed to OpenCode; the variant comes only from the model string. |
 | `profiles.<name>.when` | Free text that tells the commander when the profile applies. It must not be empty. |
-| `profiles.<name>.harness` | Optional. The agent CLI the profile's soldiers run on. `claude` (Claude Code) is the default when the field is absent. `pi` runs the profile's soldiers on the [Pi](/docs/guides/using-pi) coding agent. `opencode` is a reserved name with no implementation yet: the file loads, but dispatching with a profile that names it is an error. Any other name is an error that names the file and the field. |
+| `profiles.<name>.harness` | Optional. The agent CLI the profile's soldiers run on. `claude` (Claude Code) is the default when the field is absent. `pi` runs the profile's soldiers on the [Pi](/docs/guides/using-pi) coding agent. `opencode` runs them on [OpenCode](/docs/guides/using-opencode), 1.x or 2.x. Any other name is an error that names the file and the field. |
 | `default.model`, `default.effort` | The fallback when no profile fits. Same valid values. |
 
 Unknown fields are rejected, so a typo does not silently do nothing. A value the profile's harness would not accept is an error that names the file and the field. Values are checked after the layers are merged, against the harness the profile ends up with: a project file can set a `provider/id` model on a `pi` profile the global base defined, and switching an existing profile to `pi` fails until its model is a `provider/id`. A `pi` model is checked for shape only, because Pi's models are whatever your providers offer; see [Using Pi](/docs/guides/using-pi). The `default` entry has no `harness`: it always runs on `claude`. The file has no `schema_version`; the strict parsing already makes an older vexillum refuse a file that uses a field it does not know.
@@ -110,6 +110,25 @@ A profile that runs on Pi names a `provider/id` model, a thinking level as its e
 ```
 
 Keep a model id that ends in a colon segment, such as OpenRouter's `...:free`, whole in `model` and put the thinking level in `effort`; vexillum passes it with `--thinking` and never as a suffix. [Using Pi](/docs/guides/using-pi) covers setup, what differs from a Claude Code soldier, and the privacy of free tiers.
+
+## A profile on OpenCode
+
+A profile that runs on OpenCode names a `provider/model` (with an optional `#variant`), any plain label as its effort, and the `opencode` harness. The same profile works on OpenCode 1.x and 2.x:
+
+```json
+{
+  "profiles": {
+    "opencode-scout": {
+      "model": "opencode/glm-5.3-flash-free",
+      "effort": "low",
+      "when": "Scout whose question reduces to verifiable facts, run on a free zero-retention model.",
+      "harness": "opencode"
+    }
+  }
+}
+```
+
+The effort is only recorded, because variant names differ per model; write a variant after the model, as in `anthropic/claude-sonnet-5#high`. The model is checked for shape only. [Using OpenCode](/docs/guides/using-opencode) covers setup, the files vexillum writes in the camp, and the privacy of free models.
 
 ## A worked example
 

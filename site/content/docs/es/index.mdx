@@ -16,7 +16,7 @@ Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)
 
 - **Un único binario en Go.** Hace plomería determinista: crea worktrees, inicia sesiones, lleva el estado en disco y rechaza operaciones inseguras. Se instala con Homebrew o con un script de curl, sin dependencias de runtime.
 - **No es el cerebro.** El criterio del commander (cuándo despachar, qué modelo elegir, cuándo preguntarte) vive en markdown: un núcleo corto en un bloque de tu propio `AGENTS.md` (o `CLAUDE.md`), más [skills](/es/docs/concepts/skills) que el commander carga cuando las necesita. `vx init` las escribe en tu proyecto, después de preguntarte. Podés leerlas y editarlas. Ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).
-- **Claude Code y Pi.** El commander es Claude Code. Un soldier corre en Claude Code por defecto, o en [Pi](/es/docs/guides/using-pi) cuando su perfil de modelo lo dice. Todavía no se soportan otros harnesses. Las contribuciones son bienvenidas: ver [Contribuir](/es/docs/guides/contributing).
+- **Claude Code, Pi y OpenCode.** El commander es Claude Code. Un soldier corre en Claude Code por defecto, o en [Pi](/es/docs/guides/using-pi) u [OpenCode](/es/docs/guides/using-opencode) cuando su perfil de modelo lo dice. Todavía no se soportan otros harnesses. Las contribuciones son bienvenidas: ver [Contribuir](/es/docs/guides/contributing).
 - **herdr para los panes.** Los soldiers corren en panes de [herdr](https://herdr.dev). `vx doctor` lo verifica pero nunca lo instala.
 
 ## Siguientes pasos

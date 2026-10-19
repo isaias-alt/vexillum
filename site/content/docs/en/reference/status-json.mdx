@@ -37,7 +37,9 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 | `agent_not_found_since`, `idle_unconfirmed_since` | time | when the sentinel first saw the condition |
 | `redispatches` | number | how many times the task was re-dispatched |
 | `model`, `effort` | string | the soldier's choice; empty means claude's default |
-| `harness` | string | the agent CLI the soldier runs on, from the dispatch profile (`claude` or `pi`); empty means `claude`, as in a task file written before this field existed |
+| `harness` | string | the agent CLI the soldier runs on, from the dispatch profile (`claude`, `pi` or `opencode`); empty means `claude`, as in a task file written before this field existed |
+| `harness_major` | number | for an `opencode` task, the OpenCode series it was dispatched on (`1` or `2`), detected from `opencode --version` and kept by `vx redispatch`; absent for other harnesses |
+| `harness_version` | string | for an `opencode` task, the full version found at dispatch, such as `2.0.32`; absent for other harnesses |
 | `decision` | object | present once the task has blocked at least once |
 | `amendments` | array | instructions the general gave after dispatch, via `vx prompt` and `vx decide` (not `--dismiss`); see below |
 

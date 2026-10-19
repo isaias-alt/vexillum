@@ -16,6 +16,8 @@ vx decide <task-id> "Use the existing helper"
 
 Un soldier de Pi no tiene selector de preguntas. Pregunta con una herramienta `ask_user` que vexillum le da, y tu respuesta (el texto exacto de una opción o su número, o cualquier texto) se escribe en el archivo que esa herramienta espera; no se teclea nada en su pane. Cuando preguntó con una línea `needs-decision:` común, la respuesta se escribe como texto: escribí la respuesta misma, no un número de opción. Ver [Usar Pi](/es/docs/guides/using-pi).
 
+Un soldier de OpenCode se responde con pulsaciones de tecla en las pantallas que vexillum reconoce (un prompt de permiso, un formulario de preguntas) y como texto en las demás; `always allow` nunca se elige por vos. Ver [Usar OpenCode](/es/docs/guides/using-opencode).
+
 Solo una tarea `blocked` puede responderse. Si su pane en realidad ya no está, `decide` la marca `interrupted` y se niega.
 
 ### Una tarea bloqueada por error
