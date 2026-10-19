@@ -12,6 +12,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/install"
 	"github.com/isaias-alt/vexillum/internal/models"
+	"github.com/isaias-alt/vexillum/internal/piwake"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/slot"
 	"github.com/isaias-alt/vexillum/internal/soldier"
@@ -45,6 +46,17 @@ type skillPlan struct {
 	act    skillAct
 }
 
+// wakeAct is what a run does with the Pi commander's wake extension.
+type wakeAct int
+
+const (
+	wakeNothing wakeAct = iota
+	wakeInstall
+	wakeRefresh
+	wakeOverwrite
+	wakeKeepEdited
+)
+
 // projectPlan is everything init/upgrade learned about the project before
 // writing anything.
 type projectPlan struct {
@@ -70,16 +82,29 @@ type projectPlan struct {
 	tmpl       string
 	claude     slot.ClaudeImport
 	skills     []skillPlan
-	hookNeeded bool
-	hookErr    error
-	needIgnore bool
-	needModels bool
+	// wake is the Pi commander's wake extension, and settings what its
+	// .pi/settings.json still lacks; both stay zero unless pi is one of the
+	// commander harnesses.
+	wake           wakeAct
+	wakeState      piwake.State
+	settingsNeeded bool
+	settingsErr    error
+	hookNeeded     bool
+	hookErr        error
+	needIgnore     bool
+	needModels     bool
 }
 
 // hasClaudeCommander reports whether Claude Code is one of the commander
 // harnesses, which is what the CLAUDE.md import and the Stop hook are for.
 func (p *projectPlan) hasClaudeCommander() bool {
 	return slices.Contains(p.commanders, soldier.HarnessClaude)
+}
+
+// hasPiCommander reports whether Pi is one of the commander harnesses, which
+// is what the wake extension and the Pi project settings are for.
+func (p *projectPlan) hasPiCommander() bool {
+	return slices.Contains(p.commanders, soldier.HarnessPi)
 }
 
 // commanderChanged reports whether --commander asks for something other than
@@ -154,10 +179,42 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 	if p.hasClaudeCommander() {
 		p.hookNeeded, p.hookErr = scaffold.SentinelHookNeeded(projectDir)
 	}
+	if p.hasPiCommander() {
+		if err := p.inspectPiWake(); err != nil {
+			return nil, err
+		}
+	}
 	p.needIgnore = !exists(filepath.Join(p.configDir, ".gitignore"))
 	p.needModels = !exists(filepath.Join(p.configDir, models.FileName))
 
 	return p, nil
+}
+
+// inspectPiWake decides what to do with the wake extension and the Pi project
+// settings. Like a skill, a missing extension is installed, a stale one
+// refreshed, and one edited by hand left alone unless upgrade is forced.
+func (p *projectPlan) inspectPiWake() error {
+	var err error
+	p.wakeState, err = piwake.Inspect(p.dir, p.cfg.Extensions[piwake.ExtensionRel])
+	if err != nil {
+		return err
+	}
+	switch p.wakeState {
+	case piwake.Missing:
+		p.wake = wakeInstall
+	case piwake.Stale:
+		p.wake = wakeKeepEdited
+		if p.kind == setupUpgrade {
+			p.wake = wakeRefresh
+		}
+	case piwake.Edited:
+		p.wake = wakeKeepEdited
+		if p.kind == setupUpgrade && p.opts.Force {
+			p.wake = wakeOverwrite
+		}
+	}
+	p.settingsNeeded, p.settingsErr = piwake.SettingsNeeded(p.dir)
+	return nil
 }
 
 // useSlotFile points the plan at file as the home of the vexillum block and
@@ -298,6 +355,9 @@ func (p *projectPlan) userFileLines() []string {
 	if p.hookNeeded {
 		pad(".claude/settings.json", "add the sentinel Stop hook")
 	}
+	if p.settingsNeeded && p.settingsErr == nil && exists(piwake.SettingsPath(p.dir)) {
+		pad(piwake.SettingsRel, "add "+piwake.SkillsRef+" to \"skills\", so Pi sees the vexillum skills")
+	}
 	return lines
 }
 
@@ -330,6 +390,17 @@ func (p *projectPlan) ownFileLines() []string {
 	if names := append(p.skillsOf(skillRefresh), p.skillsOf(skillOverwrite)...); len(names) > 0 {
 		own = append(own, "the installed skills "+install.SkillList(names)+" in .claude/skills/")
 	}
+	switch p.wake {
+	case wakeInstall:
+		own = append(own, piwake.ExtensionRel+" (wakes a Pi commander)")
+	case wakeRefresh:
+		own = append(own, "the installed "+piwake.ExtensionRel)
+	case wakeOverwrite:
+		own = append(own, "the installed "+piwake.ExtensionRel+" (your edited copy is saved first)")
+	}
+	if p.settingsNeeded && p.settingsErr == nil && !exists(piwake.SettingsPath(p.dir)) {
+		own = append(own, piwake.SettingsRel+" (lets Pi see the vexillum skills)")
+	}
 	return own
 }
 
@@ -339,6 +410,9 @@ func (p *projectPlan) hasWork() bool {
 		return true
 	}
 	if p.claude.Action != slot.ClaudeOK || p.hookNeeded || p.needIgnore || p.needModels || !p.cfgExists || p.commanderChanged() {
+		return true
+	}
+	if p.wake == wakeInstall || p.wake == wakeRefresh || p.wake == wakeOverwrite || p.settingsNeeded && p.settingsErr == nil {
 		return true
 	}
 	for _, s := range p.skills {
@@ -365,6 +439,26 @@ func (p *projectPlan) report(e *setupEnv) {
 		e.warn("could not add the sentinel Stop hook: %v", p.hookErr)
 	}
 	p.reportSkills(e)
+	p.reportPiWake(e)
+}
+
+// reportPiWake prints what is left alone about the Pi commander's files.
+func (p *projectPlan) reportPiWake(e *setupEnv) {
+	if p.settingsErr != nil {
+		e.warn("could not add the vexillum skills to %s: %v", piwake.SettingsRel, p.settingsErr)
+	}
+	if p.wake != wakeKeepEdited {
+		return
+	}
+	if p.wakeState == piwake.Stale {
+		e.say("%s: older than this binary's copy. Run '%s upgrade' to refresh it.", piwake.ExtensionRel, cmdname.Name)
+		return
+	}
+	hint := "rerun with --force to overwrite it (a backup is saved first)"
+	if p.kind == setupInit {
+		hint = "'" + cmdname.Name + " upgrade --force' overwrites it (a backup is saved first)"
+	}
+	e.say("%s: edited by hand, left as it is; %s.", piwake.ExtensionRel, hint)
 }
 
 // reportSkills prints the skills that are left alone and why.
@@ -501,6 +595,10 @@ func (p *projectPlan) apply(e *setupEnv, vexillumHome string) int {
 		return code
 	}
 
+	if code := p.applyPiWake(e, &cfgDirty); code != 0 {
+		return code
+	}
+
 	// .claude/settings.json isn't vexillum's file - it's the user's own
 	// Claude Code config. A malformed existing file is a pre-existing
 	// problem, reported earlier, not a failure of this run.
@@ -520,6 +618,9 @@ func (p *projectPlan) apply(e *setupEnv, vexillumHome string) int {
 
 	if p.kind == setupInit {
 		e.say("%s initialized.", cmdname.Name)
+		if p.hasPiCommander() {
+			e.say("Pi will ask \"Trust project folder?\" the first time you run it here, because .pi/ holds a project extension and settings. Answer Trust once (Pi remembers it in ~/.pi/agent/trust.json); until then the wake and the vexillum skills do not load. '%s doctor' shows where it stands.", cmdname.Name)
+		}
 	} else {
 		e.say("%s upgrade complete.", cmdname.Name)
 	}
@@ -718,6 +819,61 @@ func (p *projectPlan) applySkills(e *setupEnv, cfgDirty *bool) int {
 			return e.fail("%v", err)
 		}
 		record(name, h)
+	}
+	return 0
+}
+
+// applyPiWake installs, refreshes or overwrites the Pi commander's wake
+// extension as planned, adds the skills to the Pi project settings, and records
+// the extension's hash in the config.
+func (p *projectPlan) applyPiWake(e *setupEnv, cfgDirty *bool) int {
+	if !p.hasPiCommander() {
+		return 0
+	}
+	record := func(hash string) {
+		if p.cfg.Extensions == nil {
+			p.cfg.Extensions = map[string]string{}
+		}
+		if p.cfg.Extensions[piwake.ExtensionRel] != hash {
+			p.cfg.Extensions[piwake.ExtensionRel] = hash
+			*cfgDirty = true
+		}
+	}
+	switch p.wake {
+	case wakeInstall, wakeRefresh, wakeOverwrite:
+		if p.wake == wakeOverwrite {
+			backup, err := piwake.Backup(p.dir, p.configDir)
+			if err != nil {
+				return e.fail("%v", err)
+			}
+			e.say("Saved your edited %s to %s", piwake.ExtensionRel, relTo(p.dir, backup))
+		}
+		hash, err := piwake.Install(p.dir)
+		if err != nil {
+			return e.fail("%v", err)
+		}
+		record(hash)
+		switch p.wake {
+		case wakeInstall:
+			e.say("Installed %s (wakes a Pi commander)", piwake.ExtensionRel)
+		case wakeRefresh:
+			e.say("Refreshed %s", piwake.ExtensionRel)
+		default:
+			e.say("Overwrote %s", piwake.ExtensionRel)
+		}
+	case wakeNothing:
+		if p.wakeState == piwake.Current {
+			// Already what this binary ships: make sure the config knows, so
+			// a later upgrade can tell a stale copy from an edited one.
+			record(piwake.Hash())
+		}
+	}
+	if p.settingsNeeded && p.settingsErr == nil {
+		if added, err := piwake.EnsureSettings(p.dir); err != nil {
+			e.warn("could not add the vexillum skills to %s: %v", piwake.SettingsRel, err)
+		} else if added {
+			e.say("Added %s to the \"skills\" of %s", piwake.SkillsRef, piwake.SettingsRel)
+		}
 	}
 	return 0
 }

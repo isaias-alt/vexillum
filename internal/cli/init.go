@@ -45,6 +45,15 @@ several (--commander, repeatable, claude by default). They are recorded in
 project needs. The CLAUDE.md import and the sentinel Stop hook above are
 Claude Code's, so init writes them only when claude is one of the commanders.
 
+A pi commander is woken by an extension instead of a Stop hook. For it init
+writes .pi/extensions/vexillum-wake.ts (built into the binary: it runs the
+sentinel's await as a child of Pi and hands a wake to the model as a message,
+and does nothing in a soldier's camp) and adds ../.claude/skills to "skills" in
+.pi/settings.json, so Pi sees the vexillum, forum and muster skills. Both are
+committed with the project; upgrade keeps the extension current. Pi asks
+"Trust project folder?" the first time you run it in the folder: answer Trust
+once (until then neither loads); doctor shows where it stands.
+
 Without a terminal (scripts, CI) init asks nothing and does nothing unless
 --yes is given; without it, it prints what it would change and exits with an
 error.
