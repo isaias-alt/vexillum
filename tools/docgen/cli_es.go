@@ -162,6 +162,13 @@ PATH, doctor también informa sobre Pi: el binario, su versión y si la
 integración de herdr para pi está instalada ('herdr integration install pi').
 Solo advierten; una configuración sin Pi no ve ninguna de estas líneas.
 
+Lo mismo vale para OpenCode, cuando un perfil selecciona el harness opencode o
+hay un binario opencode en el PATH: el binario, su versión (1.x desde 1.18.29, o
+2.x; cualquier otra es una advertencia), una advertencia cuando una instalación
+1.x más vieja tapa a una 2.x en el PATH (nombra las dos), y si la integración de
+herdr para opencode está instalada y al día ('herdr integration install
+opencode').
+
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando
 encuentra un binario vx al correr desde un entorno vacío (solo HOME y
@@ -211,11 +218,25 @@ vexillum.
 
 Un perfil también puede nombrar, en models.json, el harness (el CLI de agente)
 en el que corre su soldier: "claude" (el valor por defecto cuando no nombra
-ninguno) o "pi". El harness queda registrado en la tarea y 'vx redispatch' lo
-conserva. "opencode" está reservado: elegir un perfil que lo nombre es un error
-hasta que se implemente. A un soldier de pi se le responde con texto libre
+ninguno), "pi" u "opencode". El harness queda registrado en la tarea y 'vx
+redispatch' lo conserva. A un soldier de pi se le responde con texto libre
 cuando se bloquea (no tiene un selector donde pulsar una tecla), y necesita el
 CLI pi en el PATH.
+
+En un perfil que selecciona el harness opencode, --model es un provider/model con
+un #variant opcional, como opencode/glm-5.3-flash-free o
+anthropic/claude-sonnet-5#high ('opencode models' los lista), y --effort es solo
+una etiqueta que se registra en la tarea: nunca se convierte en un variant de
+OpenCode, porque los nombres de variant cambian según el modelo. Se manejan
+tanto OpenCode 1.x (desde 1.18.29) como 2.x; la versión que hay en el PATH se
+detecta al despachar y se registra, y redispatch, prompt y decide siguen
+usándola. En 2.x el modelo del soldier pasa por .opencode/agents/vx-soldier.md y
+opencode.json, que se escriben en el camp y se excluyen de git; si el proyecto
+ya tiene un opencode.json, un opencode.jsonc o un .opencode/agents/vx-soldier.md,
+dispatch falla nombrándolo, porque vexillum nunca sobrescribe ni mezcla la
+configuración de OpenCode de un proyecto. A un soldier de opencode se le
+responde con texto libre cuando hace una pregunta, y necesita el CLI opencode en
+el PATH. Ver 'vx doctor'.
 
 Corre una sesión real e interactiva del harness (Claude Code por defecto, con
 --dangerously-skip-permissions; pi no tiene prompts de permisos que saltear y
@@ -228,8 +249,8 @@ escribir o exfiltrar en otro lugar de la máquina. Nada llega al historial real
 del proyecto hasta que 'vx land' se aprueba explícitamente; nunca despaches
 contra un prompt, un repositorio o una máquina donde leer estado sensible del
 host sería un problema. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane
-administrado por herdr) y que herdr y el CLI del harness (claude, o pi) estén
-en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
+administrado por herdr) y que herdr y el CLI del harness (claude, pi u
+opencode) estén en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
 revisa tu configuración).
 
 Vuelve rápido: solo espera una breve sonda de arranque, no la tarea
@@ -259,8 +280,9 @@ Esto es una tabla de consulta, no un router: qué perfil conviene a una tarea es
 un juicio del commander, hecho a partir de las líneas "when". Un archivo de
 modelos que no es JSON válido, que nombra un modelo o un effort que su harness
 no acepta (claude: haiku, sonnet, opus, fable y low a max; pi: un modelo
-provider/id como anthropic/claude-sonnet-5 y un nivel de thinking off a max), o
-que nombra un harness desconocido, es un error que nombra el archivo y el
+provider/id como anthropic/claude-sonnet-5 y un nivel de thinking off a max;
+opencode: un provider/model con un #variant opcional, y cualquier etiqueta
+simple como effort), o que nombra un harness desconocido, es un error que nombra el archivo y el
 campo.
 `,
 	},
@@ -303,10 +325,12 @@ re-dispatch, no una reanudación: el camp sucio de la tarea (el árbol de trabaj
 y los commits que nunca aterrizó) se descarta, se crea un camp nuevo y la
 mission se relanza desde su prompt original como si se acabara de despachar:
 no se recupera nada del trabajo parcial ni de la sesión de agente del soldier
-muerto. La tarea se relanza en el harness con el que se despachó. Requiere
-HERDR_WORKSPACE_ID (corré esto desde un pane administrado por herdr) y que herdr
-y el CLI de ese harness (claude, o pi) estén en el PATH; si falta alguno lo dice
-y termina antes de crear nada.
+muerto. La tarea se relanza en el harness con el que se despachó, y para opencode
+en la generación (1.x o 2.x) registrada al despachar: si ahora hay otra
+instalada, se rechaza con un mensaje que lo dice, antes de descartar nada.
+Requiere HERDR_WORKSPACE_ID (corré esto desde un pane administrado por herdr) y
+que herdr y el CLI de ese harness (claude, pi u opencode) estén en el PATH; si
+falta alguno lo dice y termina antes de crear nada.
 `,
 	},
 
@@ -337,6 +361,20 @@ pregunta ya se contestó en el pane, la respuesta se rechaza y la tarea se
 puede limpiar con --dismiss. Un soldier de pi que preguntó en prosa (una línea
 needs-decision:, o una sesión donde la extensión ask_user no se cargó) recibe
 la respuesta como texto plano.
+
+Un soldier de opencode (2.x) bloqueado en una pantalla propia de OpenCode se
+responde con pulsaciones de tecla donde la pantalla es conocida, después de
+volver a leer el pane para no teclear nada en una pantalla que ya cambió. En un
+prompt de permiso, <answer> "allow once" pulsa Enter y "reject" pulsa Esc;
+"always allow" se rechaza, porque puede guardar una regla para siempre. En un
+formulario de pregunta, <answer> es el número de una opción (contando desde 1) o
+su texto exacto, entregado como pulsaciones de flecha abajo y Enter; cualquier
+otro texto va al campo "Type your own answer" del formulario con una pulsación
+por carácter, así que se limita a ASCII imprimible, y un número suelto que no es
+una opción se rechaza. Una pantalla que vexillum no conoce, y cualquier pantalla
+de 1.x, se rechaza sin teclear nada. Un soldier que terminó su turno con una
+línea needs-decision: se responde con texto plano, como con cualquier otro
+harness.
 
 Una vez entregada la respuesta, también se registra en la tarea como una
 enmienda (campo "amendments" en 'vx status --json'), junto con la pregunta que

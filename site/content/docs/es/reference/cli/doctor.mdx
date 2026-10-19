@@ -21,6 +21,13 @@ PATH, doctor también informa sobre Pi: el binario, su versión y si la
 integración de herdr para pi está instalada ('herdr integration install pi').
 Solo advierten; una configuración sin Pi no ve ninguna de estas líneas.
 
+Lo mismo vale para OpenCode, cuando un perfil selecciona el harness opencode o
+hay un binario opencode en el PATH: el binario, su versión (1.x desde 1.18.29, o
+2.x; cualquier otra es una advertencia), una advertencia cuando una instalación
+1.x más vieja tapa a una 2.x en el PATH (nombra las dos), y si la integración de
+herdr para opencode está instalada y al día ('herdr integration install
+opencode').
+
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando
 encuentra un binario vx al correr desde un entorno vacío (solo HOME y

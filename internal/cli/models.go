@@ -25,8 +25,9 @@ This is a lookup table, not a router: which profile fits a task is the
 commander's judgment, made from the "when" lines. A models file that is
 not valid JSON, names a model or effort its harness does not accept (claude:
 haiku, sonnet, opus, fable and low to max; pi: a provider/id model such as
-anthropic/claude-sonnet-5 and a thinking level off to max), or names an
-unknown harness is an error naming the file and field.
+anthropic/claude-sonnet-5 and a thinking level off to max; opencode: a
+provider/model with an optional #variant, and any plain label as the effort),
+or names an unknown harness is an error naming the file and field.
 `
 
 // profileSummary is the parenthesized part of a profile's line: model and

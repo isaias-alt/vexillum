@@ -32,6 +32,20 @@ puede limpiar con --dismiss. Un soldier de pi que preguntó en prosa (una línea
 needs-decision:, o una sesión donde la extensión ask_user no se cargó) recibe
 la respuesta como texto plano.
 
+Un soldier de opencode (2.x) bloqueado en una pantalla propia de OpenCode se
+responde con pulsaciones de tecla donde la pantalla es conocida, después de
+volver a leer el pane para no teclear nada en una pantalla que ya cambió. En un
+prompt de permiso, <answer> "allow once" pulsa Enter y "reject" pulsa Esc;
+"always allow" se rechaza, porque puede guardar una regla para siempre. En un
+formulario de pregunta, <answer> es el número de una opción (contando desde 1) o
+su texto exacto, entregado como pulsaciones de flecha abajo y Enter; cualquier
+otro texto va al campo "Type your own answer" del formulario con una pulsación
+por carácter, así que se limita a ASCII imprimible, y un número suelto que no es
+una opción se rechaza. Una pantalla que vexillum no conoce, y cualquier pantalla
+de 1.x, se rechaza sin teclear nada. Un soldier que terminó su turno con una
+línea needs-decision: se responde con texto plano, como con cualquier otro
+harness.
+
 Una vez entregada la respuesta, también se registra en la tarea como una
 enmienda (campo "amendments" en 'vx status --json'), junto con la pregunta que
 respondió, para que la revisión del tribunal de una mission la cuente como

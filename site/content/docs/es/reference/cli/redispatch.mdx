@@ -16,8 +16,10 @@ re-dispatch, no una reanudación: el camp sucio de la tarea (el árbol de trabaj
 y los commits que nunca aterrizó) se descarta, se crea un camp nuevo y la
 mission se relanza desde su prompt original como si se acabara de despachar:
 no se recupera nada del trabajo parcial ni de la sesión de agente del soldier
-muerto. La tarea se relanza en el harness con el que se despachó. Requiere
-HERDR_WORKSPACE_ID (corré esto desde un pane administrado por herdr) y que herdr
-y el CLI de ese harness (claude, o pi) estén en el PATH; si falta alguno lo dice
-y termina antes de crear nada.
+muerto. La tarea se relanza en el harness con el que se despachó, y para opencode
+en la generación (1.x o 2.x) registrada al despachar: si ahora hay otra
+instalada, se rechaza con un mensaje que lo dice, antes de descartar nada.
+Requiere HERDR_WORKSPACE_ID (corré esto desde un pane administrado por herdr) y
+que herdr y el CLI de ese harness (claude, pi u opencode) estén en el PATH; si
+falta alguno lo dice y termina antes de crear nada.
 ```

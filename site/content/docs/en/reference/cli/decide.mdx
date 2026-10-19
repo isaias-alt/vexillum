@@ -30,6 +30,19 @@ answer is refused and the task can be cleared with --dismiss. A pi soldier that
 asked in plain prose (a needs-decision: line, or a session where the ask_user
 extension did not load) is answered as plain text.
 
+An opencode soldier (2.x) that is blocked on a screen of OpenCode's own is
+answered with key presses where the screen is known, after the pane is read
+again so nothing is typed into a screen that has moved on. On a permission
+prompt, <answer> "allow once" presses Enter and "reject" presses Esc; "always
+allow" is refused, because it may save a rule for good. On a question form,
+<answer> is an option's 1-based number or its exact text, delivered as
+arrow-down presses and Enter; any other text goes into the form's "Type your
+own answer" field one key press per character, so it is limited to printable
+ASCII, and a bare number that is not an option is refused. A screen vexillum
+does not know, and any 1.x screen, is refused with nothing typed. A soldier
+that ended its turn with a needs-decision: line is answered as plain text, like
+every other harness.
+
 Once the answer is delivered it is also recorded on the task as an amendment
 (field "amendments" in 'vx status --json'), together with the question it answered,
 so a mission's tribunal review counts it as part of the mission's intent. A

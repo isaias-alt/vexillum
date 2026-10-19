@@ -16,8 +16,11 @@ re-dispatch, not resumption: the task's dirty camp (working tree and any
 commits it never landed) is discarded, a fresh camp is created, and the
 mission is relaunched from its original prompt as if freshly dispatched -
 none of the dead soldier's partial work or agent session is recovered.
-The task is relaunched on the harness it was dispatched with. Requires
+The task is relaunched on the harness it was dispatched with, and for opencode
+on the generation (1.x or 2.x) recorded at dispatch: if a different one is
+installed now, it is refused with a message saying so, before anything is
+discarded. Requires
 HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) and both herdr
-and that harness's CLI (claude, or pi) on PATH; if any is missing it says so
+and that harness's CLI (claude, pi or opencode) on PATH; if any is missing it says so
 and exits before creating anything.
 ```
