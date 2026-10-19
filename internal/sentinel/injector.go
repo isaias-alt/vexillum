@@ -132,12 +132,14 @@ func (i *OpenCodeInjector) sweepProject(root string) int {
 	}
 
 	pane, found, err := i.commanderPane(root)
-	if err != nil {
-		i.problem(root, "cannot find the commander", err)
-	}
 	if !found {
 		// No live OpenCode commander: the wake waits for whoever listens next.
-		delete(i.failing, root)
+		// herdr failing is worth saying, a pane that is gone is not.
+		if err != nil {
+			i.problem(root, "cannot find the commander", err)
+		} else {
+			delete(i.failing, root)
+		}
 		return 0
 	}
 	info, err := i.Herdr.AgentGet(pane)
