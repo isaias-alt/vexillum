@@ -32,6 +32,7 @@ var commandsES = map[string]commandES{
 
 Uso:
   vx init [--yes] [--lang en|es] [--skills | --no-skills]
+         [--commander claude|pi|opencode]...
 
 init le da al agente del proyecto las reglas del commander y las herramientas
 para usar bien vexillum. Antes de escribir nada lista los archivos tuyos que va
@@ -60,6 +61,13 @@ bajo .vexillum/ (config.json, models.json, .gitignore); un models.json
 existente nunca se sobrescribe. Volver a correr init no cambia nada de lo que
 ya está en su lugar.
 
+El commander puede correr en Claude Code, Pi u OpenCode, y un proyecto puede
+tener varios (--commander, repetible, claude por defecto). Se registran en
+.vexillum/config.json, que es lo que doctor lee para saber qué binario necesita
+el proyecto. El import en CLAUDE.md y el hook Stop del sentinel de arriba son de
+Claude Code, así que init los escribe solo cuando claude es uno de los
+commanders.
+
 Sin una terminal (scripts, CI) init no pregunta nada y no hace nada a menos que
 se pase --yes; sin él, imprime lo que cambiaría y sale con un error.
 
@@ -70,6 +78,9 @@ Flags:
   --lang en|es    Idioma del bloque, en lugar de detectarlo.
   --skills        Instala las skills sin preguntar.
   --no-skills     No instala las skills, sin preguntar.
+  --commander H   Un harness en el que corre el commander: claude, pi u
+                  opencode. Repetilo para varios. Sin él, init conserva lo que
+                  registra .vexillum/config.json (claude en un proyecto nuevo).
 `,
 	},
 
@@ -148,6 +159,13 @@ Flags:
 	"doctor": {
 		Summary: "Informar sobre la salud del entorno de vexillum",
 		Usage: `Informar sobre la salud del entorno de vexillum. Solo lectura.
+
+La herramienta en la que corre el commander es la que doctor exige. Un proyecto
+inicializado registra sus harnesses de commander en .vexillum/config.json
+('vx init --commander', claude por defecto); el binario de cada uno es
+obligatorio y los demás solo advierten. Para un commander claude doctor también
+revisa el hook Stop y el import en CLAUDE.md que se describen más abajo, que un
+proyecto sin commander claude no necesita.
 
 Además de las herramientas que maneja vexillum, para un proyecto inicializado
 doctor informa el estado del bloque de vexillum en AGENTS.md o CLAUDE.md

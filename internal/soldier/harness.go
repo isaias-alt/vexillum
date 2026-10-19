@@ -215,6 +215,12 @@ func implementedHarnessNames() []string {
 	return names
 }
 
+// HarnessNames lists the implemented harnesses, sorted, for usage text and
+// error messages.
+func HarnessNames() []string {
+	return implementedHarnessNames()
+}
+
 // ClaudeHarness is the Harness for the `claude` CLI (Claude Code). It wraps the
 // real `claude` CLI, both one-shot (Command, used by the tribunal's
 // reviewer and fixer) and interactive inside a herdr pane

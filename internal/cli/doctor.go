@@ -5,14 +5,23 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/doctorcheck"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
 const doctorUsage = `Report on the health of the vexillum environment. Read-only.
+
+The tool the commander runs in is the one doctor requires. An initialized
+project records its commander harnesses in .vexillum/config.json ('` + cmdname.Name + ` init
+--commander', claude by default); each one's binary is required, and the
+others only warn. For a claude commander doctor also checks the Stop hook and
+the CLAUDE.md import described below, which a project with no claude commander
+does not need.
 
 Besides the tools vexillum drives, doctor reports, for an initialized project,
 the state of the vexillum block in AGENTS.md or CLAUDE.md (absent, current,
@@ -74,8 +83,11 @@ func Doctor(args []string) int {
 }
 
 func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
+	commanders, commanderWarns := doctorcheck.Commanders(projectDir)
+	isCommander := func(harness string) bool { return slices.Contains(commanders, harness) }
+
 	checks := []doctorcheck.Result{
-		doctorcheck.Binary("Claude Code", "claude", true),
+		doctorcheck.Binary("Claude Code", "claude", isCommander(soldier.HarnessClaude)),
 		doctorcheck.Binary("herdr", "herdr", true),
 		doctorcheck.HerdrVersion(),
 		doctorcheck.GitHubCLI(),
@@ -84,8 +96,9 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.ProjectInitialized(projectDir),
 		doctorcheck.GitRepo(projectDir),
 	}
-	checks = append(checks, doctorcheck.PiChecks(projectDir, vexillumHome)...)
-	checks = append(checks, doctorcheck.OpenCodeChecks(projectDir, vexillumHome)...)
+	checks = append(checks, commanderWarns...)
+	checks = append(checks, doctorcheck.PiChecks(projectDir, vexillumHome, isCommander(soldier.HarnessPi))...)
+	checks = append(checks, doctorcheck.OpenCodeChecks(projectDir, vexillumHome, isCommander(soldier.HarnessOpenCode))...)
 	if scaffold.ProjectInitialized(projectDir) {
 		checks = append(checks, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
 	}

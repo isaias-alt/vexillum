@@ -3,6 +3,7 @@ package scaffold
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -50,6 +51,43 @@ func TestWriteConfigAndReadConfig(t *testing.T) {
 	}
 	if cfg.InitializedAt.IsZero() {
 		t.Error("expected InitializedAt to be set")
+	}
+	if !reflect.DeepEqual(cfg.Commander, []string{"claude"}) {
+		t.Errorf("a fresh config records the default commander, got %v", cfg.Commander)
+	}
+}
+
+func TestConfigCommanderHarnesses(t *testing.T) {
+	var none Config
+	if got := none.CommanderHarnesses(); !reflect.DeepEqual(got, []string{"claude"}) {
+		t.Errorf("no commander recorded = %v, want [claude]", got)
+	}
+	if !none.HasCommander("claude") || none.HasCommander("pi") {
+		t.Error("a config without commander is a claude commander only")
+	}
+
+	two := Config{Commander: []string{"pi", "opencode"}}
+	if got := two.CommanderHarnesses(); !reflect.DeepEqual(got, []string{"pi", "opencode"}) {
+		t.Errorf("CommanderHarnesses = %v", got)
+	}
+	if two.HasCommander("claude") || !two.HasCommander("opencode") {
+		t.Error("HasCommander does not follow the recorded list")
+	}
+}
+
+// A config.json written before the commander field existed still reads, and
+// means a claude commander.
+func TestReadConfig_WithoutCommanderField(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"version":1,"initialized_at":"2026-01-01T00:00:00Z"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Commander != nil || !reflect.DeepEqual(cfg.CommanderHarnesses(), []string{"claude"}) {
+		t.Errorf("Commander = %v, harnesses = %v", cfg.Commander, cfg.CommanderHarnesses())
 	}
 }
 

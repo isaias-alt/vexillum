@@ -1,6 +1,7 @@
 package scaffold
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -293,5 +294,47 @@ func TestSentinelHookNeeded(t *testing.T) {
 	}
 	if need, err := SentinelHookNeeded(dir); err != nil || need {
 		t.Errorf("after ensure: need=%v err=%v", need, err)
+	}
+}
+
+// The settings.json a fresh project gets is pinned byte for byte: the Stop
+// hook is Claude Code's wake path and must not change shape with the commander
+// harness work.
+func TestEnsureSentinelHook_GoldenSettingsJSON(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := EnsureSentinelHook(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The file is written without HTML escaping, so the command is quoted
+	// the same way.
+	var quoted bytes.Buffer
+	enc := json.NewEncoder(&quoted)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(SentinelHookCommand); err != nil {
+		t.Fatal(err)
+	}
+	cmd := strings.TrimSpace(quoted.String())
+	want := "{\n" +
+		"  \"hooks\": {\n" +
+		"    \"Stop\": [\n" +
+		"      {\n" +
+		"        \"hooks\": [\n" +
+		"          {\n" +
+		"            \"asyncRewake\": true,\n" +
+		"            \"command\": " + cmd + ",\n" +
+		"            \"timeout\": 3600,\n" +
+		"            \"type\": \"command\"\n" +
+		"          }\n" +
+		"        ]\n" +
+		"      }\n" +
+		"    ]\n" +
+		"  }\n" +
+		"}\n"
+	if string(got) != want {
+		t.Errorf("settings.json changed.\n got:\n%s\nwant:\n%s", got, want)
 	}
 }

@@ -3,12 +3,14 @@ package doctorcheck
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/install"
 	"github.com/isaias-alt/vexillum/internal/models"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/slot"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/yolo"
 )
 
@@ -16,20 +18,31 @@ import (
 // vexillum block (in AGENTS.md or CLAUDE.md), the CLAUDE.md import when the
 // block is in AGENTS.md, the first-party skills, a leftover rules file from
 // an older version, models.json, yolo mode, and the sentinel Stop hook with
-// the sentinel behind it. Every check is read-only, and none is Required: a
+// the sentinel behind it. The CLAUDE.md import and the Stop hook are
+// Claude Code's, so they are checked only when claude is one of the
+// project's commander harnesses (see Commanders). Every check is read-only, and none is Required: a
 // stale or missing piece is something to fix with init or upgrade, not a
 // reason to call the environment unusable.
 func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
+	commanders, _ := Commanders(projectDir)
+	claude := slices.Contains(commanders, soldier.HarnessClaude)
+
 	var out []Result
 	slotRes, slotState, inClaude := Slot(projectDir)
 	out = append(out, slotRes)
-	if slotState != slot.StateAbsent && !inClaude {
+	if claude && slotState != slot.StateAbsent && !inClaude {
 		out = append(out, ClaudeImport(projectDir))
 	}
 	out = append(out, Skills(projectDir)...)
 	out = append(out, Models(projectDir, vexillumHome))
 	out = append(out, Yolo(projectDir))
-	out = append(out, StopHooks(projectDir, vexillumHome, homeDir)...)
+	if claude {
+		out = append(out, StopHooks(projectDir, vexillumHome, homeDir)...)
+	} else {
+		// The Stop hook is Claude Code's wake path; the sentinel behind
+		// it serves every commander.
+		out = append(out, SentinelRunning(vexillumHome))
+	}
 	return out
 }
 

@@ -18,14 +18,17 @@ import (
 // an older install shadows a newer one in PATH, and whether herdr's
 // integration for it is installed and current. Nothing is reported, so a setup
 // without OpenCode sees no new line, unless a profile in models.json names the
-// opencode harness or an opencode binary is on PATH anyway. None is Required:
-// a missing piece fails an OpenCode dispatch with its own message, it does not
-// make the environment unusable for the other harnesses.
-func OpenCodeChecks(projectDir, vexillumHome string) []Result {
-	return openCodeChecks(projectDir, vexillumHome, os.Getenv("PATH"))
+// opencode harness or an opencode binary is on PATH anyway. The binary is
+// Required only when commander is true, that is when OpenCode is one of the
+// project's commander harnesses (see Commanders); then it is always reported.
+// The rest is never Required: a missing piece fails an OpenCode dispatch with
+// its own message, it does not make the environment unusable for the other
+// harnesses.
+func OpenCodeChecks(projectDir, vexillumHome string, commander bool) []Result {
+	return openCodeChecks(projectDir, vexillumHome, os.Getenv("PATH"), commander)
 }
 
-func openCodeChecks(projectDir, vexillumHome, pathEnv string) []Result {
+func openCodeChecks(projectDir, vexillumHome, pathEnv string, commander bool) []Result {
 	usesOpenCode := false
 	if t, err := models.Load(projectDir, vexillumHome); err == nil {
 		for _, p := range t.Profiles {
@@ -35,14 +38,17 @@ func openCodeChecks(projectDir, vexillumHome, pathEnv string) []Result {
 		}
 	}
 	installs := openCodeInstalls(pathEnv)
-	if !usesOpenCode && len(installs) == 0 {
+	if !usesOpenCode && len(installs) == 0 && !commander {
 		return nil
+	}
+	if len(installs) == 0 && commander {
+		return []Result{{Name: "OpenCode", Required: true, Detail: "opencode not found in PATH - " + installHints["opencode"]}}
 	}
 	if len(installs) == 0 {
 		return []Result{{Name: "OpenCode", Warn: true, Detail: "a model profile uses harness opencode but opencode is not on PATH - " + installHints["opencode"]}}
 	}
 
-	out := []Result{{Name: "OpenCode", OK: true}, openCodeVersion(installs[0])}
+	out := []Result{{Name: "OpenCode", OK: true, Required: commander}, openCodeVersion(installs[0])}
 	if shadow, ok := openCodeShadow(installs); ok {
 		out = append(out, shadow)
 	}

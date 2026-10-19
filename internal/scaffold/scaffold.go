@@ -27,6 +27,35 @@ type Config struct {
 	// installed files against it to tell "untouched, safe to refresh"
 	// from "edited by the user".
 	Skills map[string]string `json:"skills,omitempty"`
+	// Commander lists the harnesses the project's commander runs in, by
+	// the names soldier.HarnessFor knows ("claude", "pi", "opencode"); see
+	// CommanderHarnesses. 'vx init --commander' sets it, 'vx doctor' and
+	// 'vx upgrade' read it to know what to check and maintain.
+	Commander []string `json:"commander,omitempty"`
+}
+
+// DefaultCommander is the commander harness of a project whose config.json
+// names none: a config written before the field existed, or one without it.
+const DefaultCommander = "claude"
+
+// CommanderHarnesses returns the harnesses the project's commander runs in,
+// DefaultCommander when the config names none.
+func (c Config) CommanderHarnesses() []string {
+	if len(c.Commander) == 0 {
+		return []string{DefaultCommander}
+	}
+	return c.Commander
+}
+
+// HasCommander reports whether harness is one of the project's commander
+// harnesses.
+func (c Config) HasCommander(harness string) bool {
+	for _, h := range c.CommanderHarnesses() {
+		if h == harness {
+			return true
+		}
+	}
+	return false
 }
 
 // ReadConfig reads config.json directly inside configDir, the project's
@@ -70,13 +99,13 @@ func ProjectInitialized(projectDir string) bool {
 }
 
 // WriteConfig creates a fresh config.json directly inside configDir, the
-// project's .vexillum/.
+// project's .vexillum/, with the default commander harness.
 func WriteConfig(configDir string) error {
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return err
 	}
 
-	return SaveConfig(configDir, Config{Version: 1, InitializedAt: time.Now().UTC()})
+	return SaveConfig(configDir, Config{Version: 1, InitializedAt: time.Now().UTC(), Commander: []string{DefaultCommander}})
 }
 
 // WriteFileIfMissing writes content to dir/name unless it already exists.

@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/install"
 	"github.com/isaias-alt/vexillum/internal/selfupdate"
 	"github.com/isaias-alt/vexillum/internal/slot"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
 // setupKind says which command is running the shared setup engine.
@@ -39,6 +41,10 @@ type setupOptions struct {
 	Lang slot.Lang
 	// Skills is nil to ask, or the --skills / --no-skills decision.
 	Skills *bool
+	// Commander (init only) is nil to keep what config.json records, or the
+	// commander harnesses given with --commander, in the order given and
+	// without repeats.
+	Commander []string
 
 	// The next three are upgrade only: it updates the binary before the
 	// scaffold.
@@ -88,6 +94,21 @@ func parseSetupArgs(kind setupKind, args []string) (opts setupOptions, help bool
 				return opts, false, fmt.Errorf("--skills and --no-skills contradict each other")
 			}
 			opts.Skills = &want
+		case kind == setupInit && (a == "--commander" || strings.HasPrefix(a, "--commander=")):
+			val := strings.TrimPrefix(a, "--commander=")
+			if a == "--commander" {
+				if i+1 >= len(args) {
+					return opts, false, fmt.Errorf("--commander needs a value (%s)", strings.Join(soldier.HarnessNames(), ", "))
+				}
+				i++
+				val = args[i]
+			}
+			if err := validateCommander(val); err != nil {
+				return opts, false, err
+			}
+			if !slices.Contains(opts.Commander, val) {
+				opts.Commander = append(opts.Commander, val)
+			}
 		case a == "--lang" || strings.HasPrefix(a, "--lang="):
 			val := strings.TrimPrefix(a, "--lang=")
 			if a == "--lang" {
@@ -110,6 +131,18 @@ func parseSetupArgs(kind setupKind, args []string) (opts setupOptions, help bool
 		return opts, false, fmt.Errorf("--check and --scaffold-only contradict each other")
 	}
 	return opts, false, nil
+}
+
+// validateCommander checks name against the harnesses vexillum knows. The
+// commander and the soldiers share one vocabulary (see soldier.HarnessFor).
+func validateCommander(name string) error {
+	if name == "" {
+		return fmt.Errorf("--commander needs a value (%s)", strings.Join(soldier.HarnessNames(), ", "))
+	}
+	if _, err := soldier.HarnessFor(name); err != nil {
+		return fmt.Errorf("--commander: %w", err)
+	}
+	return nil
 }
 
 // setupEnv is everything the setup engine needs from the outside: flags,

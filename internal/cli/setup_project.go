@@ -6,12 +6,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/install"
 	"github.com/isaias-alt/vexillum/internal/models"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/slot"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
 type slotPlan int
@@ -52,6 +55,9 @@ type projectPlan struct {
 	skillsDir string
 	cfg       scaffold.Config
 	cfgExists bool
+	// commanders are the harnesses the commander runs in: what --commander
+	// asked for, else what config.json records, else the default.
+	commanders []string
 	// slotFile is the file that holds, or will hold, the vexillum block:
 	// AGENTS.md or CLAUDE.md.
 	slotFile install.SlotFile
@@ -68,6 +74,18 @@ type projectPlan struct {
 	hookErr    error
 	needIgnore bool
 	needModels bool
+}
+
+// hasClaudeCommander reports whether Claude Code is one of the commander
+// harnesses, which is what the CLAUDE.md import and the Stop hook are for.
+func (p *projectPlan) hasClaudeCommander() bool {
+	return slices.Contains(p.commanders, soldier.HarnessClaude)
+}
+
+// commanderChanged reports whether --commander asks for something other than
+// what config.json records.
+func (p *projectPlan) commanderChanged() bool {
+	return p.opts.Commander != nil && !slices.Equal(p.opts.Commander, p.cfg.Commander)
 }
 
 func (p *projectPlan) slotPlan() slotPlan {
@@ -116,6 +134,11 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 		return nil, fmt.Errorf("cannot read .vexillum/config.json: %w", err)
 	}
 
+	p.commanders = p.cfg.CommanderHarnesses()
+	if opts.Commander != nil {
+		p.commanders = opts.Commander
+	}
+
 	var file install.SlotFile
 	if file, p.chooseSlot, err = install.LocateSlotFile(projectDir); err != nil {
 		return nil, err
@@ -128,7 +151,9 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 		return nil, err
 	}
 
-	p.hookNeeded, p.hookErr = scaffold.SentinelHookNeeded(projectDir)
+	if p.hasClaudeCommander() {
+		p.hookNeeded, p.hookErr = scaffold.SentinelHookNeeded(projectDir)
+	}
 	p.needIgnore = !exists(filepath.Join(p.configDir, ".gitignore"))
 	p.needModels = !exists(filepath.Join(p.configDir, models.FileName))
 
@@ -144,6 +169,12 @@ func (p *projectPlan) useSlotFile(file install.SlotFile) error {
 	p.lang, p.langSource = install.ResolveLang(file.Content, p.opts.Lang)
 	if p.slotIns, p.tmpl, err = install.InspectSlot(file.Content, p.lang); err != nil {
 		return err
+	}
+	if !p.hasClaudeCommander() {
+		// Only Claude Code needs CLAUDE.md to import AGENTS.md; Pi and
+		// OpenCode read AGENTS.md themselves.
+		p.claude = slot.ClaudeImport{}
+		return nil
 	}
 	if file.Name == install.ClaudeFile {
 		p.claude = slot.ClaudeImport{Path: file.Path, Exists: file.Exists, Imports: true}
@@ -284,6 +315,8 @@ func (p *projectPlan) ownFileLines() []string {
 	var own []string
 	if !p.cfgExists {
 		own = append(own, ".vexillum/config.json")
+	} else if p.commanderChanged() {
+		own = append(own, ".vexillum/config.json (commander: "+strings.Join(p.commanders, ", ")+")")
 	}
 	if p.needIgnore {
 		own = append(own, ".vexillum/.gitignore")
@@ -305,7 +338,7 @@ func (p *projectPlan) hasWork() bool {
 	if p.slotPlan() == slotWrite || p.slotPlan() == slotRepair {
 		return true
 	}
-	if p.claude.Action != slot.ClaudeOK || p.hookNeeded || p.needIgnore || p.needModels || !p.cfgExists {
+	if p.claude.Action != slot.ClaudeOK || p.hookNeeded || p.needIgnore || p.needModels || !p.cfgExists || p.commanderChanged() {
 		return true
 	}
 	for _, s := range p.skills {
@@ -435,6 +468,10 @@ func (p *projectPlan) apply(e *setupEnv, vexillumHome string) int {
 		e.say("Created .vexillum/config.json")
 	}
 	cfgDirty := false
+	if p.commanderChanged() {
+		p.cfg.Commander = p.opts.Commander
+		cfgDirty = true
+	}
 
 	// forum artifacts live in .vexillum/forum/ and are scratch; ignore them
 	// without touching the user's own root .gitignore.

@@ -20,10 +20,12 @@ const PiSupportedVersionPrefix = "1."
 // "harness": "pi": whether the binary is on PATH, its version, and whether
 // herdr's integration for it is installed. Nothing is reported, so a
 // Claude-only setup sees no new line, unless a profile in models.json names
-// the pi harness or a pi binary is on PATH anyway. None is Required: a
-// missing piece fails a Pi dispatch with its own message, it does not make
-// the environment unusable for Claude.
-func PiChecks(projectDir, vexillumHome string) []Result {
+// the pi harness or a pi binary is on PATH anyway. The binary is Required only
+// when commander is true, that is when Pi is one of the project's commander
+// harnesses (see Commanders); then it is always reported. The rest is never
+// Required: a missing piece fails a Pi dispatch with its own message, it does
+// not make the environment unusable for Claude.
+func PiChecks(projectDir, vexillumHome string, commander bool) []Result {
 	usesPi := false
 	if t, err := models.Load(projectDir, vexillumHome); err == nil {
 		for _, p := range t.Profiles {
@@ -34,14 +36,17 @@ func PiChecks(projectDir, vexillumHome string) []Result {
 	}
 	_, lookErr := exec.LookPath("pi")
 	present := lookErr == nil
-	if !usesPi && !present {
+	if !usesPi && !present && !commander {
 		return nil
 	}
 
+	if !present && commander {
+		return []Result{{Name: "Pi", Required: true, Detail: "pi not found in PATH - " + installHints["pi"]}}
+	}
 	if !present {
 		return []Result{{Name: "Pi", Warn: true, Detail: "a model profile uses harness pi but pi is not on PATH - " + installHints["pi"]}}
 	}
-	out := []Result{{Name: "Pi", OK: true}, piVersion()}
+	out := []Result{{Name: "Pi", OK: true, Required: commander}, piVersion()}
 	if integration, ok := piIntegration(); ok {
 		out = append(out, integration)
 	}

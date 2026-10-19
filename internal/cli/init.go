@@ -13,6 +13,7 @@ const initUsage = `Prepare the current project to be orchestrated by vexillum.
 
 Usage:
   ` + cmdname.Name + ` init [--yes] [--lang en|es] [--skills | --no-skills]
+         [--commander claude|pi|opencode]...
 
 init gives the project's agent the commander rules and the tools to use
 vexillum well. Before it writes anything it lists the files of yours it will
@@ -38,6 +39,12 @@ them to .claude/skills/. It also writes vexillum's own files under .vexillum/
 (config.json, models.json, .gitignore); an existing models.json is never
 overwritten. Running init again changes nothing that is already in place.
 
+The commander can run in Claude Code, Pi or OpenCode, and one project can have
+several (--commander, repeatable, claude by default). They are recorded in
+.vexillum/config.json, which is what doctor reads to know which binary the
+project needs. The CLAUDE.md import and the sentinel Stop hook above are
+Claude Code's, so init writes them only when claude is one of the commanders.
+
 Without a terminal (scripts, CI) init asks nothing and does nothing unless
 --yes is given; without it, it prints what it would change and exits with an
 error.
@@ -49,6 +56,9 @@ Flags:
   --lang en|es    Language of the block, instead of detecting it.
   --skills        Install the skills without asking.
   --no-skills     Do not install the skills, without asking.
+  --commander H   A harness the commander runs in: claude, pi or opencode.
+                  Repeat it for several. Without it, init keeps what
+                  .vexillum/config.json records (claude for a new project).
 `
 
 const sentinelHookCommand = scaffold.SentinelHookCommand
