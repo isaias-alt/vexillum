@@ -815,8 +815,8 @@ inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cu
 confirmados se descarta. Ver "vx forum" para el listener.
 
 Un commander OpenCode 2.x no tiene hook Stop, así que el propio sentinel entrega
-sus wakes: cuando un proyecto tiene un commander opencode registrado y vivo (ver
-"vx doctor") y ningún await vivo, el sentinel postea el mismo texto en la sesión
+sus wakes: cuando un proyecto tiene un commander opencode registrado y vivo
+(vx doctor lo informa) y ningún await vivo, el sentinel postea el mismo texto en la sesión
 del commander a través de la API HTTP de OpenCode (opencode api POST
 /api/session/<id>/prompt, encolado detrás del turno que corre, sin tocar el
 editor), una sola vez, con las mismas reglas para descartar lo que ya no es

@@ -56,7 +56,7 @@ once-only delivery; a forum wake whose messages were already confirmed is
 dropped. See "vx forum" for the listener.
 
 An OpenCode 2.x commander has no Stop hook, so the sentinel itself delivers its
-wakes: when a project has a live registered opencode commander (see "` + cmdname.Name + ` doctor")
+wakes: when a project has a live registered opencode commander (` + cmdname.Name + ` doctor reports it)
 and no live await, the sentinel posts the same text into the commander's session
 through OpenCode's HTTP API (opencode api POST /api/session/<id>/prompt, queued
 behind the turn that is running, without touching the editor), once, under the
