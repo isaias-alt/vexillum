@@ -181,7 +181,7 @@ export default async function Home({
                 {t.oss.issue}
               </ExternalLink>
               <ExternalLink
-                href={`${GITHUB_URL}/blob/main/CONTRIBUTING.md`}
+                href={`${GITHUB_URL}/blob/canary/CONTRIBUTING.md`}
                 className="btn btn-secondary"
               >
                 {t.oss.contributing}
