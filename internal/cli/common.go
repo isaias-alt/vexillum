@@ -222,7 +222,13 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 	}
 
 	result, runErr := soldier.RunInHerdr(vexillumHome, workspaceID, task, c, client)
-	fmt.Fprintf(stdout, "status=%s\n", result.Status)
+	shown := result.Status
+	if runErr != nil && result.HerdrTabID == "" {
+		// RunInHerdr failed before it created anything; the failed state is
+		// recorded below, so say so here instead of the pending it returned.
+		shown = state.StatusFailed
+	}
+	fmt.Fprintf(stdout, "status=%s\n", shown)
 	if result.HerdrPaneID != "" {
 		fmt.Fprintf(stdout, "herdr: workspace=%s tab=%s pane=%s agent=%s\n", result.HerdrWorkspaceID, result.HerdrTabID, result.HerdrPaneID, result.HerdrAgentName)
 	}

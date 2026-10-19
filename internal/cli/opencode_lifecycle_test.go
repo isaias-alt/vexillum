@@ -227,6 +227,9 @@ func TestOpenCodeLifecycle_ProjectConfigCollisionFailsTheDispatch(t *testing.T) 
 	if code == 0 {
 		t.Fatalf("the dispatch should fail: %s", out.String())
 	}
+	if !strings.Contains(out.String(), "status=failed") {
+		t.Errorf("a dispatch that failed before creating a pane should say status=failed:\n%s", out.String())
+	}
 	for _, want := range []string{"opencode.json", "is tracked by the project", "never overwrites or merges"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
