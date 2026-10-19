@@ -1,6 +1,7 @@
 package soldier_test
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -320,4 +321,28 @@ func TestParseOpenCodeRunOutput(t *testing.T) {
 			t.Errorf("got %q, %v", got, err)
 		}
 	})
+}
+
+// The two files are the stdout of `opencode run --auto --format json` on a
+// real OpenCode 2.0.32, run against free Zen models with trivial prompts:
+// a successful run, which ends after its text event with no step_finish, and a
+// run asked for a variant the model does not have, which exits 1 with an error
+// event.
+func TestParseOpenCodeRunOutput_RealOutput(t *testing.T) {
+	ok, err := os.ReadFile("testdata/opencode-2.0.32-run-ok.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := soldier.ParseOpenCodeRunOutput(string(ok))
+	if err != nil || got != "ping" {
+		t.Errorf("success: got %q, %v; want ping", got, err)
+	}
+
+	bad, err := os.ReadFile("testdata/opencode-2.0.32-run-error.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := soldier.ParseOpenCodeRunOutput(string(bad)); err == nil || !strings.Contains(err.Error(), "Variant unavailable for opencode/longcat-2.5-preview-free: high") {
+		t.Errorf("error run: got %v", err)
+	}
 }
