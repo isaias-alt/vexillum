@@ -40,11 +40,25 @@ an error listing the valid ones; "default" selects the table's default
 entry. Which profile fits a task is your call. See the vexillum skill.
 
 A profile may also name the harness (the agent CLI) its soldier runs on, in
-models.json: "claude" (the default when it names none) or "pi". The harness is
-recorded on the task and kept by '` + cmdname.Name + ` redispatch'. "opencode" is reserved:
-choosing a profile that names it is an error until it is implemented. A pi
+models.json: "claude" (the default when it names none), "pi" or "opencode". The
+harness is recorded on the task and kept by '` + cmdname.Name + ` redispatch'. A pi
 soldier is answered as free text when it blocks (it has no question selector
 to press a key in), and needs the pi CLI on PATH.
+
+On a profile that selects the opencode harness, --model is provider/model with
+an optional #variant, such as opencode/glm-5.3-flash-free or
+anthropic/claude-sonnet-5#high ('opencode models' lists them), and --effort is
+only a label that is recorded on the task: it is never turned into an OpenCode
+variant, because variant names differ per model. Both OpenCode 1.x (from
+1.18.29) and 2.x are driven; the version found on PATH is detected at dispatch
+and recorded, and re-dispatch, prompt and decide keep using it. On 2.x the
+soldier's model goes through .opencode/agents/vx-soldier.md and opencode.json,
+which are written into the camp and excluded from git; if the project already
+has an opencode.json, opencode.jsonc or .opencode/agents/vx-soldier.md,
+dispatch fails naming it, because vexillum never overwrites or merges a
+project's OpenCode configuration. An opencode soldier is answered as free
+text when it asks a question, and needs the opencode CLI on PATH. See
+'` + cmdname.Name + ` doctor'.
 
 Runs a real, interactive session of the harness (Claude Code by default, with
 --dangerously-skip-permissions; pi has no permission prompts to skip and is
@@ -58,7 +72,7 @@ project's real history until '` + cmdname.Name + ` land' is explicitly approved;
 never dispatch against a prompt, repository, or machine where reading
 sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID (run
 this from inside a herdr-managed pane) and both herdr and the harness's CLI
-(claude, or pi) on PATH; if any is missing it says so and exits before
+(claude, pi or opencode) on PATH; if any is missing it says so and exits before
 creating anything ('` + cmdname.Name + ` doctor' checks your setup).
 
 Returns quickly: it only waits out a short quick-settle probe, not the
@@ -203,6 +217,16 @@ func runDispatch(projectDir, vexillumHome, workspaceID, prompt string, kind stat
 	task.Model = model
 	task.Effort = effort
 	task.Harness = harness
+	// Detected now and recorded, so everything later that drives this soldier
+	// (re-dispatch, prompt, decide, the tribunal) uses the same generation of
+	// the CLI, whatever is installed by then.
+	major, version, err := soldier.DetectHarnessVersion(harness)
+	if err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	task.HarnessMajor = major
+	task.HarnessVersion = version
 
 	return acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID, task, client, stdout, stderr)
 }

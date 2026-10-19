@@ -27,9 +27,12 @@ re-dispatch, not resumption: the task's dirty camp (working tree and any
 commits it never landed) is discarded, a fresh camp is created, and the
 mission is relaunched from its original prompt as if freshly dispatched -
 none of the dead soldier's partial work or agent session is recovered.
-The task is relaunched on the harness it was dispatched with. Requires
+The task is relaunched on the harness it was dispatched with, and for opencode
+on the generation (1.x or 2.x) recorded at dispatch: if a different one is
+installed now, it is refused with a message saying so, before anything is
+discarded. Requires
 HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) and both herdr
-and that harness's CLI (claude, or pi) on PATH; if any is missing it says so
+and that harness's CLI (claude, pi or opencode) on PATH; if any is missing it says so
 and exits before creating anything.
 `
 
@@ -106,6 +109,20 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 		return 1
 	}
 
+	// The generation of the harness CLI the task was dispatched on is the one
+	// it is relaunched on. Checked before the old camp is discarded: a task
+	// whose recorded generation is no longer installed is left as it was.
+	major, version, err := soldier.DetectHarnessVersion(task.Harness)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": task %s: %v\n", taskID, err)
+		return 1
+	}
+	if task.HarnessMajor != 0 && major != task.HarnessMajor {
+		fmt.Fprintf(stderr, cmdname.Name+": task %s was dispatched on %s %d.x but %s %s is installed now: install the %d.x it was dispatched on to redispatch it, or strike it and dispatch a new task\n",
+			taskID, task.Harness, task.HarnessMajor, task.Harness, version, task.HarnessMajor)
+		return 1
+	}
+
 	if task.Status != state.StatusInterrupted {
 		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not interrupted - only an interrupted task can be re-dispatched (a done mission is landed with '"+cmdname.Name+" land' and struck; a running one is left alone)\n", taskID, task.Status)
 		return 1
@@ -151,7 +168,7 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 	// The reset is applied to the record on disk under the tasks lock, so a
 	// write made since this command loaded it (the sentinel's transcript
 	// refresh, say) is built on, not overwritten with the loaded copy.
-	task, err = updateRedispatchReset(projectRoot, taskID)
+	task, err = updateRedispatchReset(projectRoot, taskID, major, version)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": persisting reset task: %v\n", err)
 		return 1
@@ -165,10 +182,16 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 // has not acquired a camp yet, and returns it as saved. It sets only the
 // fields a re-dispatch owns: the counter, the status, the old camp and herdr
 // assignment, the dead soldier's transcript, exit code and question.
-func updateRedispatchReset(projectRoot, taskID string) (state.Task, error) {
+func updateRedispatchReset(projectRoot, taskID string, major int, version string) (state.Task, error) {
 	var reset state.Task
 	_, err := state.Update(projectRoot, taskID, func(task *state.Task) (bool, error) {
 		task.Redispatches++
+		if task.HarnessMajor == 0 {
+			// A task that recorded no generation (edited by hand) takes the
+			// one installed now; a recorded one is never changed here.
+			task.HarnessMajor = major
+			task.HarnessVersion = version
+		}
 		task.Status = state.StatusPending
 		task.CampSlot = 0
 		task.CampPath = ""

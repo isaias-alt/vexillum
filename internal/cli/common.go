@@ -92,6 +92,7 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 	if workspaceID == "" {
 		problems = append(problems, "HERDR_WORKSPACE_ID is not set - "+command+" must run from inside a herdr-managed pane")
 	}
+	harnessFound := true
 	for _, tool := range []string{"herdr", harnessBinary} {
 		if _, err := lookPath(tool); err != nil {
 			problem := tool + " is not on PATH"
@@ -99,6 +100,16 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 				problem += " (" + hint + ")"
 			}
 			problems = append(problems, problem)
+			if tool == harnessBinary {
+				harnessFound = false
+			}
+		}
+	}
+	// A harness whose CLI has generations that launch differently needs one
+	// vexillum can drive. Asked only once the binary is known to be there.
+	if harnessFound {
+		if _, _, err := soldier.DetectHarnessVersion(harness); err != nil {
+			problems = append(problems, err.Error())
 		}
 	}
 	if len(problems) == 0 {
