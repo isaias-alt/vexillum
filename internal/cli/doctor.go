@@ -27,6 +27,12 @@ also reports on Pi: the binary, its version, and whether herdr's integration for
 pi is installed ('herdr integration install pi'). They only ever warn; a setup
 without Pi sees none of these lines.
 
+The same goes for OpenCode, when a profile selects the opencode harness or an
+opencode binary is on PATH: the binary, its version (1.x from 1.18.29, or 2.x;
+any other is a warning), a warning when an older 1.x install shadows a 2.x one
+in PATH (it names both), and whether herdr's integration for opencode is
+installed and current ('herdr integration install opencode').
+
 It also checks the sentinel Stop hook, the one that wakes the commander when a
 soldier finishes: whether it is registered in .claude/settings.json, whether
 its command finds a ` + cmdname.Name + ` binary when run from a bare environment (only HOME and
@@ -79,6 +85,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.GitRepo(projectDir),
 	}
 	checks = append(checks, doctorcheck.PiChecks(projectDir, vexillumHome)...)
+	checks = append(checks, doctorcheck.OpenCodeChecks(projectDir, vexillumHome)...)
 	if scaffold.ProjectInitialized(projectDir) {
 		checks = append(checks, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
 	}

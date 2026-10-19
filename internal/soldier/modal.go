@@ -176,8 +176,14 @@ func ResolveBlockedDecision(client herdr.Client, agentName, output string) *stat
 // question as prose, so nothing on its pane can be mistaken for Claude Code's
 // AskUserQuestion rendering. Its answer is then free text, see AnswerBlocked
 // (ResolveBlockedDecisionForTask first looks for a question its ask_user tool
-// recorded).
+// recorded). OpenCode reads its own two blocking screens, then falls back to
+// the same.
 func ResolveBlockedDecisionFor(harness string, client herdr.Client, agentName, output string) *state.Decision {
+	if harness == HarnessOpenCode {
+		// Its permission prompt and question form are OpenCode's own, see
+		// opencode_blocked.go; anything else is read as prose.
+		return resolveOpenCodeBlocked(client, agentName, output)
+	}
 	if h, err := HarnessFor(harness); err == nil && !h.QuestionModal() {
 		return ExtractDecision(output)
 	}

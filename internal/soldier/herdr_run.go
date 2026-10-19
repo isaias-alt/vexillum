@@ -326,7 +326,10 @@ func blockedDecision(projectRoot string, client herdr.Client, task state.Task, a
 // (state.DecisionKindAsk) is answered through the file that tool waits on
 // (answerAsk). Every other Decision is answered exactly as before this
 // existed: plain text through the same client.AgentPrompt path RunInHerdr
-// uses for a task's original prompt.
+// uses for a task's original prompt. An OpenCode task is the exception that
+// checks the pane first (answerOpenCodeBlocked): if it is blocked on one of
+// OpenCode's own screens the answer is keys or a refusal, and only a pane
+// that is not blocked gets the plain text.
 //
 // Mirrors RunInHerdr's own quick-settle probe either way: a fast
 // idle/done/blocked settlement is reflected immediately, otherwise the task
@@ -343,6 +346,13 @@ func blockedDecision(projectRoot string, client herdr.Client, task state.Task, a
 func AnswerBlocked(projectRoot string, task state.Task, answer string, client herdr.Client) (state.Task, error) {
 	if task.Decision != nil && task.Decision.Kind == state.DecisionKindAsk {
 		return answerAsk(projectRoot, task, answer, client)
+	}
+	if task.Harness == HarnessOpenCode {
+		// The pane is looked at first: an OpenCode pane blocked on a screen is
+		// answered with keys or not at all, never with typed text.
+		if result, handled, err := answerOpenCodeBlocked(projectRoot, task, answer, client); handled {
+			return result, err
+		}
 	}
 	if task.Decision != nil && task.Decision.Kind == state.DecisionKindModal {
 		if n, label, ok := resolveModalAnswer(task.Decision.Options, answer); ok && label != optionTypeSomething {

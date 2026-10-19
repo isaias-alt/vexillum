@@ -33,10 +33,11 @@ type Result struct {
 // installHints says how to get the tools doctor checks for, shown on their
 // [missing] line.
 var installHints = map[string]string{
-	"claude": "install it from https://claude.com/claude-code",
-	"herdr":  "install it with 'brew install herdr' or from https://herdr.dev",
-	"pi":     "install it with 'curl -fsSL https://pi.dev/install.sh | sh' or 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent'",
-	"gh":     "install it with 'brew install gh' or from https://cli.github.com",
+	"claude":   "install it from https://claude.com/claude-code",
+	"herdr":    "install it with 'brew install herdr' or from https://herdr.dev",
+	"opencode": "install it with 'brew install opencode' or from https://opencode.ai",
+	"pi":       "install it with 'curl -fsSL https://pi.dev/install.sh | sh' or 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent'",
+	"gh":       "install it with 'brew install gh' or from https://cli.github.com",
 }
 
 // InstallHint says how to install binaryName, or "" for a tool doctor has no
