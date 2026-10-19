@@ -35,6 +35,15 @@ hay un binario opencode en el PATH: el binario, su versión (1.x desde 1.18.29, 
 herdr para opencode está instalada y al día ('herdr integration install
 opencode').
 
+Para un commander pi doctor revisa, en lugar del hook Stop, que
+.pi/extensions/vexillum-wake.ts esté y sea igual a la copia que lleva este
+binario (current, stale o editada a mano), que .pi/settings.json liste
+../.claude/skills para que Pi vea las skills, si a Pi se le dijo que confíe en
+la carpeta (lee ~/.pi/agent/trust.json y nunca lo escribe; sin respuesta
+guardada advierte que Pi va a preguntar una vez), y que el await de la
+extensión encuentre un binario vx desde el entorno en el que corre doctor. Solo
+advierten.
+
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando
 encuentra un binario vx al correr desde un entorno vacío (solo HOME y

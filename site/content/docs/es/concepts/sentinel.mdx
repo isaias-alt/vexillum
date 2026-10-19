@@ -57,6 +57,10 @@ Fuera de un pane administrado por herdr (sin `HERDR_WORKSPACE_ID`), `await` y `d
 
 Cada `await` se registra en `~/.vexillum/sentinel-awaiters/` y nunca sobrevive al hook que lo lanzó. Sale solo cuando su proceso padre desaparece, y un `await` más nuevo de la misma sesión y proyecto reemplaza al del turno anterior, así que una sesión deja un proceso esperando, no uno por turno. Arrancar `vx sentinel` o cualquier `await` también detiene a los huérfanos que dejó una sesión muerta. A un proceso solo se le manda una señal después de verificar, por su archivo de pid y su línea de comando, que es un `vx sentinel await`, nunca por nombre.
 
+## Un commander en Pi
+
+Pi no tiene un hook Stop. Un proyecto cuyo commander corre en [Pi](/es/docs/guides/pi-commander) recibe en su lugar `.pi/extensions/vexillum-wake.ts`, que arranca el mismo `vx sentinel await` como hijo de Pi y, cuando sale con código 2, le entrega su mensaje al modelo con `pi.sendUserMessage` (como follow-up cuando Pi está a mitad de turno). Todo lo anterior vale sin cambios, porque es el mismo `await`: una entrega por wake, un dueño que lo baja junto con Pi, el sentinel arrancado y refrescado por él. La extensión además guarda un wake que Pi no pudo recibir en ese momento y vuelve a intentar, y no hace nada en un camp.
+
 ## El hook no depende de tu PATH
 
 Claude Code corre el hook en un shell que puede no haber leído nunca tu perfil, así que un `vx sentinel await` pelado puede fallar con `command not found` cuando vx vive en `~/.local/bin`. Entonces el commander nunca se despertaría, sin que nada lo avise. Por eso el comando registrado busca vx por su cuenta, en este orden:

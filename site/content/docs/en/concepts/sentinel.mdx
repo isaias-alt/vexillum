@@ -57,6 +57,10 @@ Outside a herdr-managed pane (no `HERDR_WORKSPACE_ID`), `await` and `drain` exit
 
 Each `await` records itself in `~/.vexillum/sentinel-awaiters/` and never outlives the hook that launched it. It exits on its own once its parent process is gone, and a newer `await` from the same session and project replaces the previous turn's, so one session leaves one waiting process, not one per turn. Starting `vx sentinel` or any `await` also stops orphans left behind by a dead session. A process is signaled only after it is verified to be a `vx sentinel await` by its pid file and command line, never by name.
 
+## A commander in Pi
+
+Pi has no Stop hook. A project whose commander runs in [Pi](/docs/guides/pi-commander) gets `.pi/extensions/vexillum-wake.ts` instead, which starts the same `vx sentinel await` as a child of Pi and, when it exits with code 2, hands its message to the model with `pi.sendUserMessage` (as a follow-up when Pi is mid-turn). Everything above holds unchanged, because it is the same `await`: one delivery per wake, an owner that takes it down with Pi, the sentinel started and refreshed by it. The extension also keeps a wake that Pi could not take at that moment and tries again, and does nothing in a camp.
+
 ## The hook does not depend on your PATH
 
 Claude Code runs the hook in a shell that may never have read your profile, so a bare `vx sentinel await` can fail with `command not found` when vx lives in `~/.local/bin`. The commander would then never be woken, with nothing to say so. The registered command therefore looks for vx itself, in this order:

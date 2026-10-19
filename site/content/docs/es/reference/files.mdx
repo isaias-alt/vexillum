@@ -17,6 +17,9 @@ vexillum escribe en dos lugares: tu proyecto (lo que scaffoldea `vx init`) y el 
     settings.json                 suma el hook Stop del sentinel
     skills/
       vexillum/  forum/  muster/  las skills first-party
+  .pi/                            solo para un commander Pi
+    settings.json                 suma la referencia a las skills
+    extensions/vexillum-wake.ts   la extension de despertar
   .vexillum/
     config.json                   marca el proyecto como inicializado
     models.json                   perfiles de modelo y effort
@@ -27,6 +30,7 @@ vexillum escribe en dos lugares: tu proyecto (lo que scaffoldea `vx init`) y el 
     AGENTS.md.backup
     CLAUDE.md.backup
     backups/skills/<name>/
+    backups/pi/vexillum-wake.ts
 ```
 
 | Ruta | Escrito por | Guarda | ¿Seguro borrar? |
@@ -35,7 +39,9 @@ vexillum escribe en dos lugares: tu proyecto (lo que scaffoldea `vx init`) y el 
 | `CLAUDE.md` | `init`, `upgrade` | tiene el bloque de vexillum en lugar de `AGENTS.md` cuando el proyecto no tiene `AGENTS.md`; si no, se crea con, o recibe, la línea `@AGENTS.md` para que Claude Code vea el bloque | No. Igual que arriba; sin la línea o el bloque Claude Code deja de ver las reglas del commander |
 | `.claude/settings.json` | `init`, `upgrade` | suma el hook `Stop` asíncrono que corre `vx sentinel await` mediante un wrapper de una línea que no depende del PATH (ver [Sentinel](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path)); el contenido existente se fusiona, nunca se pisa. Un JSON inválido se deja intacto y se reporta | No el archivo entero, puede tener tus propios ajustes. Borrar solo la entrada del hook deja al commander sin despertar hasta que `vx upgrade` la vuelva a agregar |
 | `.claude/skills/<name>/` | `init`, `upgrade` | las [skills](/es/docs/concepts/skills) `vexillum`, `forum` y `muster`, si las aceptaste | Sí. `vx upgrade` las reinstala (una editada se respalda antes) |
-| `.vexillum/config.json` | `init`, `upgrade` | marca el proyecto como inicializado; guarda un hash de contenido por skill instalada para que `upgrade` sepa si la editaste | No conviene. El proyecto pasa a verse como no inicializado y se pierde la memoria de qué skills editaste; `vx init` lo recrea |
+| `.pi/extensions/vexillum-wake.ts` | `init`, `upgrade`, solo cuando `pi` es un commander | la extension que despierta a un [commander Pi](/es/docs/guides/pi-commander): corre `vx sentinel await` como hijo de Pi y le entrega un wake al modelo. Se commitea con el proyecto; no hace nada en los camps de los soldiers | Sí, pero el commander Pi no se despierta hasta que `vx upgrade` o `vx init` la vuelvan a escribir. Pi la carga solo cuando confiás en la carpeta |
+| `.pi/settings.json` | `init`, `upgrade`, solo cuando `pi` es un commander | recibe `"skills": ["../.claude/skills"]` para que Pi vea las skills de vexillum; el contenido existente se fusiona, nunca se sobrescribe. Un JSON inválido se deja intacto y se informa | No el archivo entero, puede tener tus propios ajustes de Pi. Sin la entrada Pi no ve las skills |
+| `.vexillum/config.json` | `init`, `upgrade` | marca el proyecto como inicializado; registra los harnesses del commander; guarda un hash de contenido por skill instalada, y uno por la extension de despertar de Pi, para que `upgrade` sepa si la editaste | No conviene. El proyecto pasa a verse como no inicializado y se pierde la memoria de qué skills editaste; `vx init` lo recrea |
 | `.vexillum/models.json` | `init` (una vez) | los perfiles de modelo y effort; **tuyo para editar**, nunca se pisa. Ver [`models.json`](/es/docs/reference/models-json) | Sí, pero se van tus perfiles; rigen los valores built-in hasta que `init` escriba uno nuevo |
 | `.vexillum/yolo.json` | `vx yolo on`, `vx yolo off` | si [yolo mode](/es/docs/guides/yolo-mode) está activado en el proyecto; si no existe, está desactivado. Se commitea con el proyecto, igual que `models.json` | Sí. Desactiva yolo mode |
 | `.vexillum/.gitignore` | `init` | ignora `forum/` para que los artefactos temporales del forum queden fuera de git | Sí, pero entonces `.vexillum/forum/` aparece en `git status` |
@@ -43,6 +49,7 @@ vexillum escribe en dos lugares: tu proyecto (lo que scaffoldea `vx init`) y el 
 | `.vexillum/agents-md-slot.backup.md` | `upgrade --force` | tu bloque editado, guardado antes de reemplazarlo | Sí, cuando ya no necesites tu edición |
 | `.vexillum/AGENTS.md.backup`, `.vexillum/CLAUDE.md.backup` | `upgrade` | el archivo entero que tiene el bloque, guardado antes de reparar un bloque malformado | Sí, una vez que revisaste la reparación |
 | `.vexillum/backups/skills/<name>/` | `upgrade --force` | una skill editada, guardada antes de sobrescribirla | Sí, cuando ya no necesites tu edición |
+| `.vexillum/backups/pi/vexillum-wake.ts` | `upgrade --force` | una extension de despertar editada, guardada antes de sobrescribirla | Sí, cuando ya no necesites tu edición |
 
 `AGENTS.md` y `CLAUDE.md` son tuyos: `init` los lista en un aviso y pregunta antes de cambiarlos. Commiteá `AGENTS.md`, `CLAUDE.md`, `.claude/` y `.vexillum/` (los backups y `forum/` son las excepciones que no vas a querer commitear).
 

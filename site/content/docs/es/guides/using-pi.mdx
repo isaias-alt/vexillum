@@ -3,7 +3,7 @@ title: Usar Pi
 description: Corré los soldiers de un perfil de modelo en el agente de código Pi en lugar de Claude Code, incluidos los modelos gratuitos y de otros proveedores.
 ---
 
-Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Claude Code es el default. Con `"harness": "pi"` los soldiers de ese perfil corren en [Pi](https://pi.dev), que puede usar casi cualquier proveedor y modelo, incluidos los planes gratuitos. El commander sigue siendo una sesión de Claude Code, y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
+Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Claude Code es el default. Con `"harness": "pi"` los soldiers de ese perfil corren en [Pi](https://pi.dev), que puede usar casi cualquier proveedor y modelo, incluidos los planes gratuitos. El commander es una sesión de Claude Code salvo que también lo corras en Pi (ver [Pi como commander](/es/docs/guides/pi-commander)), y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
 
 Esta página describe lo que se verificó contra **Pi 1.3.0**. `vx doctor` advierte con cualquier otra serie mayor.
 
@@ -73,7 +73,7 @@ Pi lee un sufijo `:level` en `--model` como un nivel de thinking, y algunos ids 
 | Reglas | `CLAUDE.md`, que importa `AGENTS.md` | Pi lee `AGENTS.md` en cada carpeta y, solo si no hay, `CLAUDE.md`. No expande `@AGENTS.md`. No hace falta nada extra: el bloque de vexillum vive en `AGENTS.md` (o en `CLAUDE.md` cuando el proyecto no tiene `AGENTS.md`), y Pi lee el que lo tenga. Un proyecto con los dos archivos y contenido distinto le muestra a un soldier de Pi solo `AGENTS.md`. |
 | Skills | el `.claude/skills` del proyecto | ninguna. Los soldiers no usan skills en este release. |
 | Preguntas | el selector de preguntas de Claude, que se responde con una pulsación de tecla | una herramienta `ask_user` que vexillum le da al soldier, que se responde mediante un archivo (ver [Soldiers blocked](#soldiers-blocked)). Sin la herramienta, una línea `needs-decision:` que se responde como texto plano. |
-| Despertar | el sentinel lee el estado de herdr | lo mismo. El sentinel no necesita ninguna extension de despertar para Pi, y el commander se despierta como siempre. |
+| Despertar | el sentinel lee el estado de herdr | lo mismo. El sentinel no necesita ninguna extension para vigilar a un soldier de Pi, y el commander se despierta como siempre. (Un commander que corre en Pi tiene una extension propia para eso: ver [Pi como commander](/es/docs/guides/pi-commander).) |
 | `vx ship` | el reviewer y el fixer del tribunal corren `claude -p` en `sonnet` con effort high | corren `pi -p --no-session` con el modelo y el nivel de thinking con los que corrió la mission, o el default de Pi cuando el perfil no definió ninguno |
 
 ## Soldiers blocked
@@ -102,8 +102,6 @@ Si la integración de herdr para Pi no está instalada, herdr no ve al soldier c
 
 ## No está en este release
 
-- Una extension de despertar para Pi.
-- Pi como commander.
 - Skills para los soldiers de Pi.
 
 Para una checklist con la que verificar una configuración de Pi en una máquina real, mirá `docs/verification/pi-soldier-checklist.md` en el repositorio.
@@ -113,3 +111,4 @@ Para una checklist con la que verificar una configuración de Pi en una máquina
 - [models.json](/es/docs/reference/models-json)
 - [`vx dispatch`](/es/docs/reference/cli/dispatch) y [`vx doctor`](/es/docs/reference/cli/doctor)
 - [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted)
+- [Pi como commander](/es/docs/guides/pi-commander)

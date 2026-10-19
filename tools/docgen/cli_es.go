@@ -68,6 +68,16 @@ el proyecto. El import en CLAUDE.md y el hook Stop del sentinel de arriba son de
 Claude Code, así que init los escribe solo cuando claude es uno de los
 commanders.
 
+Un commander pi se despierta con una extensión en lugar de un hook Stop. Para
+él init escribe .pi/extensions/vexillum-wake.ts (incluida en el binario: corre
+el await del sentinel como hijo de Pi y le entrega un wake al modelo como un
+mensaje, y no hace nada en el camp de un soldier) y agrega ../.claude/skills a
+"skills" en .pi/settings.json, para que Pi vea las skills vexillum, forum y
+muster. Los dos se commitean con el proyecto; upgrade mantiene la extensión al
+día. Pi pregunta "Trust project folder?" la primera vez que lo corrés en la
+carpeta: respondé Trust una sola vez (hasta entonces no se carga ninguno de los
+dos); doctor muestra en qué estado está.
+
 Sin una terminal (scripts, CI) init no pregunta nada y no hace nada a menos que
 se pase --yes; sin él, imprime lo que cambiaría y sale con un error.
 
@@ -186,6 +196,15 @@ hay un binario opencode en el PATH: el binario, su versión (1.x desde 1.18.29, 
 1.x más vieja tapa a una 2.x en el PATH (nombra las dos), y si la integración de
 herdr para opencode está instalada y al día ('herdr integration install
 opencode').
+
+Para un commander pi doctor revisa, en lugar del hook Stop, que
+.pi/extensions/vexillum-wake.ts esté y sea igual a la copia que lleva este
+binario (current, stale o editada a mano), que .pi/settings.json liste
+../.claude/skills para que Pi vea las skills, si a Pi se le dijo que confíe en
+la carpeta (lee ~/.pi/agent/trust.json y nunca lo escribe; sin respuesta
+guardada advierte que Pi va a preguntar una vez), y que el await de la
+extensión encuentre un binario vx desde el entorno en el que corre doctor. Solo
+advierten.
 
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando

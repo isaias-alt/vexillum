@@ -27,12 +27,13 @@ Ningún proceso en segundo plano (sentinel, servidor del forum) guarda estado qu
       commanders.json      el pane de herdr de cada harness de commander
 ```
 
-En el proyecto mismo, `init` escribe `AGENTS.md` o `CLAUDE.md`, `.claude/` (las skills y el hook del sentinel) y `.vexillum/` (`config.json`, `models.json`, `.gitignore`):
+En el proyecto mismo, `init` escribe `AGENTS.md` o `CLAUDE.md`, `.claude/` (las skills y el hook del sentinel), `.vexillum/` (`config.json`, `models.json`, `.gitignore`) y, para un [commander Pi](/es/docs/guides/pi-commander), `.pi/` (la extension de despertar y los ajustes de proyecto de Pi):
 
 ```text
 <project>/
   AGENTS.md  CLAUDE.md
   .claude/settings.json  .claude/skills/
+  .pi/extensions/vexillum-wake.ts  .pi/settings.json      (solo un commander Pi)
   .vexillum/config.json  .vexillum/models.json  .vexillum/.gitignore
 ```
 

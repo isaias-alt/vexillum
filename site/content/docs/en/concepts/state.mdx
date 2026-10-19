@@ -27,12 +27,13 @@ No background process (sentinel, forum server) holds state that is not on disk. 
       commanders.json      the herdr pane of each commander harness
 ```
 
-In the project itself, `init` writes `AGENTS.md` or `CLAUDE.md`, `.claude/` (the skills and the sentinel hook) and `.vexillum/` (`config.json`, `models.json`, `.gitignore`):
+In the project itself, `init` writes `AGENTS.md` or `CLAUDE.md`, `.claude/` (the skills and the sentinel hook), `.vexillum/` (`config.json`, `models.json`, `.gitignore`) and, for a [Pi commander](/docs/guides/pi-commander), `.pi/` (the wake extension and Pi's project settings):
 
 ```text
 <project>/
   AGENTS.md  CLAUDE.md
   .claude/settings.json  .claude/skills/
+  .pi/extensions/vexillum-wake.ts  .pi/settings.json      (a Pi commander only)
   .vexillum/config.json  .vexillum/models.json  .vexillum/.gitignore
 ```
 

@@ -1,0 +1,88 @@
+---
+title: Pi como commander
+description: Corré el commander, el agente con el que hablás, en Pi en lugar de Claude Code, o en los dos, y cómo vexillum lo despierta cuando un soldier termina.
+---
+
+El commander es el agente con el que hablás y que despacha soldiers. Por defecto es una sesión de Claude Code. También puede ser una sesión de [Pi](https://pi.dev), o las dos: un proyecto registra en qué harnesses corre su commander, y una persona puede usar Claude Code mientras otra usa Pi en el mismo repositorio. Los soldiers son otra elección, que se hace por perfil de modelo (ver [Usar Pi](/es/docs/guides/using-pi)).
+
+Esta página describe lo que se verificó contra **Pi 1.3.0**, manejado sin un modelo. Lo que solo un modelo real puede mostrar está listado al final.
+
+## Prepararlo
+
+1. Instalá Pi e iniciá sesión en un proveedor, como en [Usar Pi](/es/docs/guides/using-pi#prepararlo). Instalá la integración de herdr para Pi (`herdr integration install pi`).
+2. En el proyecto, en un pane de herdr:
+
+   ```bash
+   vx init --commander pi            # solo Pi
+   vx init --commander claude --commander pi    # los dos
+   ```
+
+   `init` lista lo que va a escribir y pregunta antes, como siempre. Los harnesses quedan registrados en `.vexillum/config.json`, que es lo que leen `vx doctor` y `vx upgrade` para saber qué necesita el proyecto.
+3. Corré `pi` en el proyecto. La primera vez, Pi pregunta **"Trust project folder?"**. Respondé **Trust** una sola vez. Pi lo recuerda en `~/.pi/agent/trust.json`, y hasta que respondas no se carga ninguno de los dos archivos de abajo.
+4. Corré `vx doctor` y leé las líneas de Pi.
+
+## Qué escribe `init` para un commander Pi
+
+| Archivo | Qué es |
+| --- | --- |
+| `AGENTS.md` (o `CLAUDE.md`) | el bloque de vexillum, como para cualquier commander. Pi lee `AGENTS.md`, y `CLAUDE.md` solo cuando no hay `AGENTS.md`. No expande `@AGENTS.md`, así que en un proyecto que tiene los dos archivos Pi ve solo `AGENTS.md`: poné el bloque ahí. |
+| `.claude/skills/{vexillum,forum,muster}` | las mismas skills que usa un commander Claude. Pi no lee `.claude/skills` por su cuenta, por eso: |
+| `.pi/settings.json` | recibe `"skills": ["../.claude/skills"]`, lo que hace que Pi liste las tres skills. Lo demás que tengas ahí se conserva; un archivo que no es JSON válido se deja como está y se informa. |
+| `.pi/extensions/vexillum-wake.ts` | el despertar, abajo. Está incluido en el binario `vx`, como la extensión `ask_user` de los soldiers de Pi, y `vx upgrade` la mantiene al día. |
+
+`init` no escribe el import en `CLAUDE.md` ni el hook Stop salvo que `claude` también sea uno de los commanders: son de Claude Code. Commiteá `.pi/` con el resto del proyecto, como `.claude/settings.json`.
+
+Pi muestra una skill por nombre y descripción y la carga cuando es relevante, o cuando escribís `/skill:vexillum`. El atajo `/muster` de Claude Code es `/skill:muster` en Pi.
+
+## Cómo se despierta a un commander Pi
+
+Claude Code despierta a su commander con un hook Stop async que corre `vx sentinel await` y toma su código de salida 2 y su stderr como un mensaje. Pi no tiene un hook así, así que la extensión hace el mismo trabajo desde adentro de Pi:
+
+1. Cuando arranca una sesión de Pi, la extensión arranca `vx sentinel await` como hijo de Pi, como lo hace el hook (corre el mismo wrapper de shell del hook Stop, que encuentra `vx` en tu `PATH` o en sus directorios de instalación habituales).
+2. El await espera, como siempre, a que el sentinel registre que un soldier terminó o se bloqueó, o que llegó feedback del forum.
+3. Cuando sale con código 2, la extensión le entrega su texto al modelo como un mensaje de usuario (`pi.sendUserMessage`). Si Pi está idle el modelo recibe un turno enseguida. Si Pi está en medio de un turno, el mensaje queda en cola como **follow-up** y se entrega cuando el turno termina.
+4. Arranca el siguiente await.
+
+No se escribe nada en la terminal. Lo que hayas escrito en el editor de Pi y no mandaste sigue ahí después y sale como mensaje propio. Esa es la razón de no usar `herdr agent prompt` para despertar a un commander: escribe en el editor, así que el texto del wake queda pegado a tu borrador sin enviar. (`herdr agent prompt` es lo que usa `vx prompt` para hablarle a un soldier, donde no hay borrador.)
+
+Como es el mismo await, todo lo demás que se apoya en él funciona sin cambios: el wake se entrega una sola vez, los wakes viejos se descartan, el await arranca el sentinel, el await muere con el proceso de Pi, y el [forum](/es/docs/guides/forum) ve un commander vivo.
+
+### De qué se ocupa la extensión
+
+- **Un wake nunca se pierde.** El await ya lo consumió cuando sale. Si Pi no puede recibir el mensaje en ese momento, la extensión lo guarda y vuelve a intentar un segundo después, juntando los wakes que se acumulan. Si abrís una sesión nueva en Pi (`/new`, `/resume`, `/fork`, `/reload`) mientras hay uno retenido, la sesión siguiente lo recibe. Salir de Pi lo descarta, porque la sesión para la que era ya no existe.
+- **No hace nada donde no hay un commander.** Un archivo `.pi/extensions` commiteado se baja en el camp de cada soldier, y los soldiers de Pi arrancan con `--approve`. La extensión actúa solo en una sesión interactiva de Pi, dentro de un pane de herdr, fuera de un camp (todo lo que esté bajo `~/.vexillum`) y en un Pi que no se arrancó como soldier. Y `vx sentinel await` mismo sale enseguida en un camp, en una carpeta que no es un proyecto y fuera de un pane de herdr.
+- **Sin bucle de reinicios.** Un await que vuelve de inmediato con salida 0 se reintenta a los 5 segundos, luego a los 20, y después se deja en paz hasta el próximo inicio de sesión. Uno que falla (otro código de salida) se reintenta a los 5 segundos, a los 15, al minuto y después cada cinco minutos, y se te avisa una vez en Pi que el despertar no funciona. Un await que corrió un rato y terminó con salida 0 es el timeout normal de 55 minutos: se arranca de nuevo enseguida.
+- **Sin `vx`, sin wake, dicho en voz alta.** Cuando no se encuentra `vx`, el mensaje del wrapper ("vx: not found, so the sentinel Stop hook cannot wake the commander...") se muestra una vez en Pi, y `vx doctor` dice lo mismo.
+
+## Qué revisa `vx doctor`
+
+Para un proyecto con un commander `pi`, `doctor` agrega estas líneas (solo advierten, ninguna deja el entorno como no listo), y exige el binario `pi` en lugar de `claude` cuando Pi es el único commander:
+
+| Revisión | Significado |
+| --- | --- |
+| `Pi wake extension` | el archivo está y es igual a la copia que lleva este binario: `current`, `stale` (más vieja, se refresca sin riesgo con `vx upgrade`), `edited by hand` (se conserva; `vx upgrade --force` la reemplaza después de guardar un backup en `.vexillum/backups/pi/`) o no instalada. |
+| `Pi skills reference` | `.pi/settings.json` lista `../.claude/skills`. |
+| `Pi project trust` | lee `~/.pi/agent/trust.json` (o `$PI_CODING_AGENT_DIR/trust.json`) y `defaultProjectTrust` en los ajustes del agente de Pi, y nunca los escribe. `trusted`; o una advertencia de que Pi va a preguntar una vez; o de que se le dijo que no confíe en la carpeta (se cambia con `/trust` dentro de Pi), o de que `defaultProjectTrust` es `never`. |
+| `Pi wake finds vx` | el wrapper de la extensión encuentra un `vx` desde el entorno en el que corre `doctor`, que es el desde el que se arranca Pi. |
+
+La línea del sentinel es compartida con los demás commanders.
+
+## Editar la extensión
+
+`.pi/extensions/vexillum-wake.ts` es una copia de la del binario. `vx upgrade` la refresca cuando no la tocaste, la conserva y lo dice cuando sí, y `vx upgrade --force` la reemplaza después de guardar la tuya. El hash que `vx` escribió por última vez está en `.vexillum/config.json` bajo `extensions`; así distingue "stale" de "edited".
+
+## Sin verificar sin un modelo real
+
+El camino del despertar se corrió en el Pi 1.3.0 instalado, en una terminal, con un modelo con guion y el `vx sentinel await` real, y todo lo dicho arriba sobre la entrega (idle, a mitad de turno, borrador conservado, camp, salida) sale de esa corrida. Un modelo con guion prueba que el texto llega al contexto del modelo, no que un modelo real actúe en consecuencia. Esto no está verificado, y `docs/verification/pi-commander-checklist.md` en el repositorio lista los pasos para confirmarlo en una máquina con un modelo:
+
+- que un modelo real obedezca el texto del wake, cargue la skill `vexillum` cuando corresponde y respete la regla del commander de no hacer el trabajo de un soldier, y cómo se comporta un modelo más débil o gratuito como commander;
+- que `vx dispatch` corrido desde la herramienta de shell del propio commander vea las variables del pane de herdr;
+- el ciclo de 55 minutos del await en una sesión larga, los reinicios de herdr, y un `/new` o `/resume` mientras hay un wake retenido;
+- un Pi cuyo `defaultProjectTrust` no es el `ask` por defecto.
+
+## Relacionado
+
+- [Usar Pi](/es/docs/guides/using-pi) para los soldiers de Pi
+- [Sentinel](/es/docs/concepts/sentinel)
+- [`vx init`](/es/docs/reference/cli/init) y [`vx doctor`](/es/docs/reference/cli/doctor)
+- [Archivos](/es/docs/reference/files)

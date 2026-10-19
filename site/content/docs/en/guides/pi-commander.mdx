@@ -1,0 +1,88 @@
+---
+title: Pi as the commander
+description: Run the commander, the agent you talk to, in Pi instead of Claude Code, or in both, and how vexillum wakes it when a soldier finishes.
+---
+
+The commander is the agent you talk to and that dispatches soldiers. It is a Claude Code session by default. It can also be a [Pi](https://pi.dev) session, or both: a project records which harnesses its commander runs in, and one person can use Claude Code while another uses Pi in the same repository. Soldiers are a separate choice, made per model profile (see [Using Pi](/docs/guides/using-pi)).
+
+This page describes what was checked against **Pi 1.3.0**, driven without a model. What only a real model can show is listed at the end.
+
+## Set it up
+
+1. Install Pi and log in to a provider, as in [Using Pi](/docs/guides/using-pi#set-it-up). Install herdr's integration for it (`herdr integration install pi`).
+2. In the project, in a herdr pane:
+
+   ```bash
+   vx init --commander pi            # Pi only
+   vx init --commander claude --commander pi    # both
+   ```
+
+   `init` lists what it will write and asks first, as always. The harnesses are recorded in `.vexillum/config.json`, which is what `vx doctor` and `vx upgrade` read to know what the project needs.
+3. Run `pi` in the project. The first time, Pi asks **"Trust project folder?"**. Answer **Trust** once. Pi remembers it in `~/.pi/agent/trust.json`, and until you answer, neither of the two files below loads.
+4. Run `vx doctor` and read the Pi lines.
+
+## What `init` writes for a Pi commander
+
+| File | What it is |
+| --- | --- |
+| `AGENTS.md` (or `CLAUDE.md`) | the vexillum block, as for any commander. Pi reads `AGENTS.md`, and `CLAUDE.md` only when there is no `AGENTS.md`. It does not expand `@AGENTS.md`, so a project that has both files shows Pi only `AGENTS.md`: put the block there. |
+| `.claude/skills/{vexillum,forum,muster}` | the same skills a Claude commander uses. Pi does not read `.claude/skills` on its own, so: |
+| `.pi/settings.json` | gains `"skills": ["../.claude/skills"]`, which makes Pi list the three skills. Other settings you have there are kept; a file that is not valid JSON is left alone and reported. |
+| `.pi/extensions/vexillum-wake.ts` | the wake, below. It is built into the `vx` binary, like the `ask_user` extension of Pi soldiers, and `vx upgrade` keeps it current. |
+
+`init` writes no `CLAUDE.md` import and no Stop hook unless `claude` is also one of the commanders: they are Claude Code's. Commit `.pi/` with the rest of the project, like `.claude/settings.json`.
+
+Pi shows a skill by name and description and loads it when it is relevant, or when you type `/skill:vexillum`. The `/muster` shortcut of Claude Code is `/skill:muster` in Pi.
+
+## How a Pi commander is woken
+
+Claude Code wakes its commander with an async Stop hook that runs `vx sentinel await` and treats its exit code 2 and stderr as a message. Pi has no such hook, so the extension does the same job from inside Pi:
+
+1. When a Pi session starts, the extension starts `vx sentinel await` as a child of Pi, the way the hook does (it runs the very shell wrapper of the Stop hook, which finds `vx` on your `PATH` or in its usual install directories).
+2. The await waits, as it always does, for the sentinel to record that a soldier finished or got blocked, or that forum feedback arrived.
+3. When it exits with code 2, the extension hands its text to the model as a user message (`pi.sendUserMessage`). If Pi is idle the model gets a turn at once. If Pi is in the middle of a turn, the message is queued as a **follow-up** and delivered when the turn ends.
+4. It starts the next await.
+
+Nothing is typed into the terminal. Whatever you have written in Pi's editor and not sent is still there afterwards and goes out as its own message. That is the reason for not using `herdr agent prompt` to wake a commander: it types into the editor, so the wake text is glued to your unsent draft. (`herdr agent prompt` is what `vx prompt` uses to talk to a soldier, where there is no draft.)
+
+Because it is the same await, everything else that rides on it works unchanged: the wake is delivered once, stale wakes are dropped, the sentinel is started by the await, the await dies with the Pi process, and the [forum](/docs/guides/forum) sees a live commander.
+
+### What the extension takes care of
+
+- **A wake is never dropped.** The await has already consumed it when it exits. If Pi cannot take the message at that moment, the extension keeps it and tries again a second later, joining wakes that pile up. If you start a new session in Pi (`/new`, `/resume`, `/fork`, `/reload`) while one is held, the next session gets it. Quitting Pi discards it, as the session it was for is gone.
+- **It does nothing where there is no commander.** A committed `.pi/extensions` file is checked out in every soldier's camp, and Pi soldiers are started with `--approve`. The extension acts only in an interactive Pi session, inside a herdr pane, outside a camp (anything under `~/.vexillum`) and in a Pi that was not started as a soldier. And `vx sentinel await` itself exits at once in a camp, in a folder that is not a project, and outside a herdr pane.
+- **No respawn loop.** An await that comes straight back with exit 0 is tried again after 5 seconds, then 20, and then left alone until the next session start. One that fails (another exit code) is retried after 5 seconds, 15 seconds, one minute and then every five minutes, and you are told once in Pi that the wake is not working. An await that ran for a while and ended with exit 0 is the normal 55 minute timeout: it is started again at once.
+- **No `vx`, no wake, said out loud.** When `vx` cannot be found, the wrapper's message ("vx: not found, so the sentinel Stop hook cannot wake the commander...") is shown once in Pi, and `vx doctor` says the same.
+
+## What `vx doctor` checks
+
+For a project with a `pi` commander, `doctor` adds these lines (they only warn, none makes the environment not ready), and it requires the `pi` binary instead of `claude` when Pi is the only commander:
+
+| Check | Meaning |
+| --- | --- |
+| `Pi wake extension` | the file is there and equal to the copy this binary carries: `current`, `stale` (older, safe to refresh with `vx upgrade`), `edited by hand` (kept; `vx upgrade --force` replaces it after saving a backup in `.vexillum/backups/pi/`) or not installed. |
+| `Pi skills reference` | `.pi/settings.json` lists `../.claude/skills`. |
+| `Pi project trust` | reads `~/.pi/agent/trust.json` (or `$PI_CODING_AGENT_DIR/trust.json`) and `defaultProjectTrust` in Pi's agent settings, and never writes them. `trusted`; or a warning that Pi will ask once; or that it was told not to trust the folder (change it with `/trust` inside Pi), or that `defaultProjectTrust` is `never`. |
+| `Pi wake finds vx` | the extension's wrapper finds a `vx` from the environment `doctor` runs in, which is the one Pi is started from. |
+
+The sentinel line is shared with the other commanders.
+
+## Editing the extension
+
+`.pi/extensions/vexillum-wake.ts` is a copy of the binary's. `vx upgrade` refreshes it when you have not touched it, keeps it and says so when you have, and `vx upgrade --force` replaces it after saving yours. The hash `vx` last wrote is in `.vexillum/config.json` under `extensions`; that is how it tells "stale" from "edited".
+
+## Not verified without a real model
+
+The wake path was run in the installed Pi 1.3.0 in a terminal, with a scripted model and the real `vx sentinel await`, and every claim above about delivery (idle, mid-turn, draft kept, camp, quit) comes from that run. A scripted model proves that the text arrives in the model's context, not that a real model acts on it. These are unverified, and `docs/verification/pi-commander-checklist.md` in the repository lists the steps to confirm them on a machine with a model:
+
+- that a real model obeys the wake text, loads the `vexillum` skill when it should and keeps to the commander's rule of never doing a soldier's work, and how a weaker or free model behaves as a commander;
+- that `vx dispatch` run from the commander's own shell tool sees the herdr pane variables;
+- the 55 minute await cycle over a long session, herdr restarts, and a `/new` or `/resume` while a wake is held;
+- a Pi whose `defaultProjectTrust` is not the default `ask`.
+
+## Related
+
+- [Using Pi](/docs/guides/using-pi) for Pi soldiers
+- [Sentinel](/docs/concepts/sentinel)
+- [`vx init`](/docs/reference/cli/init) and [`vx doctor`](/docs/reference/cli/doctor)
+- [Files](/docs/reference/files)
