@@ -183,6 +183,17 @@ type Task struct {
 	// A re-dispatch reuses whatever this task already carries.
 	Harness string `json:"harness,omitempty"`
 
+	// HarnessMajor and HarnessVersion are the major and the full version of
+	// the harness CLI detected when the task was dispatched, for a harness
+	// whose generations launch differently (OpenCode: 1 or 2, see
+	// internal/soldier.OpenCodeHarness). A re-dispatch, vx prompt and vx
+	// decide drive the generation recorded here, not whatever is installed
+	// later. Zero and empty for claude and pi, which have one launch. Purely
+	// additive, no SchemaVersion bump needed: only a build that can drive
+	// OpenCode reads them, and it writes them.
+	HarnessMajor   int    `json:"harness_major,omitempty"`
+	HarnessVersion string `json:"harness_version,omitempty"`
+
 	// Decision is the structured, durable record of what this task is (or
 	// most recently was) blocked on - see internal/soldier.ExtractDecision,
 	// which builds one from the soldier's transcript every time Status

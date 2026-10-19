@@ -38,7 +38,7 @@ type fakeHerdr struct {
 	tabClosed     bool
 }
 
-func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
+func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
 	if f.createTabErr != nil {
 		return "", "", f.createTabErr
 	}
@@ -273,7 +273,7 @@ func TestRunDispatch_PersistsTheHarness(t *testing.T) {
 // A reserved harness with no implementation is refused before a camp is
 // acquired or a task written, with a clear error.
 func TestRunDispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
-	for _, harness := range []string{"opencode", "gemini"} {
+	for _, harness := range []string{"gemini"} {
 		t.Run(harness, func(t *testing.T) {
 			project := initDispatchTestProject(t)
 			if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
@@ -306,15 +306,14 @@ func TestRunDispatch_RefusesAHarnessWithNoImplementation(t *testing.T) {
 }
 
 // resolveProfile hands the profile's harness back; a pi profile passes the
-// model/effort validation Dispatch runs next, and one naming a reserved
-// harness fails it.
+// model/effort validation Dispatch runs next, and so does an opencode one.
 func TestResolveProfile_Harness(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(project, ".vexillum"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	models := `{"profiles": {"pi-scout": {"model": "anthropic/claude-haiku-4-5", "effort": "low", "when": "x", "harness": "pi"}, "oc-scout": {"model": "m", "effort": "e", "when": "x", "harness": "opencode"}, "mission-big": {"harness": "claude"}}}`
+	models := `{"profiles": {"pi-scout": {"model": "anthropic/claude-haiku-4-5", "effort": "low", "when": "x", "harness": "pi"}, "oc-scout": {"model": "opencode/glm-5.3-flash-free#high", "effort": "e", "when": "x", "harness": "opencode"}, "mission-big": {"harness": "claude"}}}`
 	if err := os.WriteFile(filepath.Join(project, ".vexillum", "models.json"), []byte(models), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -347,8 +346,13 @@ func TestResolveProfile_Harness(t *testing.T) {
 	if err != nil || h != "opencode" {
 		t.Fatalf("oc-scout = %q %q %q, %v", m, e, h, err)
 	}
-	if err := soldier.ValidateModelEffort(h, m, e); err == nil || !strings.Contains(err.Error(), "not implemented yet") {
-		t.Errorf("validating the opencode profile: got %v, want a not-implemented error", err)
+	if err := soldier.ValidateModelEffort(h, m, e); err != nil {
+		t.Errorf("validating the opencode profile: %v", err)
+	}
+	// An explicit claude alias on an opencode profile is refused as opencode's.
+	m, e, h, _ = resolveProfile(project, home, "oc-scout", "sonnet", "")
+	if err := soldier.ValidateModelEffort(h, m, e); err == nil || !strings.Contains(err.Error(), "provider/model") {
+		t.Errorf("a claude alias on an opencode profile: got %v, want a provider/model error", err)
 	}
 }
 

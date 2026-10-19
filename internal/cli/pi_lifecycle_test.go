@@ -58,6 +58,7 @@ func recorded(t *testing.T, rec, prefix string, n int) string {
 type piHerdr struct {
 	*fakeHerdr
 	cwd   string
+	env   []string // the pane's shell environment, as set at tab creation
 	kinds []string
 	keys  [][]string
 }
@@ -66,15 +67,17 @@ func newPiHerdr() *piHerdr {
 	return &piHerdr{fakeHerdr: &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "done", readOutput: "pi did the thing"}}
 }
 
-func (p *piHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
+func (p *piHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
 	p.cwd = cwd
-	return p.fakeHerdr.CreateTab(workspaceID, cwd, label)
+	p.env = env
+	return p.fakeHerdr.CreateTab(workspaceID, cwd, label, env...)
 }
 
 func (p *piHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) error {
 	p.kinds = append(p.kinds, kind)
 	cmd := exec.Command(kind, agentArgs...)
 	cmd.Dir = p.cwd
+	cmd.Env = append(os.Environ(), p.env...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.New("starting " + kind + ": " + err.Error() + ": " + string(out))
 	}
@@ -129,8 +132,8 @@ func TestHarnessPreconditions_NeedTheHarnessCLI(t *testing.T) {
 		t.Errorf("pi present, claude absent: got %q, %v; want w1 and no error", id, err)
 	}
 
-	if _, err := harnessPreconditions("dispatch", "opencode", getenv, exec.LookPath); err == nil || !strings.Contains(err.Error(), "not implemented yet") {
-		t.Errorf("a reserved harness: got %v", err)
+	if _, err := harnessPreconditions("dispatch", "gemini", getenv, exec.LookPath); err == nil || !strings.Contains(err.Error(), "unknown harness") {
+		t.Errorf("an unknown harness: got %v", err)
 	}
 }
 

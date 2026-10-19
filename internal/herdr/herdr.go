@@ -24,8 +24,9 @@ import (
 type Client interface {
 	// CreateTab creates a tab (and its root pane) in workspaceID, with
 	// the pane's shell starting in cwd. Returns the new tab and pane
-	// ids.
-	CreateTab(workspaceID, cwd, label string) (tabID, paneID string, err error)
+	// ids. Each env entry ("KEY=VALUE") is set in the environment of the
+	// pane's shell, so an agent started there afterwards inherits it.
+	CreateTab(workspaceID, cwd, label string, env ...string) (tabID, paneID string, err error)
 
 	// AgentStart starts a supported interactive agent (kind, e.g.
 	// "claude") in an existing, at-prompt pane. name must match
@@ -190,8 +191,12 @@ func IsTimeout(err error) bool {
 // binary.
 type CLI struct{}
 
-func (CLI) CreateTab(workspaceID, cwd, label string) (string, string, error) {
-	result, err := run("tab", "create", "--workspace", workspaceID, "--cwd", cwd, "--label", label, "--no-focus")
+func (CLI) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
+	args := []string{"tab", "create", "--workspace", workspaceID, "--cwd", cwd, "--label", label, "--no-focus"}
+	for _, kv := range env {
+		args = append(args, "--env", kv)
+	}
+	result, err := run(args...)
 	if err != nil {
 		return "", "", err
 	}

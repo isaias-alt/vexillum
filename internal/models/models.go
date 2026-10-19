@@ -20,13 +20,16 @@
 // (soldier.ValidateModelEffort): on claude "model" is one of haiku, sonnet,
 // opus, fable and "effort" one of low, medium, high, xhigh, max; on pi "model"
 // is a provider/id such as "anthropic/claude-sonnet-5" and "effort" is a
-// thinking level (off, minimal, low, medium, high, xhigh, max). "when" is free
-// text telling the commander when the profile applies. "harness" is optional
-// and names the agent CLI the profile's soldiers run on: "claude" (the default
-// when absent), "pi", or the reserved "opencode", which loads but cannot be
-// dispatched until it is implemented (soldier.HarnessFor). The default entry
-// has no harness: it is always claude. Unknown fields are rejected so a typo
-// does not silently do nothing. See testdata/example.json.
+// thinking level (off, minimal, low, medium, high, xhigh, max); on opencode
+// "model" is provider/model with an optional #variant, such as
+// "opencode/glm-5.3-flash-free" or "anthropic/claude-sonnet-5#high", and
+// "effort" is only a label that is recorded on the task and never passed to
+// opencode (the variant, when there is one, is the one after the #). "when" is
+// free text telling the commander when the profile applies. "harness" is
+// optional and names the agent CLI the profile's soldiers run on: "claude"
+// (the default when absent), "pi" or "opencode" (soldier.HarnessFor). The
+// default entry has no harness: it is always claude. Unknown fields are
+// rejected so a typo does not silently do nothing. See testdata/example.json.
 //
 // models.json carries no schema_version: strict decoding already makes an
 // older vexillum refuse a file that uses a field it does not know, such as

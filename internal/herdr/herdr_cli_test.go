@@ -40,6 +40,28 @@ esac`))
 	}
 }
 
+// Each env entry becomes a --env flag of tab create, so the pane's shell and
+// the agent started in it inherit it.
+func TestCLI_CreateTab_PassesEnvAsFlags(t *testing.T) {
+	rec := filepath.Join(t.TempDir(), "args")
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "tab create") printf '%s\n' "$@" > '`+rec+`'; echo '{"result":{"tab":{"tab_id":"tab-1"},"root_pane":{"pane_id":"pane-1"}}}' ;;
+esac`))
+
+	if _, _, err := (CLI{}).CreateTab("ws1", "/some/cwd", "soldier-1", "A=1", "B=two words"); err != nil {
+		t.Fatalf("CreateTab: %v", err)
+	}
+	raw, err := os.ReadFile(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+	want := []string{"tab", "create", "--workspace", "ws1", "--cwd", "/some/cwd", "--label", "soldier-1", "--no-focus", "--env", "A=1", "--env", "B=two words"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("herdr args = %q, want %q", got, want)
+	}
+}
+
 // A "successful" response missing the fields CreateTab extracts is still
 // an error, named clearly, not a silently empty tab/pane id.
 func TestCLI_CreateTab_MalformedResponse(t *testing.T) {

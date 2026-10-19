@@ -112,6 +112,11 @@ func validPiModel(m string) bool {
 	return true
 }
 
+// Launch passes the task's model and effort as pi's own flags.
+func (h PiHarness) Launch(task state.Task) (LaunchSpec, error) {
+	return LaunchSpec{Args: h.ModelEffortArgs(task)}, nil
+}
+
 // ModelEffortArgs maps the task's model to --model and its effort to
 // --thinking. The thinking level is never folded into --model as a ":level"
 // suffix: a model id can itself end in a colon segment (OpenRouter's

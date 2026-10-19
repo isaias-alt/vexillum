@@ -12,6 +12,49 @@ import (
 type CommandSpec struct {
 	Command string
 	Args    []string
+
+	// Env is added to the process's environment as "KEY=VALUE" entries.
+	Env []string
+
+	// ParseOutput, when set, turns the process's stdout into the answer text
+	// the caller wants (a harness whose headless mode prints event lines, not
+	// the bare answer) and reports a failure the process printed on stdout
+	// instead of stderr. The caller also hands it the stdout of a run that
+	// exited non-zero, to name the cause. The process's stdin is always the
+	// null device: a harness that reads a piped stdin to EOF (OpenCode) would
+	// hang on an open pipe.
+	ParseOutput func(stdout string) (string, error)
+}
+
+// ProvisionedFile is a file a harness needs in the camp before its
+// interactive session starts, with a path relative to the camp root.
+type ProvisionedFile struct {
+	Path    string
+	Content []byte
+}
+
+// LaunchSpec is how a soldier's interactive session is started: what the
+// harness adds to its fixed HerdrExtraArgs, the environment its pane shell
+// needs, and the files it needs in the camp. The zero value starts the
+// harness with nothing extra.
+type LaunchSpec struct {
+	// Args are passed to the harness CLI after HerdrExtraArgs.
+	Args []string
+	// Env is set in the pane's shell before the agent starts, so the CLI
+	// inherits it.
+	Env map[string]string
+	// Files are written into the camp before the pane is created. A file
+	// that already exists in the camp is never overwritten: the launch fails
+	// naming it (see provisionFiles).
+	Files []ProvisionedFile
+	// RefuseIfPresent are further camp paths that make the launch fail when
+	// they exist, because the harness would read them next to Files (a
+	// config under another name that would be merged with the generated one).
+	RefuseIfPresent []string
+	// GitExclude are gitignore patterns added to the repository's
+	// info/exclude, so Files do not make the camp look dirty to the
+	// completion checks, strike and ship.
+	GitExclude []string
 }
 
 // CommandOptions tune how Harness.Command builds the one-shot process.
@@ -42,9 +85,9 @@ type TrustDialog struct {
 // means implementing this interface and registering it there, instead of
 // editing every place that hardcodes one CLI's shape.
 //
-// ClaudeHarness and PiHarness are the implementations registered so far:
-// OpenCode is a reserved name that HarnessFor refuses with a clear error
-// until its phase lands.
+// ClaudeHarness, PiHarness and OpenCodeHarness are the implementations
+// registered. A name reserved for a harness still to come is refused by
+// HarnessFor with a clear error.
 type Harness interface {
 	// Binary is the executable this harness's CLI runs as: the one dispatch
 	// and doctor look for on PATH.
@@ -56,11 +99,13 @@ type Harness interface {
 	// meaning "don't pass this flag - let the harness use its own default".
 	ValidateModelEffort(model, effort string) error
 
-	// ModelEffortArgs builds the extra CLI args for task's Model/Effort,
-	// omitting either that's unset. Shared between Command (the one-shot
-	// path the tribunal's reviewer and fixer use) and RunInHerdr (a
-	// soldier's interactive path) so both stay in sync.
-	ModelEffortArgs(task state.Task) []string
+	// Launch builds how task's soldier is started interactively: the CLI
+	// args for its Model/Effort (omitting either that is unset), plus any
+	// environment and camp files the harness needs to apply them. An error
+	// means this task cannot be launched on this harness (a value the CLI
+	// would reject, or a generation of the CLI the task has no recorded
+	// version for); RunInHerdr fails before creating anything.
+	Launch(task state.Task) (LaunchSpec, error)
 
 	// Command builds the CommandSpec that runs task's prompt through the
 	// real harness CLI, unattended, inside a camp. A soldier does not use
@@ -74,8 +119,8 @@ type Harness interface {
 	HerdrAgentKind() string
 
 	// HerdrExtraArgs returns the fixed extra CLI args herdr should pass
-	// when starting the soldier's interactive agent (RunInHerdr), on top of task's Model/Effort args (added
-	// separately - see ModelEffortArgs).
+	// when starting the soldier's interactive agent (RunInHerdr), on top of
+	// the task's own args (added separately - see Launch).
 	HerdrExtraArgs() []string
 
 	// TrustDialog describes the folder-trust dialog the interactive session
@@ -104,15 +149,17 @@ const (
 // harnesses is the registry HarnessFor reads: the implemented harnesses,
 // keyed by name.
 var harnesses = map[string]Harness{
-	HarnessClaude: ClaudeHarness{},
-	HarnessPi:     PiHarness{},
+	HarnessClaude:   ClaudeHarness{},
+	HarnessPi:       PiHarness{},
+	HarnessOpenCode: OpenCodeHarness{},
 }
 
 // reservedHarnesses are names vexillum has set aside for harnesses with no
 // implementation yet, in the order error messages list them. A model profile
 // may name one so the file does not have to change when it lands, but
-// HarnessFor refuses it.
-var reservedHarnesses = []string{HarnessOpenCode}
+// HarnessFor refuses it. None is reserved at the moment: every harness the
+// multi-harness rule names is implemented.
+var reservedHarnesses = []string{}
 
 // HarnessFor returns the Harness registered under name. An empty name means
 // HarnessClaude, which is what a task or profile written before the harness
@@ -128,6 +175,9 @@ func HarnessFor(name string) (Harness, error) {
 	}
 	if isReservedHarness(name) {
 		return nil, fmt.Errorf("harness %q is not implemented yet (supported: %s)", name, strings.Join(implementedHarnessNames(), ", "))
+	}
+	if len(reservedHarnesses) == 0 {
+		return nil, fmt.Errorf("unknown harness %q (supported: %s)", name, strings.Join(implementedHarnessNames(), ", "))
 	}
 	return nil, fmt.Errorf("unknown harness %q (supported: %s; reserved, not implemented yet: %s)",
 		name, strings.Join(implementedHarnessNames(), ", "), strings.Join(reservedHarnesses, ", "))
@@ -228,6 +278,15 @@ func (ClaudeHarness) ValidateModelEffort(model, effort string) error {
 	return nil
 }
 
+// Launch passes the task's model and effort as claude's own flags.
+func (h ClaudeHarness) Launch(task state.Task) (LaunchSpec, error) {
+	return LaunchSpec{Args: h.ModelEffortArgs(task)}, nil
+}
+
+// ModelEffortArgs builds the extra CLI args for task's Model/Effort, omitting
+// either that is unset. Shared between Command (the one-shot path the
+// tribunal's reviewer and fixer use) and Launch (a soldier's interactive
+// path) so both stay in sync.
 func (ClaudeHarness) ModelEffortArgs(task state.Task) []string {
 	var args []string
 	if task.Model != "" {
@@ -308,13 +367,40 @@ func HarnessCommand(harness string, task state.Task) (CommandSpec, error) {
 	return HarnessCommandWith(harness, task, CommandOptions{})
 }
 
-// HarnessCommandWith is HarnessCommand with CommandOptions.
+// HarnessCommandWith is HarnessCommand with CommandOptions. For OpenCode the
+// generation of the CLI is the task's recorded one (state.Task.HarnessMajor);
+// a task that records none, such as the synthetic one the tribunal builds
+// when its caller has no mission, is detected now.
 func HarnessCommandWith(harness string, task state.Task, opts CommandOptions) (CommandSpec, error) {
-	h, err := HarnessFor(harness)
+	task.Harness = harness
+	h, err := HarnessForTask(task)
 	if err != nil {
 		return CommandSpec{}, err
 	}
+	if oc, ok := h.(OpenCodeHarness); ok && oc.Major == 0 {
+		major, _, err := DetectHarnessVersion(HarnessOpenCode)
+		if err != nil {
+			return CommandSpec{}, fmt.Errorf("detecting the OpenCode version for a one-shot run: %w", err)
+		}
+		h = OpenCodeHarness{Major: major}
+	}
 	return h.Command(task, opts), nil
+}
+
+// HarnessForTask is HarnessFor for the harness task was dispatched on, with
+// the generation of its CLI the task recorded when it was dispatched
+// (state.Task.HarnessMajor), for a harness whose generations launch
+// differently. Use it wherever the task's soldier is driven; HarnessFor alone
+// answers only what does not depend on the generation.
+func HarnessForTask(task state.Task) (Harness, error) {
+	h, err := HarnessFor(task.Harness)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := h.(OpenCodeHarness); ok {
+		return OpenCodeHarness{Major: task.HarnessMajor}, nil
+	}
+	return h, nil
 }
 
 // HarnessBinary is the executable of the harness registered under harness

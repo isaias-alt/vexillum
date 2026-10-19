@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
@@ -47,14 +48,14 @@ func TestClaudeHarness_Capabilities(t *testing.T) {
 }
 
 func TestHarnessBinary(t *testing.T) {
-	for name, want := range map[string]string{"": "claude", "claude": "claude", "pi": "pi"} {
+	for name, want := range map[string]string{"": "claude", "claude": "claude", "pi": "pi", "opencode": "opencode"} {
 		got, err := soldier.HarnessBinary(name)
 		if err != nil || got != want {
 			t.Errorf("HarnessBinary(%q) = %q, %v; want %q", name, got, err, want)
 		}
 	}
-	if _, err := soldier.HarnessBinary("opencode"); err == nil {
-		t.Error("HarnessBinary(opencode): expected an error, it is not implemented")
+	if _, err := soldier.HarnessBinary("gemini"); err == nil {
+		t.Error("HarnessBinary(gemini): expected an error, it is not a harness")
 	}
 }
 
@@ -301,7 +302,9 @@ func TestRunInHerdr_PiDoesNotDismissAStartupDialog(t *testing.T) {
 		paneID:     "w1:p2",
 		startErr:   &herdr.APIError{Code: "agent_not_ready", Message: "blocked during startup"},
 		readOutput: "Trust project folder?\n→ Trust\n  Do not trust\nYes, I trust this folder",
+		readyAfter: 1 << 30,
 	}
+	defer soldier.SetNotReadyPollWindow(50 * time.Millisecond)()
 
 	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {

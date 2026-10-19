@@ -37,7 +37,17 @@ const (
 	// the first attempt, and a plain retry resolves it).
 	promptStalledMaxAttempts = 3
 	promptStalledRetryDelay  = 500 * time.Millisecond
+
+	notReadyPollInterval = 500 * time.Millisecond
 )
+
+// notReadyPollWindow is how long startAgent keeps asking herdr whether an
+// agent that failed to start with agent_not_ready came up after all. herdr
+// reports that error when it did not see the agent ready within its own
+// start timeout, which a dialog explains but a slow start does too: an
+// OpenCode TUI was seen to return it and be up and answering a minute later.
+// A variable so tests can shorten it.
+var notReadyPollWindow = 60 * time.Second
 
 // RunInHerdr runs task's prompt through a real, interactive session of the
 // task's harness (Harness, Claude Code by default) in a herdr pane inside c, instead of a one-shot background
@@ -79,15 +89,29 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 
 	// Resolved before anything is created, so a task naming a harness this
 	// build cannot drive fails here and not halfway through a launch.
-	harness, err := HarnessFor(task.Harness)
+	harness, err := HarnessForTask(task)
 	if err != nil {
 		return task, fmt.Errorf("resolving task harness: %w", err)
+	}
+	launch, err := harness.Launch(task)
+	if err != nil {
+		return task, fmt.Errorf("preparing the soldier launch: %w", err)
+	}
+
+	// The files an earlier soldier's launch left in this camp go first, so
+	// that anything still there is the project's own, and so a camp reused by
+	// a harness that writes none is not left carrying another's config.
+	// Writing the new ones fails the launch, before a pane exists, when one
+	// would overwrite a file of the project's.
+	retractProvisioned(c.Path)
+	if err := provisionFiles(c.Path, launch); err != nil {
+		return task, err
 	}
 
 	// A harness with an extension of vexillum's own (Pi's ask_user) gets it
 	// installed and loaded; written before the tab exists, so a failure
 	// leaves nothing to clean up.
-	launchArgs := harness.ModelEffortArgs(task)
+	launchArgs := append([]string(nil), launch.Args...)
 	if ext, ok := harness.(ExtensionHarness); ok {
 		extra, err := ext.LaunchArgs(projectRoot, task)
 		if err != nil {
@@ -98,7 +122,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 
 	agentName := herdrAgentName(task)
 
-	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName)
+	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName, envList(launch.Env)...)
 	if err != nil {
 		return task, fmt.Errorf("creating herdr tab for camp: %w", err)
 	}
@@ -1017,23 +1041,42 @@ func startAgentOnce(client herdr.Client, harness Harness, name, paneID string, e
 	}
 
 	dialog := harness.TrustDialog()
-	if dialog.Marker == "" {
-		return err
-	}
-	output, readErr := client.AgentRead(name, 20)
-	if readErr != nil || !strings.Contains(strings.ToLower(output), dialog.Marker) {
-		return err
-	}
-	if err := client.AgentSendKeys(name, dialog.Keys...); err != nil {
-		return fmt.Errorf("dismissing workspace trust dialog: %w", err)
+	if dialog.Marker != "" {
+		output, readErr := client.AgentRead(name, 20)
+		if readErr == nil && strings.Contains(strings.ToLower(output), dialog.Marker) {
+			if err := client.AgentSendKeys(name, dialog.Keys...); err != nil {
+				return fmt.Errorf("dismissing workspace trust dialog: %w", err)
+			}
+			if waitUntilReady(client, name, trustDialogSettleWindow, trustDialogPollInterval) {
+				return nil
+			}
+			return fmt.Errorf("soldier agent did not become ready after dismissing the workspace trust dialog")
+		}
 	}
 
-	deadline := time.Now().Add(trustDialogSettleWindow)
-	for time.Now().Before(deadline) {
-		if ready, err := client.AgentReady(name); err == nil && ready {
-			return nil
-		}
-		time.Sleep(trustDialogPollInterval)
+	// Not a dialog vexillum knows how to answer. herdr gave up waiting, which
+	// is not the same as the agent being stuck: ask it again for a while
+	// before treating the start as a failure, and never type into the pane.
+	if waitUntilReady(client, name, notReadyPollWindow, notReadyPollInterval) {
+		return nil
 	}
-	return fmt.Errorf("soldier agent did not become ready after dismissing the workspace trust dialog")
+	return err
+}
+
+// waitUntilReady polls client.AgentReady for name until it reports ready or
+// window passes. An agent herdr says does not exist (not_found) cannot come
+// up, so the wait ends at once; any other error is a hiccup to poll through.
+func waitUntilReady(client herdr.Client, name string, window, interval time.Duration) bool {
+	deadline := time.Now().Add(window)
+	for time.Now().Before(deadline) {
+		ready, err := client.AgentReady(name)
+		if err == nil && ready {
+			return true
+		}
+		if err != nil && herdr.IsNotFound(err) {
+			return false
+		}
+		time.Sleep(interval)
+	}
+	return false
 }

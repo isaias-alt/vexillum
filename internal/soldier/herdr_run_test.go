@@ -39,6 +39,8 @@ func testProjectRoot(t *testing.T, vexillumHome string) string {
 // exercised without a real herdr server or a real Claude Code session.
 type fakeHerdr struct {
 	createTabErr error
+	createTabs   int      // CreateTab calls
+	tabEnv       []string // env passed on the last CreateTab call
 	tabID        string
 	paneID       string
 
@@ -69,7 +71,9 @@ type fakeHerdr struct {
 	tabCloseCalls []string
 }
 
-func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string) (string, string, error) {
+func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
+	f.createTabs++
+	f.tabEnv = env
 	if f.createTabErr != nil {
 		return "", "", f.createTabErr
 	}
@@ -282,7 +286,7 @@ func TestRunInHerdr_StartsTheTasksHarness(t *testing.T) {
 // A task naming a harness this build cannot drive fails before a tab is
 // created or an agent started, with the registry's own error.
 func TestRunInHerdr_RefusesAHarnessWithNoImplementation(t *testing.T) {
-	for _, harness := range []string{"opencode", "gemini"} {
+	for _, harness := range []string{"gemini"} {
 		t.Run(harness, func(t *testing.T) {
 			home := t.TempDir()
 			task := newMissionTask(t)
@@ -865,7 +869,9 @@ func TestRunInHerdr_UnrecognizedStartupBlockFails(t *testing.T) {
 		paneID:     "w1:p2",
 		startErr:   &herdr.APIError{Code: "agent_not_ready", Message: "blocked during startup"},
 		readOutput: "Pick a theme:\n❯ Dark\n  Light",
+		readyAfter: 1 << 30,
 	}
+	defer soldier.SetNotReadyPollWindow(50 * time.Millisecond)()
 
 	got, err := runInHerdr(t, home, "w1", task, c, client)
 	if err == nil {
@@ -876,6 +882,40 @@ func TestRunInHerdr_UnrecognizedStartupBlockFails(t *testing.T) {
 	}
 	if len(client.sendKeysCalls) != 0 {
 		t.Errorf("expected no keys sent for an unrecognized dialog, got %v", client.sendKeysCalls)
+	}
+}
+
+// herdr reports agent_not_ready for an agent that is merely slow to come up,
+// not only for a dialog: an OpenCode TUI returned it and was answering a
+// minute later. Dispatch polls the agent before calling that a failure, and
+// presses no key while it does.
+func TestRunInHerdr_SlowStartIsPolledNotFailed(t *testing.T) {
+	defer soldier.SetNotReadyPollWindow(10 * time.Second)()
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:        "w1:t2",
+		paneID:       "w1:p2",
+		startErr:     &herdr.APIError{Code: "agent_not_ready", Message: "did not become ready in time"},
+		readOutput:   "loading...",
+		readyAfter:   2,
+		promptStatus: "done",
+	}
+
+	got, err := runInHerdr(t, home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("status = %s, want done after the agent came up", got.Status)
+	}
+	if client.readyCalls < 2 {
+		t.Errorf("the agent was polled %d time(s), want at least 2", client.readyCalls)
+	}
+	if len(client.sendKeysCalls) != 0 {
+		t.Errorf("keys were sent while waiting for a slow start: %v", client.sendKeysCalls)
 	}
 }
 

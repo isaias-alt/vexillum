@@ -248,26 +248,31 @@ func TestHarness_ExplicitClaudeAndOverrideAcrossLayers(t *testing.T) {
 		t.Errorf("mission-big = %+v, want the explicit claude harness with model and effort inherited", c)
 	}
 
-	// A later layer overrides the harness without repeating the other fields.
-	// opencode is reserved, so it has nothing to check the inherited values
-	// against yet.
-	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "opencode"}}}`)
+	// A later layer overrides the harness. The model it inherits is checked
+	// against the new harness, so switching to opencode needs a model of its
+	// own shape; the effort is only a label there and is inherited as is.
+	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "opencode", "model": "opencode/glm-5.3-flash-free"}}}`)
 	tbl, err = Load(project, home)
 	if err != nil {
 		t.Fatal(err)
 	}
 	c, _ = tbl.Lookup("mission-big")
-	if c.Harness != "opencode" || c.Model != "sonnet" || c.Effort != "high" {
-		t.Errorf("mission-big = %+v, want harness opencode with model and effort inherited", c)
+	if c.Harness != "opencode" || c.Model != "opencode/glm-5.3-flash-free" || c.Effort != "high" {
+		t.Errorf("mission-big = %+v, want harness opencode with the new model and the inherited effort", c)
+	}
+
+	// Without a model of its own, the inherited claude alias is rejected.
+	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"harness": "opencode"}}}`)
+	if _, err = Load(project, home); err == nil || !strings.Contains(err.Error(), "provider/model") {
+		t.Errorf("Load = %v, want the inherited claude alias rejected for opencode", err)
 	}
 }
 
-// A new profile may name a reserved harness. It loads (the file does not have
-// to change when the harness lands) and its model and effort are not checked
-// against claude's sets; choosing it fails at dispatch, not here.
-func TestHarness_ReservedNameLoads(t *testing.T) {
+// An opencode profile takes provider/model with an optional #variant, and any
+// plain label as its effort: the effort is recorded, never mapped to a variant.
+func TestHarness_OpenCodeProfile(t *testing.T) {
 	project, home := layout(t)
-	writeModels(t, projectModels(project), `{"profiles": {"oc-scout": {"model": "some-oc-model", "effort": "whatever", "when": "x", "harness": "opencode"}}}`)
+	writeModels(t, projectModels(project), `{"profiles": {"oc-scout": {"model": "opencode/deepseek-v4.1-flash-free#high", "effort": "medium", "when": "x", "harness": "opencode"}}}`)
 	tbl, err := Load(project, home)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +281,7 @@ func TestHarness_ReservedNameLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c != (Choice{Model: "some-oc-model", Effort: "whatever", Harness: "opencode"}) {
+	if c != (Choice{Model: "opencode/deepseek-v4.1-flash-free#high", Effort: "medium", Harness: "opencode"}) {
 		t.Errorf("oc-scout = %+v", c)
 	}
 }
@@ -342,12 +347,14 @@ func TestHarness_InvalidValues(t *testing.T) {
 		content string
 		want    []string
 	}{
-		{"unknown harness", `{"profiles": {"mission-big": {"harness": "gemini"}}}`, []string{`profiles["mission-big"].harness`, `unknown harness "gemini"`, "supported: claude, pi", "reserved, not implemented yet: opencode"}},
+		{"unknown harness", `{"profiles": {"mission-big": {"harness": "gemini"}}}`, []string{`profiles["mission-big"].harness`, `unknown harness "gemini"`, "supported: claude, opencode, pi"}},
 		{"empty harness", `{"profiles": {"mission-big": {"harness": ""}}}`, []string{`profiles["mission-big"].harness: must not be empty`}},
 		{"case matters", `{"profiles": {"mission-big": {"harness": "Claude"}}}`, []string{`unknown harness "Claude"`}},
 		{"default has no harness", `{"default": {"harness": "claude"}}`, []string{"invalid JSON", "harness"}},
 		{"pi model must be provider/id", `{"profiles": {"mission-big": {"harness": "pi", "model": "sonnet", "effort": "high"}}}`, []string{`profiles["mission-big"].model`, `"sonnet"`, "provider/id"}},
 		{"pi effort is a thinking level", `{"profiles": {"mission-big": {"harness": "pi", "model": "a/b", "effort": "extreme"}}}`, []string{`profiles["mission-big"].effort`, `"extreme"`, "xhigh"}},
+		{"opencode model must be provider/model", `{"profiles": {"mission-big": {"harness": "opencode", "model": "sonnet", "effort": "high"}}}`, []string{`profiles["mission-big"].model`, `"sonnet"`, "provider/model"}},
+		{"opencode variant must be a plain token", `{"profiles": {"mission-big": {"harness": "opencode", "model": "opencode/x#hi gh", "effort": "high"}}}`, []string{`profiles["mission-big"].model`, "#variant"}},
 		{"claude values still checked", `{"profiles": {"mission-big": {"harness": "claude", "model": "gpt"}}}`, []string{`profiles["mission-big"].model`, `"gpt"`}},
 	}
 	for _, c := range cases {
