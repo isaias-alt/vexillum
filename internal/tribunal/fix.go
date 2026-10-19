@@ -39,7 +39,7 @@ func fixable(sr StepResult) ([]Finding, bool) {
 func runFix(campPath string, findings []Finding, opts Options, round int) (StepResult, error) {
 	prompt := buildFixPrompt(findings, opts.intent(), opts.Branch)
 	model, effort := opts.modelEffort(fixModel, fixEffort)
-	if _, err := runHarness(campPath, opts.Harness, state.Task{Prompt: prompt, Model: model, Effort: effort}, opts.timeout()); err != nil {
+	if _, err := runHarness(campPath, opts.Harness, state.Task{Prompt: prompt, Model: model, Effort: effort, HarnessMajor: opts.HarnessMajor}, opts.timeout()); err != nil {
 		if errors.Is(err, errTimedOut) {
 			detail := fmt.Sprintf("the fixer %v", err)
 			if status, err := gitOutput(campPath, "status", "--porcelain"); err == nil && status != "" {

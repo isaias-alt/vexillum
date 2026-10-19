@@ -207,7 +207,7 @@ func TestRunReview_UsesTheMissionsHarness(t *testing.T) {
 // A harness with no implementation never falls back to claude: the review
 // step errors out without invoking anything, so it can never read as a pass.
 func TestRunReview_RefusesAHarnessWithNoImplementation(t *testing.T) {
-	for _, harness := range []string{"opencode", "gemini"} {
+	for _, harness := range []string{"gemini"} {
 		t.Run(harness, func(t *testing.T) {
 			dir := newTribunalRepo(t)
 			commitFile(t, dir, "change.txt", "hi\n")

@@ -63,6 +63,10 @@ type Options struct {
 	// Harness is state.Task.Harness, the agent CLI the mission ran on: the
 	// reviewer and the fixer run through it too. Empty means claude.
 	Harness string
+	// HarnessMajor is state.Task.HarnessMajor, the generation of that CLI the
+	// mission was dispatched on (OpenCode: 1 or 2). Zero detects it when the
+	// reviewer first runs.
+	HarnessMajor int
 	// TaskModel and TaskEffort are state.Task.Model and Effort, the model and
 	// effort the mission ran with. The reviewer and the fixer use them on a
 	// harness whose models are not Claude's (see modelEffort).

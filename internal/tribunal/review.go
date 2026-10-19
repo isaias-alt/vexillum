@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -102,7 +103,7 @@ func runReview(campPath, base string, opts Options, fixStartSHA string) (StepRes
 				"\nReview once more and finish with a single corrected JSON object that follows the schema exactly."
 		}
 		model, effort := opts.modelEffort(reviewModel, reviewEffort)
-		out, err := runHarness(campPath, opts.Harness, state.Task{Prompt: turn, Model: model, Effort: effort}, opts.timeout())
+		out, err := runHarness(campPath, opts.Harness, state.Task{Prompt: turn, Model: model, Effort: effort, HarnessMajor: opts.HarnessMajor}, opts.timeout())
 		if errors.Is(err, errTimedOut) {
 			return StepResult{Step: StepReview, Passed: false, Notes: notes,
 				Detail: fmt.Sprintf("the reviewer %v - a timeout is never treated as a pass", err)}, nil
@@ -182,6 +183,13 @@ func runHarness(campPath, harness string, task state.Task, timeout time.Duration
 	defer cancel()
 	cmd := exec.CommandContext(ctx, spec.Command, spec.Args...)
 	cmd.Dir = campPath
+	if len(spec.Env) > 0 {
+		cmd.Env = append(os.Environ(), spec.Env...)
+	}
+	// An explicit null stdin, not an inherited or open pipe: a harness that
+	// reads piped stdin to EOF (OpenCode's run) would otherwise hang until
+	// the timeout.
+	cmd.Stdin = nil
 	// A killed claude may leave children holding the output pipes open;
 	// WaitDelay force-closes them so a timeout can never hang here.
 	cmd.WaitDelay = 5 * time.Second
@@ -193,7 +201,18 @@ func runHarness(campPath, harness string, task state.Task, timeout time.Duration
 		return "", fmt.Errorf("%w after %s", errTimedOut, timeout)
 	}
 	if err != nil {
-		return "", fmt.Errorf("%w\n%s", err, strings.TrimSpace(stderr.String()))
+		detail := strings.TrimSpace(stderr.String())
+		// A harness that reports its failure on stdout (OpenCode: a JSON
+		// error line, with exit code 1) names the cause there.
+		if spec.ParseOutput != nil {
+			if _, perr := spec.ParseOutput(stdout.String()); perr != nil {
+				detail = perr.Error()
+			}
+		}
+		return "", fmt.Errorf("%w\n%s", err, detail)
+	}
+	if spec.ParseOutput != nil {
+		return spec.ParseOutput(stdout.String())
 	}
 	return stdout.String(), nil
 }

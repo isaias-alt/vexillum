@@ -350,6 +350,7 @@ func runShip(projectDir, vexillumHome, taskID string, ship shipOptions, stdout, 
 	opts.Branch = c.Branch
 	opts.TaskPrompt = task.Prompt
 	opts.Harness = task.Harness
+	opts.HarnessMajor = task.HarnessMajor
 	opts.TaskModel = task.Model
 	opts.TaskEffort = task.Effort
 	opts.TaskAmendments = task.Amendments
