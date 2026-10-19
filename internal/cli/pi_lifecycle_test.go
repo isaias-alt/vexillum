@@ -158,7 +158,7 @@ func TestPiLifecycle_DispatchStatusLandStrike(t *testing.T) {
 	if !slices.Equal(client.kinds, []string{"pi"}) {
 		t.Errorf("herdr agent kinds = %v, want [pi]", client.kinds)
 	}
-	wantArgs := "--approve\n--tui-mode\nregular\n--model\nanthropic/claude-haiku-4-5\n--thinking\nlow"
+	wantArgs := "--approve\n--tui-mode\nregular\n--model\nanthropic/claude-haiku-4-5\n--thinking\nlow\n" + askExtensionArgs(t, project, home, task.ID)
 	if got := recorded(t, rec, "args", 1); got != wantArgs {
 		t.Errorf("pi was started with:\n%s\nwant:\n%s", got, wantArgs)
 	}
@@ -318,7 +318,7 @@ func TestPiLifecycle_Redispatch(t *testing.T) {
 	if code := runRedispatch(project, home, "w1", task.ID, client, &out, &out); code != 0 {
 		t.Fatalf("redispatch: exit %d: %s", code, out.String())
 	}
-	wantArgs := "--approve\n--tui-mode\nregular\n--model\nopenai/gpt-5\n--thinking\nhigh"
+	wantArgs := "--approve\n--tui-mode\nregular\n--model\nopenai/gpt-5\n--thinking\nhigh\n" + askExtensionArgs(t, project, home, task.ID)
 	if got := recorded(t, rec, "args", 1); got != wantArgs {
 		t.Errorf("pi was restarted with:\n%s\nwant:\n%s", got, wantArgs)
 	}
