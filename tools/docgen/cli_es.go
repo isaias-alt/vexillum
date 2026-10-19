@@ -53,6 +53,14 @@ CLAUDE.md se crea si no existe, y entonces no necesita la línea @AGENTS.md).
 Respondé no para crear AGENTS.md como se describió arriba. Un bloque que ya
 vive en CLAUDE.md se queda ahí.
 
+OpenCode lee AGENTS.md primero y CLAUDE.md solo cuando no hay AGENTS.md. Por eso,
+con un commander opencode, un proyecto que no tiene ninguno de los dos archivos
+recibe el bloque en un AGENTS.md nuevo sin hacer la pregunta, e init avisa (no
+cambia nada) cuando el bloque está en un CLAUDE.md que un AGENTS.md le oculta a
+OpenCode. OpenCode ya lee las skills de .claude/skills/, así que no necesita
+nada más en el proyecto: el sentinel lo despierta desde afuera, a través de su
+API HTTP.
+
 El bloque se escribe en el idioma que detecta en el archivo que lo contiene
 (inglés cuando no puede saberlo); vos lo confirmás o lo cambiás. Después init
 pregunta "Install the vexillum, forum and muster skills?" y, si aceptás, las
@@ -205,6 +213,16 @@ la carpeta (lee ~/.pi/agent/trust.json y nunca lo escribe; sin respuesta
 guardada advierte que Pi va a preguntar una vez), y que el await de la
 extensión encuentre un binario vx desde el entorno en el que corre doctor. Solo
 advierten.
+
+Cuando opencode es uno de los commanders del proyecto, doctor también revisa
+cómo lo va a despertar el sentinel, desde afuera, a través de la API HTTP V2 de
+OpenCode: si el commander se registró (su pane sigue vivo), si el servicio de
+fondo responde 'GET /api/info' en este entorno (se consulta antes con 'opencode
+service status', así que doctor nunca arranca uno; OpenCode 1.x no tiene esa API
+y es una advertencia), y si el bloque de vexillum está en un archivo que
+OpenCode lee (un bloque en CLAUDE.md se ignora cuando existe un AGENTS.md).
+Doctor no le manda ningún prompt a la ruta del wake. Los chequeos de la API usan
+el HOME y los directorios XDG_* de este shell, que el sentinel debe compartir.
 
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando
@@ -795,6 +813,20 @@ proyecto y registra un wake de forum, que tanto "drain" como "await" informan
 como "forum session <file>: N new messages (ended: false). Run vx forum
 inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
 confirmados se descarta. Ver "vx forum" para el listener.
+
+Un commander OpenCode 2.x no tiene hook Stop, así que el propio sentinel entrega
+sus wakes: cuando un proyecto tiene un commander opencode registrado y vivo (ver
+"vx doctor") y ningún await vivo, el sentinel postea el mismo texto en la sesión
+del commander a través de la API HTTP de OpenCode (opencode api POST
+/api/session/<id>/prompt, encolado detrás del turno que corre, sin tocar el
+editor), una sola vez, con las mismas reglas para descartar lo que ya no es
+noticia. Un wake que no puede entregar (todavía no hay sesión porque no se envió
+nada en el pane, el servicio es inalcanzable, un sentinel con otro HOME o
+directorios XDG que el OpenCode del commander) se vuelve a poner y se reintenta
+en cada pasada, nunca se descarta. Después de 30 segundos fallando, y solo
+mientras herdr informa al commander como idle, lo escribe en el pane con "herdr
+agent prompt", que puede pegar el texto a un borrador que la persona escribió
+pero no envió.
 
 Corre un sentinel por máquina, garantizado por un lock que el kernel suelta
 cuando el proceso muere, así que un crash nunca deja un reclamo viejo. El

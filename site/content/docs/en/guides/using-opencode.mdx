@@ -3,7 +3,7 @@ title: Using OpenCode
 description: Run a model profile's soldiers on OpenCode instead of Claude Code, on OpenCode 1.x or 2.x, including its free Zen models.
 ---
 
-A model profile can name a **harness**, the agent CLI its soldiers run on. With `"harness": "opencode"` the soldiers of that profile run on [OpenCode](https://opencode.ai), which can use many providers and models, including free ones. The commander stays a Claude Code session, and a task keeps its harness through `vx redispatch`, `vx prompt`, `vx decide`, `vx land` and `vx strike`.
+A model profile can name a **harness**, the agent CLI its soldiers run on. With `"harness": "opencode"` the soldiers of that profile run on [OpenCode](https://opencode.ai), which can use many providers and models, including free ones. The commander stays in Claude Code unless you choose otherwise (see [OpenCode as the commander](/docs/guides/opencode-commander)), and a task keeps its harness through `vx redispatch`, `vx prompt`, `vx decide`, `vx land` and `vx strike`.
 
 OpenCode has two generations that share the `opencode` command, and vexillum drives both:
 
@@ -123,7 +123,6 @@ herdr itself rejects `herdr agent prompt` with `agent_blocked` while a pane is b
 - Merging with a project's own OpenCode configuration.
 - Mapping `effort` to a variant.
 - Structured answers for a question form of several questions.
-- OpenCode as the commander.
 - Skills for OpenCode soldiers.
 
 For a checklist to verify an OpenCode setup, 1.x in particular, on a real machine, see `docs/verification/opencode-soldier-checklist.md` in the repository.
@@ -133,4 +132,5 @@ For a checklist to verify an OpenCode setup, 1.x in particular, on a real machin
 - [models.json](/docs/reference/models-json)
 - [`vx dispatch`](/docs/reference/cli/dispatch), [`vx decide`](/docs/reference/cli/decide) and [`vx doctor`](/docs/reference/cli/doctor)
 - [Blocked and interrupted](/docs/guides/blocked-and-interrupted)
+- [OpenCode as the commander](/docs/guides/opencode-commander)
 - [Using Pi](/docs/guides/using-pi)

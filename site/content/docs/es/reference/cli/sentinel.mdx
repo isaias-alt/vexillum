@@ -41,6 +41,20 @@ como "forum session <file>: N new messages (ended: false). Run vx forum
 inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
 confirmados se descarta. Ver "vx forum" para el listener.
 
+Un commander OpenCode 2.x no tiene hook Stop, así que el propio sentinel entrega
+sus wakes: cuando un proyecto tiene un commander opencode registrado y vivo (ver
+"vx doctor") y ningún await vivo, el sentinel postea el mismo texto en la sesión
+del commander a través de la API HTTP de OpenCode (opencode api POST
+/api/session/<id>/prompt, encolado detrás del turno que corre, sin tocar el
+editor), una sola vez, con las mismas reglas para descartar lo que ya no es
+noticia. Un wake que no puede entregar (todavía no hay sesión porque no se envió
+nada en el pane, el servicio es inalcanzable, un sentinel con otro HOME o
+directorios XDG que el OpenCode del commander) se vuelve a poner y se reintenta
+en cada pasada, nunca se descarta. Después de 30 segundos fallando, y solo
+mientras herdr informa al commander como idle, lo escribe en el pane con "herdr
+agent prompt", que puede pegar el texto a un borrador que la persona escribió
+pero no envió.
+
 Corre un sentinel por máquina, garantizado por un lock que el kernel suelta
 cuando el proceso muere, así que un crash nunca deja un reclamo viejo. El
 sentinel registra el build desde el que arrancó (versión y archivo ejecutable)

@@ -3,7 +3,7 @@ title: Usar OpenCode
 description: Corré los soldiers de un perfil de modelo en OpenCode en lugar de Claude Code, en OpenCode 1.x o 2.x, incluidos sus modelos gratuitos de Zen.
 ---
 
-Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Con `"harness": "opencode"` los soldiers de ese perfil corren en [OpenCode](https://opencode.ai), que puede usar muchos proveedores y modelos, incluidos los gratuitos. El commander sigue siendo una sesión de Claude Code, y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
+Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Con `"harness": "opencode"` los soldiers de ese perfil corren en [OpenCode](https://opencode.ai), que puede usar muchos proveedores y modelos, incluidos los gratuitos. El commander sigue en Claude Code salvo que elijas otra cosa (mirá [OpenCode como commander](/es/docs/guides/opencode-commander)), y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
 
 OpenCode tiene dos generaciones que comparten el comando `opencode`, y vexillum maneja las dos:
 
@@ -123,7 +123,6 @@ herdr mismo rechaza `herdr agent prompt` con `agent_blocked` mientras un pane es
 - Mezclar con la configuración de OpenCode propia de un proyecto.
 - Convertir `effort` en un variant.
 - Respuestas estructuradas para un formulario de varias preguntas.
-- OpenCode como commander.
 - Skills para los soldiers de OpenCode.
 
 Para una checklist que verifique una configuración de OpenCode, 1.x en particular, en una máquina real, mirá `docs/verification/opencode-soldier-checklist.md` en el repositorio.
@@ -133,4 +132,5 @@ Para una checklist que verifique una configuración de OpenCode, 1.x en particul
 - [models.json](/es/docs/reference/models-json)
 - [`vx dispatch`](/es/docs/reference/cli/dispatch), [`vx decide`](/es/docs/reference/cli/decide) y [`vx doctor`](/es/docs/reference/cli/doctor)
 - [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted)
+- [OpenCode como commander](/es/docs/guides/opencode-commander)
 - [Usar Pi](/es/docs/guides/using-pi)

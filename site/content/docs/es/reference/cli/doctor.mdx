@@ -44,6 +44,16 @@ guardada advierte que Pi va a preguntar una vez), y que el await de la
 extensión encuentre un binario vx desde el entorno en el que corre doctor. Solo
 advierten.
 
+Cuando opencode es uno de los commanders del proyecto, doctor también revisa
+cómo lo va a despertar el sentinel, desde afuera, a través de la API HTTP V2 de
+OpenCode: si el commander se registró (su pane sigue vivo), si el servicio de
+fondo responde 'GET /api/info' en este entorno (se consulta antes con 'opencode
+service status', así que doctor nunca arranca uno; OpenCode 1.x no tiene esa API
+y es una advertencia), y si el bloque de vexillum está en un archivo que
+OpenCode lee (un bloque en CLAUDE.md se ignora cuando existe un AGENTS.md).
+Doctor no le manda ningún prompt a la ruta del wake. Los chequeos de la API usan
+el HOME y los directorios XDG_* de este shell, que el sentinel debe compartir.
+
 También revisa el hook Stop del sentinel, el que despierta al commander cuando
 un soldier termina: si está registrado en .claude/settings.json, si su comando
 encuentra un binario vx al correr desde un entorno vacío (solo HOME y

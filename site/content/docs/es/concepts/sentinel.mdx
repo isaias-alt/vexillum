@@ -61,6 +61,10 @@ Cada `await` se registra en `~/.vexillum/sentinel-awaiters/` y nunca sobrevive a
 
 Pi no tiene un hook Stop. Un proyecto cuyo commander corre en [Pi](/es/docs/guides/pi-commander) recibe en su lugar `.pi/extensions/vexillum-wake.ts`, que arranca el mismo `vx sentinel await` como hijo de Pi y, cuando sale con código 2, le entrega su mensaje al modelo con `pi.sendUserMessage` (como follow-up cuando Pi está a mitad de turno). Todo lo anterior vale sin cambios, porque es el mismo `await`: una entrega por wake, un dueño que lo baja junto con Pi, el sentinel arrancado y refrescado por él. La extensión además guarda un wake que Pi no pudo recibir en ese momento y vuelve a intentar, y no hace nada en un camp.
 
+## Un commander en OpenCode
+
+Un commander OpenCode 2.x no tiene hook Stop, así que entrega el propio sentinel: después de registrar un wake para un proyecto que tiene un commander OpenCode registrado y vivo (mirá [el registro de commanders](/es/docs/reference/files)) y ningún `await` vivo, postea el mismo texto, una sola vez y bajo las mismas reglas de descarte de lo viejo, en la sesión del commander a través de la API HTTP de OpenCode (`POST /api/session/<id>/prompt`, encolado detrás del turno que corre, sin tocar el editor). Un wake que no puede entregar (sin sesión todavía, el servicio inalcanzable) se vuelve a poner y se reintenta, nunca se descarta, y después de 30 segundos fallando cae a `herdr agent prompt` cuando el commander está idle, lo que puede pegar el wake a un borrador sin enviar. Mirá [OpenCode como commander](/es/docs/guides/opencode-commander).
+
 ## El hook no depende de tu PATH
 
 Claude Code corre el hook en un shell que puede no haber leído nunca tu perfil, así que un `vx sentinel await` pelado puede fallar con `command not found` cuando vx vive en `~/.local/bin`. Entonces el commander nunca se despertaría, sin que nada lo avise. Por eso el comando registrado busca vx por su cuenta, en este orden:

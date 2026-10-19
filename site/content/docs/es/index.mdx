@@ -3,7 +3,7 @@ title: Introducción
 description: vexillum orquesta agentes de código desde tu terminal, un commander, muchos soldiers, cada uno en su propio camp.
 ---
 
-vexillum es un orquestador de agentes de código por CLI, escrito en Go. Le hablás a un solo agente, el **commander** (Claude Code). Él despacha **soldiers** (más sesiones de Claude Code) en paralelo. Cada soldier trabaja en su propio git worktree (un **camp**), así el trabajo en paralelo nunca choca, y devuelve un cambio para aterrizar (una **mission**) o un reporte escrito (un **scout**). Un **sentinel** en segundo plano vigila a los soldiers y despierta al commander solo cuando algo necesita atención.
+vexillum es un orquestador de agentes de código por CLI, escrito en Go. Le hablás a un solo agente, el **commander** (Claude Code por defecto). Él despacha **soldiers** (más sesiones de Claude Code) en paralelo. Cada soldier trabaja en su propio git worktree (un **camp**), así el trabajo en paralelo nunca choca, y devuelve un cambio para aterrizar (una **mission**) o un reporte escrito (un **scout**). Un **sentinel** en segundo plano vigila a los soldiers y despierta al commander solo cuando algo necesita atención.
 
 No hay una interfaz nueva que aprender: seguís hablando con Claude Code y el commander llama a `vx` por vos.
 
@@ -16,7 +16,7 @@ Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)
 
 - **Un único binario en Go.** Hace plomería determinista: crea worktrees, inicia sesiones, lleva el estado en disco y rechaza operaciones inseguras. Se instala con Homebrew o con un script de curl, sin dependencias de runtime.
 - **No es el cerebro.** El criterio del commander (cuándo despachar, qué modelo elegir, cuándo preguntarte) vive en markdown: un núcleo corto en un bloque de tu propio `AGENTS.md` (o `CLAUDE.md`), más [skills](/es/docs/concepts/skills) que el commander carga cuando las necesita. `vx init` las escribe en tu proyecto, después de preguntarte. Podés leerlas y editarlas. Ver [AGENTS.md y rules](/es/docs/concepts/agents-md-and-rules).
-- **Claude Code, Pi y OpenCode.** El commander es Claude Code. Un soldier corre en Claude Code por defecto, o en [Pi](/es/docs/guides/using-pi) u [OpenCode](/es/docs/guides/using-opencode) cuando su perfil de modelo lo dice. Todavía no se soportan otros harnesses. Las contribuciones son bienvenidas: ver [Contribuir](/es/docs/guides/contributing).
+- **Claude Code, Pi y OpenCode.** El commander es Claude Code por defecto, o [Pi](/es/docs/guides/pi-commander) u [OpenCode](/es/docs/guides/opencode-commander) cuando elegís uno con `vx init --commander`. Un soldier corre en Claude Code por defecto, o en [Pi](/es/docs/guides/using-pi) u [OpenCode](/es/docs/guides/using-opencode) cuando su perfil de modelo lo dice. Todavía no se soportan otros harnesses. Las contribuciones son bienvenidas: ver [Contribuir](/es/docs/guides/contributing).
 - **herdr para los panes.** Los soldiers corren en panes de [herdr](https://herdr.dev). `vx doctor` lo verifica pero nunca lo instala.
 
 ## Siguientes pasos

@@ -61,6 +61,10 @@ Each `await` records itself in `~/.vexillum/sentinel-awaiters/` and never outliv
 
 Pi has no Stop hook. A project whose commander runs in [Pi](/docs/guides/pi-commander) gets `.pi/extensions/vexillum-wake.ts` instead, which starts the same `vx sentinel await` as a child of Pi and, when it exits with code 2, hands its message to the model with `pi.sendUserMessage` (as a follow-up when Pi is mid-turn). Everything above holds unchanged, because it is the same `await`: one delivery per wake, an owner that takes it down with Pi, the sentinel started and refreshed by it. The extension also keeps a wake that Pi could not take at that moment and tries again, and does nothing in a camp.
 
+## A commander in OpenCode
+
+An OpenCode 2.x commander has no Stop hook, so the sentinel itself delivers: after it records a wake for a project that has a live registered OpenCode commander (see [the commander registry](/docs/reference/files)) and no live `await`, it posts the same text, once and under the same stale-drop rules, into the commander's session through OpenCode's HTTP API (`POST /api/session/<id>/prompt`, queued behind the running turn, without touching the editor). A wake it cannot deliver (no session yet, the service unreachable) is put back and retried, never dropped, and after 30 seconds of failing it falls back to `herdr agent prompt` when the commander is idle, which can glue the wake onto an unsent draft. See [OpenCode as the commander](/docs/guides/opencode-commander).
+
 ## The hook does not depend on your PATH
 
 Claude Code runs the hook in a shell that may never have read your profile, so a bare `vx sentinel await` can fail with `command not found` when vx lives in `~/.local/bin`. The commander would then never be woken, with nothing to say so. The registered command therefore looks for vx itself, in this order:

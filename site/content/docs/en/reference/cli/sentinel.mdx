@@ -41,6 +41,19 @@ in the project's inbox and records a forum wake, which both "drain" and
 once-only delivery; a forum wake whose messages were already confirmed is
 dropped. See "vx forum" for the listener.
 
+An OpenCode 2.x commander has no Stop hook, so the sentinel itself delivers its
+wakes: when a project has a live registered opencode commander (see "vx doctor")
+and no live await, the sentinel posts the same text into the commander's session
+through OpenCode's HTTP API (opencode api POST /api/session/<id>/prompt, queued
+behind the turn that is running, without touching the editor), once, under the
+same rules for dropping what is no longer news. A wake it cannot deliver (no
+session yet because nothing was sent in the pane, the service unreachable, a
+sentinel with another HOME or XDG directories than the commander's OpenCode) is
+put back and retried on every pass, never dropped. After 30 seconds of failing,
+and only while herdr reports the commander idle, it types the wake into the pane
+with "herdr agent prompt", which can glue the text onto a draft the person typed
+but did not send.
+
 One sentinel runs per machine, enforced by a lock the kernel drops when the
 process dies, so a crash never leaves a stale claim. The sentinel records the
 build it started from (version and executable file) in

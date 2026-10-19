@@ -18,7 +18,7 @@ Requirements:
 - a git repository for your project
 - optional: `gh` (for `vx ship`)
 - optional: [Pi](https://pi.dev), only if a model profile sets `"harness": "pi"` to run its soldiers on Pi instead of Claude Code
-- optional: [OpenCode](https://opencode.ai) (1.x from 1.18.29, or 2.x), only if a model profile sets `"harness": "opencode"`
+- optional: [OpenCode](https://opencode.ai) (1.x from 1.18.29, or 2.x), only if a model profile sets `"harness": "opencode"`, or to run the commander in OpenCode 2.x (`vx init --commander opencode`, see the [guide](https://vx.lucasco.dev/docs/guides/opencode-commander))
 
 `vx doctor` checks that Claude Code, herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
 

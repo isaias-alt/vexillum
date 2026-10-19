@@ -15,14 +15,14 @@ You talk to a commander. It dispatches soldiers, each in its own camp, and a sen
   caption="The pieces of vexillum and how they talk to each other."
 />
 
-- You talk to the **commander**, a Claude Code session steered by `AGENTS.md` and skills. It opens artifacts for you in the **forum** and reads your feedback from there.
+- You talk to the **commander**, a Claude Code session (or Pi or OpenCode, see [Pi as the commander](/docs/guides/pi-commander) and [OpenCode as the commander](/docs/guides/opencode-commander)) steered by `AGENTS.md` and skills. It opens artifacts for you in the **forum** and reads your feedback from there.
 - The commander runs `vx dispatch`. The **vexillum** binary keeps its state on disk, acquires a **camp** and starts a **soldier** in a **herdr** pane.
 - The **sentinel** polls herdr every 5 seconds, records each outcome in the state and wakes the commander through the `Stop` hook.
 
 ## Decisions that are settled
 
 - **Go**, shipped as a binary by Homebrew and curl, with no runtime dependencies.
-- **Claude Code** is the harness for the commander and, by default, for every soldier. A model profile can run its soldiers on **Pi** or **OpenCode** instead; the binary reaches all of them through one `Harness` interface.
+- **Claude Code** is the default harness for the commander and for every soldier. A model profile can run its soldiers on **Pi** or **OpenCode** instead; the binary reaches all of them through one `Harness` interface.
 - **herdr** hosts the panes the soldiers run in.
 - **Intelligence is markdown, not Go.** The binary does deterministic plumbing; routing and judgment live in the AGENTS.md core and the skills.
 - **Domain vocabulary stays in English** (commander, soldier, mission, scout, camp, sentinel) in every language.

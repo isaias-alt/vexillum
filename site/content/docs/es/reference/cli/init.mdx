@@ -31,6 +31,14 @@ CLAUDE.md se crea si no existe, y entonces no necesita la línea @AGENTS.md).
 Respondé no para crear AGENTS.md como se describió arriba. Un bloque que ya
 vive en CLAUDE.md se queda ahí.
 
+OpenCode lee AGENTS.md primero y CLAUDE.md solo cuando no hay AGENTS.md. Por eso,
+con un commander opencode, un proyecto que no tiene ninguno de los dos archivos
+recibe el bloque en un AGENTS.md nuevo sin hacer la pregunta, e init avisa (no
+cambia nada) cuando el bloque está en un CLAUDE.md que un AGENTS.md le oculta a
+OpenCode. OpenCode ya lee las skills de .claude/skills/, así que no necesita
+nada más en el proyecto: el sentinel lo despierta desde afuera, a través de su
+API HTTP.
+
 El bloque se escribe en el idioma que detecta en el archivo que lo contiene
 (inglés cuando no puede saberlo); vos lo confirmás o lo cambiás. Después init
 pregunta "Install the vexillum, forum and muster skills?" y, si aceptás, las

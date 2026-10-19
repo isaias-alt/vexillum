@@ -1,0 +1,103 @@
+---
+title: OpenCode as the commander
+description: Talk to the commander in OpenCode 2.x instead of Claude Code, and how the sentinel wakes it through OpenCode's HTTP API.
+---
+
+The commander can run in [OpenCode](https://opencode.ai) instead of Claude Code, or next to it: `vx init --commander opencode` records OpenCode as one of the project's commander harnesses (`--commander` is repeatable, and Claude Code is the default). The soldiers keep their own harness, chosen per model profile, whichever tool the commander runs in. See [Using OpenCode](/docs/guides/using-opencode) for soldiers.
+
+This page describes **OpenCode 2.x, checked against 2.0.32**. The wake described below needs 2.x: 1.x has no `opencode api` command, see [OpenCode 1.x](#opencode-1x).
+
+<Callout type="warn" title="What was and was not verified">
+  The wake delivery was run live on OpenCode 2.0.32, in a throwaway directory, `HOME` and XDG directories, in a real herdr pane: the sentinel put the wake into the session as a user turn, a draft typed in the editor stayed where it was, and a wake that arrived before the first message was held and then delivered. The free Zen models answered every request with `403 OpenCode's free tier can only be used from within OpenCode` during that run, so **no model ever answered a wake**. Whether a model obeys the wake text, loads the vexillum skill, and keeps to "never do the soldier's work" has not been verified. See [What is not verified](#what-is-not-verified) and `docs/verification/opencode-commander-checklist.md` in the repository.
+</Callout>
+
+## Set it up
+
+1. Install OpenCode 2.x and herdr's integration for it, which is what lets herdr report the commander's state and session:
+
+   ```bash
+   herdr integration install opencode
+   ```
+
+2. In the project, run:
+
+   ```bash
+   vx init --commander opencode
+   ```
+
+   It writes the vexillum block into `AGENTS.md` (a new one when the project has neither `AGENTS.md` nor `CLAUDE.md`) and the three skills into `.claude/skills/`. It writes **nothing else** in the project: no `.claude/settings.json` hook, no `CLAUDE.md` import, no OpenCode plugin and no file under `~/.config/opencode`. OpenCode reads `.claude/skills/` itself.
+
+3. Open OpenCode in the project's directory and talk to it. The first time that commander runs `vx dispatch` or `vx forum <file>` (any command of a commander), vexillum registers the herdr pane it ran in, so the sentinel knows where to deliver. See [Forum](/docs/guides/forum#the-listener-and-the-inbox) and [Files](/docs/reference/files).
+4. Run `vx doctor` from the project. For an OpenCode commander it requires the `opencode` binary and adds the lines described in [What `vx doctor` checks](#what-vx-doctor-checks).
+
+## How the sentinel wakes it
+
+Claude Code's commander is woken from inside, by a Stop hook. OpenCode 2.x has no such hook, and its server plugins run in one shared background service that cannot tell which pane they belong to. So the [sentinel](/docs/concepts/sentinel) delivers from outside. After it has recorded a wake for a project that has a **live registered OpenCode commander and no live `vx sentinel await`**, it:
+
+1. asks herdr for the commander's pane (`herdr agent get <pane>`), which reports the OpenCode session id;
+2. posts the wake to that session through OpenCode's own HTTP API, the way `opencode api` does:
+
+   ```bash
+   opencode api POST /api/session/<session-id>/prompt -d '{"text":"<the wake text>","delivery":"queue"}'
+   ```
+
+The text is the one the Stop hook would have delivered, and the same rules apply: a wake is delivered once, and dropped when it is no longer news (the task changed since, its camp was struck, its mission was landed, or the forum messages were already confirmed). It arrives as a **user turn** in the commander's session, queued after the turn that is running, if any. It does not touch the editor, so a message the person is typing but has not sent stays in the editor.
+
+The service is found through `HOME` and the `XDG_*` directories (its password lives in `$XDG_CONFIG_HOME/opencode/service.json`), and `opencode` is looked up in `PATH`. The sentinel needs the **same `HOME` and XDG directories as the commander's OpenCode**, and `opencode` on its `PATH`. One sentinel serves the whole machine and is started by whichever command came first, usually `vx dispatch` run from a commander's shell, which hands it that shell's environment: with the default `HOME` and no XDG overrides, they agree. The sentinel never starts an OpenCode service: it checks `opencode service status` first, because `opencode api` would start one.
+
+### Held and retried, never dropped
+
+- A pane with **no session yet** (herdr shows none until the first message is sent) cannot be reached by the API. The wake stays on disk, and goes in as soon as there is a session.
+- When the call fails (service not running, a different `HOME`, a network error), the wake is **put back** and tried again on the next pass, about every 5 seconds. The sentinel logs each distinct problem once, with a hint when it looks like a `HOME`/XDG mismatch.
+- When no live OpenCode commander is registered, the wake is not touched: it waits for whoever listens next.
+
+### The fallback, and its cost
+
+When the API route has been failing for 30 seconds **and** the commander is idle (herdr reports `idle` or `done`, never `working` or `blocked`), the sentinel falls back to `herdr agent prompt`, which types the wake into the TUI's editor and submits it. It is a fallback because it **can glue the wake onto text the person typed but did not send**: with the editor holding `DRAFT2 typed, unsent `, the user message that reached the session read `DRAFT2 typed, unsent Forum feedback is waiting for you:...` (observed on 2.0.32). A commander that is blocked, or busy working, is left alone until the API works again or it is idle.
+
+If a Claude Code commander of the same project has a live Stop hook `await`, the `await` delivers the wake, and the OpenCode commander is not woken for it.
+
+## Where the rules go
+
+OpenCode reads the first of `AGENTS.md` and `CLAUDE.md` that exists, and ignores the other. It does not expand `@AGENTS.md` inside them. So the vexillum block must be in a file OpenCode reads:
+
+- in `AGENTS.md`: always read;
+- in `CLAUDE.md`, with no `AGENTS.md` in the project: read as a fallback (according to OpenCode's documentation; not exercised live), and hidden the moment an `AGENTS.md` appears;
+- in `CLAUDE.md` while an `AGENTS.md` exists: **ignored**. `vx init` and `vx upgrade` warn about it and move nothing, and `vx doctor` shows it as a warning. Delete the block from `CLAUDE.md` and run `vx init` again to put it in `AGENTS.md`.
+
+`vx init --commander opencode` in a project with neither file creates `AGENTS.md` without asking the usual question about `CLAUDE.md`. A project that already has a `CLAUDE.md` of your own and no `AGENTS.md` keeps the block there, so your own rules stay visible to OpenCode.
+
+The skills in `.claude/skills/` are read by OpenCode natively. Setting `OPENCODE_DISABLE_CLAUDE_CODE` or `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` hides them (per OpenCode's documentation); `vx doctor` warns when either is set.
+
+## What `vx doctor` checks
+
+For a project whose commanders include `opencode`, on top of the binary, its version and the herdr integration:
+
+| Line | What it means |
+| --- | --- |
+| `OpenCode commander registered` | the registry holds a live pane for the OpenCode commander, with its session. "No commander has registered yet" is not a failure: it registers the first time it runs `vx dispatch` or `vx forum`. A registered pane that is gone is a warning. |
+| `OpenCode wake API` | OpenCode is 2.x and its background service answers `GET /api/info` in this environment, with the same version as the binary. Doctor asks `opencode service status` first and **never starts a service**, and it **never calls the prompt route**, which would add a message to your session. A stopped service is fine while no commander is open, and a warning while one is. OpenCode 1.x is a warning. |
+| `OpenCode reads the vexillum block` | the block is in a file OpenCode reads; a warning when it is hidden by an `AGENTS.md` (see above). |
+| `OpenCode reads .claude/skills` | shown only when `OPENCODE_DISABLE_CLAUDE_CODE` or `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` is set |
+
+The checks use this shell's `HOME` and `XDG_*`, which is what the sentinel needs to share. `GET /api/info` and `POST /api/session/<id>/prompt` come from the OpenCode v2.0.32 sources and were exercised live on 2.0.32 only; a later 2.x may move them.
+
+## OpenCode 1.x
+
+`opencode api` is a V2 command. On a 1.x commander the API route fails, and the sentinel falls back to `herdr agent prompt` after 30 seconds, with the draft caveat above, when the commander is idle. `vx doctor` says so. None of the commander side was run on a real 1.x. Use 2.x for the commander.
+
+## What is not verified
+
+- That a **model** obeys the wake, loads the `vexillum` skill and respects the commander rules. The free models refused every request during the live run, so the run proves delivery and context, not behavior. Weaker or free models may also be unreliable at calling tools.
+- That a **model-run bash tool** inherits `HERDR_PANE_ID`, which is how a commander registers itself. Registration was exercised by running `vx forum` with `HERDR_PANE_ID` set by hand.
+- Anything on OpenCode 1.x.
+- The API route on a 2.x later than 2.0.32.
+- Long runs: herdr restarting, a commander in two panes, the OpenCode service restarting while a wake is held, and two commanders of different harnesses in one project.
+- A wake is delivered **at least once**: a call that failed after OpenCode accepted the text would be tried again.
+
+## Related
+
+- [Using OpenCode](/docs/guides/using-opencode), for soldiers
+- [Sentinel](/docs/concepts/sentinel)
+- [Forum](/docs/guides/forum)
+- [`vx init`](/docs/reference/cli/init), [`vx doctor`](/docs/reference/cli/doctor) and [`vx sentinel`](/docs/reference/cli/sentinel)
