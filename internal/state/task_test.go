@@ -475,6 +475,7 @@ func TestOwnedKeys_CoversEveryTaskField(t *testing.T) {
 	task.LastPushedSHA = "abc"
 	task.Harness = "claude"
 	task.HarnessMajor, task.HarnessVersion = 2, "2.0.32"
+	task.HarnessSession = "ses_abc"
 
 	data, err := json.Marshal(task)
 	if err != nil {
@@ -708,5 +709,32 @@ func TestLoad_RejectsSchemaVersionAfterCurrent(t *testing.T) {
 	writeRawTask(t, home, "deadbeef", []byte(future))
 	if _, err := Load(home, "deadbeef"); err == nil {
 		t.Fatal("expected an error loading a task one schema version ahead of this build")
+	}
+}
+
+// The session of an OpenCode 2.x soldier survives a save and a load, and a task
+// without one writes no key, so every older task file reads back unchanged.
+func TestSave_HarnessSessionRoundTripsAndIsOmittedWhenEmpty(t *testing.T) {
+	home := t.TempDir()
+	task, err := New(KindMission, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(home, task); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := rawTaskFile(t, home, task.ID)["harness_session"]; ok {
+		t.Error("an empty session was written")
+	}
+	task.HarnessSession = "ses_eaa2d9d6cffe3U0WWSA8fu7NsB"
+	if err := Save(home, task); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(home, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.HarnessSession != task.HarnessSession {
+		t.Errorf("session = %q, want %q", loaded.HarnessSession, task.HarnessSession)
 	}
 }

@@ -194,6 +194,15 @@ type Task struct {
 	HarnessMajor   int    `json:"harness_major,omitempty"`
 	HarnessVersion string `json:"harness_version,omitempty"`
 
+	// HarnessSession is the id of the harness session the soldier runs in, for
+	// a harness whose soldier is started on a session vexillum creates
+	// (OpenCode 2.x, see internal/soldier.OpenCodeHarness). It is recorded
+	// when the session is created, and a re-dispatch relaunches on it when the
+	// harness still has it for the new camp, instead of creating another.
+	// Empty for every task that has none. Purely additive, no SchemaVersion
+	// bump needed.
+	HarnessSession string `json:"harness_session,omitempty"`
+
 	// Decision is the structured, durable record of what this task is (or
 	// most recently was) blocked on - see internal/soldier.ExtractDecision,
 	// which builds one from the soldier's transcript every time Status

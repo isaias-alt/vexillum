@@ -133,76 +133,6 @@ func TestOpenCodeVersionSupported(t *testing.T) {
 	}
 }
 
-func TestOpenCodeLaunch_V2_WritesAgentAndConfigWithTheVariant(t *testing.T) {
-	spec, err := soldier.OpenCodeHarness{Major: 2}.Launch(ocTask(t, 2, "opencode/deepseek-v4.1-flash-free#max", "medium"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(spec.Args) != 0 {
-		t.Errorf("V2 TUI has no model flag, Args = %v", spec.Args)
-	}
-	if spec.Env["OPENCODE_DISABLE_AUTOUPDATE"] != "1" {
-		t.Errorf("Env = %v, want OPENCODE_DISABLE_AUTOUPDATE=1", spec.Env)
-	}
-	if _, ok := spec.Env["OPENCODE_CONFIG_CONTENT"]; ok {
-		t.Error("OPENCODE_CONFIG_CONTENT is ignored by the V2 TUI and must not be used")
-	}
-	files := map[string]string{}
-	for _, f := range spec.Files {
-		files[f.Path] = string(f.Content)
-	}
-	agent := files[".opencode/agents/vx-soldier.md"]
-	for _, want := range []string{"---\n", "mode: primary", `model: "opencode/deepseek-v4.1-flash-free#max"`} {
-		if !strings.Contains(agent, want) {
-			t.Errorf("agent file lacks %q:\n%s", want, agent)
-		}
-	}
-	cfg := files["opencode.json"]
-	for _, want := range []string{`"default_agent": "vx-soldier"`, `"model": "opencode/deepseek-v4.1-flash-free"`} {
-		if !strings.Contains(cfg, want) {
-			t.Errorf("opencode.json lacks %q:\n%s", want, cfg)
-		}
-	}
-	if strings.Contains(cfg, "#") {
-		t.Errorf("the root model keeps no variant, got:\n%s", cfg)
-	}
-	if strings.Contains(agent, "permission") || strings.Contains(cfg, "permission") {
-		t.Error("no permission rules are written: --auto keeps the general's own denies, a wildcard rule would override them")
-	}
-	if !slices.Equal(spec.GitExclude, []string{"/.opencode/", "/opencode.json"}) {
-		t.Errorf("GitExclude = %v", spec.GitExclude)
-	}
-	if !slices.Contains(spec.RefuseIfPresent, "opencode.jsonc") {
-		t.Errorf("RefuseIfPresent = %v, want opencode.jsonc", spec.RefuseIfPresent)
-	}
-}
-
-// Without a variant in the model string none is written: the effort label is
-// recorded on the task and never turned into one.
-func TestOpenCodeLaunch_V2_NoVariantWhenTheProfileHasNone(t *testing.T) {
-	spec, err := soldier.OpenCodeHarness{Major: 2}.Launch(ocTask(t, 2, "opencode/glm-5.3-flash-free", "high"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range spec.Files {
-		if strings.Contains(string(f.Content), "high") || strings.Contains(string(f.Content), "#") {
-			t.Errorf("%s carries a variant the profile did not supply:\n%s", f.Path, f.Content)
-		}
-	}
-}
-
-func TestOpenCodeLaunch_V2_NoModelLeavesTheDefault(t *testing.T) {
-	spec, err := soldier.OpenCodeHarness{Major: 2}.Launch(ocTask(t, 2, "", ""))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range spec.Files {
-		if strings.Contains(string(f.Content), "model") {
-			t.Errorf("%s names a model although the task has none:\n%s", f.Path, f.Content)
-		}
-	}
-}
-
 func TestOpenCodeLaunch_V1_ModelFlagAndVariantThroughTheConfigEnv(t *testing.T) {
 	spec, err := soldier.OpenCodeHarness{Major: 1}.Launch(ocTask(t, 1, "anthropic/claude-sonnet-5#high", "medium"))
 	if err != nil {
@@ -211,8 +141,8 @@ func TestOpenCodeLaunch_V1_ModelFlagAndVariantThroughTheConfigEnv(t *testing.T) 
 	if !slices.Equal(spec.Args, []string{"--model", "anthropic/claude-sonnet-5"}) {
 		t.Errorf("Args = %v, want --model anthropic/claude-sonnet-5", spec.Args)
 	}
-	if len(spec.Files) != 0 {
-		t.Errorf("V1 writes no files into the camp, got %d", len(spec.Files))
+	if spec.Prepare != nil {
+		t.Error("V1 creates no session: Prepare must be nil")
 	}
 	want := `{"agent":{"build":{"model":"anthropic/claude-sonnet-5","variant":"high"}}}`
 	if spec.Env["OPENCODE_CONFIG_CONTENT"] != want {

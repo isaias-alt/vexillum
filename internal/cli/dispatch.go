@@ -53,13 +53,17 @@ only a label that is recorded on the task: it is never turned into an OpenCode
 variant, because variant names differ per model. Both OpenCode 1.x (from
 1.18.29) and 2.x are driven; the version found on PATH is detected at dispatch
 and recorded, and re-dispatch, prompt and decide keep using it. On 2.x the
-soldier's model goes through .opencode/agents/vx-soldier.md and opencode.json,
-which are written into the camp and excluded from git; if the project already
-has an opencode.json, opencode.jsonc or .opencode/agents/vx-soldier.md,
-dispatch fails naming it, because vexillum never overwrites or merges a
-project's OpenCode configuration. An opencode soldier is answered as free
-text when it asks a question, and needs the opencode CLI on PATH. See
-'` + cmdname.Name + ` doctor'.
+soldier gets its own OpenCode session on that model and variant, created
+through the OpenCode background service (which dispatch starts, from an
+environment without OPENCODE_CONFIG, OPENCODE_CONFIG_DIR and
+OPENCODE_CONFIG_CONTENT, when none runs) and opened with opencode --session.
+Dispatch first checks the provider, model and variant against what OpenCode
+lists for the camp, and fails naming what exists when one is not there.
+Nothing is written into the camp or the project: its own opencode.json or
+opencode.jsonc, agents, default agent and permission denies apply untouched.
+The session id is recorded on the task and re-dispatch reuses it. An opencode
+soldier is answered as free text when it asks a question, and needs the
+opencode CLI on PATH. See '` + cmdname.Name + ` doctor'.
 
 Runs a real, interactive session of the harness (Claude Code by default, with
 --dangerously-skip-permissions; pi has no permission prompts to skip and is

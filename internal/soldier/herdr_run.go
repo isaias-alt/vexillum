@@ -98,20 +98,38 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		return task, fmt.Errorf("preparing the soldier launch: %w", err)
 	}
 
-	// The files an earlier soldier's launch left in this camp go first, so
-	// that anything still there is the project's own, and so a camp reused by
-	// a harness that writes none is not left carrying another's config.
-	// Writing the new ones fails the launch, before a pane exists, when one
-	// would overwrite a file of the project's.
+	// The files an older vexillum's launch left in this camp go first, so that
+	// anything still there is the project's own, and so a camp reused by a
+	// harness that writes none is not left carrying another's config.
 	retractProvisioned(c.Path)
-	if err := provisionFiles(c.Path, launch); err != nil {
-		return task, err
+
+	launchArgs := append([]string(nil), launch.Args...)
+
+	// A harness that needs a running service to prepare the launch (OpenCode
+	// 2.x: a session on the task's model) does it now, before the tab exists,
+	// so a failure leaves nothing to clean up. The session is recorded on the
+	// task at once: whatever fails later, a re-dispatch reuses it.
+	if launch.Prepare != nil {
+		prepared, err := launch.Prepare(c.Path)
+		if err != nil {
+			return task, fmt.Errorf("preparing the soldier launch: %w", err)
+		}
+		launchArgs = append(launchArgs, prepared.Args...)
+		if prepared.SessionID != "" && prepared.SessionID != task.HarnessSession {
+			task.HarnessSession = prepared.SessionID
+			saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+				current.HarnessSession = prepared.SessionID
+			})
+			if err != nil {
+				return task, fmt.Errorf("recording the soldier's session: %w", err)
+			}
+			task = saved
+		}
 	}
 
 	// A harness with an extension of vexillum's own (Pi's ask_user) gets it
 	// installed and loaded; written before the tab exists, so a failure
 	// leaves nothing to clean up.
-	launchArgs := append([]string(nil), launch.Args...)
 	if ext, ok := harness.(ExtensionHarness); ok {
 		extra, err := ext.LaunchArgs(projectRoot, task)
 		if err != nil {

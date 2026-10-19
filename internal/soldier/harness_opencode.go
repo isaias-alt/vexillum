@@ -8,33 +8,43 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/opencodeapi"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
 // OpenCodeHarness is the Harness for the `opencode` CLI, in both generations
 // that share the command name: V1 (1.x, from 1.18.29, where the TUI takes
 // --model and --agent) and V2 (2.x, where the TUI takes neither and the
-// model is chosen through files in the project). Major says which one the
-// task's soldier runs on; it is detected from `opencode --version` when the
-// task is dispatched and recorded on the task (state.Task.HarnessMajor), so a
-// re-dispatch and every later command drive the same generation. The zero
-// value (Major 0) answers the questions that do not depend on the generation
-// (Binary, ValidateModelEffort) and cannot Launch.
+// model is chosen by creating the soldier's session through the background
+// service's HTTP API). Major says which one the task's soldier runs on; it is
+// detected from `opencode --version` when the task is dispatched and recorded
+// on the task (state.Task.HarnessMajor), so a re-dispatch and every later
+// command drive the same generation. The zero value (Major 0) answers the
+// questions that do not depend on the generation (Binary, ValidateModelEffort)
+// and cannot Launch.
 //
 // What was checked, and against what:
 //   - V2 (2.0.32): run live with the free zero-retention Zen models, see
 //     docs/verification/opencode-soldier-checklist.md for what that covered.
-//     The launch is the recipe that spike proved: .opencode/agents/vx-soldier.md
-//     carries the model and variant, opencode.json carries default_agent, and
-//     the TUI starts with --auto. OPENCODE_CONFIG_CONTENT is not used: the V2
-//     TUI ignores it unless started with --standalone, and even then it
-//     carries no variant.
+//     The launch creates the soldier's session through the service
+//     (POST /api/session with the model, the variant and the camp as its
+//     location, no agent and no permissions) and starts the TUI on it with
+//     --session and --auto, so nothing is written into the camp or the
+//     project, and the project's own config, default agent and permission
+//     denies apply untouched. A config layer was rejected: the config is read
+//     by the shared service when it starts, so OPENCODE_CONFIG_CONTENT in the
+//     TUI's environment is ignored unless the TUI is started with
+//     --standalone, and a layer given to a service that starts with it leaks
+//     into every other TUI. The variant does reach the wire through a layer
+//     (agent.<n>.model with agent.<n>.variant as separate keys), but a layer
+//     ranks below a project that sets its own default_agent or model.
 //   - V1 (1.19.3): NOT run, no V1 was available. The mechanism comes from the
 //     v1.18.29 and v1.19.3 sources and docs (TUI options model, agent, auto,
 //     prompt; no variant option) and from the config schema (agent.<name>.model
@@ -53,19 +63,16 @@ const (
 	openCodeBinary         = "opencode"
 	openCodeHerdrAgentKind = "opencode"
 
-	// openCodeAgent is the name of the agent vexillum defines for its V2
-	// soldier, and the default_agent that selects it.
-	openCodeAgent     = "vx-soldier"
-	openCodeAgentFile = ".opencode/agents/" + openCodeAgent + ".md"
-	openCodeConfig    = "opencode.json"
-
 	// openCodeAutoArg approves every permission that is not explicitly
 	// denied. An explicit deny in the general's own config still applies,
-	// which is why vexillum writes no permission rules of its own: in V2 the
-	// last matching rule wins, so a wildcard rule in the camp's config would
-	// override the general's denies. Present on the V1 TUI since 1.18.0 and
-	// on the V2 TUI and `run`.
+	// which is why vexillum sets no permission rules of its own, in the
+	// session or anywhere else: in V2 the last matching rule wins, so a
+	// wildcard rule of ours would override the general's denies. Present on
+	// the V1 TUI since 1.18.0 and on the V2 TUI and `run`.
 	openCodeAutoArg = "--auto"
+
+	// openCodeSessionArg opens an existing session in the V2 TUI.
+	openCodeSessionArg = "--session"
 
 	// The oldest 1.x vexillum drives: the one herdr's OpenCode integration
 	// supports, and recent enough to have the TUI's --auto flag.
@@ -89,9 +96,11 @@ func (OpenCodeHarness) Binary() string {
 // ValidateModelEffort checks model by shape only, as provider/model with an
 // optional #variant: OpenCode's models are whatever its providers offer, a
 // catalog that differs per machine and per provider, so there is no list to
-// hold a value against (run 'opencode models'). The variant is part of the
+// hold a value against here (run 'opencode models'). The variant is part of the
 // model string because that is how V2 spells it, and V1 gets it split off.
-// An unknown variant is OpenCode's hard error when the soldier starts.
+// What exists is checked later, per generation: V2 asks the service at
+// dispatch (prepareOpenCodeSession), and for V1 an unknown model or variant is
+// OpenCode's own error when the soldier starts.
 //
 // Effort is accepted as a label and recorded, never passed to OpenCode:
 // vexillum's low..max values have no universal meaning as OpenCode variants,
@@ -130,48 +139,96 @@ func (h OpenCodeHarness) Launch(task state.Task) (LaunchSpec, error) {
 	model, variant := splitOpenCodeModel(task.Model)
 	switch h.Major {
 	case 2:
-		return h.launchV2(model, variant), nil
+		return h.launchV2(task, model, variant), nil
 	case 1:
 		return h.launchV1(model, variant), nil
 	}
 	return LaunchSpec{}, fmt.Errorf("the task records no usable OpenCode major version (%d), so vexillum cannot tell which launch to use: it is detected from 'opencode --version' at dispatch", h.Major)
 }
 
-// launchV2 is the recipe the V2 spike proved: an agent file that carries
-// provider/model#variant, a config that makes it the default agent, and
-// --auto. The V2 TUI has no --model, --agent or variant flag, and ignores
-// OPENCODE_CONFIG_CONTENT. The files are excluded from git so the camp stays
-// clean, and an existing file of the project is never overwritten (see
-// provisionFiles).
-func (OpenCodeHarness) launchV2(model, variant string) LaunchSpec {
-	agentModel := model
-	if variant != "" {
-		agentModel += "#" + variant
-	}
-	var agent strings.Builder
-	agent.WriteString("---\ndescription: vexillum soldier\nmode: primary\n")
-	if agentModel != "" {
-		agent.WriteString("model: " + jsonString(agentModel) + "\n")
-	}
-	agent.WriteString("---\n")
-
-	cfg := map[string]string{"default_agent": openCodeAgent}
+// launchV2 starts the V2 TUI on a session vexillum creates for the task. The
+// V2 TUI has no --model, --agent or variant flag, and the service that runs the
+// session reads its config once, when it starts, so the model cannot reach it
+// through the TUI's environment or a file without a clash with the project's
+// own config. A session carries its own model and variant instead, above the
+// project's default and above its agent's own model, and nothing is written
+// anywhere. A task with no model starts the TUI plain, on the project's
+// defaults.
+func (h OpenCodeHarness) launchV2(task state.Task, model, variant string) LaunchSpec {
+	spec := LaunchSpec{Env: cloneEnv(openCodeEnv)}
 	if model != "" {
-		// A fallback only: the root model keeps no variant.
-		cfg["model"] = model
+		spec.Prepare = func(campPath string) (PreparedLaunch, error) {
+			return prepareOpenCodeSession(newOpenCodeSessions(), campPath, task, model, variant)
+		}
 	}
-	config, _ := json.MarshalIndent(cfg, "", "  ")
+	return spec
+}
 
-	return LaunchSpec{
-		Env: cloneEnv(openCodeEnv),
-		Files: []ProvisionedFile{
-			{Path: openCodeAgentFile, Content: []byte(agent.String())},
-			{Path: openCodeConfig, Content: append(config, '\n')},
-		},
-		// opencode.jsonc is read next to opencode.json and merged with it.
-		RefuseIfPresent: []string{openCodeConfig + "c"},
-		GitExclude:      []string{"/.opencode/", "/" + openCodeConfig},
+// newOpenCodeSessions is how the V2 launch reaches the OpenCode service. A
+// variable so tests can replace it.
+var newOpenCodeSessions = func() opencodeapi.Sessions {
+	return opencodeapi.CLI{Binary: openCodeBinary}
+}
+
+// prepareOpenCodeSession gives task's V2 soldier a session in the camp at
+// campPath and returns the TUI arguments that open it.
+//
+// The service is started here, by vexillum, when none runs, from an
+// environment without the OPENCODE_CONFIG* variables: `opencode api` would
+// start a stopped service itself, with whatever environment this process has,
+// and a service keeps the environment it starts with for every TUI that
+// connects to it. With the service up before the pane exists, the soldier's TUI
+// never gets to be the one that starts it either. The commander's wake path
+// (internal/opencodeapi.Client) keeps refusing to start a service.
+//
+// A session the task already has (a re-dispatch) is reused when the service
+// still knows it and it is located in this camp; one the service lost, or one
+// located in another camp, is replaced by a new session. The model is checked
+// against the models the service lists for the camp before a session is
+// created, so a provider, model or variant that does not exist fails the
+// dispatch with what does exist, instead of the soldier's first prompt.
+func prepareOpenCodeSession(api opencodeapi.Sessions, campPath string, task state.Task, model, variant string) (PreparedLaunch, error) {
+	if err := api.EnsureService(); err != nil {
+		return PreparedLaunch{}, fmt.Errorf("the OpenCode background service is not available: %w", err)
 	}
+
+	if id := task.HarnessSession; id != "" {
+		existing, err := api.Session(id)
+		switch {
+		case err == nil && sameDirectory(existing.Directory, campPath):
+			return PreparedLaunch{Args: []string{openCodeSessionArg, id}, SessionID: id}, nil
+		case err != nil && !opencodeapi.IsSessionNotFound(err):
+			return PreparedLaunch{}, fmt.Errorf("looking up the soldier's OpenCode session %s: %w", id, err)
+		}
+	}
+
+	providerID, modelID, _ := strings.Cut(model, "/")
+	models, err := api.Models(campPath)
+	if err != nil {
+		return PreparedLaunch{}, fmt.Errorf("listing the models OpenCode can run in the camp: %w", err)
+	}
+	if err := opencodeapi.CheckModel(models, providerID, modelID, variant); err != nil {
+		return PreparedLaunch{}, fmt.Errorf("cannot start this soldier on %s: %w", task.Model, err)
+	}
+	id, err := api.CreateSession(campPath, "vexillum "+task.ID, opencodeapi.SessionModel{ProviderID: providerID, ID: modelID, Variant: variant})
+	if err != nil {
+		return PreparedLaunch{}, fmt.Errorf("creating the soldier's OpenCode session: %w", err)
+	}
+	return PreparedLaunch{Args: []string{openCodeSessionArg, id}, SessionID: id}, nil
+}
+
+// sameDirectory reports whether a and b name the same directory, looking
+// through symlinks when both exist.
+func sameDirectory(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && ra == rb
 }
 
 // launchV1 starts the V1 TUI with --model, and carries the variant through the
@@ -242,11 +299,6 @@ func (OpenCodeHarness) TrustDialog() TrustDialog {
 // read as prose, and answerOpenCodeBlocked handles the OpenCode screens.
 func (OpenCodeHarness) QuestionModal() bool {
 	return false
-}
-
-func jsonString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
 }
 
 func cloneEnv(env map[string]string) map[string]string {

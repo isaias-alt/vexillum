@@ -1,6 +1,10 @@
 package soldier_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -45,44 +49,6 @@ func commitFile(t *testing.T, dir, name, content string) {
 	runGitT(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "add "+name)
 }
 
-func TestRunInHerdr_OpenCodeV2WritesTheRecipeIntoTheCampAndKeepsItClean(t *testing.T) {
-	projectDir := initStrikeTestProject(t)
-	home := t.TempDir()
-	task := ocTask(t, 2, "opencode/deepseek-v4.1-flash-free#max", "medium")
-	c := ocCamp(t, projectDir, home, task)
-	client := ocClient()
-
-	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
-		t.Fatalf("RunInHerdr: %v", err)
-	}
-
-	if !slices.Equal(client.tabEnv, []string{"OPENCODE_DISABLE_AUTOUPDATE=1"}) {
-		t.Errorf("tab env = %v", client.tabEnv)
-	}
-	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], []string{"--auto"}) {
-		t.Errorf("start args = %v, want [--auto]", client.startArgs)
-	}
-	agent, err := os.ReadFile(filepath.Join(c.Path, ".opencode", "agents", "vx-soldier.md"))
-	if err != nil || !strings.Contains(string(agent), `model: "opencode/deepseek-v4.1-flash-free#max"`) {
-		t.Errorf("agent file: %v\n%s", err, agent)
-	}
-	if _, err := os.Stat(filepath.Join(c.Path, "opencode.json")); err != nil {
-		t.Errorf("opencode.json: %v", err)
-	}
-	if out := runGitT(t, c.Path, "status", "--porcelain"); out != "" {
-		t.Errorf("the camp is dirty after provisioning:\n%s", out)
-	}
-	if out := runGitT(t, projectDir, "status", "--porcelain"); out != "" {
-		t.Errorf("the project's own checkout is dirty:\n%s", out)
-	}
-	exclude := excludeFile(t, projectDir)
-	for _, want := range []string{"/.opencode/", "/opencode.json"} {
-		if strings.Count(exclude, want+"\n") != 1 {
-			t.Errorf("info/exclude should list %s once:\n%s", want, exclude)
-		}
-	}
-}
-
 func excludeFile(t *testing.T, repo string) string {
 	t.Helper()
 	path := strings.TrimSpace(runGitT(t, repo, "rev-parse", "--git-path", "info/exclude"))
@@ -93,10 +59,82 @@ func excludeFile(t *testing.T, repo string) string {
 	return string(b)
 }
 
-// A project that tracks its own opencode.json is never overwritten: the
-// launch fails before a pane exists and names the file.
-func TestRunInHerdr_OpenCodeV2RefusesToOverwriteTheProjectsConfig(t *testing.T) {
-	for _, name := range []string{"opencode.json", "opencode.jsonc", ".opencode/agents/vx-soldier.md"} {
+// campIsUntouched fails the test when the camp, the project's own checkout or
+// the repository's info/exclude shows anything vexillum would have written for
+// the soldier: the V2 launch writes nothing anywhere.
+func campIsUntouched(t *testing.T, projectDir string, c camp.Camp) {
+	t.Helper()
+	if out := runGitT(t, c.Path, "status", "--porcelain", "--ignored"); out != "" {
+		t.Errorf("the camp has changes or ignored files:\n%s", out)
+	}
+	if out := runGitT(t, projectDir, "status", "--porcelain", "--ignored"); out != "" {
+		t.Errorf("the project's own checkout has changes or ignored files:\n%s", out)
+	}
+	if got := excludeFile(t, projectDir); strings.Contains(got, "vexillum") || strings.Contains(got, "opencode") {
+		t.Errorf("info/exclude was written to:\n%s", got)
+	}
+	gitDir := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "--absolute-git-dir"))
+	if _, err := os.Stat(filepath.Join(gitDir, "vexillum-provisioned.json")); err == nil {
+		t.Error("a provisioning sidecar was written")
+	}
+}
+
+func TestRunInHerdr_OpenCodeV2StartsOnItsOwnSessionAndWritesNothing(t *testing.T) {
+	projectDir := initStrikeTestProject(t)
+	home := t.TempDir()
+	f := newFakeSessions()
+	useSessions(t, f)
+	task := ocTask(t, 2, "opencode/deepseek-v4.1-flash-free#max", "medium")
+	c := ocCamp(t, projectDir, home, task)
+	client := ocClient()
+
+	saved, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+
+	if !slices.Equal(client.tabEnv, []string{"OPENCODE_DISABLE_AUTOUPDATE=1"}) {
+		t.Errorf("tab env = %v", client.tabEnv)
+	}
+	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], []string{"--auto", "--session", "ses_fake1"}) {
+		t.Errorf("start args = %v, want [--auto --session ses_fake1]", client.startArgs)
+	}
+	if len(f.created) != 1 || f.created[0].Directory != c.Path || f.created[0].Model.Variant != "max" {
+		t.Errorf("sessions created = %+v", f.created)
+	}
+	campIsUntouched(t, projectDir, c)
+	for _, name := range []string{"opencode.json", "opencode.jsonc", ".opencode"} {
+		if _, err := os.Stat(filepath.Join(c.Path, name)); err == nil {
+			t.Errorf("%s exists in the camp", name)
+		}
+	}
+
+	// The session is on the task, in the value returned and on disk.
+	if saved.HarnessSession != "ses_fake1" {
+		t.Errorf("returned task session = %q", saved.HarnessSession)
+	}
+	onDisk, err := state.Load(testProjectRootFor(t, projectDir, home), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if onDisk.HarnessSession != "ses_fake1" {
+		t.Errorf("task on disk has session %q", onDisk.HarnessSession)
+	}
+}
+
+func testProjectRootFor(t *testing.T, projectDir, home string) string {
+	t.Helper()
+	root, err := project.Root(home, projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// A project that tracks its own OpenCode configuration is no longer a
+// problem: nothing of the project's is written over, merged or refused.
+func TestRunInHerdr_OpenCodeV2LivesBesideTheProjectsOwnConfig(t *testing.T) {
+	for _, name := range []string{"opencode.json", "opencode.jsonc", ".opencode/agents/vx-soldier.md", ".opencode/skills/x/SKILL.md"} {
 		t.Run(name, func(t *testing.T) {
 			projectDir := initStrikeTestProject(t)
 			if dir := filepath.Dir(name); dir != "." {
@@ -106,142 +144,233 @@ func TestRunInHerdr_OpenCodeV2RefusesToOverwriteTheProjectsConfig(t *testing.T) 
 			}
 			commitFile(t, projectDir, name, "PROJECT-OWNED\n")
 			home := t.TempDir()
-			task := ocTask(t, 2, "opencode/glm-5.3-flash-free", "")
+			f := newFakeSessions()
+			useSessions(t, f)
+			task := ocTask(t, 2, "outprov/m1#high", "")
 			c := ocCamp(t, projectDir, home, task)
 			client := ocClient()
 
-			_, err := soldier.RunInHerdr(home, "w1", task, c, client)
-			if err == nil {
-				t.Fatal("expected the dispatch to fail on the collision")
+			if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+				t.Fatalf("RunInHerdr: %v", err)
 			}
-			for _, want := range []string{name, "never overwrites or merges", "no merge policy"} {
-				if !strings.Contains(err.Error(), want) {
-					t.Errorf("error %q does not mention %q", err, want)
-				}
-			}
-			if client.createTabs != 0 {
-				t.Error("a pane was created although the launch cannot proceed")
+			if client.createTabs != 1 || len(f.created) != 1 {
+				t.Errorf("tabs %d, sessions %d: the soldier should have started", client.createTabs, len(f.created))
 			}
 			got, _ := os.ReadFile(filepath.Join(c.Path, filepath.FromSlash(name)))
 			if string(got) != "PROJECT-OWNED\n" {
 				t.Errorf("the project's file was changed: %q", got)
 			}
-			for _, left := range []string{"opencode.json", ".opencode/agents/vx-soldier.md"} {
-				if left == name {
-					continue
-				}
-				if _, err := os.Stat(filepath.Join(c.Path, filepath.FromSlash(left))); err == nil {
-					t.Errorf("%s was written although the launch failed", left)
-				}
+			if out := runGitT(t, c.Path, "status", "--porcelain", "--ignored"); out != "" {
+				t.Errorf("the camp has changes:\n%s", out)
 			}
 		})
 	}
 }
 
-// A project with other .opencode content (skills, plugins) is no collision:
-// only the exact files vexillum writes are protected.
-func TestRunInHerdr_OpenCodeV2LivesBesideTheProjectsOwnOpenCodeDirectory(t *testing.T) {
+// A re-dispatch relaunches on the session the task recorded, in the same camp,
+// instead of creating another.
+func TestRunInHerdr_OpenCodeV2ARedispatchReusesTheSession(t *testing.T) {
 	projectDir := initStrikeTestProject(t)
-	if err := os.MkdirAll(filepath.Join(projectDir, ".opencode", "skills", "x"), 0o755); err != nil {
+	home := t.TempDir()
+	f := newFakeSessions()
+	useSessions(t, f)
+	task := ocTask(t, 2, "outprov/m1", "")
+	c := ocCamp(t, projectDir, home, task)
+	if _, err := soldier.RunInHerdr(home, "w1", task, c, ocClient()); err != nil {
 		t.Fatal(err)
 	}
-	commitFile(t, projectDir, ".opencode/skills/x/SKILL.md", "---\nname: x\n---\n")
+	// What a re-dispatch does: the task is loaded from disk with its session,
+	// the old camp is discarded and the slot is acquired again.
+	root := testProjectRootFor(t, projectDir, home)
+	again, err := state.Load(root, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := soldier.DiscardInHerdr(again, c, ocClient()); err != nil {
+		t.Fatal(err)
+	}
+	again, err = state.Load(root, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := camp.Acquire(projectDir, home, again.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.Path != c.Path {
+		t.Fatalf("expected the same camp, got %s then %s", c.Path, c2.Path)
+	}
+	client := ocClient()
+	if _, err := soldier.RunInHerdr(home, "w1", again, c2, client); err != nil {
+		t.Fatalf("second RunInHerdr: %v", err)
+	}
+	if len(f.created) != 1 {
+		t.Errorf("%d sessions were created, want the first one reused", len(f.created))
+	}
+	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], []string{"--auto", "--session", "ses_fake1"}) {
+		t.Errorf("start args = %v", client.startArgs)
+	}
+}
+
+func TestRunInHerdr_OpenCodeV2AnUnknownModelFailsBeforeAnyPaneWithWhatExists(t *testing.T) {
+	projectDir := initStrikeTestProject(t)
 	home := t.TempDir()
-	task := ocTask(t, 2, "opencode/glm-5.3-flash-free", "")
+	f := newFakeSessions()
+	useSessions(t, f)
+	task := ocTask(t, 2, "outprov/nope", "")
 	c := ocCamp(t, projectDir, home, task)
+	client := ocClient()
+
+	_, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err == nil {
+		t.Fatal("expected the dispatch to fail")
+	}
+	for _, want := range []string{"outprov/nope", `no model "nope"`, "m1, m2"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
+	}
+	if client.createTabs != 0 || len(f.created) != 0 {
+		t.Errorf("tabs %d, sessions %d: nothing may be created", client.createTabs, len(f.created))
+	}
+	campIsUntouched(t, projectDir, c)
+}
+
+// The session is recorded as soon as it exists: a failure after it (here the
+// pane cannot be created) still leaves it on the task for the next attempt.
+func TestRunInHerdr_OpenCodeV2TheSessionSurvivesALaterFailure(t *testing.T) {
+	projectDir := initStrikeTestProject(t)
+	home := t.TempDir()
+	f := newFakeSessions()
+	useSessions(t, f)
+	task := ocTask(t, 2, "outprov/m1", "")
+	c := ocCamp(t, projectDir, home, task)
+	client := ocClient()
+	client.createTabErr = errors.New("herdr is down")
+
+	returned, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if returned.HarnessSession != "ses_fake1" {
+		t.Errorf("the returned task (which the CLI saves as failed) lost the session: %q", returned.HarnessSession)
+	}
+	onDisk, _ := state.Load(testProjectRootFor(t, projectDir, home), task.ID)
+	if onDisk.HarnessSession != "ses_fake1" {
+		t.Errorf("task on disk has session %q", onDisk.HarnessSession)
+	}
+}
+
+// Without a model a V2 soldier starts plain, on the project's defaults, with
+// no session and no use of the service.
+func TestRunInHerdr_OpenCodeV2WithoutAModelStartsPlain(t *testing.T) {
+	projectDir := initStrikeTestProject(t)
+	home := t.TempDir()
+	f := newFakeSessions()
+	useSessions(t, f)
+	task := ocTask(t, 2, "", "")
+	c := ocCamp(t, projectDir, home, task)
+	client := ocClient()
+	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], []string{"--auto"}) {
+		t.Errorf("start args = %v", client.startArgs)
+	}
+	if len(f.calls()) != 0 {
+		t.Errorf("the service was used: %v", f.calls())
+	}
+}
+
+// writeLegacyProvisioning reproduces what an older vexillum left in a camp for
+// a V2 soldier: the two files, the sidecar that records their hashes, and the
+// lines in info/exclude.
+func writeLegacyProvisioning(t *testing.T, c camp.Camp) (files map[string]string) {
+	t.Helper()
+	files = map[string]string{
+		".opencode/agents/vx-soldier.md": "---\ndescription: vexillum soldier\nmode: primary\nmodel: \"opencode/glm-5.3-flash-free\"\n---\n",
+		"opencode.json":                  "{\n  \"default_agent\": \"vx-soldier\"\n}\n",
+	}
+	record := map[string]map[string]string{"files": {}}
+	for path, content := range files {
+		full := filepath.Join(c.Path, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256([]byte(content))
+		record["files"][path] = hex.EncodeToString(sum[:])
+	}
+	raw, _ := json.Marshal(record)
+	gitDir := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "--absolute-git-dir"))
+	if err := os.WriteFile(filepath.Join(gitDir, "vexillum-provisioned.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+// A camp provisioned by an older vexillum is cleaned before the next launch,
+// whatever harness runs there, as long as the files are what vexillum wrote.
+func TestRunInHerdr_LeftoversOfTheOldRecipeAreRetractedForAnyHarness(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		task func(t *testing.T) state.Task
+	}{
+		{"opencode V2", func(t *testing.T) state.Task { return ocTask(t, 2, "outprov/m1", "") }},
+		{"opencode V1", func(t *testing.T) state.Task { return ocTask(t, 1, "opencode/glm-5.3-flash-free", "") }},
+		{"claude", func(t *testing.T) state.Task { return newTask(t) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir := initStrikeTestProject(t)
+			home := t.TempDir()
+			useSessions(t, newFakeSessions())
+			task := tc.task(t)
+			c := ocCamp(t, projectDir, home, task)
+			writeLegacyProvisioning(t, c)
+
+			if _, err := soldier.RunInHerdr(home, "w1", task, c, ocClient()); err != nil {
+				t.Fatalf("RunInHerdr: %v", err)
+			}
+			for _, left := range []string{"opencode.json", ".opencode"} {
+				if _, err := os.Stat(filepath.Join(c.Path, left)); err == nil {
+					t.Errorf("%s from the old recipe is still in the camp", left)
+				}
+			}
+			gitDir := strings.TrimSpace(runGitT(t, c.Path, "rev-parse", "--absolute-git-dir"))
+			if _, err := os.Stat(filepath.Join(gitDir, "vexillum-provisioned.json")); err == nil {
+				t.Error("the sidecar was left behind")
+			}
+		})
+	}
+}
+
+// A file someone changed since is not vexillum's to remove, and is no reason
+// to refuse the launch any more: it stays, and counts as the project's.
+func TestRunInHerdr_AChangedLeftoverIsKeptAndNoLongerRefusesTheLaunch(t *testing.T) {
+	projectDir := initStrikeTestProject(t)
+	home := t.TempDir()
+	f := newFakeSessions()
+	useSessions(t, f)
+	task := ocTask(t, 2, "outprov/m1", "")
+	c := ocCamp(t, projectDir, home, task)
+	writeLegacyProvisioning(t, c)
+	if err := os.WriteFile(filepath.Join(c.Path, "opencode.json"), []byte(`{"theme":"mine"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := soldier.RunInHerdr(home, "w1", task, c, ocClient()); err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
-	if out := runGitT(t, c.Path, "status", "--porcelain"); out != "" {
-		t.Errorf("dirty camp:\n%s", out)
+	if got, _ := os.ReadFile(filepath.Join(c.Path, "opencode.json")); string(got) != `{"theme":"mine"}` {
+		t.Errorf("the changed file was touched: %q", got)
 	}
-}
-
-// The files of an earlier soldier are still in a reused camp (git leaves
-// ignored files alone), and are not a collision: vexillum recognizes its own.
-func TestRunInHerdr_OpenCodeReusedCampOverwritesOnlyItsOwnLeftovers(t *testing.T) {
-	projectDir := initStrikeTestProject(t)
-	home := t.TempDir()
-
-	first := ocTask(t, 2, "opencode/glm-5.3-flash-free", "")
-	c := ocCamp(t, projectDir, home, first)
-	if _, err := soldier.RunInHerdr(home, "w1", first, c, ocClient()); err != nil {
-		t.Fatalf("first: %v", err)
+	if _, err := os.Stat(filepath.Join(c.Path, ".opencode")); err == nil {
+		t.Error("the unchanged agent file was not retracted")
 	}
-	// Strike the camp so the slot is reused, as vx strike does.
-	if err := camp.Strike(c, first.ID); err != nil {
-		t.Fatalf("Strike: %v", err)
-	}
-
-	second := ocTask(t, 2, "opencode/space-bunny-free#high", "")
-	c2 := ocCamp(t, projectDir, home, second)
-	if c2.Path != c.Path {
-		t.Fatalf("expected the slot to be reused, got %s then %s", c.Path, c2.Path)
-	}
-	if _, err := soldier.RunInHerdr(home, "w1", second, c2, ocClient()); err != nil {
-		t.Fatalf("second: %v", err)
-	}
-	agent, _ := os.ReadFile(filepath.Join(c2.Path, ".opencode", "agents", "vx-soldier.md"))
-	if !strings.Contains(string(agent), "space-bunny-free#high") {
-		t.Errorf("the second soldier got the first one's agent file:\n%s", agent)
-	}
-	if got := excludeFile(t, projectDir); strings.Count(got, "/opencode.json\n") != 1 {
-		t.Errorf("info/exclude has duplicates:\n%s", got)
-	}
-}
-
-// A file the previous soldier changed is not vexillum's any more: it counts
-// as the project's, and the next dispatch refuses to overwrite it.
-func TestRunInHerdr_OpenCodeModifiedLeftoverIsACollision(t *testing.T) {
-	projectDir := initStrikeTestProject(t)
-	home := t.TempDir()
-	first := ocTask(t, 2, "opencode/glm-5.3-flash-free", "")
-	c := ocCamp(t, projectDir, home, first)
-	if _, err := soldier.RunInHerdr(home, "w1", first, c, ocClient()); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(c.Path, "opencode.json"), []byte(`{"theme":"mine"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := camp.Strike(c, first.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	second := ocTask(t, 2, "opencode/glm-5.3-flash-free", "")
-	c2 := ocCamp(t, projectDir, home, second)
-	_, err := soldier.RunInHerdr(home, "w1", second, c2, ocClient())
-	if err == nil || !strings.Contains(err.Error(), "opencode.json") {
-		t.Fatalf("error = %v, want a collision on opencode.json", err)
-	}
-	if got, _ := os.ReadFile(filepath.Join(c2.Path, "opencode.json")); string(got) != `{"theme":"mine"}` {
-		t.Errorf("the modified file was overwritten: %q", got)
-	}
-}
-
-// A camp that held an OpenCode V2 soldier and is reused by any other harness
-// does not keep the V2 files: a V1 or Claude soldier must not read them.
-func TestRunInHerdr_LeftoverOpenCodeFilesAreRetractedForAnyHarness(t *testing.T) {
-	projectDir := initStrikeTestProject(t)
-	home := t.TempDir()
-	first := ocTask(t, 2, "opencode/glm-5.3-flash-free", "")
-	c := ocCamp(t, projectDir, home, first)
-	if _, err := soldier.RunInHerdr(home, "w1", first, c, ocClient()); err != nil {
-		t.Fatal(err)
-	}
-	if err := camp.Strike(c, first.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	second := ocTask(t, 1, "opencode/glm-5.3-flash-free", "")
-	c2 := ocCamp(t, projectDir, home, second)
-	if _, err := soldier.RunInHerdr(home, "w1", second, c2, ocClient()); err != nil {
-		t.Fatalf("V1 task in the reused camp: %v", err)
-	}
-	for _, left := range []string{"opencode.json", ".opencode"} {
-		if _, err := os.Stat(filepath.Join(c2.Path, left)); err == nil {
-			t.Errorf("%s from the V2 soldier is still in the camp", left)
-		}
+	if len(f.created) != 1 {
+		t.Errorf("sessions created = %d", len(f.created))
 	}
 }
 
@@ -252,7 +381,8 @@ func TestRunInHerdr_OpenCodeV1StartsWithModelFlagAndConfigEnvAndNoFiles(t *testi
 	c := ocCamp(t, projectDir, home, task)
 	client := ocClient()
 
-	if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+	saved, err := soldier.RunInHerdr(home, "w1", task, c, client)
+	if err != nil {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], []string{"--auto", "--model", "anthropic/claude-sonnet-5"}) {
@@ -269,6 +399,9 @@ func TestRunInHerdr_OpenCodeV1StartsWithModelFlagAndConfigEnvAndNoFiles(t *testi
 		if _, err := os.Stat(filepath.Join(c.Path, name)); err == nil {
 			t.Errorf("V1 wrote %s into the camp", name)
 		}
+	}
+	if saved.HarnessSession != "" {
+		t.Errorf("V1 has no session, got %q", saved.HarnessSession)
 	}
 }
 
@@ -287,36 +420,48 @@ func TestRunInHerdr_OpenCodeWithoutARecordedMajorFailsBeforeAnyPane(t *testing.T
 	}
 }
 
-// Soldiers dispatched together append to the repository's one info/exclude.
-func TestRunInHerdr_OpenCodeConcurrentCampsKeepOneCopyOfEachExcludePattern(t *testing.T) {
+// Soldiers dispatched together each get a session of their own and share no
+// file, so nothing is serialized between them.
+func TestRunInHerdr_OpenCodeConcurrentSoldiersEachGetTheirOwnSession(t *testing.T) {
 	projectDir := initStrikeTestProject(t)
 	home := t.TempDir()
+	f := newFakeSessions()
+	useSessions(t, f)
 	const n = 6
 	tasks := make([]state.Task, n)
 	camps := make([]camp.Camp, n)
 	for i := range tasks {
-		tasks[i] = ocTask(t, 2, "opencode/glm-5.3-flash-free", "")
+		tasks[i] = ocTask(t, 2, "outprov/m1#low", "")
 		camps[i] = ocCamp(t, projectDir, home, tasks[i])
 	}
 	var wg sync.WaitGroup
 	errs := make([]error, n)
+	results := make([]state.Task, n)
 	for i := range tasks {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, errs[i] = soldier.RunInHerdr(home, "w1", tasks[i], camps[i], ocClient())
+			results[i], errs[i] = soldier.RunInHerdr(home, "w1", tasks[i], camps[i], ocClient())
 		}()
 	}
 	wg.Wait()
+	seen := map[string]bool{}
 	for i, err := range errs {
 		if err != nil {
 			t.Fatalf("soldier %d: %v", i, err)
 		}
-	}
-	exclude := excludeFile(t, projectDir)
-	for _, p := range []string{"/.opencode/", "/opencode.json"} {
-		if got := strings.Count(exclude, p+"\n"); got != 1 {
-			t.Errorf("%s appears %d times in info/exclude:\n%s", p, got, exclude)
+		id := results[i].HarnessSession
+		if id == "" || seen[id] {
+			t.Errorf("soldier %d got session %q (seen: %v)", i, id, seen)
 		}
+		seen[id] = true
+	}
+	for i := range camps {
+		if out := runGitT(t, camps[i].Path, "status", "--porcelain", "--ignored"); out != "" {
+			t.Errorf("camp %d:\n%s", i, out)
+		}
+	}
+	if got := excludeFile(t, projectDir); strings.Contains(got, "opencode") {
+		t.Errorf("info/exclude was written to:\n%s", got)
 	}
 }

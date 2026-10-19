@@ -26,35 +26,32 @@ type CommandSpec struct {
 	ParseOutput func(stdout string) (string, error)
 }
 
-// ProvisionedFile is a file a harness needs in the camp before its
-// interactive session starts, with a path relative to the camp root.
-type ProvisionedFile struct {
-	Path    string
-	Content []byte
+// PreparedLaunch is what a LaunchSpec's Prepare adds to the launch.
+type PreparedLaunch struct {
+	// Args are passed to the harness CLI after the spec's Args.
+	Args []string
+	// SessionID is the harness session Prepare created or reused for the
+	// task. RunInHerdr records it on the task (state.Task.HarnessSession) as
+	// soon as Prepare returns, so a re-dispatch reuses it.
+	SessionID string
 }
 
 // LaunchSpec is how a soldier's interactive session is started: what the
 // harness adds to its fixed HerdrExtraArgs, the environment its pane shell
-// needs, and the files it needs in the camp. The zero value starts the
-// harness with nothing extra.
+// needs, and the step that must run first. The zero value starts the harness
+// with nothing extra.
 type LaunchSpec struct {
 	// Args are passed to the harness CLI after HerdrExtraArgs.
 	Args []string
 	// Env is set in the pane's shell before the agent starts, so the CLI
 	// inherits it.
 	Env map[string]string
-	// Files are written into the camp before the pane is created. A file
-	// that already exists in the camp is never overwritten: the launch fails
-	// naming it (see provisionFiles).
-	Files []ProvisionedFile
-	// RefuseIfPresent are further camp paths that make the launch fail when
-	// they exist, because the harness would read them next to Files (a
-	// config under another name that would be merged with the generated one).
-	RefuseIfPresent []string
-	// GitExclude are gitignore patterns added to the repository's
-	// info/exclude, so Files do not make the camp look dirty to the
-	// completion checks, strike and ship.
-	GitExclude []string
+	// Prepare, when set, runs after the camp exists and before the pane is
+	// created, for a harness that has to ask a running service for something
+	// the CLI cannot be told on its command line (OpenCode 2.x: a session on
+	// the task's model). campPath is the camp root. An error fails the launch
+	// before any pane exists, so it must say what is wrong.
+	Prepare func(campPath string) (PreparedLaunch, error)
 }
 
 // CommandOptions tune how Harness.Command builds the one-shot process.
@@ -101,7 +98,8 @@ type Harness interface {
 
 	// Launch builds how task's soldier is started interactively: the CLI
 	// args for its Model/Effort (omitting either that is unset), plus any
-	// environment and camp files the harness needs to apply them. An error
+	// environment and any step to run before the pane exists that the
+	// harness needs to apply them (LaunchSpec.Prepare). An error
 	// means this task cannot be launched on this harness (a value the CLI
 	// would reject, or a generation of the CLI the task has no recorded
 	// version for); RunInHerdr fails before creating anything.

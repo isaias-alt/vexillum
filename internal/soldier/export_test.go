@@ -1,6 +1,10 @@
 package soldier
 
-import "time"
+import (
+	"time"
+
+	"github.com/isaias-alt/vexillum/internal/opencodeapi"
+)
 
 // SetNotReadyPollWindow shortens how long startAgent polls an agent that
 // failed to start with agent_not_ready, and returns a func that restores it.
@@ -49,4 +53,12 @@ func SetOpenCodeTextFieldWindow(d time.Duration) (restore func()) {
 	old := openCodeTextFieldWindow
 	openCodeTextFieldWindow = d
 	return func() { openCodeTextFieldWindow = old }
+}
+
+// SetOpenCodeSessions replaces how the OpenCode V2 launch reaches the service,
+// and returns a func that restores it.
+func SetOpenCodeSessions(api opencodeapi.Sessions) (restore func()) {
+	old := newOpenCodeSessions
+	newOpenCodeSessions = func() opencodeapi.Sessions { return api }
+	return func() { newOpenCodeSessions = old }
 }
