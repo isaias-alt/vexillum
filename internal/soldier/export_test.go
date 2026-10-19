@@ -27,8 +27,26 @@ func ParseOpenCodeBlocked(visible string) (kind string, question string, options
 	return map[openCodeBlockKind]string{openCodeBlockPermission: "permission", openCodeBlockQuestion: "question"}[k], d.Question, d.Options, true
 }
 
-// OpenCodeKeysFor exposes openCodeKeysFor for a screen kind given by name.
-func OpenCodeKeysFor(kind string, options []string, answer string) (keys []string, chosen, why string) {
+// OpenCodePlanFor exposes openCodePlanFor for a screen kind given by name.
+func OpenCodePlanFor(kind string, options []string, answer string) (keys []string, typed, chosen, why string) {
 	k := map[string]openCodeBlockKind{"permission": openCodeBlockPermission, "question": openCodeBlockQuestion}[kind]
-	return openCodeKeysFor(k, options, answer)
+	plan, why := openCodePlanFor(k, options, answer)
+	return plan.keys, plan.typed, plan.chosen, why
+}
+
+// SetOpenCodeLeaveBlockedWindow shortens how long an answered OpenCode pane is
+// waited on to leave blocked, and returns a func that restores it.
+func SetOpenCodeLeaveBlockedWindow(d time.Duration) (restore func()) {
+	old := openCodeLeaveBlockedWindow
+	openCodeLeaveBlockedWindow = d
+	return func() { openCodeLeaveBlockedWindow = old }
+}
+
+// SetOpenCodeTextFieldWindow shortens how long a selected "Type your own
+// answer" is waited on to open its text field, and returns a func that
+// restores it.
+func SetOpenCodeTextFieldWindow(d time.Duration) (restore func()) {
+	old := openCodeTextFieldWindow
+	openCodeTextFieldWindow = d
+	return func() { openCodeTextFieldWindow = old }
 }
