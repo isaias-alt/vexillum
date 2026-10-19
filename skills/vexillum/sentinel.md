@@ -2,10 +2,13 @@
 
 `vx dispatch` auto-starts a sentinel in the background if none is running, so you
 normally do not think about it. It polls every dispatched soldier's live status
-and, when one settles, surfaces that to you: a Claude Code Stop hook (wired up by
-`vx init`) blocks your turn from quietly ending and tells you what changed. Keep
-doing other things (or talk to the general) while a soldier works; you will be
-interrupted with the update the next time you would otherwise stop.
+and, when one settles, surfaces that to you as a sentinel notice: it keeps your
+turn from quietly ending and tells you what changed. Keep doing other things (or
+talk to the general) while a soldier works; you will be interrupted with the
+update the next time you would otherwise stop. In Claude Code the notice is
+delivered by an async Stop hook that `vx init` registers in
+`.claude/settings.json`; the mechanism depends on the harness you run in, the
+notice you act on is the same.
 
 If you ever need to start one yourself (the auto-start failed; `vx dispatch`
 warns on stderr if so), run `vx sentinel` in the background. It refuses a second
@@ -20,11 +23,11 @@ status word alone.
 
 ## Forum wakes
 
-The same Stop hook also carries forum feedback. When the user sends feedback
+The same sentinel notice also carries forum feedback. When the user sends feedback
 from a review panel opened in this project, a small background listener (not a
 soldier, no model) stores it in the project's inbox and rings a forum wake. If
-your turn is about to end you are told, in the same hook message and with no
-soldier involved:
+your turn is about to end you are told, in the same notice and with no soldier
+involved:
 
 ```
 forum session <file>: 2 new messages (ended: false). Run vx forum inbox.
@@ -110,14 +113,14 @@ short follow-up that finishes between two polls could still slip past.
 
 ## Stray `vx sentinel await` processes
 
-The Stop hook runs `vx sentinel await` on every turn end. Each one records
-itself in `~/.vexillum/sentinel-awaiters/`, exits by itself when the hook that
-launched it is gone, and a newer one from the same session replaces the
-previous turn's. Starting `vx sentinel` (or any new `await`) also stops
+The wake path runs `vx sentinel await` (in Claude Code, its Stop hook does it on
+every turn end). Each one records itself in `~/.vexillum/sentinel-awaiters/`,
+exits by itself when the process that launched it is gone, and a newer one from
+the same session replaces the previous turn's. Starting `vx sentinel` (or any new `await`) also stops
 orphans left by a dead session, only ever after verifying the pid is a
 `vx sentinel await`. If you still see leftovers, restarting the sentinel
 (`vx sentinel`, after stopping the old one) reaps them; never `pkill` by name,
-that would also kill the main sentinel and other sessions' hooks.
+that would also kill the main sentinel and other sessions' awaits.
 
 ## Redispatch is destructive
 

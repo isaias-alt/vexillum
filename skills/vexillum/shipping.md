@@ -18,7 +18,8 @@ so a green step there does not mean a check ran. Read the note each step prints.
 Requires the `gh` binary installed (`vx doctor` reports whether it is). `vx ship`
 refuses up front and says so if it is missing. The pipeline itself runs inside
 vexillum, with no tool of its own to install or configure, but the review needs
-`claude` (already required to dispatch) and the push needs an `origin` remote.
+the CLI of the mission's harness (`claude` by default, already required to
+dispatch) and the push needs an `origin` remote.
 
 ## The general's later instructions count as intent
 

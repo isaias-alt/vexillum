@@ -8,6 +8,13 @@ description: "Informar sobre la salud del entorno de vexillum"
 ```text
 Informar sobre la salud del entorno de vexillum. Solo lectura.
 
+La herramienta en la que corre el commander es la que doctor exige. Un proyecto
+inicializado registra sus harnesses de commander en .vexillum/config.json
+('vx init --commander', claude por defecto); el binario de cada uno es
+obligatorio y los demás solo advierten. Para un commander claude doctor también
+revisa el hook Stop y el import en CLAUDE.md que se describen más abajo, que un
+proyecto sin commander claude no necesita.
+
 Además de las herramientas que maneja vexillum, para un proyecto inicializado
 doctor informa el estado del bloque de vexillum en AGENTS.md o CLAUDE.md
 (absent, current, stale, drifted o malformed), si CLAUDE.md importa AGENTS.md

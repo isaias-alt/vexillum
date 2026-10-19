@@ -257,3 +257,24 @@ func TestVexillumSkillHardRule(t *testing.T) {
 		}
 	}
 }
+
+// The skills talk about the sentinel notice, not about the mechanism that
+// delivers it, because the commander can run in several harnesses. Only the
+// sentinel chapter, which explains the mechanism, may name the Claude Code
+// Stop hook.
+func TestSkillsDoNotNameTheStopHookOutsideTheSentinelChapter(t *testing.T) {
+	for _, name := range Names() {
+		files, err := Files(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range files {
+			if name == "vexillum" && f.Path == "sentinel.md" {
+				continue
+			}
+			if strings.Contains(string(f.Content), "Stop hook") {
+				t.Errorf("%s/%s names the Stop hook; say \"the sentinel notice\" instead", name, f.Path)
+			}
+		}
+	}
+}

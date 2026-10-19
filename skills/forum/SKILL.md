@@ -44,7 +44,7 @@ work out from the conversation what would be worth showing.
 3. **Tell the user** the review is open and what you need from them. Then
    carry on (or end your turn): **you do not poll**. `vx forum <file>` run in
    the project also started the listener (the output says `listener: running`).
-4. **When feedback arrives you are woken.** The Stop hook's await surfaces a
+4. **When feedback arrives you are woken.** The sentinel notice surfaces a
    line like `forum session <file>: 2 new messages (ended: false). Run vx forum
    inbox.` Run `vx forum inbox` (see "The inbox"), read the prompts, then
    **update the artifact first, answer second**:
@@ -270,7 +270,7 @@ your agent is listening. The indicator and a notice show one of these states:
   Waiting for its answer.") - the listener forwarded the user's latest round
   and nobody has answered it yet. It is shown for as long as that is true, with
   the time since forwarding; if no commander session is known for the project
-  (no Stop hook await alive) it says so ("no commander session is known for
+  (no sentinel await alive) it says so ("no commander session is known for
   this project; your message waits in its inbox until one starts") and updates
   when one appears. It ends when you `vx forum reply`, edit the artifact, or the
   user presses **Stop waiting**.

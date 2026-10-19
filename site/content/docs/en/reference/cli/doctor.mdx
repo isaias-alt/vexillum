@@ -8,6 +8,13 @@ description: "Report on the health of the vexillum environment"
 ```text
 Report on the health of the vexillum environment. Read-only.
 
+The tool the commander runs in is the one doctor requires. An initialized
+project records its commander harnesses in .vexillum/config.json ('vx init
+--commander', claude by default); each one's binary is required, and the
+others only warn. For a claude commander doctor also checks the Stop hook and
+the CLAUDE.md import described below, which a project with no claude commander
+does not need.
+
 Besides the tools vexillum drives, doctor reports, for an initialized project,
 the state of the vexillum block in AGENTS.md or CLAUDE.md (absent, current,
 stale, drifted or malformed), whether CLAUDE.md imports AGENTS.md when the

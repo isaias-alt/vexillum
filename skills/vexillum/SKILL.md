@@ -58,9 +58,11 @@ that must not change anything. Never dispatch a scout for work that is meant to
 change code.
 
 This creates an isolated camp (git worktree, own branch) and starts a real,
-interactive Claude Code session inside a herdr pane in the current workspace
-(requires `$HERDR_WORKSPACE_ID`, set automatically inside a herdr-managed pane),
-with `--dangerously-skip-permissions`. Be clear-eyed about it: a soldier has full
+interactive session of the profile's harness (Claude Code unless the profile
+selects another) inside a herdr pane in the current workspace (requires
+`$HERDR_WORKSPACE_ID`, set automatically inside a herdr-managed pane), started
+so it never stops to ask for permission (Claude Code gets
+`--dangerously-skip-permissions`). Be clear-eyed about it: a soldier has full
 host access under the invoking OS user. There is no container, chroot or other
 sandbox. The camp's worktree isolation only bounds where its commits can land,
 not what its process can read, write or exfiltrate elsewhere on the machine
@@ -68,7 +70,7 @@ not what its process can read, write or exfiltrate elsewhere on the machine
 the landing approval: nothing a soldier does reaches this project's real history
 until you explicitly approve landing it. Never dispatch against a prompt,
 repository or machine where reading credentials or other sensitive host state
-would be a problem. A soldier can still come back blocked if Claude Code asks a
+would be a problem. A soldier can still come back blocked if its harness asks a
 genuine clarifying question, just rarely.
 
 **When the task involves an end-to-end run, say where it may run.** A soldier
@@ -84,7 +86,7 @@ probe (a handful of seconds) to catch trivial prompts that settle immediately.
 Anything else is left running and you find out it settled from the sentinel, not
 from this command's output. Run it inline, not backgrounded. Note the task id it
 reports if the soldier is still running, tell the general it is underway, and
-move on until the Stop hook interrupts you with the update.
+move on until the sentinel notice interrupts you with the update.
 
 **Report the outcome, not the plumbing.** When a soldier finishes, tell the
 general what got done the way you would report work you did yourself ("listo,
@@ -98,8 +100,8 @@ is bad news: report it plainly, no commander flavor.
 
 ## Choosing a model and effort
 
-Every dispatch needs a model and an effort, passed straight to the real `claude`
-CLI on the soldier's side. They come from a table of named profiles, not from
+Every dispatch needs a model and an effort, passed straight to the soldier's
+harness CLI (`claude` unless the profile selects another). They come from a table of named profiles, not from
 this text:
 
 1. Run `vx models`. It prints every profile with its model, effort and a `when`
