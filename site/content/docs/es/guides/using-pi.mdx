@@ -72,24 +72,37 @@ Pi lee un sufijo `:level` en `--model` como un nivel de thinking, y algunos ids 
 | Terminal | normal | `--tui-mode regular`. Desde 1.0.0 Pi corre en pantalla completa sobre la pantalla alternativa de la terminal por defecto, que no tiene scrollback para leer. |
 | Reglas | `CLAUDE.md`, que importa `AGENTS.md` | Pi lee `AGENTS.md` en cada carpeta y, solo si no hay, `CLAUDE.md`. No expande `@AGENTS.md`. No hace falta nada extra: el bloque de vexillum vive en `AGENTS.md` (o en `CLAUDE.md` cuando el proyecto no tiene `AGENTS.md`), y Pi lee el que lo tenga. Un proyecto con los dos archivos y contenido distinto le muestra a un soldier de Pi solo `AGENTS.md`. |
 | Skills | el `.claude/skills` del proyecto | ninguna. Los soldiers no usan skills en este release. |
-| Preguntas | el selector de preguntas de Claude, que se responde con una pulsación de tecla | no hay selector. Un soldier pregunta con una línea `needs-decision:`, y `vx decide` entrega la respuesta como texto plano. |
-| Despertar | el sentinel lee el estado de herdr | lo mismo. El sentinel no necesita ninguna extension para Pi, y el commander se despierta como siempre. |
+| Preguntas | el selector de preguntas de Claude, que se responde con una pulsación de tecla | una herramienta `ask_user` que vexillum le da al soldier, que se responde mediante un archivo (ver [Soldiers blocked](#soldiers-blocked)). Sin la herramienta, una línea `needs-decision:` que se responde como texto plano. |
+| Despertar | el sentinel lee el estado de herdr | lo mismo. El sentinel no necesita ninguna extension de despertar para Pi, y el commander se despierta como siempre. |
 | `vx ship` | el reviewer y el fixer del tribunal corren `claude -p` en `sonnet` con effort high | corren `pi -p --no-session` con el modelo y el nivel de thinking con los que corrió la mission, o el default de Pi cuando el perfil no definió ninguno |
 
 ## Soldiers blocked
 
-Un soldier de Pi que necesita una respuesta termina su turno con una línea `needs-decision:`, que es también como pregunta en Claude Code cuando no usa el selector. La tarea pasa a `blocked` con la pregunta guardada como una `decision` de prosa:
+Cada soldier de Pi arranca con una extension chica de vexillum que le da una herramienta `ask_user`: una pregunta, las respuestas probables como opciones, y siempre una forma de escribir otra. La extension viene dentro del binario `vx` y se escribe en `~/.vexillum/projects/<key>/pi/ask_user.ts` cuando despachás, y se carga con `pi -e`. No se agrega nada al camp, el aviso de confianza del proyecto de Pi nunca le aplica, y nada salvo el propio Pi la ejecuta (no hay que instalar Node ni Python).
+
+Mientras el soldier espera en `ask_user`:
+
+1. la extension guarda la pregunta y sus opciones en `~/.vexillum/projects/<key>/asks/<task-id>/` y le avisa a herdr que el soldier está `blocked`, que es lo único para lo que la integración de herdr para Pi reporta eso;
+2. el sentinel marca la tarea `blocked`, despierta al commander y guarda la pregunta como la `decision` de la tarea con `"kind": "ask"`, sus opciones y un `question_id`;
+3. vos respondés, y el soldier sigue con tu respuesta como resultado de la herramienta.
 
 ```bash
 vx status
-vx decide <task-id> "Use the existing helper"
+vx decide <task-id> 2                      # el número de una opción, desde 1
+vx decide <task-id> "Use the existing helper"   # el texto exacto de una opción, o cualquier texto
 ```
 
-Lo que pases se escribe en el pane del soldier como texto. Los números de opción no significan nada para Pi, así que escribí la respuesta misma. `--dismiss` funciona como en cualquier tarea. Ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted).
+`vx decide` escribe la respuesta en un archivo que la extension está esperando, dirigida al id de esa pregunta, y espera a que la extension la tome. No se teclea nada en el pane. Se usa un archivo y no pulsaciones de tecla porque lo que hace una tecla depende de cuál de los diálogos de Pi está abierto y dónde está su cursor, y un prompt enviado a Pi mientras corre una herramienta queda en cola como mensaje de dirección en vez de responder a la herramienta. También podés responder vos mismo en el pane del soldier: el diálogo se cierra igual, y la tarea vuelve sola a `running`. Si después corrés `vx decide`, se niega con un mensaje de que la pregunta ya no está abierta, y `vx decide <task-id> --dismiss` limpia la tarea.
+
+Los archivos guardan solo la pregunta y las opciones que escribió el soldier y tu respuesta: un `question.json` y un `answer.json`, legibles solo por vos. Se borran apenas la pregunta se cierra.
+
+Si la extension no se cargó (un Pi viejo, o un `pi` que falló al arrancar), el soldier no tiene `ask_user`. Su prompt le dice entonces que termine su turno con una línea `needs-decision:`, la tarea pasa a `blocked` con una `decision` de prosa, y `vx decide` escribe tu respuesta en el pane como texto plano, así que escribí la respuesta misma y no un número de opción. `vx doctor` no revisa la extension, porque se carga recién cuando arranca un soldier: si un soldier ignora `ask_user`, mirá su pane por una línea de Pi sobre la extension, y mirá la checklist del repositorio para confirmar que se cargó.
+
+Si la integración de herdr para Pi no está instalada, herdr no ve al soldier como blocked mientras espera. El sentinel igual bloquea la tarea a partir del archivo de la pregunta abierta, en unos segundos. `--dismiss` funciona como en cualquier tarea. Ver [Blocked e interrupted](/es/docs/guides/blocked-and-interrupted).
 
 ## No está en este release
 
-- Una extension de despertar para Pi y una herramienta `ask_user` estructurada, que le permitiría a un soldier de Pi preguntar sin una línea de texto.
+- Una extension de despertar para Pi.
 - Pi como commander.
 - Skills para los soldiers de Pi.
 - OpenCode, un nombre de harness reservado que se rechaza con un error claro.

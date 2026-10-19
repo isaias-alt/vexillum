@@ -51,7 +51,8 @@ Optional fields are omitted when empty.
 | `options` | choices it offered, if any |
 | `asked_at` | when it blocked |
 | `answer`, `answered_at` | set after [`vx decide`](/docs/reference/cli/decide) |
-| `kind` | how it must be answered: a selector overlay is answered with a key press, anything else as text |
+| `kind` | how it must be answered: `modal` (a selector overlay) with a key press, `ask` (a Pi soldier's `ask_user` question) through a file, anything else as text |
+| `question_id` | the id of an `ask` question, what an answer is addressed to |
 | `dismissed` | `true` when cleared with `vx decide --dismiss` instead of answered; `answered_at` is set, `answer` is not |
 
 A task in `blocked` always carries its question here, not just the word "blocked".

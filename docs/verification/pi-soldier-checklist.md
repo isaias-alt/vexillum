@@ -174,7 +174,13 @@ Pass:
 vx dispatch "Before you do anything else, you need to know which color to use. Ask me, using the needs-decision line the way you were told. When I answer, write the answer into color.txt and commit it." --kind mission --profile pi-mission
 ```
 
-Pi has no question tool, so this goes through the `needs-decision:` line. Pass:
+Pi has no question tool of its own, so without vexillum's extension this goes
+through the `needs-decision:` line. Since phase 2 every Pi soldier is also given
+vexillum's `ask_user` tool and its prompt says to call that first, so the
+soldier will usually ask through the tool instead, which section 13 checks.
+Count this step as passed if the soldier asks either way and the matching
+outcome below (or in section 13) holds.
+Pass:
 
 - The soldier ends its turn with a line `needs-decision: <its question>`.
 - Within a few sentinel polls (it polls every 5 seconds) `vx status` shows
@@ -351,3 +357,168 @@ reads the status from herdr.
 When you report back, include `vx doctor`, `pi --version`, `herdr --version`,
 the OS, and for any failed step the exact command, what you saw, and (for pane
 problems) the output of `herdr agent read <agent-name>`.
+
+## 13. Phase 2: blocked soldiers through `ask_user`
+
+Phase 2 gives every Pi soldier a vexillum-owned extension that registers an
+`ask_user` tool. While the soldier waits in it, the extension tells herdr the
+soldier is blocked and leaves the question in a file, so `vx decide` can read
+and answer it. What was already checked without a model, so you know what is
+left: the extension loads in Pi 1.3.0 and registers `--vx-ask-dir`; driven by
+a scripted fake model inside a real Pi 1.3.0 TUI, the tool wrote
+`question.json`, closed its dialog when `answer.json` appeared (and when the
+option was picked in the dialog), returned the answer as the tool result and
+removed both files; and herdr's stock Pi integration, given the extension's
+`herdr:blocked` event, reported `blocked` with the label, then `working` and
+`idle`. What was never run: a real model calling the tool, and Pi inside a real
+herdr pane. That is what this section is for.
+
+You need the setup of section 0 and 2 (a `pi-mission` profile), and the
+herdr integration for Pi installed. `<key>` below is the directory name under
+`~/.vexillum/projects/` for `~/pi-check` (`ls ~/.vexillum/projects`).
+
+### 13.1 The extension is installed outside the camp and loaded
+
+```sh
+vx dispatch "Reply with the word ready and stop." --kind scout --profile pi-scout
+ls -l ~/.vexillum/projects/<key>/pi/
+ps ax -o args | grep -- '--vx-ask-dir' | grep -v grep
+```
+
+Pass:
+
+- `~/.vexillum/projects/<key>/pi/ask_user.ts` exists, mode `-rw-------`.
+- The `pi` process line contains `-e ~/.vexillum/projects/<key>/pi/ask_user.ts
+  --vx-ask-dir ~/.vexillum/projects/<key>/asks/<task-id>` (with the home
+  directory spelled out), after `--approve --tui-mode regular --model ...`.
+- The camp has no new files from vexillum: `git -C <camp_path> status --short`
+  prints nothing (use `camp_path` from `vx status --json`). No `.pi` appeared
+  in it.
+- Pi started without an error about the extension, and `ask_user` is
+  callable: step 13.2 is what proves it.
+
+Then confirm Pi accepts the file on its own:
+
+```sh
+pi -e ~/.vexillum/projects/<key>/pi/ask_user.ts --help | grep -A1 'Extension CLI Flags'
+```
+
+Pass: it lists `--vx-ask-dir <value>`.
+
+### 13.2 A soldier asks, and is shown blocked
+
+```sh
+vx dispatch "Before you do anything, call your ask_user tool to ask me which database to use, with the options Postgres and SQLite. Then write the answer into db.txt and commit it." --kind mission --profile pi-mission
+```
+
+Within a few seconds of the soldier calling the tool, check all of these:
+
+| Observe | Pass |
+| --- | --- |
+| The pane | A selector with the question, the options `Postgres` and `SQLite` and a last entry `Type my own answer`. |
+| herdr | `herdr agent get <agent-name>` shows `blocked` (agent name from `vx status --json`, `herdr_agent_name`). Also look at the herdr sidebar: the soldier shows as blocked. |
+| The file | `cat ~/.vexillum/projects/<key>/asks/<task-id>/question.json` shows `"version":1`, a 32 character `id`, the question and `"options":["Postgres","SQLite"]`. The file is mode `-rw-------` and holds nothing but those fields. |
+| vx status | Within about 10 seconds `vx status` shows the task `blocked`, and `vx status --json` has a `decision` with `"kind": "ask"`, the question, the two options and a `question_id` equal to the file's `id`. |
+| The wake | A commander session in the same workspace receives the blocked notice. |
+
+If the pane shows no selector but the soldier ended its turn with a
+`needs-decision:` line instead, the model did not call the tool: note it, and
+repeat with a more explicit prompt ("you must call ask_user"). That is a
+model-behavior finding, not a failure of the extension.
+
+### 13.3 Answer with `vx decide`, and the soldier continues
+
+```sh
+vx decide <task-id> 2
+```
+
+Pass:
+
+- It prints `answered task ... now running` (or `done`).
+- In the pane the selector closes by itself, the tool result reads `The general
+  chose option 2: SQLite`, and the soldier continues and writes `SQLite` into
+  `db.txt`. Nothing is typed into the editor.
+- `~/.vexillum/projects/<key>/asks/<task-id>/` no longer holds `question.json`
+  or `answer.json`.
+- herdr goes `blocked` to `working`, and `vx status` to `running` and then
+  `done`. `vx status --json` shows the decision with `"answer": "2"` and an
+  `amendments` entry reading `Asked "<question>", the general answered:
+  SQLite`.
+
+Repeat on a second blocked task with a free-text answer
+(`vx decide <task-id> "Use DuckDB, it is a one-off script"`). Pass: the tool
+result reads `The general answered: Use DuckDB, it is a one-off script` and
+the soldier acts on it.
+
+### 13.4 Answering in the pane, and the stale decide
+
+On a third blocked task, choose an option in the soldier's own selector.
+
+Pass: the soldier continues, the files are removed, and within a few seconds
+`vx status` returns the task to `running` by itself (it was `blocked` for a
+moment). Then run `vx decide <task-id> 1`: it must refuse with a message that
+the question is no longer open, and `vx status` is unchanged. If the task is
+still `blocked` in `vx status`, `vx decide <task-id> --dismiss` clears it.
+
+### 13.5 Escape in the selector
+
+On a fourth blocked task press Escape in the soldier's selector.
+
+Pass: the selector closes, the files are removed, the tool result reads `The
+general did not answer. Continue without it, or end your turn with
+`needs-decision:`.`, and the soldier carries on or ends its turn; the task
+leaves `blocked` and does not get stuck.
+
+### 13.6 Without herdr's Pi integration
+
+```sh
+herdr integration uninstall pi
+```
+
+Repeat 13.2 and 13.3 with a new task. Pass: `herdr agent get` shows `working`
+(herdr cannot see the wait), but `vx status` still shows the task `blocked`
+within about 10 seconds, with the same `"kind": "ask"` decision, and
+`vx decide` works. Then `herdr integration install pi` again.
+
+### 13.7 If the extension fails to load
+
+Signs: the pane shows an error from Pi about the extension or about `Unknown
+option: --vx-ask-dir` at startup, the soldier says it has no `ask_user` tool
+(a Pi setting that limits the tools, such as `defaultTools` in
+`~/.pi/agent/settings.json`, can leave it out), `ls
+~/.vexillum/projects/<key>/asks/<task-id>/` stays empty although the soldier
+asked a question, or `vx decide` fails with `the soldier did not pick the
+answer up within 10s`.
+
+What to do:
+
+1. `pi --version` must print `1.3.<patch>`; the extension was written for the
+   1.3 API.
+2. Run `pi -e ~/.vexillum/projects/<key>/pi/ask_user.ts --help` in a pane and
+   read the output. A TypeScript or import error is printed there. Report it.
+3. The file is rewritten from the vx binary at every dispatch. If it is
+   missing or was edited, dispatch again; to force it, delete
+   `~/.vexillum/projects/<key>/pi/ask_user.ts` first.
+4. The soldier is not stuck for good: the prompt also teaches the
+   `needs-decision:` line, so a soldier without `ask_user` asks that way, the
+   task becomes `blocked` with a prose `decision` and `vx decide` types the
+   answer into the pane as text (step 5 of this checklist).
+5. A task left `blocked` by an answer that was withdrawn (`did not pick the
+   answer up`): look at the pane, answer there if a selector is up, otherwise
+   `vx decide <task-id> --dismiss`.
+
+When you report a failure include `pi --version`, the output of step 2, the
+contents of `~/.vexillum/projects/<key>/asks/<task-id>/` if any, and
+`herdr agent read <agent-name>`.
+
+### 13.8 Results
+
+| Step | Pass / fail / skipped | Notes (versions, model, anything odd) |
+| --- | --- | --- |
+| 13.1 extension installed outside the camp, loaded, `ask_user` listed | | |
+| 13.2 selector shown, herdr `blocked`, `vx status` blocked with an `ask` decision | | |
+| 13.3 `vx decide` by number and by free text, soldier continues, files cleared | | |
+| 13.4 answered in the pane, stale `vx decide` refused | | |
+| 13.5 Escape in the selector | | |
+| 13.6 without the herdr Pi integration | | |
+| 13.7 failure to load: signs and fallback understood | | |
