@@ -326,8 +326,17 @@ AskUserQuestion de Claude Code, <answer> (el texto exacto de una opción, o su
 número renderizado, contando desde 1) se entrega como una única pulsación de
 tecla, el mismo mecanismo que usaría una persona al elegir en ese menú, salvo
 que se resuelva a "Type something.", que recurre a texto plano como todas las
-demás decisiones. Un soldier de pi no tiene ese selector, así que su respuesta
-siempre se entrega como texto plano.
+demás decisiones.
+
+Un soldier de pi no tiene ese selector. Cuando preguntó con su herramienta
+ask_user (la decisión es de tipo "ask", con la pregunta y sus opciones),
+<answer> es el texto exacto de una opción, su número contando desde 1, o
+cualquier texto libre, y se escribe en el archivo que esa herramienta espera:
+el soldier sigue con esa respuesta y no se teclea nada en su pane. Si la
+pregunta ya se contestó en el pane, la respuesta se rechaza y la tarea se
+puede limpiar con --dismiss. Un soldier de pi que preguntó en prosa (una línea
+needs-decision:, o una sesión donde la extensión ask_user no se cargó) recibe
+la respuesta como texto plano.
 
 Una vez entregada la respuesta, también se registra en la tarea como una
 enmienda (campo "amendments" en 'vx status --json'), junto con la pregunta que

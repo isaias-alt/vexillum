@@ -27,8 +27,16 @@ field "decision" of '` + cmdname.Name + ` status --json'. If the open question c
 AskUserQuestion selector, <answer> (an option's exact text, or its 1-based
 rendered number) is delivered as a single key press (the same mechanism a
 human picking from that menu would use) unless it resolves to "Type
-something.", which falls back to plain text like every other decision. A pi
-soldier has no such selector, so its answer is always delivered as plain text.
+something.", which falls back to plain text like every other decision.
+
+A pi soldier has no such selector. When it asked through its ask_user tool (the
+decision has kind "ask", with the question and its options), <answer> is an
+option's exact text, its 1-based number, or any free text, and is written to
+the file that tool is waiting on: the soldier carries on with it and nothing
+is typed into its pane. If the question was already answered in the pane, the
+answer is refused and the task can be cleared with --dismiss. A pi soldier that
+asked in plain prose (a needs-decision: line, or a session where the ask_user
+extension did not load) is answered as plain text.
 
 Once the answer is delivered it is also recorded on the task as an amendment
 (field "amendments" in '` + cmdname.Name + ` status --json'), together with the question it answered,
