@@ -7,6 +7,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/piask"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -215,7 +216,9 @@ func TestRunInHerdr_PiStartsWithItsOwnArgs(t *testing.T) {
 		t.Fatalf("RunInHerdr: %v", err)
 	}
 
-	want := []string{"--approve", "--tui-mode", "regular", "--model", "anthropic/claude-sonnet-5", "--thinking", "high"}
+	root := testProjectRoot(t, home)
+	want := []string{"--approve", "--tui-mode", "regular", "--model", "anthropic/claude-sonnet-5", "--thinking", "high",
+		"-e", piask.ExtensionPath(root), "--vx-ask-dir", piask.Dir(root, task.ID)}
 	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], want) {
 		t.Errorf("expected the soldier to start with %v, got %v", want, client.startArgs)
 	}
@@ -247,8 +250,9 @@ func TestRunInHerdr_PiStartsAHerdrAgentOfKindPi(t *testing.T) {
 	}
 }
 
-// A Pi soldier is not told about a question tool it does not have, and is
-// still taught the needs-decision: line, which is how it asks.
+// A Pi soldier is told to ask through its ask_user tool, with the
+// needs-decision: line as the fallback for a session where the tool is not
+// there, and is not told about Claude's AskUserQuestion.
 func TestRunInHerdr_PiPromptDoesNotMentionAskUserQuestion(t *testing.T) {
 	home := t.TempDir()
 	task := newMissionTask(t)
@@ -265,7 +269,7 @@ func TestRunInHerdr_PiPromptDoesNotMentionAskUserQuestion(t *testing.T) {
 	if strings.Contains(prompt, "AskUserQuestion tool") {
 		t.Errorf("a Pi soldier's prompt mentions AskUserQuestion:\n%s", prompt)
 	}
-	for _, want := range []string{"needs-decision:", "real decision or answer from the general", "do not use it for an ordinary status update."} {
+	for _, want := range []string{"call your ask_user tool", "Only if that tool is not available", "needs-decision:", "real decision or answer from the general", "do not use it for an ordinary status update."} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("a Pi soldier's prompt is missing %q", want)
 		}

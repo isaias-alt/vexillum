@@ -84,6 +84,18 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		return task, fmt.Errorf("resolving task harness: %w", err)
 	}
 
+	// A harness with an extension of vexillum's own (Pi's ask_user) gets it
+	// installed and loaded; written before the tab exists, so a failure
+	// leaves nothing to clean up.
+	launchArgs := harness.ModelEffortArgs(task)
+	if ext, ok := harness.(ExtensionHarness); ok {
+		extra, err := ext.LaunchArgs(projectRoot, task)
+		if err != nil {
+			return task, fmt.Errorf("preparing the soldier's extension: %w", err)
+		}
+		launchArgs = append(launchArgs, extra...)
+	}
+
 	agentName := herdrAgentName(task)
 
 	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName)
@@ -118,7 +130,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	}
 	task = saved
 
-	agentName, err = startAgent(client, harness, agentName, task.ID, paneID, harness.ModelEffortArgs(task))
+	agentName, err = startAgent(client, harness, agentName, task.ID, paneID, launchArgs)
 	if err != nil {
 		return failHerdrTask(projectRoot, task, err)
 	}
@@ -214,7 +226,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 
 	task.Status = corroboratedStatus(projectRoot, task, status)
 	if task.Status == state.StatusBlocked {
-		task.Decision = blockedDecision(client, task, agentName, status, task.Output)
+		task.Decision = blockedDecision(projectRoot, client, task, agentName, status, task.Output)
 	}
 	saved, err = updateTask(projectRoot, task.ID, func(current *state.Task) {
 		applySettled(current, task, readErr == nil)
@@ -265,9 +277,9 @@ func applySettled(current *state.Task, settled state.Task, outputRead bool) {
 // The final fallback is defensive only - corroboratedStatus should never
 // return StatusBlocked without one of the above being true - but a
 // genuinely blocked task must never end up with a nil Decision.
-func blockedDecision(client herdr.Client, task state.Task, agentName, liveStatus, output string) *state.Decision {
+func blockedDecision(projectRoot string, client herdr.Client, task state.Task, agentName, liveStatus, output string) *state.Decision {
 	if MapAgentStatus(liveStatus) == state.StatusBlocked {
-		return ResolveBlockedDecisionFor(task.Harness, client, agentName, output)
+		return ResolveBlockedDecisionForTask(projectRoot, task, client, agentName, output)
 	}
 	if d, found := FinalTurnNeedsDecision(task, output); found {
 		return d
@@ -286,9 +298,11 @@ func blockedDecision(client herdr.Client, task state.Task, agentName, liveStatus
 // the resolved option's rendered number, via client.AgentSendKeys - instead
 // of a plain-text prompt submission, unless answer resolves specifically to
 // the auto-injected "Type something." option (see resolveModalAnswer).
-// Every other Decision is answered exactly as before this existed: plain
-// text through the same client.AgentPrompt path RunInHerdr uses for a
-// task's original prompt.
+// A Decision recorded from a Pi soldier's ask_user tool
+// (state.DecisionKindAsk) is answered through the file that tool waits on
+// (answerAsk). Every other Decision is answered exactly as before this
+// existed: plain text through the same client.AgentPrompt path RunInHerdr
+// uses for a task's original prompt.
 //
 // Mirrors RunInHerdr's own quick-settle probe either way: a fast
 // idle/done/blocked settlement is reflected immediately, otherwise the task
@@ -303,6 +317,9 @@ func blockedDecision(client herdr.Client, task state.Task, agentName, liveStatus
 // task, so nothing else would ever catch this. The caller should point the
 // general at 'vx redispatch' instead.
 func AnswerBlocked(projectRoot string, task state.Task, answer string, client herdr.Client) (state.Task, error) {
+	if task.Decision != nil && task.Decision.Kind == state.DecisionKindAsk {
+		return answerAsk(projectRoot, task, answer, client)
+	}
 	if task.Decision != nil && task.Decision.Kind == state.DecisionKindModal {
 		if n, label, ok := resolveModalAnswer(task.Decision.Options, answer); ok && label != optionTypeSomething {
 			if err := client.AgentSendKeys(task.HerdrAgentName, strconv.Itoa(n)); err != nil {
@@ -453,7 +470,7 @@ func Reprompt(projectRoot string, task state.Task, text string, client herdr.Cli
 	}
 	task.Status = corroboratedStatus(projectRoot, task, status)
 	if task.Status == state.StatusBlocked {
-		task.Decision = blockedDecision(client, task, task.HerdrAgentName, status, task.Output)
+		task.Decision = blockedDecision(projectRoot, client, task, task.HerdrAgentName, status, task.Output)
 	}
 	saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
 		applySettled(current, task, readErr == nil)
@@ -550,7 +567,7 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, chosen, st
 			// Settled straight back into another question - extract it
 			// the same way a fresh block does, so the general sees the
 			// new question, not the one they just answered.
-			if d := ResolveBlockedDecisionFor(task.Harness, client, task.HerdrAgentName, task.Output); d != nil {
+			if d := ResolveBlockedDecisionForTask(projectRoot, task, client, task.HerdrAgentName, task.Output); d != nil {
 				newDecision = d
 			}
 		}
@@ -736,6 +753,12 @@ func needsDecisionInstructions(harness Harness) string {
 	if !harness.QuestionModal() {
 		when = "If you need a real decision or answer from the general before you can continue, " +
 			"end your turn with a line in exactly this format (nothing else on that line):\n\n"
+	}
+	if ext, ok := harness.(ExtensionHarness); ok {
+		when = "If you need a real decision or answer from the general before you can continue, " +
+			"call your " + ext.AskTool() + " tool with the question and the likely answers as options, and carry on " +
+			"with the answer it returns. Only if that tool is not available in your session, end your turn " +
+			"with a line in exactly this format (nothing else on that line):\n\n"
 	}
 	return "\n\n---\n\n" + when +
 		"  needs-decision: " + needsDecisionPlaceholder + "\n\n" +

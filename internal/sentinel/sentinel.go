@@ -255,7 +255,14 @@ func tickProject(projectRoot string, client herdr.Client, note func(subject, lin
 
 		newStatus := soldier.MapAgentStatus(live)
 		if newStatus == task.Status {
-			continue
+			// Working, as far as herdr can tell. A Pi soldier waiting in
+			// its ask_user tool is shown as blocked only when herdr's own
+			// Pi integration is installed; the question it left behind
+			// says it is blocked either way.
+			if !soldier.HasOpenAskQuestion(projectRoot, task) {
+				continue
+			}
+			newStatus = state.StatusBlocked
 		}
 
 		// Every transition reaching here settles a Running task out of
@@ -415,7 +422,7 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 		// caught it, almost always Claude Code's AskUserQuestion modal (a Pi
 		// soldier has none, its question is read as prose).
 		// See soldier.ResolveBlockedDecisionFor.
-		task.Decision = soldier.ResolveBlockedDecisionFor(task.Harness, client, task.HerdrAgentName, task.Output)
+		task.Decision = soldier.ResolveBlockedDecisionForTask(projectRoot, task, client, task.HerdrAgentName, task.Output)
 	}
 	saved, err := saveIfRunning(projectRoot, task)
 	if err != nil {
