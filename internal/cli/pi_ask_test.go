@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -65,10 +67,50 @@ done
 mkdir -p "$dir"
 printf '%s\n' '{"version":1,"id":"`+askQuestionID+`","question":"Which database?","options":["Postgres","SQLite"],"asked_at":"2026-01-02T03:04:05Z"}' > "$dir/question.json.tmp"
 mv "$dir/question.json.tmp" "$dir/question.json"
-( until grep -q '`+askQuestionID+`' "$dir/answer.json" 2>/dev/null; do sleep 0.05; done; `+take+` ) >/dev/null 2>&1 &
+( n=0; until grep -q '`+askQuestionID+`' "$dir/answer.json" 2>/dev/null; do n=$((n+1)); [ "$n" -le 600 ] && [ -d "$d" ] && [ ! -e "$d/stop" ] || exit 0; sleep 0.05; done; `+take+` ) >/dev/null 2>&1 &
 echo "pi started"`)
 	t.Setenv("PATH", bin)
+	t.Cleanup(func() { requireNoLeakedProcs(t, rec, filepath.Join(bin, "pi")) })
 	return rec
+}
+
+// requireNoLeakedProcs fails the test if a process the fake pi started is
+// still alive once the test is over. The fake waits in the background for an
+// answer that some tests never send, so it is told to stop (the stop file,
+// also implied by rec going away) and given a moment to exit; a straggler is
+// killed by pid and reported. Only processes whose command line holds this
+// test's own pi stub path are considered, never anything else.
+func requireNoLeakedProcs(t *testing.T, rec, stubPath string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(rec, "stop"), nil, 0o644); err != nil {
+		t.Errorf("writing the stop file: %v", err)
+	}
+	alive := func() []string {
+		out, err := exec.Command("/bin/ps", "-eo", "pid,command").Output()
+		if err != nil {
+			t.Errorf("ps: %v", err)
+			return nil
+		}
+		var pids []string
+		for _, line := range strings.Split(string(out), "\n") {
+			if f := strings.Fields(line); len(f) > 1 && strings.Contains(line, stubPath) {
+				pids = append(pids, f[0])
+			}
+		}
+		return pids
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for len(alive()) > 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if left := alive(); len(left) > 0 {
+		for _, pid := range left {
+			if n, err := strconv.Atoi(pid); err == nil {
+				_ = syscall.Kill(n, syscall.SIGKILL)
+			}
+		}
+		t.Errorf("the fake pi left processes running after the test: pids %v", left)
+	}
 }
 
 func readFileT(t *testing.T, path string) string {
