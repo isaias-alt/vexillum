@@ -474,6 +474,7 @@ func TestOwnedKeys_CoversEveryTaskField(t *testing.T) {
 	task.Amendments = []Amendment{{Text: "t"}}
 	task.LastPushedSHA = "abc"
 	task.Harness = "claude"
+	task.HarnessMajor, task.HarnessVersion = 2, "2.0.32"
 
 	data, err := json.Marshal(task)
 	if err != nil {
