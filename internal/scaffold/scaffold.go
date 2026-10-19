@@ -27,6 +27,11 @@ type Config struct {
 	// installed files against it to tell "untouched, safe to refresh"
 	// from "edited by the user".
 	Skills map[string]string `json:"skills,omitempty"`
+	// Extensions maps the project-relative path of a file vexillum
+	// installed outside .claude/skills/ (the Pi commander's wake
+	// extension, see internal/piwake) to the content hash vexillum last
+	// wrote, for the same stale-versus-edited call as Skills.
+	Extensions map[string]string `json:"extensions,omitempty"`
 	// Commander lists the harnesses the project's commander runs in, by
 	// the names soldier.HarnessFor knows ("claude", "pi", "opencode"); see
 	// CommanderHarnesses. 'vx init --commander' sets it, 'vx doctor' and

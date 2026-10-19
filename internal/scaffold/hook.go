@@ -44,11 +44,17 @@ const (
 	// is visible without blocking Claude Code. exec keeps the await
 	// process a direct child of the hook runner, which its owner tracking
 	// (see internal/sentinel) relies on.
-	SentinelHookCommand = `sh -c 'for v in "$(command -v ` + cmdname.Name + ` 2>/dev/null)" ` +
+	SentinelHookCommand = `sh -c '` + SentinelHookScript + `'`
+
+	// SentinelHookScript is the shell script SentinelHookCommand runs under
+	// "sh -c". The Pi commander's wake extension (internal/piwake) runs the
+	// same script as its own "sh -c" so that it finds vx exactly the way the
+	// hook does, and the await it execs stays a direct child of Pi.
+	SentinelHookScript = `for v in "$(command -v ` + cmdname.Name + ` 2>/dev/null)" ` +
 		`"$HOME/.local/bin/` + cmdname.Name + `" /opt/homebrew/bin/` + cmdname.Name + ` ` +
 		`/usr/local/bin/` + cmdname.Name + ` /home/linuxbrew/.linuxbrew/bin/` + cmdname.Name + `; do ` +
 		`[ -f "$v" ] && [ -x "$v" ] && exec "$v" sentinel await; done; ` +
-		`echo "` + SentinelHookNotFoundMessage + `" >&2; exit 0'`
+		`echo "` + SentinelHookNotFoundMessage + `" >&2; exit 0`
 
 	// SentinelHookNotFoundMessage is the line SentinelHookCommand prints to
 	// stderr when no vx binary can be found. It must stay free of double
