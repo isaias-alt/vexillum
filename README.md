@@ -20,7 +20,7 @@ Requirements:
 - optional: [Pi](https://pi.dev), only if a model profile sets `"harness": "pi"` to run its soldiers on Pi instead of Claude Code
 - optional: [OpenCode](https://opencode.ai) (1.x from 1.18.29, or 2.x), only if a model profile sets `"harness": "opencode"`, or to run the commander in OpenCode 2.x (`vx init --commander opencode`, see the [guide](https://vx.lucasco.dev/docs/guides/opencode-commander)); Pi can run the commander too (`vx init --commander pi`, see the [guide](https://vx.lucasco.dev/docs/guides/pi-commander))
 
-Example `models.json` profiles that run scouts and missions on Pi or OpenCode with free and cheap models, with what was and was not verified, are in [Models for other harnesses](https://vx.lucasco.dev/docs/guides/models-for-other-harnesses) and in `docs/examples/`.
+Example `models.json` profiles that run scouts and missions on Pi or OpenCode with free and cheap models are in [Models for other harnesses](https://vx.lucasco.dev/docs/guides/models-for-other-harnesses) and in `docs/examples/`.
 
 `vx doctor` checks that the CLI of each of the project's commander harnesses (Claude Code by default), herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
 

@@ -2,12 +2,12 @@
   "profiles": {
     "scout-facts": {
       "harness": "pi",
-      "model": "opencode/deepseek-v4.1-flash-free",
+      "model": "opencode/deepseek-v4.1-flash",
       "effort": "low"
     },
     "scout-judgment": {
       "harness": "pi",
-      "model": "opencode/deepseek-v4.1-flash-free",
+      "model": "opencode/deepseek-v4.1-flash",
       "effort": "medium"
     },
     "mission-big": {
