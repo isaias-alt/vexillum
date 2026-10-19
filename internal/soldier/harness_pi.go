@@ -19,7 +19,9 @@ import (
 // nothing like Claude's --dangerously-skip-permissions: it runs with the
 // full host access of the invoking OS user either way, and the real safety
 // control is the same landing approval (camp.Land). Pi also has no
-// AskUserQuestion-style selector, so a blocked Pi soldier asks through the
+// AskUserQuestion-style selector, so vexillum gives the soldier an ask_user
+// tool of its own (LaunchArgs, internal/piask) and answers its question
+// through a file. A soldier without the tool asks through the
 // needs-decision: line (see needsDecisionInstructions) and is answered as
 // free text.
 type PiHarness struct{}

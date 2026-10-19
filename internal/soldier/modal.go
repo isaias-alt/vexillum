@@ -174,7 +174,9 @@ func ResolveBlockedDecision(client herdr.Client, agentName, output string) *stat
 // harness registered under harness ("" means claude). A harness with no
 // question selector of its own (Pi) skips the modal parser and reads the
 // question as prose, so nothing on its pane can be mistaken for Claude Code's
-// AskUserQuestion rendering. Its answer is then free text, see AnswerBlocked.
+// AskUserQuestion rendering. Its answer is then free text, see AnswerBlocked
+// (ResolveBlockedDecisionForTask first looks for a question its ask_user tool
+// recorded).
 func ResolveBlockedDecisionFor(harness string, client herdr.Client, agentName, output string) *state.Decision {
 	if h, err := HarnessFor(harness); err == nil && !h.QuestionModal() {
 		return ExtractDecision(output)
