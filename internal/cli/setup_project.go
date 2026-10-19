@@ -107,6 +107,13 @@ func (p *projectPlan) hasPiCommander() bool {
 	return slices.Contains(p.commanders, soldier.HarnessPi)
 }
 
+// hasOpenCodeCommander reports whether OpenCode is one of the commander
+// harnesses. It reads AGENTS.md first and CLAUDE.md only when there is no
+// AGENTS.md, so where the block goes matters to it.
+func (p *projectPlan) hasOpenCodeCommander() bool {
+	return slices.Contains(p.commanders, soldier.HarnessOpenCode)
+}
+
 // commanderChanged reports whether --commander asks for something other than
 // what config.json records.
 func (p *projectPlan) commanderChanged() bool {
@@ -167,6 +174,16 @@ func inspectProject(kind setupKind, opts setupOptions, projectDir string) (*proj
 	var file install.SlotFile
 	if file, p.chooseSlot, err = install.LocateSlotFile(projectDir); err != nil {
 		return nil, err
+	}
+	if p.chooseSlot && !file.Exists && p.hasOpenCodeCommander() {
+		// Neither file exists: an OpenCode commander reads AGENTS.md first, so
+		// that is where the block goes, with no question. (An existing
+		// CLAUDE.md of the user's keeps the block, since OpenCode falls back to
+		// it and creating an AGENTS.md would hide the user's own rules in it.)
+		if file, err = install.ReadSlotFile(projectDir, install.AgentsFile); err != nil {
+			return nil, err
+		}
+		p.chooseSlot = false
 	}
 	if err := p.useSlotFile(file); err != nil {
 		return nil, err
@@ -438,6 +455,7 @@ func (p *projectPlan) report(e *setupEnv) {
 	if p.hookErr != nil {
 		e.warn("could not add the sentinel Stop hook: %v", p.hookErr)
 	}
+	p.reportShadow(e)
 	p.reportSkills(e)
 	p.reportPiWake(e)
 }
@@ -459,6 +477,18 @@ func (p *projectPlan) reportPiWake(e *setupEnv) {
 		hint = "'" + cmdname.Name + " upgrade --force' overwrites it (a backup is saved first)"
 	}
 	e.say("%s: edited by hand, left as it is; %s.", piwake.ExtensionRel, hint)
+}
+
+// reportShadow warns when the vexillum block is where an OpenCode commander
+// cannot see it: in CLAUDE.md while an AGENTS.md exists, which OpenCode reads
+// instead. Nothing is moved: the fix is the user's to make in their own files.
+func (p *projectPlan) reportShadow(e *setupEnv) {
+	if !p.hasOpenCodeCommander() || p.slotFile.Name != install.ClaudeFile || !exists(filepath.Join(p.dir, install.AgentsFile)) {
+		return
+	}
+	e.warn("the vexillum block is in %s, but %s exists and OpenCode reads that one and ignores %s, so the OpenCode commander will not see the block. "+
+		"Delete the block from %s and run '%s init' again to put it in %s.",
+		install.ClaudeFile, install.AgentsFile, install.ClaudeFile, install.ClaudeFile, cmdname.Name, install.AgentsFile)
 }
 
 // reportSkills prints the skills that are left alone and why.

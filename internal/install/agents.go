@@ -70,6 +70,29 @@ func LocateSlotFile(projectDir string) (file SlotFile, choose bool, err error) {
 	return claude, true, nil
 }
 
+// BlockShadowedByAgents reports whether the vexillum block sits in CLAUDE.md
+// while an AGENTS.md exists. A harness that reads the first of the two and
+// ignores the other (OpenCode: AGENTS.md, and CLAUDE.md only when there is no
+// AGENTS.md) never sees a block in that CLAUDE.md. file is the file that holds
+// the block, "" when no file does.
+func BlockShadowedByAgents(projectDir string) (shadowed bool, file string, err error) {
+	located, _, err := LocateSlotFile(projectDir)
+	if err != nil {
+		return false, "", err
+	}
+	if slot.Inspect(located.Content, "").State == slot.StateAbsent {
+		return false, "", nil
+	}
+	if located.Name != ClaudeFile {
+		return false, located.Name, nil
+	}
+	agents, err := ReadSlotFile(projectDir, AgentsFile)
+	if err != nil {
+		return false, "", err
+	}
+	return agents.Exists, located.Name, nil
+}
+
 // LangSource says where a language choice came from.
 type LangSource int
 

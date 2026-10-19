@@ -10,6 +10,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/doctorcheck"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
+	"github.com/isaias-alt/vexillum/internal/slot"
 )
 
 func readCommander(t *testing.T, projectDir string) []string {
@@ -307,5 +308,101 @@ func TestDoctor_UnknownCommanderWarns(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "[ok] Claude Code") {
 		t.Errorf("the default applies when nothing valid is left:\n%s", out.String())
+	}
+}
+
+// OpenCode reads AGENTS.md first, so with neither file in the project an
+// opencode commander's block goes to a new AGENTS.md, without the question
+// about CLAUDE.md that a Claude-only project is asked.
+func TestInit_OpenCodeCommanderWithNoRulesFilePutsTheBlockInAGENTS(t *testing.T) {
+	t.Run("alone", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		// A terminal whose answers are all the defaults.
+		r := doInit(projectDir, home, setupOptions{Commander: []string{"opencode"}}, strings.Repeat("\n", 8), true)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if strings.Contains(r.out, "instead of creating an AGENTS.md") {
+			t.Errorf("an OpenCode commander was asked whether the block may go to CLAUDE.md:\n%s", r.out)
+		}
+		if !strings.Contains(readFile(t, filepath.Join(projectDir, "AGENTS.md")), "Vexillum commander") {
+			t.Error("AGENTS.md has no vexillum block")
+		}
+		notExist(t, filepath.Join(projectDir, "CLAUDE.md"))
+		notExist(t, filepath.Join(projectDir, ".claude", "settings.json"))
+		mustStat(t, filepath.Join(projectDir, ".claude", "skills", "vexillum", "SKILL.md"))
+	})
+	t.Run("with claude", func(t *testing.T) {
+		projectDir, home := newProject(t)
+		r := doInit(projectDir, home, setupOptions{Yes: true, Commander: []string{"opencode", "claude"}}, "", false)
+		if r.code != 0 {
+			t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+		}
+		if !strings.Contains(readFile(t, filepath.Join(projectDir, "AGENTS.md")), "Vexillum commander") {
+			t.Error("AGENTS.md has no vexillum block")
+		}
+		if got := readFile(t, filepath.Join(projectDir, "CLAUDE.md")); got != "@AGENTS.md\n" {
+			t.Errorf("CLAUDE.md = %q, want only the import", got)
+		}
+	})
+}
+
+// A CLAUDE.md of the user's keeps the block: OpenCode falls back to it while
+// there is no AGENTS.md, and a new AGENTS.md would hide the user's own rules.
+func TestInit_OpenCodeCommanderKeepsAnExistingCLAUDEmd(t *testing.T) {
+	projectDir, home := newProject(t)
+	writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), "# my own rules\n")
+	r := doInit(projectDir, home, setupOptions{Yes: true, Commander: []string{"opencode"}}, "", false)
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+	}
+	notExist(t, filepath.Join(projectDir, "AGENTS.md"))
+	claude := readFile(t, filepath.Join(projectDir, "CLAUDE.md"))
+	if !strings.Contains(claude, "# my own rules") || !strings.Contains(claude, "Vexillum commander") {
+		t.Errorf("CLAUDE.md = %q", claude)
+	}
+	if strings.Contains(r.errOut, "ignores CLAUDE.md") {
+		t.Errorf("a block OpenCode can read was reported as shadowed:\n%s", r.errOut)
+	}
+}
+
+// A block in CLAUDE.md next to an AGENTS.md is invisible to OpenCode: init
+// says so and moves nothing.
+func TestInit_OpenCodeCommanderWarnsWhenAGENTShidesTheBlock(t *testing.T) {
+	projectDir, home := newProject(t)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatalf("first init: %s%s", r.out, r.errOut)
+	}
+	if !strings.Contains(readFile(t, filepath.Join(projectDir, "CLAUDE.md")), "Vexillum commander") {
+		t.Fatal("setup: the block should be in CLAUDE.md")
+	}
+	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), "# rules added later\n")
+
+	r := doInit(projectDir, home, setupOptions{Yes: true, Commander: []string{"opencode"}}, "", false)
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s%s", r.code, r.out, r.errOut)
+	}
+	for _, want := range []string{"warning:", "OpenCode reads that one and ignores CLAUDE.md", "Delete the block from CLAUDE.md", "init"} {
+		if !strings.Contains(r.errOut, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, r.errOut)
+		}
+	}
+	if got := readFile(t, filepath.Join(projectDir, "AGENTS.md")); got != "# rules added later\n" {
+		t.Errorf("AGENTS.md was changed: %q", got)
+	}
+
+	// Following the advice fixes it.
+	claude := readFile(t, filepath.Join(projectDir, "CLAUDE.md"))
+	out, err := slot.Remove(claude)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFileT(t, filepath.Join(projectDir, "CLAUDE.md"), out)
+	r = doInit(projectDir, home, setupOptions{Yes: true, Commander: []string{"opencode"}}, "", false)
+	if r.code != 0 || strings.Contains(r.errOut, "ignores CLAUDE.md") {
+		t.Fatalf("after moving the block: exit %d\n%s%s", r.code, r.out, r.errOut)
+	}
+	if !strings.Contains(readFile(t, filepath.Join(projectDir, "AGENTS.md")), "Vexillum commander") {
+		t.Error("the block did not reach AGENTS.md")
 	}
 }

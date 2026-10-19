@@ -50,6 +50,16 @@ folder (it reads ~/.pi/agent/trust.json and never writes it; with no answer
 saved it warns that Pi will ask once), and that the extension's await finds a
 ` + cmdname.Name + ` binary from the environment doctor runs in. They only warn.
 
+When opencode is one of the project's commanders, doctor also checks how the
+sentinel will wake it, from outside, through OpenCode's V2 HTTP API: whether the
+commander registered itself (its pane is still live), whether the background
+service answers 'GET /api/info' in this environment (asked with 'opencode
+service status' first, so doctor never starts one; OpenCode 1.x has no such API
+and is a warning), and whether the vexillum block is in a file OpenCode reads
+(a block in CLAUDE.md is ignored when an AGENTS.md exists). Doctor does not send
+the wake route a prompt. The API checks use this shell's HOME and XDG_*
+directories, which the sentinel must share.
+
 It also checks the sentinel Stop hook, the one that wakes the commander when a
 soldier finishes: whether it is registered in .claude/settings.json, whether
 its command finds a ` + cmdname.Name + ` binary when run from a bare environment (only HOME and
@@ -107,6 +117,9 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	checks = append(checks, commanderWarns...)
 	checks = append(checks, doctorcheck.PiChecks(projectDir, vexillumHome, isCommander(soldier.HarnessPi))...)
 	checks = append(checks, doctorcheck.OpenCodeChecks(projectDir, vexillumHome, isCommander(soldier.HarnessOpenCode))...)
+	if isCommander(soldier.HarnessOpenCode) {
+		checks = append(checks, doctorcheck.OpenCodeCommanderChecks(projectDir, vexillumHome)...)
+	}
 	if scaffold.ProjectInitialized(projectDir) {
 		checks = append(checks, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
 	}
