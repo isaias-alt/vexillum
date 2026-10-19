@@ -1,0 +1,102 @@
+---
+title: Modelos para otros harnesses
+description: Perfiles de ejemplo de models.json para Pi y OpenCode con modelos gratuitos y baratos, qué ids se revisaron y qué nunca corrió con un modelo real.
+---
+
+Los perfiles integrados de [models.json](/es/docs/reference/models-json) corren todos en Claude Code. Esta página da perfiles de ejemplo que corren esos mismos tres tipos de trabajo en [Pi](/es/docs/guides/using-pi) u [OpenCode](/es/docs/guides/using-opencode), con un modelo gratuito para los scouts y uno pago y barato para una mission grande. Son ejemplos, no defaults: vexillum no los trae, y los perfiles integrados en el binario no cambian.
+
+<Callout type="warn" title="Ningún modelo real respondió en ninguna verificación de vexillum">
+  Los soldiers y commanders de Pi y OpenCode se verificaron con providers con guion, servidores de captura y fakes, no con un modelo real. En las verificaciones en vivo de OpenCode, cada pedido a un modelo gratuito de Zen volvió con `403 OpenCode's free tier can only be used from within OpenCode`, incluso desde el propio OpenCode 2.0.32, en un `HOME` descartable. Si un modelo gratuito de Zen responde desde Pi está **sin confirmar**. Así que los perfiles de abajo son un punto de partida sin probar: confirmalos con los checklists de `docs/verification/` en el repositorio (`pi-soldier-checklist.md`, `opencode-soldier-checklist.md`) antes de depender de ellos.
+</Callout>
+
+<Callout type="warn" title="Un modelo gratuito retiene lo que digan los términos del proveedor, y no da garantías como commander">
+  Un soldier le manda al proveedor tus prompts, los archivos que abre y la salida de los comandos que corre. Lo que los modelos gratuitos de Zen hacen con tus datos está en la documentación del propio OpenCode, leída el 2026-10-19 en la sección Privacy de [opencode.ai/docs/zen](https://opencode.ai/docs/zen/) (la página no imprime versión; estaba instalado OpenCode 2.0.32). Dice que los proveedores siguen una política de retención cero y no entrenan con tus datos, **con excepciones**, y nombra cuatro modelos gratuitos como de retención cero: `glm-5.3-flash-free`, `deepseek-v4.1-flash-free`, `minimax-m3.1-flash-free` y `longcat-2.5-preview-free`. La misma página dice que los gratuitos lo son por tiempo limitado. Varios otros modelos gratuitos figuran como que recolectan datos para mejorar el modelo (Big Pickle, Exo Free, MiMo, los Nemotron) o como que los retienen 30 días (LL Alpha Free, Beam Free). Un modelo gratuito que la página no menciona, como `space-bunny-free` o `cat-jam-free`, no está documentado como de retención cero: tratalo como si registrara todo. Los términos cambian, así que releé la página antes de usar uno, y no uses un modelo gratuito con código privado o propietario, ni en una máquina cuyos archivos o entorno guarden secretos.
+
+  Un modelo gratuito como **commander** es peor que como soldier: el commander lee tus pedidos y las reglas del proyecto, corre `vx` con su propio criterio y decide qué aterrizar. Los modelos gratuitos pueden ser poco confiables para llamar herramientas y para seguir reglas largas, y acá no se revisó nada sobre cómo se comporta ninguno en ese rol. Usá uno como commander solo en trabajo que puedas permitirte rehacer.
+</Callout>
+
+## OpenCode
+
+Escribí esto en `.vexillum/models.json` (o en el `~/.vexillum/models.json` global). También está en el repositorio como `docs/examples/models.opencode.json`.
+
+```json
+{
+  "profiles": {
+    "scout-facts": {
+      "harness": "opencode",
+      "model": "opencode/glm-5.3-flash-free",
+      "effort": "low"
+    },
+    "scout-judgment": {
+      "harness": "opencode",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "effort": "medium"
+    },
+    "mission-big": {
+      "harness": "opencode",
+      "model": "opencode/deepseek-v4-pro",
+      "effort": "high"
+    }
+  }
+}
+```
+
+Los tres perfiles llevan el nombre de perfiles integrados, así que cada uno pisa solo los tres campos que define y conserva la línea `when` integrada que lee el commander. Eso también **reemplaza** la configuración de Claude Code de ese perfil: con este archivo, `scout-facts` corre en OpenCode. Para conservar los perfiles de Claude y sumar estos al lado, dales nombres nuevos y escribí un `when` para cada uno (un perfil nuevo tiene que definir `model`, `effort` y `when`).
+
+En OpenCode, `effort` es solo una etiqueta: se registra en la tarea y nunca se le pasa al modelo. Un variant sale solo del string del modelo (`opencode/deepseek-v4-pro#high`), y los nombres de variant dependen del modelo, así que acá no se fija ninguno. Mirá [Usar OpenCode](/es/docs/guides/using-opencode#agregar-un-perfil).
+
+| Perfil | Por qué este modelo |
+| --- | --- |
+| `scout-facts` | `opencode/glm-5.3-flash-free`: gratuito, y nombrado de retención cero en la página de Zen. Recuperar datos no pide criterio. |
+| `scout-judgment` | `opencode/deepseek-v4.1-flash-free`: también gratuito y de retención cero, de otra familia de modelos, así que un scout de criterio recibe una segunda opinión de otro modelo. Si alcanza para juzgar está **sin confirmar**. |
+| `mission-big` | `opencode/deepseek-v4-pro`: no es gratuito. En la página de Zen cuesta $1.74 de entrada y $3.48 de salida por millón de tokens (leído el 2026-10-19), contra $0.30 y $1.20 del más barato `opencode/deepseek-v4.1-flash`, que podés poner en su lugar. Si alguno de los dos sostiene una mission grande y ambigua está **sin confirmar**. |
+
+## Pi
+
+Pi elige un modelo como `provider/id`, y `effort` es un nivel de thinking que se pasa como `--thinking`. Pi 1.3.0 trae un provider `opencode` integrado para Zen, que lee la variable de entorno `OPENCODE_API_KEY`, así que los mismos modelos de Zen se alcanzan desde Pi. Está en el repositorio como `docs/examples/models.pi.json`:
+
+```json
+{
+  "profiles": {
+    "scout-facts": {
+      "harness": "pi",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "effort": "low"
+    },
+    "scout-judgment": {
+      "harness": "pi",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "effort": "medium"
+    },
+    "mission-big": {
+      "harness": "pi",
+      "model": "opencode/deepseek-v4-pro",
+      "effort": "high"
+    }
+  }
+}
+```
+
+El catálogo de Pi tiene `opencode/deepseek-v4.1-flash-free` pero **no** `opencode/glm-5.3-flash-free`, así que el scout barato usa acá el de DeepSeek. Que el plan gratuito de Zen responda un pedido que viene de Pi está **sin confirmar**: el plan gratuito es para el cliente propio de OpenCode, y el 403 de arriba muestra cómo se ve un rechazo. Si lo rechaza, usá un modelo pago para esos perfiles. Pi ajusta (clamp) un nivel de thinking que el modelo no soporta, así que `high` en un modelo que se queda más abajo corre en el nivel más cercano que tiene. Mirá [Usar Pi](/es/docs/guides/using-pi#agregar-un-perfil).
+
+Para usar modelos de Google en Pi, usá una clave de API de Google AI Studio (`GEMINI_API_KEY`), que es la vía que Google permite para un agente de terceros. Pi 1.3.0 lista para eso modelos como `google/gemini-3.5-flash-lite`. No conectes un login de consumidor de Google (el inicio de sesión de Antigravity o de Gemini CLI) a Pi ni a OpenCode: Google dice que un agente ajeno a sus propias herramientas no puede manejar ese login, y puede suspender la cuenta. Antigravity CLI (`agy`) no es un harness soportado.
+
+## Qué se revisó, y cuándo
+
+Las dos listas se leyeron el 2026-10-19 bajo un **`HOME` y directorios `XDG_*` descartables**, nunca los reales, porque cualquier comando `opencode` arranca el servicio en segundo plano de su `HOME`.
+
+| Id del modelo | `opencode models`, OpenCode 2.0.32 | `pi --list-models`, Pi 1.3.0 |
+| --- | --- | --- |
+| `opencode/glm-5.3-flash-free` | listado | no listado |
+| `opencode/deepseek-v4.1-flash-free` | listado | listado |
+| `opencode/deepseek-v4-pro` | listado con `OPENCODE_API_KEY` definida | listado con `OPENCODE_API_KEY` definida |
+
+OpenCode lista los gratuitos sin ninguna clave. En Pi, `pi --list-models` no muestra nada hasta que un provider tiene credenciales, así que la lista de Pi se leyó con una `OPENCODE_API_KEY` falsa: prueba que el catálogo tiene el id, no que un pedido sería aceptado. `minimax-m3.1-flash-free` apareció en la lista de OpenCode solo con una clave de Zen definida. Corré vos los mismos dos comandos, con tus propias credenciales, antes de copiar un id: los modelos se agregan y se retiran seguido, y los gratuitos lo son por tiempo limitado.
+
+No se midió nada sobre velocidad, confiabilidad al llamar herramientas ni calidad. Se reportó en el upstream un problema con las llamadas a herramientas de DeepSeek V4 en Zen ([anomalyco/opencode#36354](https://github.com/anomalyco/opencode/issues/36354), cerrado) y no se volvió a revisar contra 2.0.32 acá.
+
+## Relacionado
+
+- [models.json](/es/docs/reference/models-json)
+- [Usar Pi](/es/docs/guides/using-pi) y [Pi como commander](/es/docs/guides/pi-commander)
+- [Usar OpenCode](/es/docs/guides/using-opencode) y [OpenCode como commander](/es/docs/guides/opencode-commander)

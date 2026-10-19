@@ -8,8 +8,8 @@ description: Los roles, y la vida de una tarea desde el dispatch hasta el strike
 | Término | Qué es |
 | --- | --- |
 | **general** | Vos, el humano. Le hablás solo al commander. |
-| **commander** | La sesión de Claude Code con la que hablás. Lee tu pedido y el núcleo de AGENTS.md del proyecto, y despacha y sigue a los soldiers. |
-| **soldier** | Una sesión de Claude Code que el commander inicia para hacer una tarea, en su propio camp. |
+| **commander** | La sesión de agente con la que hablás: Claude Code por defecto, o Pi u OpenCode. Lee tu pedido y el núcleo de AGENTS.md del proyecto, y despacha y sigue a los soldiers. |
+| **soldier** | Una sesión de agente que el commander inicia para hacer una tarea, en su propio camp. Claude Code por defecto, o Pi u OpenCode cuando su perfil de modelo lo dice. |
 | **camp** | El git worktree aislado de un soldier, en su propia branch. |
 | **mission** | Una tarea que cambia código y entrega algo para aterrizar. |
 | **scout** | Una tarea que solo investiga y reporta. Nunca hace commit ni push. |
@@ -17,12 +17,12 @@ description: Los roles, y la vida de una tarea desde el dispatch hasta el strike
 
 ## La vida de una tarea
 
-1. **Pedís.** En Claude Code decís qué querés.
+1. **Pedís.** En la sesión del commander (Claude Code por defecto) decís qué querés.
 2. **El commander despacha.** Siguiendo la skill `vexillum` corre `vx dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
 3. **Se adquiere un camp.** vexillum toma un worktree limpio del [pool](/es/docs/concepts/camps) del proyecto (o crea uno) en una branch nueva, `vexillum/<task-id>`, bifurcada de tu branch actual.
-4. **Arranca un soldier.** Se abre una sesión real e interactiva de Claude Code en un pane de herdr dentro de ese camp. El comando vuelve rápido: solo espera un breve probe para los prompts triviales que terminan enseguida.
+4. **Arranca un soldier.** Se abre una sesión real e interactiva del harness del soldier (Claude Code por defecto) en un pane de herdr dentro de ese camp. El comando vuelve rápido: solo espera un breve probe para los prompts triviales que terminan enseguida.
 5. **El sentinel vigila.** Consulta el estado en vivo del soldier y registra el resultado en disco. Ver [Sentinel](/es/docs/concepts/sentinel).
-6. **Se despierta al commander.** Un hook `Stop` muestra el cambio, así el commander te reporta aunque su turno ya hubiera terminado.
+6. **Se despierta al commander.** El cambio le llega al commander, así te reporta aunque su turno ya hubiera terminado: por un hook `Stop` en Claude Code, una extensión de wake en Pi, o el sentinel publicando en la sesión en OpenCode (ver [Sentinel](/es/docs/concepts/sentinel)).
 7. **Decidís vos.** Para una mission, [la aterrizás o la enviás](/es/docs/guides/land-vs-ship). Para un scout, el commander transmite el reporte.
 8. **Se hace strike del camp**, que vuelve al pool, una vez que no queda nada por perder.
 

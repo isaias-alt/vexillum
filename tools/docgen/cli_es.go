@@ -634,9 +634,10 @@ deteniéndose en el primer paso que falla e informándolo, sin pushear ni abrir
 nada. Cada paso corre de forma sincrónica; "vx ship" no vuelve hasta que todo
 el pipeline terminó, no hay nada externo que seguir después.
 
-La revisión corre en una sesión nueva de Claude Code que no tiene nada del
-contexto del autor: lee el diff por sí misma con git, asume que el cambio está
-mal e intenta romperlo, e informa hallazgos estructurados (archivo, línea,
+La revisión corre en una sesión headless nueva del harness en el que corrió la
+mission (Claude Code por defecto) que no tiene nada del contexto del autor: lee
+el diff por sí misma con git, asume que el cambio está mal e intenta romperlo, e
+informa hallazgos estructurados (archivo, línea,
 severidad, acción, un escenario de falla concreto, sitios hermanos) más los
 archivos que realmente leyó. Cuando la mission tiene un prompt, cada
 componente que introdujo el cambio también se juzga contra él, seguido de las

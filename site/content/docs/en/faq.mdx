@@ -13,7 +13,7 @@ Claude Code, which is the default, [Pi](/docs/guides/using-pi) and [OpenCode](/d
 
 ## Do I have to learn commands?
 
-No. You talk to the commander in Claude Code and it runs `vx` for you. The [CLI reference](/docs/reference/cli) is for when you want to drive it by hand.
+No. You talk to the commander, in Claude Code by default (or in Pi or OpenCode), and it runs `vx` for you. The [CLI reference](/docs/reference/cli) is for when you want to drive it by hand.
 
 ## Does vexillum open pull requests?
 
@@ -21,7 +21,7 @@ Not by default. `vx land` merges locally. `vx ship` runs the tribunal pipeline a
 
 ## Is it safe to let soldiers run?
 
-Treat soldiers as you would an unattended session with your credentials. They run with `--dangerously-skip-permissions`, with no sandbox. The camp isolates their commits; your approval before landing is the control. Do not dispatch where reading secrets would be a problem.
+Treat soldiers as you would an unattended session with your credentials. They run with full permissions (`--dangerously-skip-permissions` on Claude Code, no permission prompts on Pi, `--auto` on OpenCode), with no sandbox. The camp isolates their commits; your approval before landing is the control. Do not dispatch where reading secrets would be a problem.
 
 ## What happens if a soldier crashes, or my machine restarts?
 

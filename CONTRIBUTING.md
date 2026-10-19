@@ -29,7 +29,7 @@ same pages, same menu position) and regenerate the reference with
 
 ## Scope
 
-vexillum supports Claude Code only, for now. Support for another agent is
+vexillum runs on Claude Code, Pi and OpenCode. Support for another agent is
 discussed first in an issue, not proposed as a PR. A few architecture decisions
 are settled (see `AGENTS.md`) and are not reopened in a PR.
 

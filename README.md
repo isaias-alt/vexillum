@@ -1,7 +1,7 @@
 # vexillum
 
 CLI orchestrator for code agents, written in Go. You talk to a commander
-(Claude Code), and it dispatches soldiers in parallel, each isolated in its
+(Claude Code by default, or Pi or OpenCode), and it dispatches soldiers in parallel, each isolated in its
 own git worktree (camp), returning a PR (mission) or a report (scout). A
 sentinel process watches dispatched soldiers and wakes the commander when
 something needs attention.
@@ -13,14 +13,16 @@ See `AGENTS.md` for how vexillum itself is built.
 Requirements:
 
 - macOS or Linux, amd64 or arm64 (Windows is not supported)
-- Claude Code, installed and logged in (subscription or API key)
+- Claude Code, installed and logged in (subscription or API key), for the default commander and soldiers; a project whose commander runs in Pi or OpenCode needs that CLI instead
 - [herdr](https://herdr.dev) (`brew install herdr` works)
 - a git repository for your project
 - optional: `gh` (for `vx ship`)
 - optional: [Pi](https://pi.dev), only if a model profile sets `"harness": "pi"` to run its soldiers on Pi instead of Claude Code
-- optional: [OpenCode](https://opencode.ai) (1.x from 1.18.29, or 2.x), only if a model profile sets `"harness": "opencode"`, or to run the commander in OpenCode 2.x (`vx init --commander opencode`, see the [guide](https://vx.lucasco.dev/docs/guides/opencode-commander))
+- optional: [OpenCode](https://opencode.ai) (1.x from 1.18.29, or 2.x), only if a model profile sets `"harness": "opencode"`, or to run the commander in OpenCode 2.x (`vx init --commander opencode`, see the [guide](https://vx.lucasco.dev/docs/guides/opencode-commander)); Pi can run the commander too (`vx init --commander pi`, see the [guide](https://vx.lucasco.dev/docs/guides/pi-commander))
 
-`vx doctor` checks that Claude Code, herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
+Example `models.json` profiles that run scouts and missions on Pi or OpenCode with free and cheap models, with what was and was not verified, are in [Models for other harnesses](https://vx.lucasco.dev/docs/guides/models-for-other-harnesses) and in `docs/examples/`.
+
+`vx doctor` checks that the CLI of each of the project's commander harnesses (Claude Code by default), herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
 
 > **Warning:** soldiers run Claude Code with `--dangerously-skip-permissions` (or
 > Pi, which has no permission prompts at all, or OpenCode with `--auto`), as
@@ -85,10 +87,11 @@ for a specific command.
 <project>/
   AGENTS.md or CLAUDE.md     the vexillum block (CLAUDE.md is "@AGENTS.md" when AGENTS.md exists)
   .claude/
-    settings.json            the sentinel Stop hook
+    settings.json            the sentinel Stop hook (Claude Code commander)
     skills/                  the vexillum, forum and muster skills
+  .pi/                       only for a Pi commander: settings.json and extensions/vexillum-wake.ts
   .vexillum/
-    config.json              marks the project initialized
+    config.json              marks the project initialized and records its commander harnesses
     models.json              model and effort profiles (yours to edit)
     yolo.json                yolo mode switch, only after `vx yolo`
     .gitignore               ignores forum/

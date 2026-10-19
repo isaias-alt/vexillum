@@ -3,7 +3,7 @@ title: Quickstart
 description: De una instalación nueva a tu primera mission aterrizada.
 ---
 
-Necesitás vexillum, Claude Code y herdr instalados. Ver [Instalación](/es/docs/get-started/install).
+Necesitás vexillum, Claude Code (el commander por defecto; Pi y OpenCode también sirven, mirá [Pi como commander](/es/docs/guides/pi-commander) y [OpenCode como commander](/es/docs/guides/opencode-commander)) y herdr instalados. Ver [Instalación](/es/docs/get-started/install).
 
 ## 1. Preparar tu proyecto
 
@@ -66,12 +66,12 @@ Todo lo requerido debería decir `[ok]`.
 
 ## 3. Iniciar el commander dentro de herdr
 
-Abrí un pane de herdr, hacé `cd` al proyecto e iniciá Claude Code. `vx dispatch` necesita `HERDR_WORKSPACE_ID`, que herdr define en los panes que administra; fuera de uno se niega a despachar.
+Abrí un pane de herdr, hacé `cd` al proyecto e iniciá tu commander (Claude Code por defecto). `vx dispatch` necesita `HERDR_WORKSPACE_ID`, que herdr define en los panes que administra; fuera de uno se niega a despachar.
 
 ## 4. Pedir trabajo
 
 <Callout type="warn" title="Los soldiers tienen acceso total al host">
-  Un soldier corre Claude Code con `--dangerously-skip-permissions`, con tu usuario del sistema, sin contenedor ni sandbox. Aterrizar una mission es la puerta de aprobación: nada llega al historial real de tu proyecto hasta que lo aprobás. Nunca despaches contra un repositorio o una máquina donde leer credenciales sería un problema.
+  Un soldier corre con todos los permisos (Claude Code con `--dangerously-skip-permissions`, Pi, que no tiene prompts de permisos, u OpenCode con `--auto`), con tu usuario del sistema, sin contenedor ni sandbox. Aterrizar una mission es la puerta de aprobación: nada llega al historial real de tu proyecto hasta que lo aprobás. Nunca despaches contra un repositorio o una máquina donde leer credenciales sería un problema.
 </Callout>
 
 ```text

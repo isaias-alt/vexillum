@@ -3,9 +3,9 @@ title: Introduction
 description: vexillum orchestrates coding agents from your terminal, one commander, many soldiers, each in its own camp.
 ---
 
-vexillum is a CLI orchestrator for code agents, written in Go. You talk to one agent, the **commander** (Claude Code by default). It dispatches **soldiers** (more Claude Code sessions) in parallel. Each soldier works in its own git worktree (a **camp**) so parallel work never collides, and hands back either a change to land (a **mission**) or a written report (a **scout**). A background **sentinel** watches the soldiers and wakes the commander only when something needs attention.
+vexillum is a CLI orchestrator for code agents, written in Go. You talk to one agent, the **commander** (Claude Code by default). It dispatches **soldiers** (more agent sessions, Claude Code by default) in parallel. Each soldier works in its own git worktree (a **camp**) so parallel work never collides, and hands back either a change to land (a **mission**) or a written report (a **scout**). A background **sentinel** watches the soldiers and wakes the commander only when something needs attention.
 
-You do not learn a new interface: you keep talking to Claude Code, and the commander calls `vx` for you.
+You do not learn a new interface: you keep talking to your agent, and the commander calls `vx` for you.
 
 ```text
 > dispatch a soldier to refactor the payment module
@@ -29,5 +29,5 @@ Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)
 </Cards>
 
 <Callout type="warn" title="Soldiers have full host access">
-  A soldier runs Claude Code with `--dangerously-skip-permissions`, under your OS user, with no container or sandbox. The camp only bounds where its commits land. Nothing reaches your project's real history until you approve landing it. Never dispatch against a repository or machine where reading credentials would be a problem.
+  A soldier runs with full permissions (Claude Code with `--dangerously-skip-permissions`, Pi, which has no permission prompts, or OpenCode with `--auto`), under your OS user, with no container or sandbox. The camp only bounds where its commits land. Nothing reaches your project's real history until you approve landing it. Never dispatch against a repository or machine where reading credentials would be a problem.
 </Callout>

@@ -32,9 +32,10 @@ fails and reporting it, without pushing or opening anything. Every step
 runs synchronously; "` + cmdname.Name + ` ship" doesn't return until the whole pipeline
 has settled, there's nothing external to track afterward.
 
-The review runs in a brand-new Claude Code session that has none of the
-author's context: it reads the diff itself with git, assumes the change is
-wrong and tries to break it, and reports structured findings (file, line,
+The review runs in a brand-new headless session of the harness the mission
+ran on (Claude Code by default) that has none of the author's context: it
+reads the diff itself with git, assumes the change is wrong and tries to
+break it, and reports structured findings (file, line,
 severity, action, a concrete failure scenario, sibling sites) plus the
 files it actually read. When the mission has a prompt, every component the
 change introduced is also judged against it, followed by any instructions the

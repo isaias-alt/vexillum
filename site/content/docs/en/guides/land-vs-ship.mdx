@@ -36,12 +36,12 @@ Runs, in order, inside the mission's camp, stopping at the first failure without
 
 1. **lint** - `go vet ./...` for a Go project, `npm run lint --if-present` for a Node one;
 2. **tests** - `go test ./...` or `npm run test --if-present`;
-3. **review** - an adversarial review of the diff by a fresh Claude Code session (see below);
+3. **review** - an adversarial review of the diff by a fresh session of the agent the mission ran on (see below);
 4. **docs** - for Go projects, new exported declarations must carry a doc comment. In any other project this step is skipped and reports as passed.
 
 ### The adversarial review
 
-The review runs in a brand-new Claude Code session (never a resumed one) that has none of the author's context. It is given the branch, the base and target commits and the list of changed files vexillum computed - not the diff. It reads the diff itself with `git`, assumes the change is wrong and tries to break it: correctness, edge cases, error handling, concurrency, security and authorization, regressions and the quality of new tests. A finding needs a concrete failure scenario from the change's intended use, and each defect class is reported once with all its sibling sites. It runs with `sonnet` at `high` effort and does not run the tests (the previous step did).
+The review runs in a brand-new headless session of the harness the mission ran on, Claude Code by default (never a resumed one), that has none of the author's context. It is given the branch, the base and target commits and the list of changed files vexillum computed - not the diff. It reads the diff itself with `git`, assumes the change is wrong and tries to break it: correctness, edge cases, error handling, concurrency, security and authorization, regressions and the quality of new tests. A finding needs a concrete failure scenario from the change's intended use, and each defect class is reported once with all its sibling sites. On Claude Code it runs with `sonnet` at `high` effort; on Pi and OpenCode it runs with the model and thinking level the mission itself ran with, or the harness's default when the profile set none. It does not run the tests (the previous step did).
 
 When the mission has a prompt, every component the change introduced is also judged against that statement plus the instructions the general gave afterward, through `vx prompt` and `vx decide`. Those are recorded on the task as amendments (with a timestamp and the command they came from, in `vx status --json`) and listed after the prompt, in order, so a component you asked for later is not reported as unrequested. Only those two commands write amendments, into the task's state file and never into a file in the camp, so a soldier cannot widen its own mandate. Whatever neither the prompt nor an amendment required is reported as a warning whose remedy is removing it. A mission without a prompt skips this pass, and `ship` says so.
 

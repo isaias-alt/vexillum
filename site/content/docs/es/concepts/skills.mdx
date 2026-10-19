@@ -1,11 +1,11 @@
 ---
 title: Skills
-description: Las tres skills de Claude Code que trae vexillum, para qué sirve cada una, dónde se instalan y cómo upgrade las mantiene al día.
+description: Las tres skills que trae vexillum para un commander de Claude Code, Pi u OpenCode, para qué sirve cada una y cómo upgrade las mantiene al día.
 ---
 
 ## Qué es una skill
 
-Una skill es un directorio con un `SKILL.md` (y archivos de apoyo opcionales) que Claude Code carga **a pedido**: al arrancar lee la descripción corta de cada skill, y carga el texto completo solo cuando la tarea coincide. Por eso vexillum saca el detalle operativo del [slot de AGENTS.md](/es/docs/concepts/agents-md-slot), que siempre está activo, y lo pone en skills: el commander paga el detalle solo cuando despacha, aterriza, hace ship o libera.
+Una skill es un directorio con un `SKILL.md` (y archivos de apoyo opcionales) que Claude Code carga **a pedido** (un commander de Pi u OpenCode lee el mismo directorio `.claude/skills`, mirá [Pi como commander](/es/docs/guides/pi-commander) y [OpenCode como commander](/es/docs/guides/opencode-commander)): al arrancar lee la descripción corta de cada skill, y carga el texto completo solo cuando la tarea coincide. Por eso vexillum saca el detalle operativo del [slot de AGENTS.md](/es/docs/concepts/agents-md-slot), que siempre está activo, y lo pone en skills: el commander paga el detalle solo cuando despacha, aterriza, hace ship o libera.
 
 El slot termina con una instrucción dura de cargar la skill `vexillum` antes de cualquiera de esos pasos, para que el detalle a pedido no quede librado al azar.
 

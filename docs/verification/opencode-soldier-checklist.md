@@ -64,11 +64,15 @@ names.
   `go build -o /tmp/vx-oc ./cmd/vx`, then use `/tmp/vx-oc` wherever this page
   says `vx`.
 - A free **zero-retention** model, so the check sends nothing worth keeping to
-  a provider that logs it: `opencode/glm-5.3-flash-free`,
-  `opencode/deepseek-v4.1-flash-free`, `opencode/longcat-2.5-preview-free` or
-  `opencode/space-bunny-free`. Confirm in `opencode models` that the one you
-  pick is listed, and write it down as `<provider>/<model>`. Any other free
-  model logs prompts. Use trivial prompts only.
+  a provider that logs it. The "Free models" and Privacy sections of
+  https://opencode.ai/docs/zen/ (read on 2026-10-19) name four:
+  `opencode/glm-5.3-flash-free`, `opencode/deepseek-v4.1-flash-free`,
+  `opencode/minimax-m3.1-flash-free` and `opencode/longcat-2.5-preview-free`.
+  Confirm in `opencode models` that the one you pick is listed (the minimax
+  one showed up only with a Zen key set), and write it down as
+  `<provider>/<model>`. A free model that page does not name, such as
+  `opencode/space-bunny-free`, is not documented as zero-retention, and
+  several others log prompts. Use trivial prompts only.
 - Everything below runs inside a herdr pane, in a throwaway repository:
 
   ```sh

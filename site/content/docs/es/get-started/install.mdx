@@ -8,15 +8,16 @@ vexillum soporta macOS y Linux, en amd64 y arm64.
 ## Requisitos
 
 - macOS o Linux, amd64 o arm64 (Windows no está soportado)
-- [Claude Code](https://claude.com/claude-code), instalado y con sesión iniciada (suscripción o API key)
+- [Claude Code](https://claude.com/claude-code), instalado y con sesión iniciada (suscripción o API key), para el commander y los soldiers por defecto
 - [herdr](https://herdr.dev) (`brew install herdr` funciona)
 - un repositorio git para tu proyecto
 - opcional: `gh` (para `vx ship`)
+- opcional: [Pi](https://pi.dev) u [OpenCode](https://opencode.ai), para correr en ellos el commander o los soldiers de un perfil de modelo (ver [Pi como commander](/es/docs/guides/pi-commander), [OpenCode como commander](/es/docs/guides/opencode-commander) y [Modelos para otros harnesses](/es/docs/guides/models-for-other-harnesses)); un proyecto cuyo commander no es Claude Code necesita acá su propio CLI
 
-`vx doctor` verifica que Claude Code, herdr y git estén presentes, y que el scaffold del proyecto esté sano. No verifica que Claude Code tenga la sesión iniciada, tu SO o arquitectura, ni que estés dentro de un pane de herdr; `vx dispatch` solo funciona dentro de un pane de herdr.
+`vx doctor` verifica que estén presentes el CLI de cada harness de commander del proyecto (Claude Code por defecto), herdr y git, y que el scaffold del proyecto esté sano. No verifica que Claude Code tenga la sesión iniciada, tu SO o arquitectura, ni que estés dentro de un pane de herdr; `vx dispatch` solo funciona dentro de un pane de herdr.
 
 <Callout type="warn" title="Los soldiers tienen acceso total al host">
-  Un soldier corre Claude Code con `--dangerously-skip-permissions`, con tu usuario del sistema, sin contenedor ni sandbox. Aterrizar una mission es la puerta de aprobación: nada llega al historial real de tu proyecto hasta que lo aprobás. Nunca despaches contra un repositorio o una máquina donde leer credenciales sería un problema.
+  Un soldier corre con todos los permisos (Claude Code con `--dangerously-skip-permissions`, Pi, que no tiene prompts de permisos, u OpenCode con `--auto`), con tu usuario del sistema, sin contenedor ni sandbox. Aterrizar una mission es la puerta de aprobación: nada llega al historial real de tu proyecto hasta que lo aprobás. Nunca despaches contra un repositorio o una máquina donde leer credenciales sería un problema.
 </Callout>
 
 ## Instalá el binario
@@ -62,7 +63,8 @@ vexillum no instala sus herramientas; las verifica.
 
 | Herramienta | Para qué | Requerida |
 | --- | --- | --- |
-| [Claude Code](https://claude.com/claude-code) | el commander y cada soldier | sí |
+| [Claude Code](https://claude.com/claude-code) | el commander y los soldiers por defecto | sí, salvo que el commander del proyecto sea Pi u OpenCode |
+| [Pi](https://pi.dev), [OpenCode](https://opencode.ai) | un commander o los soldiers de un perfil de modelo en ese harness | solo para eso |
 | [herdr](https://herdr.dev) | los panes donde corren los soldiers | sí |
 | `gh` (GitHub CLI) | `vx ship`, y aterrizar un PR enviado | solo para eso |
 

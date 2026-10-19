@@ -8,15 +8,16 @@ vexillum supports macOS and Linux, on amd64 and arm64.
 ## Requirements
 
 - macOS or Linux, amd64 or arm64 (Windows is not supported)
-- [Claude Code](https://claude.com/claude-code), installed and logged in (subscription or API key)
+- [Claude Code](https://claude.com/claude-code), installed and logged in (subscription or API key), for the default commander and soldiers
 - [herdr](https://herdr.dev) (`brew install herdr` works)
 - a git repository for your project
 - optional: `gh` (for `vx ship`)
+- optional: [Pi](https://pi.dev) or [OpenCode](https://opencode.ai), to run the commander or a model profile's soldiers on them instead (see [Pi as the commander](/docs/guides/pi-commander), [OpenCode as the commander](/docs/guides/opencode-commander) and [Models for other harnesses](/docs/guides/models-for-other-harnesses)); a project whose commander is not Claude Code needs its own CLI here instead
 
-`vx doctor` checks that Claude Code, herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
+`vx doctor` checks that the CLI of each of the project's commander harnesses (Claude Code by default), herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
 
 <Callout type="warn" title="Soldiers have full host access">
-  A soldier runs Claude Code with `--dangerously-skip-permissions`, as your OS user, with no container or sandbox. Landing a mission is the approval gate: nothing reaches your project's real history until you approve it. Never dispatch against a repository or machine where reading credentials would be a problem.
+  A soldier runs with full permissions (Claude Code with `--dangerously-skip-permissions`, Pi, which has no permission prompts, or OpenCode with `--auto`), as your OS user, with no container or sandbox. Landing a mission is the approval gate: nothing reaches your project's real history until you approve it. Never dispatch against a repository or machine where reading credentials would be a problem.
 </Callout>
 
 ## Install the binary
@@ -62,7 +63,8 @@ vexillum does not install its tools; it checks for them.
 
 | Tool | Needed for | Required |
 | --- | --- | --- |
-| [Claude Code](https://claude.com/claude-code) | the commander and every soldier | yes |
+| [Claude Code](https://claude.com/claude-code) | the default commander and soldiers | yes, unless the project's commander is Pi or OpenCode |
+| [Pi](https://pi.dev), [OpenCode](https://opencode.ai) | a commander or a model profile's soldiers on that harness | only for those |
 | [herdr](https://herdr.dev) | the panes soldiers run in | yes |
 | `gh` (GitHub CLI) | `vx ship`, and landing a shipped PR | only for those |
 

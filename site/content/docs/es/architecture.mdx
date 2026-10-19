@@ -11,13 +11,13 @@ Le hablás a un commander. Él despacha soldiers, cada uno en su propio camp, y 
   name="architecture.es"
   width={614}
   height={762}
-  alt="Diagrama de las piezas de vexillum. El general habla con el commander y revisa sus artefactos en el forum. El commander ejecuta vx dispatch sobre el binario vexillum, que guarda el estado en disco y abre un camp donde un soldier corre en un pane de herdr. El sentinel consulta herdr, registra los resultados en el estado y despierta al commander mediante el hook Stop."
+  alt="Diagrama de las piezas de vexillum. El general habla con el commander y revisa sus artefactos en el forum. El commander ejecuta vx dispatch sobre el binario vexillum, que guarda el estado en disco y abre un camp donde un soldier corre en un pane de herdr. El sentinel consulta herdr, registra los resultados en el estado y despierta al commander: mediante el hook Stop en Claude Code, mediante una extensión de wake en Pi, o publicando en su sesión a través de la API de OpenCode. El commander y los soldiers pueden correr cada uno en Claude Code, Pi u OpenCode."
   caption="Las piezas de vexillum y cómo se comunican entre sí."
 />
 
 - Le hablás al **commander**, una sesión de Claude Code (o de Pi u OpenCode, mirá [Pi como commander](/es/docs/guides/pi-commander) y [OpenCode como commander](/es/docs/guides/opencode-commander)) guiada por `AGENTS.md` y skills. Te abre artefactos en el **forum** y lee de ahí tu feedback.
 - El commander ejecuta `vx dispatch`. El binario **vexillum** guarda su estado en disco, toma un **camp** e inicia un **soldier** en un pane de **herdr**.
-- El **sentinel** consulta herdr cada 5 segundos, registra cada resultado en el estado y despierta al commander mediante el hook `Stop`.
+- El **sentinel** consulta herdr cada 5 segundos, registra cada resultado en el estado y despierta al commander. A un commander de Claude Code lo despierta el hook `Stop`, a uno de Pi una extensión de wake que corre dentro de Pi, y a uno de OpenCode el sentinel, que publica el wake en su sesión a través de la API de OpenCode (ver [Sentinel](/es/docs/concepts/sentinel)).
 
 ## Decisiones cerradas
 

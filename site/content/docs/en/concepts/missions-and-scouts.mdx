@@ -14,7 +14,7 @@ description: The two kinds of task, and the states a task moves through.
 
 `vx dispatch` defaults to `--kind mission`. A scout writes its report to `~/.vexillum/projects/<repo>-<hash>/reports/<agent-name>-<task-id>.md`, outside the camp, so it survives `strike`. Never use a scout for work that must change code.
 
-`--model` and `--effort` are passed straight to the `claude` CLI; vexillum only checks that Claude Code accepts the value. Choosing them is the commander's job, from the profiles in [`models.json`](/docs/reference/models-json) (`--profile`). See also [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
+`--model` and `--effort` are passed straight to the CLI of the profile's harness (`claude` unless the profile names `pi` or `opencode`); vexillum checks that the harness accepts the value, by shape only for the models of Pi and OpenCode (see [models.json](/docs/reference/models-json)). Choosing them is the commander's job, from the profiles in [`models.json`](/docs/reference/models-json) (`--profile`). See also [AGENTS.md and rules](/docs/concepts/agents-md-and-rules).
 
 ## Task states
 

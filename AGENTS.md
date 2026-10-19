@@ -14,7 +14,7 @@ No las cambies ni propongas alternativas sin que el general lo pida explícitame
 
 - **Lenguaje: Go.** No sugieras reescribir en otro lenguaje.
 - **Distribución: binario por brew/curl**, multiplataforma. No introduzcas dependencias de runtime (Node, Python) en el camino de instalación.
-- **Multi-harness: Claude Code, Pi y OpenCode**, elegido por perfil de modelo (`harness` en `models.json`; Claude Code es el default). El general levantó la regla anterior de "harness único". Se mantiene su espíritu: Go, sin dependencias de runtime en el camino de instalación (los harnesses son herramientas que vexillum orquesta y `doctor` verifica, no se instalan), y el binario solo hace plomería determinista (nada de ruteo ni razonamiento en Go). Cada harness se agrega por fases detrás de la interfaz `soldier.Harness` y el registro `soldier.HarnessFor`; un nombre reservado sin implementación falla con un error claro.
+- **Multi-harness: Claude Code, Pi y OpenCode**, elegido por perfil de modelo (`harness` en `models.json`; Claude Code es el default). El general levantó la regla anterior de "harness único". Se mantiene su espíritu: Go, sin dependencias de runtime en el camino de instalación (los harnesses son herramientas que vexillum orquesta y `doctor` verifica, no se instalan), y el binario solo hace plomería determinista (nada de ruteo ni razonamiento en Go). Los tres están implementados detrás de la interfaz `soldier.Harness` y el registro `soldier.HarnessFor`; hoy no queda ningún nombre reservado, y un nombre desconocido (o uno reservado sin implementación, si algún día lo hay) falla con un error claro.
 - **Backend: herdr es el único backend.** tmux no está soportado. Dejá la costura preparada por si algún día hay otro backend, pero no construyas la abstracción multi-backend todavía.
 - **La inteligencia del commander vive en el AGENTS.md de producto (markdown), no en Go.** El binario hace plomería determinista. No reimplementes ruteo/razonamiento en Go.
 - **Vocabulario del dominio en inglés** (commander, soldier, mission, scout, camp, sentinel), en código y en voz del agente. Sin traducción.
@@ -38,7 +38,7 @@ Trabajá en la capa activa. No adelantes código de capas futuras salvo pedido e
 - Código y comentarios en inglés. Los mensajes de CLI al usuario también en inglés.
 - La escritura de estado a disco es atómica desde la Capa 2 (escribir a temp + rename), aunque en esa capa se invoque a mano, porque la Capa 4 escribe en paralelo.
 - Tests con la librería estándar (`testing`). Cada capa se prueba antes de avanzar (ver casos de prueba).
-- Mantené el binario autosuficiente: sin dependencias de runtime externas más allá de las herramientas que orquesta (Claude Code, herdr), que se verifican con `doctor`, no se instalan.
+- Mantené el binario autosuficiente: sin dependencias de runtime externas más allá de las herramientas que orquesta (Claude Code, Pi, OpenCode, herdr), que se verifican con `doctor`, no se instalan.
 
 ## Pruebas E2E aisladas
 

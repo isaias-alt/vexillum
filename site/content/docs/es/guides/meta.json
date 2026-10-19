@@ -1,1 +1,1 @@
-{ "title": "Guías", "defaultOpen": true, "pages": ["parallel-missions", "land-vs-ship", "yolo-mode", "using-pi", "pi-commander", "using-opencode", "opencode-commander", "blocked-and-interrupted", "forum", "muster-skill", "contributing"] }
+{ "title": "Guías", "defaultOpen": true, "pages": ["parallel-missions", "land-vs-ship", "yolo-mode", "using-pi", "pi-commander", "using-opencode", "opencode-commander", "models-for-other-harnesses", "blocked-and-interrupted", "forum", "muster-skill", "contributing"] }

@@ -3,9 +3,9 @@ title: Introducción
 description: vexillum orquesta agentes de código desde tu terminal, un commander, muchos soldiers, cada uno en su propio camp.
 ---
 
-vexillum es un orquestador de agentes de código por CLI, escrito en Go. Le hablás a un solo agente, el **commander** (Claude Code por defecto). Él despacha **soldiers** (más sesiones de Claude Code) en paralelo. Cada soldier trabaja en su propio git worktree (un **camp**), así el trabajo en paralelo nunca choca, y devuelve un cambio para aterrizar (una **mission**) o un reporte escrito (un **scout**). Un **sentinel** en segundo plano vigila a los soldiers y despierta al commander solo cuando algo necesita atención.
+vexillum es un orquestador de agentes de código por CLI, escrito en Go. Le hablás a un solo agente, el **commander** (Claude Code por defecto). Él despacha **soldiers** (más sesiones de agente, Claude Code por defecto) en paralelo. Cada soldier trabaja en su propio git worktree (un **camp**), así el trabajo en paralelo nunca choca, y devuelve un cambio para aterrizar (una **mission**) o un reporte escrito (un **scout**). Un **sentinel** en segundo plano vigila a los soldiers y despierta al commander solo cuando algo necesita atención.
 
-No hay una interfaz nueva que aprender: seguís hablando con Claude Code y el commander llama a `vx` por vos.
+No hay una interfaz nueva que aprender: seguís hablando con tu agente y el commander llama a `vx` por vos.
 
 ```text
 > dispatch a soldier to refactor the payment module
@@ -29,5 +29,5 @@ Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)
 </Cards>
 
 <Callout type="warn" title="Los soldiers tienen acceso total al host">
-  Un soldier corre Claude Code con `--dangerously-skip-permissions`, con tu usuario del sistema y sin container ni sandbox. El camp solo acota dónde caen sus commits. Nada llega al historial real de tu proyecto hasta que apruebes aterrizarlo. Nunca despaches contra un repositorio o una máquina donde leer credenciales sea un problema.
+  Un soldier corre con todos los permisos (Claude Code con `--dangerously-skip-permissions`, Pi, que no tiene prompts de permisos, u OpenCode con `--auto`), con tu usuario del sistema y sin container ni sandbox. El camp solo acota dónde caen sus commits. Nada llega al historial real de tu proyecto hasta que apruebes aterrizarlo. Nunca despaches contra un repositorio o una máquina donde leer credenciales sea un problema.
 </Callout>
