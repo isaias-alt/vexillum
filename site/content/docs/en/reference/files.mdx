@@ -77,6 +77,7 @@ Machine-level state, shared by every project. Nothing here is committed anywhere
     pending/<id>.json                  the commander's pending decisions
     reports/<agent>-<id>.md            a scout's final report
     pauses/<agent>.md                  a soldier's declared pause
+    commanders.json  commanders.lock   the commander registry and its lock
 ```
 
 | Path | Holds | Safe to delete? |
@@ -99,5 +100,6 @@ Machine-level state, shared by every project. Nothing here is committed anywhere
 | `projects/<repo>-<hash>/pending/<id>.json` | a commander's pending decision, see [`vx pending`](/docs/reference/cli/pending) | Yes, if you no longer need that decision recorded |
 | `projects/<repo>-<hash>/reports/<agent>-<id>.md` | a scout's final report (written by the scout, not by the binary) | Yes, once you read it |
 | `projects/<repo>-<hash>/pauses/<agent>.md` | a soldier's declared pause (written by the soldier) | Yes. Without it, an idle soldier is treated as unconfirmed again |
+| `projects/<repo>-<hash>/commanders.json` | the commander registry: per harness (`claude`, `pi`, `opencode`), the herdr pane of the commander that last ran `vx dispatch` or `vx forum` in the project, read from `HERDR_PANE_ID`. A pane that herdr no longer reports as the same harness working in the project is treated as absent, and the pane is looked up again by directory. See [Forum](/docs/guides/forum#the-listener-and-the-inbox). `commanders.lock` only serializes writers | Yes. It is rewritten the next time a commander runs one of those commands; until then the forum shows no commander for a commander that has no live Stop hook |
 
 Every JSON file is written to a temporary `*.tmp` file and renamed into place. A crash can leave a stray `*.tmp` file behind; it is safe to delete.
