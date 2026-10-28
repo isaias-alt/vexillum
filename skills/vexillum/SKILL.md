@@ -36,9 +36,16 @@ Read the file that matches the moment, in addition to this one:
 
 | Moment | Read |
 | --- | --- |
-| A sentinel notice arrives, a task is blocked or interrupted, or a finished soldier needs a follow-up prompt | [sentinel.md](sentinel.md) |
+| A sentinel notice arrives (done, blocked, interrupted or unconfirmed), or a finished soldier needs a follow-up prompt | [sentinel.md](sentinel.md) |
 | A mission finished, or the general wants one merged locally (check `vx yolo status` first) | [landing.md](landing.md) |
 | The general wants a real, validated GitHub PR | [shipping.md](shipping.md) |
+
+**On an `unconfirmed` sentinel notice, never trust a `herdr pane read` for
+liveness** (the viewport can be stale). Check `ls pauses/<agent>.md` (exists and
+fresh?), `herdr pane list` (`agent_status`) and the task output from `vx status`.
+No fresh pause, an idle pane and no commit or report means the soldier stopped
+without delivering: re-prompt it with `vx prompt`, do not explain it away. The
+steps are in [sentinel.md](sentinel.md).
 
 ## Dispatching a soldier
 

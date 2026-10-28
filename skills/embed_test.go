@@ -230,6 +230,34 @@ func TestVexillumSkillContract(t *testing.T) {
 	}
 }
 
+// TestVexillumSkillUnconfirmedRule pins the commander rule for an unconfirmed
+// wake: a pane read is never proof of liveness, the facts are (pause file,
+// herdr pane list, vx status), and a soldier that stopped without delivering is
+// re-prompted, not explained away.
+func TestVexillumSkillUnconfirmedRule(t *testing.T) {
+	for _, file := range []string{"SKILL.md", "sentinel.md"} {
+		data, err := ReadFile("vexillum", file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, want := range []string{"unconfirmed", "herdr pane read", "stale", "pauses/<agent>.md", "herdr pane list", "vx status", "vx prompt"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s does not mention %q", file, want)
+			}
+		}
+	}
+	data, err := ReadFile("vexillum", "sentinel.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"stopped without delivering", "explain it away", "agent_status"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("sentinel.md does not mention %q", want)
+		}
+	}
+}
+
 // TestVexillumSkillHardRule pins the commander's hard rule in the skill: it
 // never does a soldier's work, and the list of what it still does is explicit.
 func TestVexillumSkillHardRule(t *testing.T) {

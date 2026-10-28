@@ -261,6 +261,11 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		// it verbatim and would otherwise accumulate a new copy of this
 		// suffix on every re-dispatch.
 		promptText += scoutReportInstructions(report.Path(projectRoot, task.HerdrAgentName, task.ID))
+	} else {
+		// A mission's deliverable is commits on its branch (the sentinel's
+		// completion signal for it), so the prompt says exactly that, plus
+		// the closing line a reader of the pane looks for.
+		promptText += missionDeliverableInstructions(task.CampBranch, task.CampBase)
 	}
 	// Every soldier - mission or scout - gets the pause-declaration
 	// instructions, same reasoning as above about never mutating
@@ -497,6 +502,7 @@ func DismissBlocked(projectRoot string, task state.Task, client herdr.Client) (s
 		current.UpdatedAt = time.Now().UTC()
 		current.IdleUnconfirmedSince = time.Time{}
 		current.AgentNotFoundSince = time.Time{}
+		current.PauseSeenAt = time.Time{}
 	})
 	if err != nil {
 		return task, fmt.Errorf("persisting dismissed task: %w", err)
@@ -534,6 +540,7 @@ func Reprompt(projectRoot string, task state.Task, text string, client herdr.Cli
 		current.UpdatedAt = now
 		current.IdleUnconfirmedSince = time.Time{}
 		current.AgentNotFoundSince = time.Time{}
+		current.PauseSeenAt = time.Time{}
 	})
 	if err != nil {
 		return task, fmt.Errorf("persisting running state: %w", err)
@@ -607,6 +614,7 @@ func restoreAfterFailedPrompt(current *state.Task, before state.Task, at time.Ti
 	current.UpdatedAt = before.UpdatedAt
 	current.IdleUnconfirmedSince = before.IdleUnconfirmedSince
 	current.AgentNotFoundSince = before.AgentNotFoundSince
+	current.PauseSeenAt = before.PauseSeenAt
 }
 
 // finishAnswerBlocked is AnswerBlocked's shared tail, once the answer has
@@ -809,22 +817,55 @@ func scoutReportInstructions(reportPath string) string {
 		"'" + cmdname.Name + " strike' will refuse to strike your camp without it."
 }
 
-// pauseInstructions tells a soldier (mission or scout) how to declare
-// that it's deliberately pausing its own turn to wait on something of its
-// own - a background job it started, a validation run still in flight -
-// instead of blocking on it with a polling loop. Without this, vexillum's
-// sentinel can't tell that apart from the turn simply being done: see
-// internal/pause's package doc for why that ambiguity matters and why a
-// file is what resolves it, never the turn's own prose.
+// missionDeliverableInstructions tells a mission soldier what must exist when
+// it ends its turn: commits on its camp branch (internal/settle treats a
+// commit ahead of the camp's base as the mission's completion signal) and a
+// closing "delivered:" line. Without a stated contract, a closing summary with
+// an uncommitted tree reads like a legitimate end of the task, and the
+// sentinel can only mark it unconfirmed. branch and base come from the
+// task's camp; either may be empty for a task launched without one, in which
+// case the text falls back to "your branch".
+func missionDeliverableInstructions(branch, base string) string {
+	where := "your branch"
+	if branch != "" {
+		where = "your branch (" + branch + ")"
+	}
+	ahead := ""
+	if base != "" {
+		ahead = ", ahead of " + base
+	}
+	return "\n\n---\n\nDeliverable: before you end your turn, your work must be committed on " + where + ahead +
+		", and the last line of your final message must be \"delivered: <one-line summary of what you committed>\". " +
+		"A turn that ends with uncommitted changes, or with only a summary, is not delivered: vexillum treats a mission as finished " +
+		"only when a commit exists on its branch. If the task genuinely needs no code change, say so on that last line " +
+		"(\"delivered: no change needed - <why>\") instead of leaving it out."
+}
+
+// pauseInstructions tells a soldier (mission or scout) to run long commands
+// in the foreground and, for the one case that cannot be, how to declare that
+// it is deliberately pausing its own turn. Without the declaration vexillum's
+// sentinel cannot tell a deliberate wait apart from the turn simply being
+// done: see internal/pause's package doc for why that ambiguity matters and
+// why a file is what resolves it, never the turn's own prose.
+//
+// The text is the same for every harness (Claude Code, Pi, OpenCode): the
+// foreground cap it names is stated per harness only as far as it is known
+// (about 10 minutes in Claude Code), because a soldier on another harness
+// would otherwise be told a number that is not its own.
 func pauseInstructions(pausePath string) string {
-	return "\n\n---\n\nIf you need to pause your own turn on purpose to wait for something of your own " +
-		"(a background job you started, a validation run still in flight) instead of polling for it, " +
-		"write that BEFORE you end your turn as a file at:\n\n  " +
+	return "\n\n---\n\nNever pause on a background job: run long commands (test suites, benchmarks, builds) in the foreground and wait for them. " +
+		"A foreground tool call is capped (about 10 minutes in Claude Code; the other harnesses set their own timeout). " +
+		"If a command can take longer than that, split it into steps that each fit, or say so in your final message. " +
+		"Do not background it and end your turn.\n\n" +
+		"The pause file is only for a genuine external wait, something you cannot run in the foreground. " +
+		"If you need to pause your own turn on purpose, write that BEFORE you end your turn as a file at:\n\n  " +
 		pausePath +
 		"\n\nFirst line: \"paused: <why>\". Optional second line: \"until: <when you expect it to resolve>\".\n" +
 		"This is the only way vexillum knows you're deliberately waiting rather than finished - without it, " +
 		"an idle turn with no finished deliverable is treated as unconfirmed, not successful. Only use this " +
-		"for a real external wait, not an ordinary pause between steps."
+		"for a real external wait, not an ordinary pause between steps.\n\n" +
+		"When you wake from a pause, finish the original deliverable (the commit or the report above) before you end your turn. " +
+		"Deleting the pause file is not finishing: a turn that ends right after the wait, with nothing delivered, is marked unconfirmed."
 }
 
 // needsDecisionInstructions tells a soldier (mission or scout) the one

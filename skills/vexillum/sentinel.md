@@ -20,7 +20,8 @@ If your turn is about to end and you are told a soldier's status changed, that i
 the sentinel. Go check on it (report to the general, or land/strike as
 appropriate) before actually stopping. Verify before you report a soldier as
 finished: look at `git log` and `git status` in its camp rather than trusting the
-status word alone.
+status word alone. And never judge whether a soldier is alive or waiting from a
+`herdr pane read`: the viewport can be stale (see `unconfirmed` below).
 
 ## Forum wakes
 
@@ -70,6 +71,30 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
   ran, so `vx redispatch <task-id>` relaunches it from the original prompt. An
   `unconfirmed` task is different: it was prompted, its pane is open, and
   `vx redispatch` refuses it (carry it on with `vx prompt`).
+
+- **unconfirmed**: the soldier's turn went idle and nothing proves it finished (a
+  scout with no report, a mission with no new commit) and it has no valid pause
+  declared. It was prompted and its pane is open. The task's `output` carries the
+  pane read taken when it was marked and a note saying why, including whether a
+  pause file existed earlier and is now gone. Never trust a `herdr pane read`
+  for liveness here: the viewport can be stale and show an old "still running"
+  screen for a soldier that stopped long ago (it cost 41 minutes once). Verify
+  with the facts instead:
+  1. `ls ~/.vexillum/projects/<key>/pauses/<agent>.md` (the note in the task's
+     output gives the full path): does it exist, and is it fresh (written in the
+     last 30 minutes)? A pause file is the only thing that makes
+     an idle soldier "waiting".
+  2. `herdr pane list`: the pane's `agent_status` (`idle` or `working`).
+  3. The task's `output` from `vx status`, plus `git log` / `git status` in the
+     camp (or the report path for a scout).
+
+  No fresh pause file, an idle pane and no commit or report means the soldier
+  stopped without delivering (typically it woke from a pause, deleted its pause
+  file and ended its turn). It is not waiting on anything: re-prompt it with
+  `vx prompt <task-id> "<finish the deliverable>"`. Do not explain it away to the
+  general ("it is waiting in the background") and do not wait. If the checks
+  show it is genuinely working (`agent_status` is `working`), leave it; the
+  sentinel reopens it when it works again.
 
 ## What a wake is, and what you are not told
 

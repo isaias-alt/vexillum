@@ -215,6 +215,7 @@ func updateRedispatchReset(projectRoot, taskID string, major int, version string
 		// re-dispatched task back to interrupted on its very first
 		// AgentStatus hiccup.
 		task.AgentNotFoundSince = time.Time{}
+		task.PauseSeenAt = time.Time{}
 		// The new launch records its own prompt delivery; a stale stamp from
 		// the previous one would hide that it never happened.
 		task.PromptSubmittedAt = time.Time{}

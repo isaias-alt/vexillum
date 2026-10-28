@@ -35,6 +35,7 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 | `output` | string | el transcript capturado |
 | `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | el pane de herdr del soldier |
 | `agent_not_found_since`, `idle_unconfirmed_since` | hora | cuándo el sentinel vio la condición por primera vez |
+| `pause_seen_at` | hora | cuándo el sentinel vio por primera vez una pausa declarada válida en la tarea idle; se borra cuando la tarea termina. Permite que la nota de un `unconfirmed` diga que existió una pausa y ya no está |
 | `redispatches` | number | cuántas veces se re-despachó la tarea |
 | `model`, `effort` | string | la elección del soldier; vacío significa el default de claude |
 | `harness` | string | el CLI de agente en el que corre el soldier, tomado del perfil del dispatch (`claude`, `pi` u `opencode`); vacío significa `claude`, como en un archivo de tarea escrito antes de este campo |

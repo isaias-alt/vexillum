@@ -1648,6 +1648,70 @@ func TestRunInHerdr_EchoedPromptDoesNotBlockAFinishedSoldier(t *testing.T) {
 	}
 }
 
+// Every dispatch states what must exist when the soldier ends its turn: a
+// mission is told to commit on its own branch (ahead of its base) and to close
+// with a "delivered:" line, a scout keeps its report path and gets no mission
+// contract. The same pause rules reach every harness, since they share one
+// submission path: run long commands in the foreground, a pause only for a
+// genuine external wait, and finish the deliverable after waking.
+func TestRunInHerdr_PromptStatesTheDeliverableContractOnEveryHarness(t *testing.T) {
+	for _, harness := range []string{"claude", "pi", "opencode"} {
+		t.Run(harness, func(t *testing.T) {
+			projectDir := initStrikeTestProject(t)
+			home := t.TempDir()
+			task := newMissionTask(t)
+			task.Harness = harness
+			if harness == "opencode" {
+				task.HarnessMajor, task.HarnessVersion = 1, "1.14.0"
+			}
+			c := ocCamp(t, projectDir, home, task)
+			client := ocClient()
+
+			if _, err := soldier.RunInHerdr(home, "w1", task, c, client); err != nil {
+				t.Fatalf("RunInHerdr: %v", err)
+			}
+			prompt := client.promptCalls[0]
+			for _, want := range []string{
+				"Deliverable: before you end your turn, your work must be committed on your branch (" + c.Branch + "), ahead of " + c.Base,
+				"delivered: <one-line summary of what you committed>",
+				"Never pause on a background job",
+				"run long commands (test suites, benchmarks, builds) in the foreground",
+				"about 10 minutes in Claude Code",
+				"Do not background it and end your turn",
+				"only for a genuine external wait",
+				"Deleting the pause file is not finishing",
+			} {
+				if !strings.Contains(prompt, want) {
+					t.Errorf("mission prompt lacks %q:\n%s", want, prompt)
+				}
+			}
+			// The needs-decision trailer stays last: the extractor reads from it.
+			if !strings.HasSuffix(prompt, "do not use it for an ordinary status update.") {
+				t.Errorf("the prompt must end with the needs-decision trailer, got: %s", prompt)
+			}
+		})
+	}
+
+	t.Run("scout", func(t *testing.T) {
+		home := t.TempDir()
+		task := newScoutTask(t, "look into it")
+		c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+		client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "done"}
+		if _, err := runInHerdr(t, home, "w1", task, c, client); err != nil {
+			t.Fatalf("RunInHerdr: %v", err)
+		}
+		prompt := client.promptCalls[0]
+		if strings.Contains(prompt, "Deliverable:") || strings.Contains(prompt, "delivered:") {
+			t.Errorf("a scout gets its report path, not the mission contract:\n%s", prompt)
+		}
+		for _, want := range []string{"write your final report as a single Markdown file", "Never pause on a background job", "Deleting the pause file is not finishing"} {
+			if !strings.Contains(prompt, want) {
+				t.Errorf("scout prompt lacks %q:\n%s", want, prompt)
+			}
+		}
+	})
+}
+
 // The instructions every soldier gets and the extractor's own constants
 // must stay in step: the template line is what the extractor refuses, the
 // trailer is where it starts reading.

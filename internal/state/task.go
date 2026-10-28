@@ -160,6 +160,14 @@ type Task struct {
 	// zero value, which already means "never observed ambiguous".
 	IdleUnconfirmedSince time.Time `json:"idle_unconfirmed_since,omitzero"`
 
+	// PauseSeenAt marks when internal/sentinel first observed a valid declared
+	// pause (internal/pause) on this task while its turn was idle - zero means
+	// never. It is what lets the unconfirmed wake say "a pause existed and is
+	// gone" when the soldier wakes, deletes its pause file and ends its turn
+	// without delivering. Cleared whenever the task settles out of Running.
+	// Same purely-additive reasoning as AgentNotFoundSince.
+	PauseSeenAt time.Time `json:"pause_seen_at,omitzero"`
+
 	// PromptSubmittedAt marks when internal/soldier.RunInHerdr's prompt call
 	// returned, that is, when herdr had taken the original prompt and
 	// submitted it (zero means never confirmed). RunInHerdr saves the task

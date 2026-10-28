@@ -51,4 +51,8 @@ This is re-dispatch, **not resumption**. It discards the old camp (uncommitted c
 
 ## Unconfirmed: idle without proof
 
-`unconfirmed` means the soldier went idle with no commit ahead of its base (or no report, for a scout) and no valid declared pause. The pane is still there, so look at the camp or the pane yourself.
+`unconfirmed` means the soldier went idle with no commit ahead of its base (or no report, for a scout) and no valid declared pause. The pane is still there, so look at the camp yourself.
+
+The task's `output` ends with a note that explains the status, and it carries the pane read taken when the task was marked. When the soldier had declared a pause earlier and that file is gone, the note says so: the soldier woke from its wait, removed its pause file and ended its turn without delivering. It is not waiting on anything.
+
+Do not judge whether the soldier is alive from a `herdr pane read`: the viewport can be stale and show an old "still running" screen. Check the facts instead: whether `pauses/<agent>.md` exists and is fresh (written in the last 30 minutes), the pane's `agent_status` in `herdr pane list`, and the task output from `vx status` together with `git log` in the camp. No fresh pause, an idle pane and no commit or report means the soldier stopped without delivering. Send it the next step with [`vx prompt`](/docs/reference/cli/prompt).

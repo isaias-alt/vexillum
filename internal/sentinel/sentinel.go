@@ -418,6 +418,7 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 	task.Status = newStatus
 	task.UpdatedAt = time.Now().UTC()
 	task.IdleUnconfirmedSince = time.Time{}
+	task.PauseSeenAt = time.Time{}
 	if output, err := client.AgentRead(task.HerdrAgentName, tickReadLines); err == nil {
 		task.Output = output
 	}
@@ -481,6 +482,14 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (bool, error) {
 	output, readErr := client.AgentRead(task.HerdrAgentName, tickReadLines)
 
+	// Remember that a pause was declared, even while the turn is held for
+	// background work below: a soldier that wakes, removes the file and ends
+	// its turn without delivering is only recognizable later by this mark.
+	task, err := notePauseSeen(projectRoot, task)
+	if err != nil {
+		return false, err
+	}
+
 	// Whichever way this idle turn ends below (a question for the general or
 	// a finished task), what the sentinel saves is the soldier's last word:
 	// wait until the pane stops changing before reading it, so the final
@@ -542,7 +551,28 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 		return false, nil
 	}
 
-	return handleIdleUnconfirmed(projectRoot, task)
+	return handleIdleUnconfirmed(projectRoot, task, client, output, readErr)
+}
+
+// notePauseSeen stamps task.PauseSeenAt the first time the soldier's declared
+// pause is valid while its turn is idle, and returns the task as it should be
+// used from here on. See state.Task.PauseSeenAt for why the mark is kept.
+func notePauseSeen(projectRoot string, task state.Task) (state.Task, error) {
+	if !task.PauseSeenAt.IsZero() {
+		return task, nil
+	}
+	_, active, err := pause.Active(projectRoot, task.HerdrAgentName, time.Now())
+	if err != nil {
+		return task, fmt.Errorf("checking declared pause for task %s: %w", task.ID, err)
+	}
+	if !active {
+		return task, nil
+	}
+	task.PauseSeenAt = time.Now().UTC()
+	if _, err := saveIfRunning(projectRoot, task); err != nil {
+		return task, fmt.Errorf("recording the seen pause for task %s: %w", task.ID, err)
+	}
+	return task, nil
 }
 
 func needsDecisionIn(task state.Task, output string) bool {
@@ -663,6 +693,7 @@ func settleNeedsDecision(projectRoot string, task state.Task, output string, dec
 	task.Decision = decision
 	task.UpdatedAt = time.Now().UTC()
 	task.IdleUnconfirmedSince = time.Time{}
+	task.PauseSeenAt = time.Time{}
 	saved, err := saveIfRunning(projectRoot, task)
 	if err != nil {
 		return false, fmt.Errorf("persisting task %s: %w", task.ID, err)
@@ -686,6 +717,7 @@ func settleDone(projectRoot string, task state.Task, reportPath, output string, 
 	task.Status = state.StatusDone
 	task.UpdatedAt = time.Now().UTC()
 	task.IdleUnconfirmedSince = time.Time{}
+	task.PauseSeenAt = time.Time{}
 	if readErr == nil {
 		task.Output = output
 	}
@@ -724,7 +756,11 @@ const idleUnconfirmedConfirmWindow = 30 * time.Second
 // applied to a different kind of ambiguity (an agent that's still there,
 // just unexplained, instead of one that's genuinely gone). Returns
 // whether it settled the task (and so recorded a wake) on this call.
-func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
+//
+// output and readErr are the pane read settleIdleTask already took this tick;
+// the wake saves that read (settled, see awaitSettledTranscript) with a note
+// that explains the unconfirmed status by itself (unconfirmedNote).
+func handleIdleUnconfirmed(projectRoot string, task state.Task, client herdr.Client, output string, readErr error) (bool, error) {
 	if task.IdleUnconfirmedSince.IsZero() {
 		task.IdleUnconfirmedSince = time.Now().UTC()
 		if _, err := saveIfRunning(projectRoot, task); err != nil {
@@ -741,10 +777,50 @@ func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
 		return interruptUndelivered(projectRoot, task)
 	}
 
-	return settleUnconfirmed(projectRoot, task, "", "[vexillum] this soldier's turn went idle with no completion signal (no report for a scout, "+
-		"no new commit for a mission) and no declared pause (internal/pause) - marked unconfirmed, not done. "+
-		"Check its camp/pane before assuming either way. Only an interrupted task can be re-dispatched; "+
-		"to carry this one on, send it the next step with '"+cmdname.Name+" prompt', or abandon it with '"+cmdname.Name+" strike --discard' once the general approves.")
+	// The wake carries the pane as it stands now, read until it holds still
+	// like the done path does, so the commander has the soldier's last message
+	// in front of it instead of reading a pane by hand (a read that can show a
+	// stale viewport).
+	note := unconfirmedNote(projectRoot, task)
+	if readErr != nil {
+		output = ""
+		note += "\n" + transcriptUnreadNote
+	} else {
+		var stable bool
+		if output, stable = awaitSettledTranscript(client, task.HerdrAgentName, output); !stable {
+			note += "\n" + transcriptChangingNote
+		}
+	}
+	return settleUnconfirmed(projectRoot, task, output, note)
+}
+
+// unconfirmedNote explains, in the wake itself, why an idle task with no
+// completion signal was marked unconfirmed. When the soldier had declared a
+// pause earlier and that file is gone (or has gone stale), it says so: that is
+// the soldier waking from its wait and ending its turn without delivering,
+// and it must be re-prompted, not waited for.
+func unconfirmedNote(projectRoot string, task state.Task) string {
+	missing := "no report written"
+	if task.Kind == state.KindMission {
+		missing = "no new commit on its branch"
+	}
+	agent := task.HerdrAgentName
+	verify := "Do not trust a pane read for liveness (the viewport can be stale): check 'ls " + pause.Path(projectRoot, agent) +
+		"', 'herdr pane list' (agent_status) and this task's output from '" + cmdname.Name + " status'."
+	next := "To carry it on, send it the next step with '" + cmdname.Name + " prompt', or abandon it with '" +
+		cmdname.Name + " strike --discard' once the general approves. Only an interrupted task can be re-dispatched."
+
+	if !task.PauseSeenAt.IsZero() {
+		gone := "that pause file is now gone (the soldier removed it when it woke)"
+		if pause.Exists(projectRoot, agent) {
+			gone = "that pause file is still there but older than " + pause.ValidityWindow.String() + ", so it is no longer trusted"
+		}
+		return fmt.Sprintf("[vexillum] this soldier stopped without delivering. It declared a pause (first seen %s) and %s; its pane is idle, "+
+			"%s, and nothing was reported as finished. It is not waiting on anything: re-prompt it to finish the original deliverable. %s %s",
+			task.PauseSeenAt.Local().Format("15:04:05"), gone, missing, verify, next)
+	}
+	return fmt.Sprintf("[vexillum] this soldier's turn went idle with no completion signal (%s) and no declared pause (internal/pause) - "+
+		"marked unconfirmed, not done. Its pane is idle and it has no pause file. %s %s", missing, verify, next)
 }
 
 // interruptUndelivered marks a Running task interrupted because its idle
@@ -767,6 +843,7 @@ func interruptUndelivered(projectRoot string, task state.Task) (bool, error) {
 		current.Status = state.StatusInterrupted
 		current.UpdatedAt = time.Now().UTC()
 		current.IdleUnconfirmedSince = time.Time{}
+		current.PauseSeenAt = time.Time{}
 		if current.Output != "" {
 			current.Output += "\n\n"
 		}
@@ -802,6 +879,7 @@ func settleUnconfirmed(projectRoot string, task state.Task, output, note string)
 	old := task.Status
 	task.Status = state.StatusUnconfirmed
 	task.UpdatedAt = time.Now().UTC()
+	task.PauseSeenAt = time.Time{}
 	if output != "" {
 		task.Output = output
 	}

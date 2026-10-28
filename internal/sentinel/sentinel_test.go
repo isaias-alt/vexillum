@@ -1489,6 +1489,150 @@ func TestTick_StalePauseDoesNotBlockUnconfirmedEscalation(t *testing.T) {
 	}
 }
 
+// The motivating failure (mission c2fe27a0b4ebaa39): a soldier declares a
+// pause and ends its turn on a background job, wakes when the job finishes,
+// deletes its own pause file and ends its turn again with no commit and no
+// report. The sentinel marks it unconfirmed, and the wake must say that
+// itself - a pause existed and is gone, the pane is idle, nothing was
+// delivered - and carry the pane read taken at settle time, so the commander
+// is not pushed to read a pane by hand (a read that can be stale).
+func TestTick_UnconfirmedAfterPauseRemovedExplainsItself(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	writePauseFile(t, proj, "vx-do-the-thing", "paused: waiting on my own final run\n")
+
+	// Tick 1: idle on a background job with the pause declared. Held, no wake.
+	client := &fakeHerdr{
+		statuses:   map[string]string{"vx-do-the-thing": "idle"},
+		readOutput: "final baseline run is still going\n\n✻ Sautéed for 3s · 1 shell still running\n",
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("Tick 1 = %d, %v; want a silent hold", woke, err)
+	}
+
+	// The soldier wakes, removes the pause and ends its turn with nothing
+	// delivered. The idle mark from the hold is old by now.
+	if err := os.Remove(pause.Path(proj, "vx-do-the-thing")); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if _, err := state.Update(proj, task.ID, func(current *state.Task) (bool, error) {
+		current.IdleUnconfirmedSince = time.Now().Add(-6 * time.Minute)
+		return true, nil
+	}); err != nil {
+		t.Fatalf("state.Update: %v", err)
+	}
+	finalMessage := "Nothing is committed. The benchmark output is at final.md.\n\n✻ Sautéed for 31s\n"
+	client.readOutput = finalMessage
+
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick 2: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("Tick 2 woke %d, want 1", woke)
+	}
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.Status != state.StatusUnconfirmed {
+		t.Fatalf("status = %s, want unconfirmed", persisted.Status)
+	}
+	if !strings.Contains(persisted.Output, "Nothing is committed") {
+		t.Errorf("Output lacks the pane read taken at settle time:\n%s", persisted.Output)
+	}
+	for _, want := range []string{"pause", "removed", "idle", "no new commit", "stopped without delivering", "vx prompt", "pane read"} {
+		if !strings.Contains(persisted.Output, want) {
+			t.Errorf("Output lacks %q:\n%s", want, persisted.Output)
+		}
+	}
+}
+
+// The pause mark is cleared once the task settles, so a later unconfirmed
+// (after a re-prompt) is not described as a pause that "went away" again.
+func TestTick_UnconfirmedAfterPauseClearsPauseSeenMark(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.PauseSeenAt = time.Now().Add(-10 * time.Minute)
+	task.IdleUnconfirmedSince = time.Now().Add(-31 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}, readOutput: "all done, nothing committed\n"}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick = %d, %v; want 1 wake", woke, err)
+	}
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !persisted.PauseSeenAt.IsZero() {
+		t.Errorf("PauseSeenAt = %v, want cleared once settled", persisted.PauseSeenAt)
+	}
+}
+
+// A pause that is still valid keeps the task running and leaves its mark, so
+// the explanation survives the pause file being removed later.
+func TestTick_ActivePauseRecordsPauseSeenMark(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	writePauseFile(t, proj, "vx-do-the-thing", "paused: waiting on my own run\n")
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("Tick = %d, %v; want no wake", woke, err)
+	}
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if persisted.PauseSeenAt.IsZero() {
+		t.Error("expected PauseSeenAt to be recorded while the pause is valid")
+	}
+	if persisted.Status != state.StatusRunning {
+		t.Errorf("status = %s, want running", persisted.Status)
+	}
+}
+
+// An unconfirmed task that never declared a pause keeps saying so, and names
+// how to verify liveness without a pane read. A scout's missing deliverable is
+// a report, not a commit.
+func TestTick_UnconfirmedWithoutPauseNamesTheVerificationSteps(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-scout-it")
+	task.Kind = state.KindScout
+	task.IdleUnconfirmedSince = time.Now().Add(-31 * time.Second)
+	task.PromptSubmittedAt = time.Now().Add(-time.Minute)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-scout-it": "idle"}, readOutput: "I looked around.\n"}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick = %d, %v; want 1 wake", woke, err)
+	}
+	persisted, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, want := range []string{"I looked around.", "no declared pause", "no report written", "herdr pane list", "status", "stale"} {
+		if !strings.Contains(persisted.Output, want) {
+			t.Errorf("Output lacks %q:\n%s", want, persisted.Output)
+		}
+	}
+	if strings.Contains(persisted.Output, "stopped without delivering") {
+		t.Errorf("a task that never paused must not be described as waking from a pause:\n%s", persisted.Output)
+	}
+}
+
 // C1-08: Tick sweeps every project namespaced under vexillumHome, not
 // just one - a wake recorded for a task in project A must never leak
 // into project B's own wakes/, and vice versa. This is the core guarantee
