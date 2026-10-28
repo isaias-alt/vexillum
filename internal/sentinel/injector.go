@@ -160,8 +160,8 @@ func (i *OpenCodeInjector) sweepProject(root string) int {
 		return 0
 	}
 
-	wakes, forumWakes, err := DrainAll(root)
-	if len(wakes)+len(forumWakes) == 0 {
+	claim, err := Claim(root)
+	if claim.Len() == 0 {
 		if err != nil {
 			i.problem(root, "cannot read the wakes", err)
 		}
@@ -170,7 +170,7 @@ func (i *OpenCodeInjector) sweepProject(root string) int {
 		return 0
 	}
 
-	text := WakeReason(wakes, forumWakes)
+	text := claim.Reason()
 	route := "the OpenCode API"
 	if viaHerdr {
 		route = "herdr agent prompt"
@@ -179,11 +179,14 @@ func (i *OpenCodeInjector) sweepProject(root string) int {
 		err = i.API.Prompt(info.Session, text)
 	}
 	if err != nil {
-		if rerr := Requeue(root, wakes, forumWakes); rerr != nil {
-			fmt.Fprintf(i.Log, "sentinel: warning: LOST a wake for the opencode commander of %s: %v\n", filepath.Base(root), rerr)
+		if rerr := claim.Release(); rerr != nil {
+			fmt.Fprintf(i.Log, "sentinel: warning: could not put back a wake for the opencode commander of %s: %v\n", filepath.Base(root), rerr)
 		}
 		i.problem(root, "cannot deliver the wake through "+route+", it stays queued", err)
 		return 0
+	}
+	if cerr := claim.Commit(); cerr != nil {
+		fmt.Fprintf(i.Log, "sentinel: warning: delivered a wake to the opencode commander of %s but could not consume it: %v\n", filepath.Base(root), cerr)
 	}
 	delete(i.failing, root)
 	fmt.Fprintf(i.Log, "sentinel: woke the opencode commander of %s (pane %s) through %s\n", filepath.Base(root), pane, route)

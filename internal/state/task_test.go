@@ -477,6 +477,7 @@ func TestOwnedKeys_CoversEveryTaskField(t *testing.T) {
 	task.Harness = "claude"
 	task.HarnessMajor, task.HarnessVersion = 2, "2.0.32"
 	task.HarnessSession = "ses_abc"
+	task.CommanderProject, task.CommanderPane = "/home/projects/a-1", "w1:p1"
 
 	data, err := json.Marshal(task)
 	if err != nil {

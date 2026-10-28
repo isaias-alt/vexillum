@@ -117,6 +117,7 @@ func runReprompt(projectDir, vexillumHome, taskID, text string, client herdr.Cli
 		return 1
 	}
 
+	recordCommander(projectRoot, projectDir, vexillumHome, task, stderr)
 	result, err := soldier.Reprompt(projectRoot, task, text, client)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": %v\n", err)

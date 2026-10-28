@@ -101,7 +101,7 @@ Estado a nivel de máquina, compartido por todos los proyectos. Nada de esto se 
 | `forums/<session>/` | una sesión de revisión de forum: `session.json` (cola y estado), `transcript.json` (la conversación), `layout.json`, `whiteboards/` y `attachments/` | Sí para una sesión terminada. Perdés su transcript y sus dibujos. Nada poda estas carpetas por vos |
 | `projects/<repo>-<hash>/tasks/<id>.json` | una tarea, el [schema `Task`](/es/docs/reference/status-json) | Solo con `vx strike`. Borrarla a mano hace que vexillum olvide la tarea mientras su camp y su branch siguen ahí |
 | `projects/<repo>-<hash>/camps/` | el pool de worktrees: `pool.json`, `pool.lock` y `<slot>/<repo>/` | No. Los slots son git worktrees registrados en tu repositorio; usá `vx strike` |
-| `projects/<repo>-<hash>/wakes/<id>.json` | un wake pendiente del sentinel | Sí. Perdés solo esa notificación |
+| `projects/<repo>-<hash>/wakes/<id>.json` | un wake pendiente del sentinel. Está en la cola del commander que despachó la tarea, que puede ser otro proyecto que el de la tarea (`origin` nombra ese); un wake que se está entregando se renombra brevemente `<id>.json.claimed-<time>-<pid>-<n>` | Sí. Perdés solo esa notificación |
 | `projects/<repo>-<hash>/wakes/forum/<session>.json` | un wake de forum pendiente (uno por sesión de revisión) | Sí. Perdés solo esa notificación |
 | `projects/<repo>-<hash>/forum-inbox/<session>/<uid>.json` | feedback de forum esperando al commander; los confirmados pasan a `read/` (se guardan los 200 más nuevos) | `read/` sí. El feedback sin leer se pierde si lo borrás |
 | `projects/<repo>-<hash>/pending/<id>.json` | una decisión pendiente del commander, ver [`vx pending`](/es/docs/reference/cli/pending) | Sí, si ya no necesitás esa decisión registrada |

@@ -2,7 +2,6 @@ package sentinel_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -472,44 +471,6 @@ func TestInjector_HerdrDownKeepsTheWakeAndSaysSo(t *testing.T) {
 	}
 	if !strings.Contains(e.log.String(), "herdr is down") {
 		t.Errorf("log = %q", e.log)
-	}
-}
-
-func TestRequeue_PutsBackWhatWasDrainedAndNeverOverwritesANewerWake(t *testing.T) {
-	root := t.TempDir()
-	at := time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC)
-	old := sentinel.Wake{TaskID: "t1", Kind: "mission", OldStatus: "running", NewStatus: "blocked", DetectedAt: at}
-	other := sentinel.Wake{TaskID: "t2", Kind: "scout", OldStatus: "running", NewStatus: "done", DetectedAt: at, ReportPath: "/r.md"}
-	newer := sentinel.Wake{TaskID: "t1", Kind: "mission", OldStatus: "blocked", NewStatus: "done", DetectedAt: at.Add(time.Hour)}
-
-	// t1 got a newer wake while the old one was out for delivery.
-	if err := sentinel.Requeue(root, []sentinel.Wake{newer}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := sentinel.Requeue(root, []sentinel.Wake{old, other}, []sentinel.ForumWake{{Session: "s1", File: "/a.html", Count: 2, DetectedAt: at}}); err != nil {
-		t.Fatal(err)
-	}
-
-	got := map[string]sentinel.Wake{}
-	for _, name := range []string{"t1", "t2"} {
-		data, err := os.ReadFile(filepath.Join(root, "wakes", name+".json"))
-		if err != nil {
-			t.Fatalf("wake %s: %v", name, err)
-		}
-		var w sentinel.Wake
-		if err := json.Unmarshal(data, &w); err != nil {
-			t.Fatal(err)
-		}
-		got[name] = w
-	}
-	if got["t1"].NewStatus != "done" {
-		t.Errorf("the newer wake of t1 was overwritten: %+v", got["t1"])
-	}
-	if got["t2"].ReportPath != "/r.md" || !got["t2"].DetectedAt.Equal(at) {
-		t.Errorf("t2 was not put back as it was: %+v", got["t2"])
-	}
-	if _, err := os.Stat(filepath.Join(root, "wakes", "forum", "s1.json")); err != nil {
-		t.Errorf("the forum wake was not put back: %v", err)
 	}
 }
 

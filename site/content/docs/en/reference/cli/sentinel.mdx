@@ -17,7 +17,10 @@ Usage:
 The sentinel polls every tracked "running" task's live herdr status,
 across every project it's ever seen (one sentinel process per machine).
 When one settles (done, blocked, unconfirmed or interrupted), it persists the change and records a
-durable wake, scoped to that task's own project. "drain"/"await" resolve which project to act on from the
+durable wake in the queue of the commander that dispatched the task. That is the task's own project
+when the commander works there, and the commander's project when it dispatched from another
+one (the task records its commander: project and herdr pane, set by 'vx dispatch').
+"drain"/"await" resolve which project to act on from the
 current directory (git toplevel, namespaced the same way "vx
 dispatch" namespaces a project's camps) - not a repo, or a toplevel
 that's itself a vexillum-managed camp, means nothing to drain here, so
@@ -40,6 +43,17 @@ in the project's inbox and records a forum wake, which both "drain" and
 (ended: false). Run vx forum inbox." It is the same hook and the same
 once-only delivery; a forum wake whose messages were already confirmed is
 dropped. See "vx forum" for the listener.
+
+A wake is consumed only once it is delivered. "drain" and "await" claim it,
+print it, and only then remove it: when the hook that launched an "await" is
+already gone (its parent process exited, it was signaled, or stderr cannot be
+written), the wake is put back for the next one instead of being printed into
+nothing, and a claim whose holder died is found again after two minutes.
+Wakes waiting in a project with no live "await" and no live registered commander are
+reported by 'vx doctor'. That is also how a Claude Code commander looks once its "await"
+has run out its 55 minutes (inside the hook's one-hour timeout): it hears nothing until its next
+turn, and vx status shows what happened meanwhile. A Pi commander starts a new "await"
+by itself when one times out, and an OpenCode commander has none.
 
 A project has one wake queue and a wake is delivered once, to whichever
 commander asks first. Two commanders live in the same project (say Claude Code

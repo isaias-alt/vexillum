@@ -195,6 +195,8 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 		return 1
 	}
 
+	announceCommander(&task, vexillumHome, projectRoot, projectDir, stderr)
+
 	c, err := camp.Acquire(projectDir, vexillumHome, task.ID)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": acquiring camp: %v\n", err)

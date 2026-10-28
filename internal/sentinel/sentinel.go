@@ -40,10 +40,12 @@ import (
 )
 
 // Wake is a durable record that a tracked task's status changed - the
-// sentinel's wake queue. It's delivered, not acknowledged: Drain removes a
-// wake's file the moment it hands it back, so a wake's mere presence on disk
-// under <project root>/wakes/ already means "pending" - there's no separate
-// acked flag to go stale.
+// sentinel's wake queue. It's delivered, not acknowledged: a wake's file is
+// removed once its delivery is settled (Drain at once, Claim when the caller
+// commits), so a wake's mere presence on disk under <project root>/wakes/
+// already means "pending" - there's no separate acked flag to go stale. It sits
+// in the queue of the commander that dispatched its task, which is the task's
+// own project unless that commander lives in another (see Origin).
 type Wake struct {
 	TaskID     string       `json:"task_id"`
 	Kind       state.Kind   `json:"kind"`
@@ -64,6 +66,13 @@ type Wake struct {
 	// a race this field doesn't try to resolve - internal/cli.runStrike
 	// makes its own live check before ever gating on one.
 	ReportPath string `json:"report_path,omitempty"`
+
+	// Origin is the project root the task lives in, set only when the wake was
+	// recorded in another project's queue: the one of the commander that
+	// dispatched the task (state.Task.CommanderProject). Empty means the wake
+	// sits in its own task's project. It is where the wake is judged for being
+	// still news, since the task and its camp are there.
+	Origin string `json:"origin,omitempty"`
 }
 
 func wakesDir(projectRoot string) string {
@@ -75,10 +84,15 @@ func wakesDir(projectRoot string) string {
 // its claimed copy can never be renamed over it.
 var claimSeq atomic.Uint64
 
-// claimedPath is where a drain moves wake file path while it reads it. The
-// result no longer ends in ".json", so no drain lists it as pending.
+// claimMarker separates a pending wake's file name from the claim suffix.
+const claimMarker = ".claimed-"
+
+// claimedPath is where a claim moves wake file path while it holds it. The
+// result no longer ends in ".json", so no drain lists it as pending. The suffix
+// carries the time of the claim (unix milliseconds), so a claim whose holder
+// died can be told from one in flight (see listPending).
 func claimedPath(path string) string {
-	return fmt.Sprintf("%s.claimed-%d-%d", path, os.Getpid(), claimSeq.Add(1))
+	return fmt.Sprintf("%s%s%d-%d-%d", path, claimMarker, time.Now().UnixMilli(), os.Getpid(), claimSeq.Add(1))
 }
 
 func wakePath(projectRoot, taskID string) string {
@@ -938,10 +952,7 @@ func handleAgentNotFound(projectRoot string, task state.Task) (interrupted bool,
 }
 
 func recordWake(projectRoot string, task state.Task, old, newStatus state.Status, reportPath string) error {
-	dir := wakesDir(projectRoot)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
+	queue := wakeQueue(projectRoot, task)
 	w := Wake{
 		TaskID:     task.ID,
 		Kind:       task.Kind,
@@ -950,7 +961,26 @@ func recordWake(projectRoot string, task state.Task, old, newStatus state.Status
 		DetectedAt: time.Now().UTC(),
 		ReportPath: reportPath,
 	}
-	return writeWake(projectRoot, w)
+	if queue != projectRoot {
+		w.Origin = projectRoot
+	}
+	return writeWake(queue, w)
+}
+
+// wakeQueue is the project root whose wake queue task's wake goes to: the
+// project of the commander that dispatched it (the one whose Stop hook await
+// drains that queue), or taskRoot, the task's own project, when the task
+// names none. A commander project that is not a sibling of taskRoot under the
+// same projects directory is not one vexillum made, and is ignored.
+func wakeQueue(taskRoot string, task state.Task) string {
+	if task.CommanderProject == "" {
+		return taskRoot
+	}
+	queue := filepath.Clean(task.CommanderProject)
+	if !filepath.IsAbs(queue) || filepath.Dir(queue) != filepath.Dir(taskRoot) {
+		return taskRoot
+	}
+	return queue
 }
 
 // writeWake writes w to its task's wake file under projectRoot, replacing an
@@ -963,10 +993,11 @@ func writeWake(projectRoot string, w Wake) error {
 }
 
 // Drain returns the pending wakes for the project rooted at projectRoot
-// that are still news, oldest first. Every wake file it finds is consumed:
-// a wake is surfaced at most once, never repeated on every drain, and its
-// file's mere existence on disk is what "pending" means (no separate acked
-// flag to keep in sync).
+// that are still news, oldest first, and consumes them: a wake is surfaced at
+// most once, never repeated on every drain, and its file's mere existence on
+// disk is what "pending" means (no separate acked flag to keep in sync). A
+// caller that can fail to hand them on uses Claim instead, which keeps them
+// until it knows they were delivered.
 //
 // A wake is a note that a task changed status, written when the sentinel
 // saw it. By the time anyone drains, the commander may have moved on: a
@@ -981,61 +1012,80 @@ func writeWake(projectRoot string, w Wake) error {
 // plain remove is not enough: concurrent unlinks of one file can all
 // report success on some filesystems, so no remove result says who won.
 func Drain(projectRoot string) ([]Wake, error) {
-	dir := wakesDir(projectRoot)
-	entries, err := os.ReadDir(dir)
+	drained, held, err := claimWakes(projectRoot)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("listing wakes: %w", err)
+		return nil, err
+	}
+	if err := commitHeld(held); err != nil {
+		return nil, err
+	}
+	return drained, nil
+}
+
+// claimWakes claims every pending task wake of the queue at projectRoot and
+// returns the ones that are still news, oldest first, with the claimed files
+// that hold them. A wake that is not news (or corrupt) is consumed right away;
+// the held files are for the caller to commit or release.
+func claimWakes(projectRoot string) ([]Wake, []heldFile, error) {
+	dir := wakesDir(projectRoot)
+	names, err := listPending(dir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing wakes: %w", err)
 	}
 
-	leases := lazyLeases(projectRoot)
-	var drained []Wake
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
+	leases := lazyLeases()
+	type claimedWake struct {
+		wake Wake
+		file heldFile
+	}
+	var current []claimedWake
+	for _, name := range names {
+		path := filepath.Join(dir, name)
 		claimed := claimedPath(path)
 		if err := os.Rename(path, claimed); err != nil {
 			// Already claimed by a concurrent drain (or gone): not ours.
 			continue
 		}
 		data, err := os.ReadFile(claimed)
-		if rmErr := os.Remove(claimed); rmErr != nil && !os.IsNotExist(rmErr) {
-			return nil, fmt.Errorf("removing delivered wake %s: %w", entry.Name(), rmErr)
-		}
 		if err != nil {
+			discard(claimed)
 			continue
 		}
 		var w Wake
 		if err := json.Unmarshal(data, &w); err != nil {
 			// A corrupt wake is garbage, consumed like any other.
+			discard(claimed)
 			continue
 		}
-		if wakeIsCurrent(projectRoot, w, leases) {
-			drained = append(drained, w)
+		if !wakeIsCurrent(projectRoot, w, leases) {
+			discard(claimed)
+			continue
 		}
+		current = append(current, claimedWake{wake: w, file: heldFile{pending: path, claimed: claimed}})
 	}
 
-	sort.Slice(drained, func(i, j int) bool { return drained[i].DetectedAt.Before(drained[j].DetectedAt) })
-	return drained, nil
+	sort.Slice(current, func(i, j int) bool { return current[i].wake.DetectedAt.Before(current[j].wake.DetectedAt) })
+	wakes := make([]Wake, len(current))
+	held := make([]heldFile, len(current))
+	for i, c := range current {
+		wakes[i], held[i] = c.wake, c.file
+	}
+	return wakes, held, nil
 }
 
-// lazyLeases returns a function that reads the project's camp leases on
-// first use and remembers the answer, so a drain with nothing to evaluate
-// never touches the pool. A pool that cannot be read yields nil: "can't
-// tell", which wakeIsCurrent treats as not struck.
-func lazyLeases(projectRoot string) func() map[string]bool {
-	var leased map[string]bool
-	loaded := false
-	return func() map[string]bool {
+// lazyLeases returns a function that reads a project's camp leases on first
+// use and remembers the answer, so a drain with nothing to evaluate never
+// touches a pool. A pool that cannot be read yields nil: "can't tell", which
+// wakeIsCurrent treats as not struck.
+func lazyLeases() func(projectRoot string) map[string]bool {
+	cache := map[string]map[string]bool{}
+	return func(projectRoot string) map[string]bool {
+		leased, loaded := cache[projectRoot]
 		if !loaded {
-			loaded = true
 			if l, err := camp.LeasedTasks(projectRoot); err == nil {
 				leased = l
 			}
+			cache[projectRoot] = leased
 		}
 		return leased
 	}
@@ -1055,7 +1105,13 @@ func lazyLeases(projectRoot string) func() map[string]bool {
 //
 // Anything it cannot establish (an unreadable pool, a camp whose git state
 // cannot be read) counts as current: a notice is never dropped on a guess.
-func wakeIsCurrent(projectRoot string, w Wake, leases func() map[string]bool) bool {
+// The task is looked up in the wake's own origin when it names one, since a
+// wake sits in its commander's project, not always its task's.
+func wakeIsCurrent(queueRoot string, w Wake, leases func(projectRoot string) map[string]bool) bool {
+	projectRoot := queueRoot
+	if w.Origin != "" && filepath.IsAbs(w.Origin) {
+		projectRoot = w.Origin
+	}
 	task, err := state.Load(projectRoot, w.TaskID)
 	if err != nil {
 		return !errors.Is(err, os.ErrNotExist)
@@ -1064,7 +1120,7 @@ func wakeIsCurrent(projectRoot string, w Wake, leases func() map[string]bool) bo
 		return false
 	}
 	if task.CampPath != "" {
-		if leased := leases(); leased != nil && !leased[task.ID] {
+		if leased := leases(projectRoot); leased != nil && !leased[task.ID] {
 			return false
 		}
 	}

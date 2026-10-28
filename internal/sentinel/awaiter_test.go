@@ -62,7 +62,7 @@ func inspectAs(t *testing.T, ppid int, command string) {
 
 func TestRegisterAwaiter_WritesAndReleasesItsRecord(t *testing.T) {
 	home := t.TempDir()
-	release, err := sentinel.RegisterAwaiter(home, "/proj", 4242)
+	release, err := sentinel.RegisterAwaiter(home, "/proj", "", 4242)
 	if err != nil {
 		t.Fatalf("RegisterAwaiter: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestRegisterAwaiter_SupersedesSameOwnerAndProject(t *testing.T) {
 	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: pid, OwnerPID: 4242, ProjectRoot: "/proj"})
 	inspectAs(t, 4242, awaitCmd)
 
-	release, err := sentinel.RegisterAwaiter(home, "/proj", 4242)
+	release, err := sentinel.RegisterAwaiter(home, "/proj", "", 4242)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestRegisterAwaiter_LeavesOtherOwnersAndProjectsAlone(t *testing.T) {
 		return 4242, awaitCmd, nil
 	}))
 
-	release, err := sentinel.RegisterAwaiter(home, "/proj", 4242)
+	release, err := sentinel.RegisterAwaiter(home, "/proj", "", 4242)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestRegisterAwaiter_ReapsOrphans(t *testing.T) {
 	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: pid, OwnerPID: 1111, ProjectRoot: "/other"})
 	inspectAs(t, 1, awaitCmd) // reparented to init
 
-	release, err := sentinel.RegisterAwaiter(home, "/proj", 4242)
+	release, err := sentinel.RegisterAwaiter(home, "/proj", "", 4242)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestSweep_NeverSignalsAPidThatIsNotAnAwait(t *testing.T) {
 	writeAwaiterRecord(t, home, sentinel.AwaiterRecord{PID: pid, OwnerPID: 1111, ProjectRoot: "/proj"})
 	inspectAs(t, 1, "/usr/bin/some-other-program --flag") // would be an orphan if it were ours
 
-	release, err := sentinel.RegisterAwaiter(home, "/proj", 1111)
+	release, err := sentinel.RegisterAwaiter(home, "/proj", "", 1111)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestRegisterAwaiter_NeverSupersedesANewerAwait(t *testing.T) {
 	})
 	inspectAs(t, 4242, awaitCmd)
 
-	release, err := sentinel.RegisterAwaiter(home, "/proj", 4242)
+	release, err := sentinel.RegisterAwaiter(home, "/proj", "", 4242)
 	if err != nil {
 		t.Fatal(err)
 	}

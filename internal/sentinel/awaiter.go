@@ -14,6 +14,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/atomicfile"
 	"github.com/isaias-alt/vexillum/internal/cmdname"
+	"github.com/isaias-alt/vexillum/internal/project"
 )
 
 // Every Stop hook invocation launches a "vx sentinel await" process that
@@ -39,10 +40,14 @@ const awaitersDirName = "sentinel-awaiters"
 
 // AwaiterRecord is what an await process writes about itself.
 type AwaiterRecord struct {
-	PID         int       `json:"pid"`
-	OwnerPID    int       `json:"owner_pid"`
-	ProjectRoot string    `json:"project_root"`
-	StartedAt   time.Time `json:"started_at"`
+	PID         int    `json:"pid"`
+	OwnerPID    int    `json:"owner_pid"`
+	ProjectRoot string `json:"project_root"`
+	// PaneID is the herdr pane the commander runs in (HERDR_PANE_ID of the
+	// hook), which is how "vx dispatch" finds the project this await drains
+	// when the dispatch itself ran in another one. Empty outside a pane.
+	PaneID    string    `json:"pane_id,omitempty"`
+	StartedAt time.Time `json:"started_at"`
 }
 
 func awaitersDir(vexillumHome string) string {
@@ -120,20 +125,20 @@ func OwnerGone(ownerPID int) bool {
 	return os.Getppid() != ownerPID
 }
 
-// RegisterAwaiter records the calling await process (owned by ownerPID,
-// waiting on projectRoot's wakes) and cleans up around it: it signals to
+// RegisterAwaiter records the calling await process (owned by ownerPID, in
+// herdr pane paneID, waiting on projectRoot's wakes) and cleans up around it: it signals to
 // exit any other live await of the same owner and project, and any await
 // whose owner is gone, and drops the records of processes that no longer
 // exist. The returned release removes this process's own record; call it on
 // every exit path.
-func RegisterAwaiter(vexillumHome, projectRoot string, ownerPID int) (release func(), err error) {
+func RegisterAwaiter(vexillumHome, projectRoot, paneID string, ownerPID int) (release func(), err error) {
 	dir := awaitersDir(vexillumHome)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating awaiters directory: %w", err)
 	}
 
 	self := os.Getpid()
-	rec := AwaiterRecord{PID: self, OwnerPID: ownerPID, ProjectRoot: projectRoot, StartedAt: time.Now().UTC()}
+	rec := AwaiterRecord{PID: self, OwnerPID: ownerPID, ProjectRoot: projectRoot, PaneID: paneID, StartedAt: time.Now().UTC()}
 	path := awaiterPath(vexillumHome, self)
 	if err := atomicfile.WriteJSON(path, rec); err != nil {
 		return nil, fmt.Errorf("recording awaiter: %w", err)
@@ -264,4 +269,86 @@ func HasLiveAwaiter(vexillumHome, projectRoot string) bool {
 		}
 	}
 	return false
+}
+
+// AwaiterProject returns the project root that the Stop hook await of the
+// commander in herdr pane paneID drains: the project to put that commander's
+// wakes in, wherever its dispatches run from. When several awaits of the pane
+// are alive (the previous turn's is superseded only when the next one starts)
+// the newest wins. It only reads: it signals nothing, deletes no record and
+// starts no process, so "vx dispatch" can ask it for free. A record counts
+// while its process exists; a recycled pid is told apart by the newest one
+// winning and by RegisterAwaiter's sweep, which drops records of processes that
+// are no longer an await.
+func AwaiterProject(vexillumHome, paneID string) (projectRoot string, ok bool) {
+	if paneID == "" {
+		return "", false
+	}
+	entries, err := os.ReadDir(awaitersDir(vexillumHome))
+	if err != nil {
+		return "", false
+	}
+	var newest AwaiterRecord
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(awaitersDir(vexillumHome), entry.Name()))
+		if err != nil {
+			continue
+		}
+		var rec AwaiterRecord
+		if json.Unmarshal(data, &rec) != nil || rec.PID <= 1 || rec.PaneID != paneID || rec.ProjectRoot == "" {
+			continue
+		}
+		if err := syscall.Kill(rec.PID, 0); err != nil && !errors.Is(err, syscall.EPERM) {
+			continue
+		}
+		if newest.PID == 0 || startedBefore(newest, rec) {
+			newest = rec
+		}
+	}
+	return newest.ProjectRoot, newest.PID != 0
+}
+
+// PendingQueue is one project's queue of undelivered wakes.
+type PendingQueue struct {
+	ProjectRoot string
+	// Count is the wake files waiting, of both kinds.
+	Count int
+	// Oldest is when the longest waiting wake file was last written.
+	Oldest time.Time
+}
+
+// PendingQueues lists the projects under vexillumHome with wakes waiting for a
+// commander, in project order. It only reads. Wakes claimed by a delivery in
+// flight are not pending and are not counted.
+func PendingQueues(vexillumHome string) []PendingQueue {
+	roots, err := project.AllRoots(vexillumHome)
+	if err != nil {
+		return nil
+	}
+	var queues []PendingQueue
+	for _, root := range roots {
+		q := PendingQueue{ProjectRoot: root}
+		for _, dir := range []string{wakesDir(root), forumWakesDir(root)} {
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				continue
+			}
+			for _, e := range entries {
+				if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+					continue
+				}
+				q.Count++
+				if info, err := e.Info(); err == nil && (q.Oldest.IsZero() || info.ModTime().Before(q.Oldest)) {
+					q.Oldest = info.ModTime()
+				}
+			}
+		}
+		if q.Count > 0 {
+			queues = append(queues, q)
+		}
+	}
+	return queues
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/commanderreg"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
-	"github.com/isaias-alt/vexillum/internal/scaffold"
+	"github.com/isaias-alt/vexillum/internal/state"
 )
 
 // stubLocator answers "herdr agent get" for a fixed set of panes.
@@ -129,7 +129,7 @@ func TestRegisterCommander_AHerdrFailureIsAWarning(t *testing.T) {
 	}
 }
 
-func TestRegisterDispatchCommander_UsesTheDispatchProjectRootAndSkipsUninitializedProjects(t *testing.T) {
+func TestAnnounceCommander_RegistersInTheDispatchProjectAndRecordsItOnTheTask(t *testing.T) {
 	home := t.TempDir()
 	vhome := filepath.Join(home, ".vexillum")
 	chdirProject(t, vhome)
@@ -141,17 +141,37 @@ func TestRegisterDispatchCommander_UsesTheDispatchProjectRootAndSkipsUninitializ
 	loc := &stubLocator{agents: map[string]herdr.AgentInfo{"w1:p1": {Kind: "opencode", PaneID: "w1:p1", Cwd: cwd}}}
 	useLocator(t, "w1:p1", loc)
 
-	registerDispatchCommander(cwd, vhome)
-	if loc.gets != 0 {
-		t.Fatal("an uninitialized project must register nothing")
-	}
+	task := state.Task{ID: "t1"}
+	var errb bytes.Buffer
+	announceCommander(&task, vhome, root, cwd, &errb)
 
-	if err := scaffold.WriteConfig(filepath.Join(cwd, ".vexillum")); err != nil {
-		t.Fatal(err)
-	}
-	registerDispatchCommander(cwd, vhome)
 	if entries, _ := commanderreg.Load(root); entries["opencode"].PaneID != "w1:p1" {
 		t.Errorf("dispatch did not register the commander under %s: %+v", root, entries)
+	}
+	if task.CommanderProject != root || task.CommanderPane != "w1:p1" {
+		t.Errorf("task commander = %q in %q, want pane w1:p1 in %q", task.CommanderPane, task.CommanderProject, root)
+	}
+	if errb.Len() != 0 {
+		t.Errorf("a dispatch in the commander's own project warns nothing, got %q", errb.String())
+	}
+	if loc.gets != 1 {
+		t.Errorf("herdr was asked %d times about the pane, want once (registering and locating share the answer)", loc.gets)
+	}
+}
+
+func TestAnnounceCommander_OutsideAPaneTouchesNothing(t *testing.T) {
+	home := t.TempDir()
+	vhome := filepath.Join(home, ".vexillum")
+	chdirProject(t, vhome)
+	cwd, _ := os.Getwd()
+	root, _ := project.Root(vhome, cwd)
+	loc := &stubLocator{}
+	useLocator(t, "", loc)
+
+	task := state.Task{ID: "t1"}
+	announceCommander(&task, vhome, root, cwd, &bytes.Buffer{})
+	if loc.gets != 0 || task.CommanderProject != "" || task.CommanderPane != "" {
+		t.Errorf("gets=%d task=%+v, want nothing", loc.gets, task)
 	}
 }
 

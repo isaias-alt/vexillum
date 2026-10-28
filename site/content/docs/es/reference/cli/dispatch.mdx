@@ -73,6 +73,16 @@ administrado por herdr) y que herdr y el CLI del harness (claude, pi u
 opencode) estén en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
 revisa tu configuración).
 
+La tarea registra al commander que la despachó: el proyecto que drena el await
+de su hook Stop y su pane de herdr (HERDR_PANE_ID), que se encuentran a partir
+del await vivo de ese pane o, si no hay, de dónde trabaja el agente del pane. El
+sentinel pone los wakes del soldier en el proyecto propio de ese commander, así
+que un commander que trabaja en un repositorio puede despachar en otro y oír
+igual cuando el soldier termina. Cuando los dos proyectos difieren, dispatch
+advierte, porque status, land, strike y prompt se siguen corriendo desde el
+proyecto en el que se despachó el soldier. Fuera de un pane de herdr no se
+registra nada y el wake queda en el proyecto propio de la tarea.
+
 Vuelve rápido: envía el prompt y deja de esperar en cuanto ve al soldier
 trabajando (o ya asentado), no la tarea completa. Un prompt trivial que se
 asienta de inmediato informa su resultado al instante; cualquier otro se deja

@@ -236,6 +236,13 @@ Una advertencia también nombra el caso de dos commanders vivos en un proyecto
 una sola cola de wakes y un wake llega solo al primero que lo pide, así que
 mantené un commander por proyecto.
 
+Doctor también advierte sobre todo proyecto, de cualquier repositorio, cuya cola
+de wakes tenga wakes de más de un minuto que nada va a entregar: ningún 'vx
+sentinel await' vivo ahí ni commander registrado vivo. El commander que despachó
+esos soldiers puede vivir en otro proyecto, o llevar más de los 55 minutos del
+await sin turno. No se pierde nada: los wakes esperan al próximo turno de un
+commander en ese proyecto.
+
 La línea del sentinel advierte, y nunca falla, cuando hay más de un proceso
 sentinel vivo (competirían por las mismas tareas), cuando el sentinel vivo es
 de una versión distinta a la de este binario, o cuando el binario desde el que
@@ -317,6 +324,16 @@ host sería un problema. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane
 administrado por herdr) y que herdr y el CLI del harness (claude, pi u
 opencode) estén en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
 revisa tu configuración).
+
+La tarea registra al commander que la despachó: el proyecto que drena el await
+de su hook Stop y su pane de herdr (HERDR_PANE_ID), que se encuentran a partir
+del await vivo de ese pane o, si no hay, de dónde trabaja el agente del pane. El
+sentinel pone los wakes del soldier en el proyecto propio de ese commander, así
+que un commander que trabaja en un repositorio puede despachar en otro y oír
+igual cuando el soldier termina. Cuando los dos proyectos difieren, dispatch
+advierte, porque status, land, strike y prompt se siguen corriendo desde el
+proyecto en el que se despachó el soldier. Fuera de un pane de herdr no se
+registra nada y el wake queda en el proyecto propio de la tarea.
 
 Vuelve rápido: envía el prompt y deja de esperar en cuanto ve al soldier
 trabajando (o ya asentado), no la tarea completa. Un prompt trivial que se
@@ -813,7 +830,10 @@ Uso:
 El sentinel consulta cada tarea "running" rastreada en el status en vivo de
 herdr, en todos los proyectos que haya visto alguna vez (un proceso sentinel
 por máquina). Cuando una termina (done o blocked), persiste el cambio y
-registra un wake durable, con alcance al proyecto propio de esa tarea. "drain" y "await" resuelven en qué proyecto
+registra un wake durable en la cola del commander que despachó la tarea. Es el
+proyecto propio de la tarea cuando el commander trabaja ahí, y el proyecto del
+commander cuando despachó desde otro (la tarea registra a su commander: proyecto
+y pane de herdr, que fija 'vx dispatch'). "drain" y "await" resuelven en qué proyecto
 actuar a partir del directorio actual (el toplevel de git, con el mismo
 namespace con el que "vx dispatch" arma los camps de un proyecto): si no es un
 repo, o si el toplevel es en sí un camp administrado por vexillum, no hay nada
@@ -835,6 +855,17 @@ proyecto y registra un wake de forum, que tanto "drain" como "await" informan
 como "forum session <file>: N new messages (ended: false). Run vx forum
 inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
 confirmados se descarta. Ver "vx forum" para el listener.
+
+Un wake se consume solo una vez entregado. "drain" y "await" lo reclaman, lo
+imprimen y recién entonces lo borran: cuando el hook que lanzó un "await" ya no
+está (su proceso padre salió, recibió una señal, o no se puede escribir en
+stderr), el wake se vuelve a poner para el siguiente en lugar de imprimirse al
+vacío, y un reclamo cuyo dueño murió se encuentra de nuevo a los dos minutos.
+Los wakes que esperan en un proyecto sin "await" vivo ni commander registrado
+vivo los informa 'vx doctor'. Así también se ve un commander de Claude Code cuyo "await" agotó
+sus 55 minutos (dentro del timeout de una hora del hook): no oye nada hasta su
+próximo turno, y vx status muestra lo que pasó mientras tanto. Un commander Pi
+arranca solo un "await" nuevo cuando uno vence, y uno OpenCode no tiene ninguno.
 
 Un proyecto tiene una sola cola de wakes y un wake se entrega una sola vez, al
 primer commander que lo pide. Dos commanders vivos en el mismo proyecto (por

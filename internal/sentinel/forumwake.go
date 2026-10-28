@@ -75,38 +75,49 @@ func RecordForumWake(projectRoot string, w ForumWake) error {
 // of the returned wakes come from the inbox. Anything it cannot establish (an
 // unreadable inbox) counts as current.
 func DrainForum(projectRoot string) ([]ForumWake, error) {
-	dir := forumWakesDir(projectRoot)
-	entries, err := os.ReadDir(dir)
+	drained, held, err := claimForum(projectRoot)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("listing forum wakes: %w", err)
+		return nil, err
 	}
-	var drained []ForumWake
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
+	if err := commitHeld(held); err != nil {
+		return nil, err
+	}
+	return drained, nil
+}
+
+// claimForum is DrainForum that keeps the claimed files of the wakes it returns
+// for the caller to commit or release.
+func claimForum(projectRoot string) ([]ForumWake, []heldFile, error) {
+	dir := forumWakesDir(projectRoot)
+	names, err := listPending(dir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing forum wakes: %w", err)
+	}
+	type claimedWake struct {
+		wake ForumWake
+		file heldFile
+	}
+	var current []claimedWake
+	for _, name := range names {
+		path := filepath.Join(dir, name)
 		claimed := claimedPath(path)
 		if err := os.Rename(path, claimed); err != nil {
 			continue
 		}
 		data, err := os.ReadFile(claimed)
-		if rmErr := os.Remove(claimed); rmErr != nil && !os.IsNotExist(rmErr) {
-			return nil, fmt.Errorf("removing delivered forum wake %s: %w", entry.Name(), rmErr)
-		}
 		if err != nil {
+			discard(claimed)
 			continue
 		}
 		var w ForumWake
 		if err := json.Unmarshal(data, &w); err != nil || w.Session == "" {
+			discard(claimed)
 			continue
 		}
 		sum, err := inbox.Unread(projectRoot, w.Session)
 		if err == nil {
 			if sum.Count == 0 {
+				discard(claimed)
 				continue
 			}
 			w.Count, w.Ended = sum.Count, sum.Ended
@@ -114,8 +125,13 @@ func DrainForum(projectRoot string) ([]ForumWake, error) {
 				w.File = sum.File
 			}
 		}
-		drained = append(drained, w)
+		current = append(current, claimedWake{wake: w, file: heldFile{pending: path, claimed: claimed}})
 	}
-	sort.Slice(drained, func(i, j int) bool { return drained[i].DetectedAt.Before(drained[j].DetectedAt) })
-	return drained, nil
+	sort.Slice(current, func(i, j int) bool { return current[i].wake.DetectedAt.Before(current[j].wake.DetectedAt) })
+	wakes := make([]ForumWake, len(current))
+	held := make([]heldFile, len(current))
+	for i, c := range current {
+		wakes[i], held[i] = c.wake, c.file
+	}
+	return wakes, held, nil
 }

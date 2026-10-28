@@ -31,7 +31,10 @@ Usage:
 The sentinel polls every tracked "running" task's live herdr status,
 across every project it's ever seen (one sentinel process per machine).
 When one settles (done, blocked, unconfirmed or interrupted), it persists the change and records a
-durable wake, scoped to that task's own project. "drain"/"await" resolve which project to act on from the
+durable wake in the queue of the commander that dispatched the task. That is the task's own project
+when the commander works there, and the commander's project when it dispatched from another
+one (the task records its commander: project and herdr pane, set by '` + cmdname.Name + ` dispatch').
+"drain"/"await" resolve which project to act on from the
 current directory (git toplevel, namespaced the same way "vx
 dispatch" namespaces a project's camps) - not a repo, or a toplevel
 that's itself a vexillum-managed camp, means nothing to drain here, so
@@ -54,6 +57,17 @@ in the project's inbox and records a forum wake, which both "drain" and
 (ended: false). Run vx forum inbox." It is the same hook and the same
 once-only delivery; a forum wake whose messages were already confirmed is
 dropped. See "vx forum" for the listener.
+
+A wake is consumed only once it is delivered. "drain" and "await" claim it,
+print it, and only then remove it: when the hook that launched an "await" is
+already gone (its parent process exited, it was signaled, or stderr cannot be
+written), the wake is put back for the next one instead of being printed into
+nothing, and a claim whose holder died is found again after two minutes.
+Wakes waiting in a project with no live "await" and no live registered commander are
+reported by '` + cmdname.Name + ` doctor'. That is also how a Claude Code commander looks once its "await"
+has run out its 55 minutes (inside the hook's one-hour timeout): it hears nothing until its next
+turn, and ` + cmdname.Name + ` status shows what happened meanwhile. A Pi commander starts a new "await"
+by itself when one times out, and an OpenCode commander has none.
 
 A project has one wake queue and a wake is delivered once, to whichever
 commander asks first. Two commanders live in the same project (say Claude Code
@@ -219,7 +233,7 @@ func runSentinelDrainOrAwait(mode string) int {
 		return 0
 	}
 	return runSentinelAwaitGuarded(os.Getenv("HERDR_WORKSPACE_ID"), func() int {
-		return runSentinelAwaitRegistered(vexillumHome, projectRoot)
+		return runSentinelAwaitRegistered(vexillumHome, projectRoot, os.Getenv("HERDR_PANE_ID"))
 	})
 }
 
@@ -256,14 +270,14 @@ func runSentinelAwaitGuarded(workspaceID string, run func() int) int {
 // process that launched it, and quietly exiting 0 on SIGTERM/SIGHUP/SIGINT
 // (what a superseding or reaping newer await sends, or the hook runner
 // closing us down).
-func runSentinelAwaitRegistered(vexillumHome, projectRoot string) int {
+func runSentinelAwaitRegistered(vexillumHome, projectRoot, paneID string) int {
 	ownerPID := os.Getppid()
 	if ownerPID <= 1 {
 		// Already orphaned at birth: nobody is listening.
 		return 0
 	}
 
-	release, err := sentinel.RegisterAwaiter(vexillumHome, projectRoot, ownerPID)
+	release, err := sentinel.RegisterAwaiter(vexillumHome, projectRoot, paneID, ownerPID)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
@@ -347,31 +361,49 @@ func gitToplevel(dir string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// drainWakes consumes both kinds of pending wake of the project; see
-// sentinel.DrainAll.
-func drainWakes(projectRoot string) ([]sentinel.Wake, []sentinel.ForumWake, error) {
-	return sentinel.DrainAll(projectRoot)
-}
-
 func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
-	wakes, forumWakes, err := drainWakes(projectRoot)
-	if err != nil && len(wakes)+len(forumWakes) == 0 {
+	claim, err := sentinel.Claim(projectRoot)
+	if err != nil && claim.Len() == 0 {
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 
-	if len(wakes)+len(forumWakes) == 0 {
+	if claim.Len() == 0 {
 		fmt.Fprintln(stdout, "{}")
 		return 0
 	}
 
-	out, err := json.Marshal(map[string]string{"decision": "block", "reason": wakeReason(wakes, forumWakes)})
+	out, err := json.Marshal(map[string]string{"decision": "block", "reason": claim.Reason()})
 	if err != nil {
+		releaseClaim(claim, stderr)
 		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
-	fmt.Fprintln(stdout, string(out))
+	// The wakes are consumed only once they were written out: a drain whose
+	// reader is gone puts them back for the next one.
+	if _, err := fmt.Fprintln(stdout, string(out)); err != nil {
+		releaseClaim(claim, stderr)
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
+	commitClaim(claim, stderr)
 	return 0
+}
+
+// releaseClaim puts claim's wakes back in their queue, saying so on stderr if
+// that fails (the wakes are then in the claim's files until they are found as
+// abandoned, see sentinel.Claim).
+func releaseClaim(claim *sentinel.Claimed, stderr io.Writer) {
+	if err := claim.Release(); err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+": warning:", err)
+	}
+}
+
+// commitClaim consumes claim's wakes after they were delivered.
+func commitClaim(claim *sentinel.Claimed, stderr io.Writer) {
+	if err := claim.Commit(); err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+": warning:", err)
+	}
 }
 
 // runSentinelAwait is what the async Stop hook actually invokes
@@ -385,13 +417,17 @@ func runSentinelDrain(projectRoot string, stdout, stderr io.Writer) int {
 // "Stop hook feedback" with no new user prompt - exit 2 + stderr is the
 // block signal here, not runSentinelDrain's JSON on stdout, matching
 // that verified mechanism exactly.
+//
+// A wake is claimed, not consumed, when found: it is consumed only after it was
+// written to stderr. If the hook is gone by then (stillWanted says so, or a
+// signal says to exit, or the write fails) the wake is put back for the next
+// await, instead of being printed into nothing.
 func runSentinelAwait(projectRoot string, maxWait, pollInterval time.Duration, stderr io.Writer, stillWanted func() bool, interrupt <-chan os.Signal) int {
 	deadline := time.Now().Add(maxWait)
 	for {
-		wakes, forumWakes, _ := drainWakes(projectRoot)
-		if len(wakes)+len(forumWakes) > 0 {
-			fmt.Fprintln(stderr, wakeReason(wakes, forumWakes))
-			return 2
+		claim, _ := sentinel.Claim(projectRoot)
+		if claim.Len() > 0 {
+			return deliverAwait(claim, stderr, stillWanted, interrupt)
 		}
 		if time.Now().After(deadline) || !stillWanted() {
 			return 0
@@ -402,6 +438,32 @@ func runSentinelAwait(projectRoot string, maxWait, pollInterval time.Duration, s
 			return 0
 		}
 	}
+}
+
+// deliverAwait prints a claim's wakes as the await's wake (exit 2) when the
+// hook that launched the await is still there to read them, and consumes them
+// once printed; otherwise it puts them back and exits 0.
+func deliverAwait(claim *sentinel.Claimed, stderr io.Writer, stillWanted func() bool, interrupt <-chan os.Signal) int {
+	select {
+	case <-interrupt:
+		releaseClaim(claim, stderr)
+		return 0
+	default:
+	}
+	if !stillWanted() {
+		releaseClaim(claim, io.Discard)
+		return 0
+	}
+	if _, err := fmt.Fprintln(stderr, claim.Reason()); err != nil {
+		releaseClaim(claim, io.Discard)
+		return 0
+	}
+	if err := claim.Commit(); err != nil {
+		// Printed all the same: the commander has the news, and a wake left
+		// behind is judged again, and dropped if stale, by the next drain.
+		fmt.Fprintln(stderr, cmdname.Name+": warning:", err)
+	}
+	return 2
 }
 
 // wakeReason is the text the Stop hook (or drain) hands the commander; see

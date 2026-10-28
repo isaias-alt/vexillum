@@ -10,7 +10,6 @@ import (
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/models"
-	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -80,6 +79,15 @@ this from inside a herdr-managed pane) and both herdr and the harness's CLI
 (claude, pi or opencode) on PATH; if any is missing it says so and exits before
 creating anything ('` + cmdname.Name + ` doctor' checks your setup).
 
+The task records the commander that dispatched it: the project its Stop hook
+await drains and its herdr pane (HERDR_PANE_ID), found from the live await of
+that pane, else from where the pane's agent works. The sentinel puts the
+soldier's wakes in that commander's own project, so a commander working in one
+repository can dispatch into another and still hear the soldier finish. When
+the two projects differ, dispatch warns, since status, land, strike and prompt
+still run from the project the soldier was dispatched into. Outside a herdr
+pane nothing is recorded and the wake stays in the task's own project.
+
 Returns quickly: it submits the prompt and stops waiting as soon as the
 soldier is seen working (or has already settled), not for its whole task. A
 trivial prompt that settles at once reports its result immediately; anything
@@ -123,23 +131,8 @@ func Dispatch(args []string) int {
 	}
 
 	ensureSentinelRunning(vexillumHome, os.Stderr)
-	registerDispatchCommander(projectDir, vexillumHome)
 
 	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, model, effort, harness, herdr.CLI{}, os.Stdout, os.Stderr)
-}
-
-// registerDispatchCommander registers the commander that ran "dispatch" in its
-// project's registry. Nothing is written for a project that is not initialized,
-// which runDispatch refuses anyway.
-func registerDispatchCommander(projectDir, vexillumHome string) {
-	if !scaffold.ProjectInitialized(projectDir) {
-		return
-	}
-	projectRoot, err := project.Root(vexillumHome, projectDir)
-	if err != nil {
-		return
-	}
-	registerCommander(projectRoot, projectDir, os.Stderr)
 }
 
 // resolveProfile fills model and effort from the named profile, leaving any

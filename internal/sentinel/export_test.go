@@ -46,3 +46,6 @@ func SetTryAcquireLock(f func(string) (func(), error)) (restore func()) {
 	tryAcquireLock = f
 	return func() { tryAcquireLock = old }
 }
+
+// RecordWakeForTest writes w into root's wake queue as the sentinel does.
+func RecordWakeForTest(root string, w Wake) error { return writeWake(root, w) }

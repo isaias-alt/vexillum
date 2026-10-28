@@ -66,6 +66,13 @@ Una advertencia también nombra el caso de dos commanders vivos en un proyecto
 una sola cola de wakes y un wake llega solo al primero que lo pide, así que
 mantené un commander por proyecto.
 
+Doctor también advierte sobre todo proyecto, de cualquier repositorio, cuya cola
+de wakes tenga wakes de más de un minuto que nada va a entregar: ningún 'vx
+sentinel await' vivo ahí ni commander registrado vivo. El commander que despachó
+esos soldiers puede vivir en otro proyecto, o llevar más de los 55 minutos del
+await sin turno. No se pierde nada: los wakes esperan al próximo turno de un
+commander en ese proyecto.
+
 La línea del sentinel advierte, y nunca falla, cuando hay más de un proceso
 sentinel vivo (competirían por las mismas tareas), cuando el sentinel vivo es
 de una versión distinta a la de este binario, o cuando el binario desde el que

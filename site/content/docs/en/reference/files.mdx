@@ -101,7 +101,7 @@ Machine-level state, shared by every project. Nothing here is committed anywhere
 | `forums/<session>/` | one forum review session: `session.json` (queue and status), `transcript.json` (the conversation), `layout.json`, `whiteboards/` and `attachments/` | Yes for an ended session. You lose its transcript and drawings. Nothing prunes these folders for you |
 | `projects/<repo>-<hash>/tasks/<id>.json` | one task, the [`Task` schema](/docs/reference/status-json) | Only through `vx strike`. Deleting it by hand makes vexillum forget the task while its camp and branch remain |
 | `projects/<repo>-<hash>/camps/` | the worktree pool: `pool.json`, `pool.lock` and `<slot>/<repo>/` | No. The slots are git worktrees registered in your repository; use `vx strike` |
-| `projects/<repo>-<hash>/wakes/<id>.json` | a pending sentinel wake | Yes. You lose only that notification |
+| `projects/<repo>-<hash>/wakes/<id>.json` | a pending sentinel wake. It sits in the queue of the commander that dispatched the task, which can be another project than the task's (`origin` names that one); a wake being delivered is briefly renamed `<id>.json.claimed-<time>-<pid>-<n>` | Yes. You lose only that notification |
 | `projects/<repo>-<hash>/wakes/forum/<session>.json` | a pending forum wake (one per review session) | Yes. You lose only that notification |
 | `projects/<repo>-<hash>/forum-inbox/<session>/<uid>.json` | forum feedback waiting for the commander; confirmed ones move to `read/` (the newest 200 are kept) | `read/` yes. Unread feedback is lost if you delete it |
 | `projects/<repo>-<hash>/pending/<id>.json` | a commander's pending decision, see [`vx pending`](/docs/reference/cli/pending) | Yes, if you no longer need that decision recorded |

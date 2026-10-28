@@ -72,6 +72,13 @@ commander registry knows them, for instance Claude Code and Pi): they share one
 wake queue and a wake reaches only whichever asks first, so keep one commander
 per project.
 
+Doctor also warns about every project, in any repository, whose wake queue holds
+wakes older than a minute that nothing will deliver: no live '` + cmdname.Name + ` sentinel
+await' there and no live registered commander. The commander that dispatched
+those soldiers may live in another project, or have been idle past the await's
+55 minutes. Nothing is lost: the wakes wait for the next commander turn in that
+project.
+
 The sentinel line warns, and never fails, when more than one sentinel process is
 alive (they would race over the same tasks), when the live sentinel is a
 different version than this binary, or when the binary it started from has been
@@ -129,6 +136,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.One(doctorcheck.GitHubCLI),
 		doctorcheck.One(doctorcheck.VXShadow),
 		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.VexillumHome(vexillumHome) }),
+		func() []doctorcheck.Result { return doctorcheck.PendingWakes(vexillumHome) },
 		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.ProjectInitialized(projectDir) }),
 		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.GitRepo(projectDir) }),
 		doctorcheck.Fixed(commanderWarns...),

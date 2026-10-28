@@ -224,6 +224,18 @@ type Task struct {
 	// bump needed.
 	HarnessSession string `json:"harness_session,omitempty"`
 
+	// CommanderProject and CommanderPane say which commander the sentinel
+	// wakes when this task settles: CommanderProject is the project root
+	// (~/.vexillum/projects/<key>) the commander's Stop hook await drains,
+	// CommanderPane the herdr pane it runs in. They are set by the commands
+	// a commander runs ("vx dispatch", "redispatch", "prompt", "decide"), so
+	// a soldier dispatched into another project than the commander's own still
+	// wakes that commander. Empty means "the task's own project", which is
+	// every task file written before these fields existed. Purely additive,
+	// no SchemaVersion bump needed.
+	CommanderProject string `json:"commander_project,omitempty"`
+	CommanderPane    string `json:"commander_pane,omitempty"`
+
 	// Decision is the structured, durable record of what this task is (or
 	// most recently was) blocked on - see internal/soldier.ExtractDecision,
 	// which builds one from the soldier's transcript every time Status

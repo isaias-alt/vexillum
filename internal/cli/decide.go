@@ -127,6 +127,7 @@ func runDecide(projectDir, vexillumHome, taskID, answer string, client herdr.Cli
 		return 1
 	}
 
+	recordCommander(projectRoot, projectDir, vexillumHome, task, stderr)
 	result, err := soldier.AnswerBlocked(projectRoot, task, answer, client)
 	fmt.Fprintf(stdout, "status=%s\n", result.Status)
 	if err != nil {

@@ -18,7 +18,10 @@ Uso:
 El sentinel consulta cada tarea "running" rastreada en el status en vivo de
 herdr, en todos los proyectos que haya visto alguna vez (un proceso sentinel
 por máquina). Cuando una termina (done o blocked), persiste el cambio y
-registra un wake durable, con alcance al proyecto propio de esa tarea. "drain" y "await" resuelven en qué proyecto
+registra un wake durable en la cola del commander que despachó la tarea. Es el
+proyecto propio de la tarea cuando el commander trabaja ahí, y el proyecto del
+commander cuando despachó desde otro (la tarea registra a su commander: proyecto
+y pane de herdr, que fija 'vx dispatch'). "drain" y "await" resuelven en qué proyecto
 actuar a partir del directorio actual (el toplevel de git, con el mismo
 namespace con el que "vx dispatch" arma los camps de un proyecto): si no es un
 repo, o si el toplevel es en sí un camp administrado por vexillum, no hay nada
@@ -40,6 +43,17 @@ proyecto y registra un wake de forum, que tanto "drain" como "await" informan
 como "forum session <file>: N new messages (ended: false). Run vx forum
 inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
 confirmados se descarta. Ver "vx forum" para el listener.
+
+Un wake se consume solo una vez entregado. "drain" y "await" lo reclaman, lo
+imprimen y recién entonces lo borran: cuando el hook que lanzó un "await" ya no
+está (su proceso padre salió, recibió una señal, o no se puede escribir en
+stderr), el wake se vuelve a poner para el siguiente en lugar de imprimirse al
+vacío, y un reclamo cuyo dueño murió se encuentra de nuevo a los dos minutos.
+Los wakes que esperan en un proyecto sin "await" vivo ni commander registrado
+vivo los informa 'vx doctor'. Así también se ve un commander de Claude Code cuyo "await" agotó
+sus 55 minutos (dentro del timeout de una hora del hook): no oye nada hasta su
+próximo turno, y vx status muestra lo que pasó mientras tanto. Un commander Pi
+arranca solo un "await" nuevo cuando uno vence, y uno OpenCode no tiene ninguno.
 
 Un proyecto tiene una sola cola de wakes y un wake se entrega una sola vez, al
 primer commander que lo pide. Dos commanders vivos en el mismo proyecto (por

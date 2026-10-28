@@ -560,9 +560,10 @@ func TestRunSentinelAwait_ExitsQuietlyOnInterrupt(t *testing.T) {
 	}
 }
 
-// A wake still wins over the owner check: a hook that is about to die with
-// a wake already pending still hands it over.
-func TestRunSentinelAwait_PendingWakeBeatsOwnerGone(t *testing.T) {
+// A hook that is already gone cannot read the wake, so the await does not print
+// it into nothing: the wake stays queued for the next await, the one the next
+// turn of the commander starts.
+func TestRunSentinelAwait_APendingWakeIsKeptWhenTheOwnerIsGone(t *testing.T) {
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
 	task := newSettledMissionTask(t, proj)
@@ -573,7 +574,10 @@ func TestRunSentinelAwait_PendingWakeBeatsOwnerGone(t *testing.T) {
 
 	var stderr bytes.Buffer
 	code := runSentinelAwait(proj, time.Hour, time.Millisecond, &stderr, func() bool { return false }, nil)
-	if code != 2 || !strings.Contains(stderr.String(), task.ID) {
-		t.Fatalf("expected the pending wake delivered (exit 2), got %d: %s", code, stderr.String())
+	if code != 0 || stderr.Len() != 0 {
+		t.Fatalf("expected a quiet exit 0 for a gone owner, got %d: %s", code, stderr.String())
+	}
+	if code, out := await(proj, time.Hour); code != 2 || !strings.Contains(out, task.ID) {
+		t.Fatalf("expected the next await to get the wake, got %d: %s", code, out)
 	}
 }
