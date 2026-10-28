@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fake pi for the benchmark harness: prints a supported version after
+# VXBENCH_PI_DELAY seconds (default none), so doctor's `pi --version` costs the
+# same on every machine. A real pi starts node and takes about 165 ms.
+[ -n "$VXBENCH_PI_DELAY" ] && sleep "$VXBENCH_PI_DELAY"
+echo "1.3.0"

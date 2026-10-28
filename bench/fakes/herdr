@@ -17,6 +17,17 @@
 #
 # VXBENCH_AGENT_STATUS is the agent_status "agent get" reports (default
 # working), so a sentinel run against the fake can see an idle soldier.
+#
+# For the wake latency scenario, which needs the status to change while a
+# sentinel is polling:
+#   VXBENCH_STATUS_FILE  when this file exists, its first word is the status
+#                        "agent get" reports, and wins over VXBENCH_AGENT_STATUS
+#   VXBENCH_SEEN_FILE    created the first time "agent get" reports idle, so
+#                        its mtime is the moment the sentinel saw the soldier
+#                        finish
+#
+# "integration status" prints the three lines doctor reads, with the shape of
+# the real output.
 
 ok() {
 	printf '{"id":"1","result":%s}\n' "$1"
@@ -35,7 +46,19 @@ case "$1 $2" in
 	ok '{}'
 	;;
 "agent get")
-	ok '{"agent":{"agent":"claude","name":"'"$3"'","pane_id":"p1","agent_status":"'"${VXBENCH_AGENT_STATUS:-working}"'","interactive_ready":true}}'
+	status="${VXBENCH_AGENT_STATUS:-working}"
+	if [ -n "$VXBENCH_STATUS_FILE" ] && [ -r "$VXBENCH_STATUS_FILE" ]; then
+		read -r status <"$VXBENCH_STATUS_FILE"
+	fi
+	if [ "$status" = idle ] && [ -n "$VXBENCH_SEEN_FILE" ] && [ ! -e "$VXBENCH_SEEN_FILE" ]; then
+		: >"$VXBENCH_SEEN_FILE"
+	fi
+	ok '{"agent":{"agent":"claude","name":"'"$3"'","pane_id":"p1","agent_status":"'"$status"'","interactive_ready":true}}'
+	;;
+"integration status")
+	echo "pi: current (v9) (/fake/.pi/agent/extensions/herdr-agent-state.ts)"
+	echo "claude: current (v11) (/fake/.claude/hooks/herdr-agent-state.sh)"
+	echo "opencode: current (v13) (/fake/.config/opencode/plugins/herdr-agent-state.js)"
 	;;
 "agent list")
 	ok '{"agents":[]}'

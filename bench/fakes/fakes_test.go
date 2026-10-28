@@ -2,9 +2,12 @@ package fakes
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func runFakeHerdr(t *testing.T, env []string, args ...string) (string, string, error) {
@@ -91,5 +94,90 @@ func TestFakeHerdrRefusesWhatItDoesNotKnow(t *testing.T) {
 	_, stderr, err := runFakeHerdr(t, nil, "pane", "split")
 	if err == nil || !strings.Contains(stderr, "unsupported") {
 		t.Errorf("an unknown call must fail loudly, got %q, %v", stderr, err)
+	}
+}
+
+// The wake scenario flips the status while a sentinel polls, through a file.
+func TestFakeHerdrStatusFileWinsAndMarksTheFirstIdle(t *testing.T) {
+	dir := t.TempDir()
+	statusFile, seenFile := filepath.Join(dir, "status"), filepath.Join(dir, "seen")
+	env := []string{"VXBENCH_STATUS_FILE=" + statusFile, "VXBENCH_SEEN_FILE=" + seenFile, "VXBENCH_AGENT_STATUS=blocked"}
+
+	out, _, err := runFakeHerdr(t, env, "agent", "get", "a")
+	if err != nil || !strings.Contains(out, `"agent_status":"blocked"`) {
+		t.Errorf("without the file the env var decides, got %q, %v", out, err)
+	}
+	if err := os.WriteFile(statusFile, []byte("working\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, _, err = runFakeHerdr(t, env, "agent", "get", "a")
+	if err != nil || !strings.Contains(out, `"agent_status":"working"`) {
+		t.Errorf("the file wins over the env var, got %q, %v", out, err)
+	}
+	if _, err := os.Stat(seenFile); err == nil {
+		t.Error("a working soldier leaves no sighting")
+	}
+
+	if err := os.WriteFile(statusFile, []byte("idle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, _, err = runFakeHerdr(t, env, "agent", "get", "a")
+	if err != nil || !strings.Contains(out, `"agent_status":"idle"`) {
+		t.Errorf("want idle, got %q, %v", out, err)
+	}
+	first, err := os.Stat(seenFile)
+	if err != nil {
+		t.Fatal("the first idle answer must create the sighting file")
+	}
+	if _, _, err := runFakeHerdr(t, env, "agent", "get", "a"); err != nil {
+		t.Fatal(err)
+	}
+	again, err := os.Stat(seenFile)
+	if err != nil || !again.ModTime().Equal(first.ModTime()) {
+		t.Error("later idle answers must not touch the sighting: its time is when the soldier was first seen finished")
+	}
+}
+
+func TestFakeHerdrIntegrationStatusHasTheShapeDoctorParses(t *testing.T) {
+	out, _, err := runFakeHerdr(t, nil, "integration", "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, agent := range []string{"pi", "claude", "opencode"} {
+		if !strings.Contains(out, agent+": current (v") {
+			t.Errorf("want a %q line, got:\n%s", agent, out)
+		}
+	}
+}
+
+func runFake(t *testing.T, name string, env []string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command("sh", append([]string{name}, args...)...)
+	cmd.Env = env
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+func TestFakePiAndOpenCodePrintASupportedVersion(t *testing.T) {
+	if out, err := runFake(t, "pi", nil, "--version"); err != nil || out != "1.3.0\n" {
+		t.Errorf("pi: %q, %v", out, err)
+	}
+	if out, err := runFake(t, "opencode", nil, "--version"); err != nil || out != "opencode v2.0.32\n" {
+		t.Errorf("opencode: %q, %v", out, err)
+	}
+	if out, err := runFake(t, "gh", nil, "--version"); err != nil || !strings.HasPrefix(out, "gh version") {
+		t.Errorf("gh: %q, %v", out, err)
+	}
+}
+
+func TestFakePiAndOpenCodeCanBeMadeSlow(t *testing.T) {
+	for _, tool := range []struct{ name, env string }{{"pi", "VXBENCH_PI_DELAY"}, {"opencode", "VXBENCH_OPENCODE_DELAY"}} {
+		start := time.Now()
+		if _, err := runFake(t, tool.name, []string{"PATH=" + os.Getenv("PATH"), tool.env + "=0.2"}, "--version"); err != nil {
+			t.Fatal(err)
+		}
+		if took := time.Since(start); took < 200*time.Millisecond {
+			t.Errorf("%s took %v, want at least the 200 ms delay", tool.name, took)
+		}
 	}
 }

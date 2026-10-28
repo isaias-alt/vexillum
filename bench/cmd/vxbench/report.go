@@ -1,127 +1,180 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"io"
-	"sort"
-	"strings"
+	"os"
+	"time"
+
+	"github.com/isaias-alt/vexillum/internal/atomicfile"
 )
 
-var groupTitles = []struct{ key, title string }{
-	{"startup", "Startup (process start, no work)"},
-	{"cheap", "Cheap commands"},
-	{"doctor", "doctor"},
-	{"forum", "Forum commands that need no browser"},
-	{"camp", "Soldier lifecycle against a fake herdr and fake claude"},
-	{"tools", "External tools vx shells out to (for scale)"},
+// schemaVersion is the version of the report file format, which is also the
+// baseline file format. Bump it when a field changes meaning; a reader refuses
+// a file of any other version instead of guessing.
+const schemaVersion = 1
+
+// result is one scenario's outcome.
+type result struct {
+	Name  string `json:"name"`
+	Group string `json:"group"`
+	// Informational rows are shown and compared but never judged: they measure
+	// the machine or a polling interval, not something vx can regress.
+	Informational bool          `json:"informational,omitempty"`
+	Skipped       string        `json:"skipped,omitempty"`
+	Failure       string        `json:"failure,omitempty"`
+	FirstMS       float64       `json:"first_run_ms,omitempty"`
+	Wall          stats         `json:"wall"`
+	CPUMedMS      float64       `json:"cpu_median_ms,omitempty"`
+	Spawns        *spawnSummary `json:"spawns,omitempty"`
+	BadExits      map[int]int   `json:"unexpected_exit_codes,omitempty"`
+	Guard         *guardResult  `json:"guard,omitempty"`
+	// Attempts is how many times the scenario ran when a comparison re-ran it
+	// to rule out noise; the row kept is the attempt with the lowest median.
+	Attempts int `json:"attempts,omitempty"`
 }
 
-func printReport(w io.Writer, rep report) {
-	fmt.Fprintf(w, "# vx benchmark\n\n")
-	fmt.Fprintf(w, "- vx: `%s`\n- host: %s/%s, %d CPUs, %s\n- runs per scenario: %d timed after %d warm-up, %s\n\n",
-		rep.VXVersion, rep.OS, rep.Arch, rep.CPUs, rep.GoVersion, rep.Runs, rep.Warmup, rep.GeneratedAt)
-	fmt.Fprintln(w, "Wall time is from before fork to after wait, in milliseconds. `first` is the first run of the scenario, before warm-up has settled. `cpu` is the median user+sys time of the process and the children it waited for. `spawns` is the number of subprocesses one traced run started.")
-
-	byGroup := map[string][]result{}
-	for _, r := range rep.Results {
-		byGroup[r.Group] = append(byGroup[r.Group], r)
-	}
-	for _, g := range groupTitles {
-		rs := byGroup[g.key]
-		if len(rs) == 0 {
-			continue
-		}
-		fmt.Fprintf(w, "\n## %s\n\n", g.title)
-		fmt.Fprintln(w, "| scenario | first | min | median | p95 | max | cpu | spawns |")
-		fmt.Fprintln(w, "|---|---:|---:|---:|---:|---:|---:|---:|")
-		for _, r := range rs {
-			switch {
-			case r.Skipped != "":
-				fmt.Fprintf(w, "| %s | skipped: %s | | | | | | |\n", r.Name, r.Skipped)
-			case r.Failure != "":
-				fmt.Fprintf(w, "| %s | FAILED: %s | | | | | | |\n", r.Name, oneLine(r.Failure))
-			default:
-				spawns := "-"
-				if r.Spawns != nil {
-					spawns = fmt.Sprintf("%d", r.Spawns.Count)
-				}
-				fmt.Fprintf(w, "| %s | %s | %s | %s | %s | %s | %s | %s |\n", r.Name,
-					fmtMS(r.FirstMS), fmtMS(r.Wall.MinMS), fmtMS(r.Wall.P50MS), fmtMS(r.Wall.P95MS), fmtMS(r.Wall.MaxMS), fmtMS(r.CPUMedMS), spawns)
-			}
-		}
-	}
-
-	var bad []string
-	for _, r := range rep.Results {
-		if len(r.BadExits) > 0 {
-			bad = append(bad, fmt.Sprintf("%s: %v", r.Name, r.BadExits))
-		}
-	}
-	if len(bad) > 0 {
-		fmt.Fprintf(w, "\nUnexpected exit codes (count per code): %s\n", strings.Join(bad, "; "))
-	}
-
-	var floor, version float64
-	for _, r := range rep.Results {
-		switch r.Name {
-		case "floor: empty Go program":
-			floor = r.Wall.P50MS
-		case "vx --version":
-			version = r.Wall.P50MS
-		}
-	}
-	if floor > 0 && version > 0 {
-		fmt.Fprintf(w, "\nStartup cost of vx itself: `vx --version` median %s minus the empty Go program median %s = %s.\n", fmtMS(version), fmtMS(floor), fmtMS(version-floor))
-	}
-
-	if len(rep.InitCosts) > 0 {
-		fmt.Fprintf(w, "\n## Package init (GODEBUG=inittrace=1, median of 15 runs)\n\nSum over %d packages: %s. Most expensive:\n\n", len(rep.InitCosts), fmtMS(rep.InitTotalMS))
-		fmt.Fprintln(w, "| package | init |")
-		fmt.Fprintln(w, "|---|---:|")
-		for i, c := range rep.InitCosts {
-			if i == 8 {
-				break
-			}
-			fmt.Fprintf(w, "| %s | %s |\n", c.Package, fmtMS(c.MS))
-		}
-	}
-
-	var traced []result
-	for _, r := range rep.Results {
-		if r.Spawns != nil && r.Spawns.Count > 0 {
-			traced = append(traced, r)
-		}
-	}
-	if len(traced) > 0 {
-		fmt.Fprintf(w, "\n## Subprocesses per command (one traced run)\n\nDurations are the time the tool itself took, measured inside the shim; the shim adds a little process start on top.\n")
-		for _, r := range traced {
-			fmt.Fprintf(w, "\n### %s: %d spawns, %s in subprocesses\n\n", r.Name, r.Spawns.Count, fmtMS(r.Spawns.TotalMS))
-			fmt.Fprintln(w, "| call | count | total |")
-			fmt.Fprintln(w, "|---|---:|---:|")
-			calls := append([]callStat(nil), r.Spawns.Calls...)
-			sort.SliceStable(calls, func(i, j int) bool { return calls[i].TotalMS > calls[j].TotalMS })
-			for _, c := range calls {
-				fmt.Fprintf(w, "| %s | %d | %s |\n", c.Call, c.Count, fmtMS(c.TotalMS))
-			}
-		}
-	}
+// timed reports whether the row has timings to compare.
+func (r result) timed() bool {
+	return r.Skipped == "" && r.Failure == "" && r.Wall.N > 0
 }
 
-func fmtMS(v float64) string {
-	switch {
-	case v >= 100:
-		return fmt.Sprintf("%.0f ms", v)
-	case v >= 10:
-		return fmt.Sprintf("%.1f ms", v)
-	default:
-		return fmt.Sprintf("%.2f ms", v)
-	}
+// guard is a hard limit a scenario must stay under whatever the baseline says:
+// it catches a regression of a kind a percentage cannot, such as dispatch
+// waiting out a 15 s probe again.
+type guard struct {
+	// Stat is the statistic held to the limit: "median" or "max".
+	Stat    string
+	LimitMS float64
+	// Why says what a failure means, in a sentence.
+	Why string
 }
 
-func oneLine(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > 160 {
-		s = s[:160] + "..."
+// guardResult is the outcome of a guard, kept in the report.
+type guardResult struct {
+	Stat       string  `json:"stat"`
+	LimitMS    float64 `json:"limit_ms"`
+	ObservedMS float64 `json:"observed_ms"`
+	Why        string  `json:"why"`
+	Failed     bool    `json:"failed,omitempty"`
+}
+
+// observed returns the statistic a guard looks at.
+func (g guard) observed(s stats) float64 {
+	if g.Stat == "max" {
+		return s.MaxMS
 	}
-	return s
+	return s.P50MS
+}
+
+func (g guard) evaluate(s stats) *guardResult {
+	obs := g.observed(s)
+	return &guardResult{Stat: g.Stat, LimitMS: g.LimitMS, ObservedMS: obs, Why: g.Why, Failed: obs > g.LimitMS}
+}
+
+// report is everything one run measured. Its JSON form is the baseline file.
+type report struct {
+	Schema      int      `json:"schema_version"`
+	GeneratedAt string   `json:"generated_at"`
+	Host        hostInfo `json:"host"`
+	VX          vxInfo   `json:"vx"`
+	// LoadStart and LoadEnd are the machine's one-minute load average when the
+	// run began and ended; 0 where the platform does not say.
+	LoadStart float64 `json:"load_start,omitempty"`
+	LoadEnd   float64 `json:"load_end,omitempty"`
+	// Runs and Warmup are the defaults; a scenario that caps them (the slow
+	// ones) says so in its own Wall.N.
+	Runs        int        `json:"runs"`
+	Warmup      int        `json:"warmup"`
+	Results     []result   `json:"results"`
+	InitCosts   []initCost `json:"package_init_ms,omitempty"`
+	InitTotalMS float64    `json:"package_init_total_ms,omitempty"`
+}
+
+// date is the day the report was taken, for headers.
+func (r report) date() string {
+	if t, err := time.Parse(time.RFC3339, r.GeneratedAt); err == nil {
+		return t.UTC().Format("2006-01-02")
+	}
+	return r.GeneratedAt
+}
+
+// find returns the result called name.
+func (r report) find(name string) (result, bool) {
+	for _, res := range r.Results {
+		if res.Name == name {
+			return res, true
+		}
+	}
+	return result{}, false
+}
+
+// validate checks that a report read from a file is one this program can
+// compare against.
+func (r report) validate() error {
+	if r.Schema != schemaVersion {
+		return fmt.Errorf("schema version %d, this vxbench reads version %d", r.Schema, schemaVersion)
+	}
+	if len(r.Results) == 0 {
+		return fmt.Errorf("no results")
+	}
+	seen := map[string]bool{}
+	for _, res := range r.Results {
+		switch {
+		case res.Name == "":
+			return fmt.Errorf("a result has no name")
+		case seen[res.Name]:
+			return fmt.Errorf("scenario %q appears twice", res.Name)
+		}
+		seen[res.Name] = true
+	}
+	return nil
+}
+
+// encodeReport is the file form of a report: indented, one trailing newline,
+// stable enough to diff.
+func encodeReport(rep report) ([]byte, error) {
+	rep.Schema = schemaVersion
+	data, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
+}
+
+// decodeReport parses and validates a report file.
+func decodeReport(data []byte) (report, error) {
+	var rep report
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&rep); err != nil {
+		return report{}, err
+	}
+	if err := rep.validate(); err != nil {
+		return report{}, err
+	}
+	return rep, nil
+}
+
+func writeReport(path string, rep report) error {
+	data, err := encodeReport(rep)
+	if err != nil {
+		return fmt.Errorf("encoding the report: %w", err)
+	}
+	if err := atomicfile.Write(path, data); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	return nil
+}
+
+func readReport(path string) (report, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return report{}, fmt.Errorf("reading %s: %w", path, err)
+	}
+	rep, err := decodeReport(data)
+	if err != nil {
+		return report{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return rep, nil
 }

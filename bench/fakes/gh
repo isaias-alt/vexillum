@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fake gh for the benchmark harness: doctor only checks that it is on PATH.
+echo "gh version 2.102.0 (fake)"

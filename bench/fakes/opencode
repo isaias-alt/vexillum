@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fake opencode for the benchmark harness: prints a supported version after
+# VXBENCH_OPENCODE_DELAY seconds (default none). A real opencode takes about
+# 62 ms.
+[ -n "$VXBENCH_OPENCODE_DELAY" ] && sleep "$VXBENCH_OPENCODE_DELAY"
+echo "opencode v2.0.32"

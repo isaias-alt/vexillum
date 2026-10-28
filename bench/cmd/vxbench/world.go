@@ -10,6 +10,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/state"
 )
 
 // world is one isolated place to run vx in: its own HOME, and a project
@@ -21,6 +24,9 @@ type world struct {
 	project  string
 	sentinel *exec.Cmd
 	b        *bench
+	// extraEnv is added to the environment of every command run in the world,
+	// the sentinel included.
+	extraEnv []string
 }
 
 // invocation is one finished command.
@@ -38,6 +44,7 @@ type spec struct {
 	exe      string // "vx", "floor", or a tool name resolved in PATH
 	args     []string
 	fake     bool     // fake herdr and claude first in PATH, HERDR_WORKSPACE_ID set
+	hermetic bool     // PATH holds only the fakes and the few real tools vx needs
 	env      []string // extra KEY=VALUE
 	realHome bool     // keep the caller's HOME (read-only calls to real tools)
 	traceLog string   // when set, tools run through the spawnlog shims
@@ -116,6 +123,26 @@ func (w *world) baseEnv() []string {
 	}
 }
 
+// commitInCamp gives the camp of task id one commit, so land has something to
+// fast-forward and the sentinel has proof the soldier delivered.
+func (w *world) commitInCamp(id string) error {
+	root, err := project.Root(w.vexillumHome(), w.project)
+	if err != nil {
+		return err
+	}
+	task, err := state.Load(root, id)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(task.CampPath, "bench-"+id+".txt"), []byte("soldier work\n"), 0o644); err != nil {
+		return err
+	}
+	if err := w.git(task.CampPath, "add", "-A"); err != nil {
+		return err
+	}
+	return w.git(task.CampPath, "commit", "-q", "-m", "soldier work "+id)
+}
+
 // vexillumHome is the ~/.vexillum of the world.
 func (w *world) vexillumHome() string { return filepath.Join(w.home, ".vexillum") }
 
@@ -164,8 +191,13 @@ func (w *world) teardown() {
 func (w *world) env(s spec) []string {
 	env := w.baseEnv()
 	path := os.Getenv("PATH")
-	if s.fake {
+	switch {
+	case s.hermetic:
+		path = w.b.hermeticPath()
+	case s.fake:
 		path = w.b.fakes + string(os.PathListSeparator) + path
+	}
+	if s.fake {
 		env = append(env, "HERDR_WORKSPACE_ID=w1")
 	}
 	if s.realHome {
@@ -176,6 +208,7 @@ func (w *world) env(s spec) []string {
 		path = w.b.makeShims(path) + string(os.PathListSeparator) + path
 	}
 	env = append(env, "PATH="+path)
+	env = append(env, w.extraEnv...)
 	return append(env, s.env...)
 }
 
@@ -245,6 +278,42 @@ func (b *bench) removeUnderRoot(path string) {
 	}
 	// Worktrees keep their files read-write, but be safe about modes.
 	_ = os.RemoveAll(path)
+}
+
+// hermeticTools are the real programs a hermetic PATH keeps: the ones vx and
+// the fake tools run. Everything else on the machine, a pi or an opencode
+// above all, is out of reach, so the numbers do not depend on what is installed.
+var hermeticTools = []string{"git", "ps", "sh", "env", "sleep"}
+
+// hermeticPath returns a directory that holds the fakes and the real tools in
+// hermeticTools, and nothing else, created on first use.
+func (b *bench) hermeticPath() string {
+	if b.hermeticDir != "" {
+		return b.hermeticDir
+	}
+	dir := filepath.Join(b.root, "hermetic-bin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "vxbench: %v\n", err)
+		return dir
+	}
+	link := func(name, target string) {
+		if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+			fmt.Fprintf(os.Stderr, "vxbench: %v\n", err)
+		}
+	}
+	entries, _ := os.ReadDir(b.fakes)
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			link(e.Name(), filepath.Join(b.fakes, e.Name()))
+		}
+	}
+	for _, tool := range hermeticTools {
+		if p, err := exec.LookPath(tool); err == nil {
+			link(tool, p)
+		}
+	}
+	b.hermeticDir = dir
+	return dir
 }
 
 // tracedTools are the tools a traced run puts a spawnlog shim in front of.
