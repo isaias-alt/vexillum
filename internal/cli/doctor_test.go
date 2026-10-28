@@ -42,14 +42,37 @@ func fakeBinDir(t *testing.T, names ...string) string {
 	return dir
 }
 
+// warmUpEnv, when set, makes a stub written by writeStub exit at once, before
+// it does anything, so it can be run once without leaving a trace.
+const warmUpEnv = "VX_STUB_WARM_UP"
+
 // writeStub (over)writes an executable stub named name in dir, running
 // script as its body - for tests that need a fake binary to produce
 // specific output (e.g. "herdr --version"), not just exit 0.
+//
+// It also runs the stub once (see warmUp). The first run of a file just
+// written can be held back by the OS while it vets it: about a second on
+// macOS, and much longer with many such first runs queued, as when several
+// checkouts run "go test ./..." at once. The code under test runs these stubs
+// under deadlines of its own (doctor's version and Stop hook probes), and that
+// wait must not be mistaken for the stub not answering.
 func writeStub(t *testing.T, dir, name, script string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+	body := "#!/bin/sh\n[ -n \"$" + warmUpEnv + "\" ] && exit 0\n" + script + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
 		t.Fatalf("writing stub %s: %v", name, err)
+	}
+	warmUp(t, path)
+}
+
+// warmUp runs the stub at path once, in warm-up mode, and waits for it.
+func warmUp(t *testing.T, path string) {
+	t.Helper()
+	cmd := exec.Command(path)
+	cmd.Env = append(os.Environ(), warmUpEnv+"=1")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("warming up %s: %v", path, err)
 	}
 }
 

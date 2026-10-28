@@ -2,21 +2,47 @@
 // (no model, no Pi) and a fake `vx` on PATH whose behavior each test scripts.
 // Run by TestExtensionUnderNode with node; exits non-zero on the first failed
 // assertion. The timings come in through VEXILLUM_WAKE_TUNING (see the test).
+//
+// Robust on a loaded machine: a wait ends on the event it waits for and the
+// deadline only bounds a real hang (it is wall clock, and far above what the
+// slowest machine needs); an assertion that something did NOT happen sleeps
+// for a quiet period, which can only make it pass late, never fail; and the one
+// wait that used to race a load-dependent cost, the first run of the freshly
+// written fake vx, is paid up front (see warmUp).
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const [extPath, base] = process.argv.slice(2);
 const T = JSON.parse(process.env.VEXILLUM_WAKE_TUNING);
-const mod = await import(extPath);
+
+// The extension reads its tuning once, when it is loaded. A scenario that needs
+// other numbers gets its own instance of the module (a query string makes node
+// load it again) instead of every number being a compromise for all of them.
+const instance = (over = {}) => {
+  process.env.VEXILLUM_WAKE_TUNING = JSON.stringify({ ...T, ...over });
+  return import(`${pathToFileURL(extPath).href}?${encodeURIComponent(JSON.stringify(over))}`);
+};
+// An await that exits 0 "at once" is told apart from a long one by fastMs. The
+// scenarios that script an instant exit 0 must not have a loaded machine's
+// slow process start read as "it ran for a while", so they use a huge fastMs.
+const mod = await instance();
+const instantExit = await instance({ fastMs: 30_000 });
+// The scenario that checks a restart is immediate, not after the pause, uses a
+// pause far above any process start time, so a late restart is not the pause.
+const longPause = await instance({ quietRetryMs: [10_000, 20_000] });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (cond, what, ms = 20000) => {
-  for (let waited = 0; waited < ms; waited += 10) {
-    if (cond()) return;
+// The state the waits look at lives in files a child process writes, so it is
+// polled; the deadline is wall clock and only meant to catch a real hang.
+const until = async (cond, what, ms = 60_000) => {
+  const deadline = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
     await sleep(10);
   }
-  throw new Error(`timed out waiting for ${what}`);
 };
 
 // The fake vx: runs plan.<n> (n = how many times it has been started, from 1)
@@ -30,6 +56,7 @@ writeFileSync(
   join(bin, "vx"),
   `#!/bin/sh
 d="${state}"
+[ "$1" = "--warm-up" ] && exit 0
 n=$(cat "$d/count" 2>/dev/null || echo 0)
 n=$((n+1))
 echo "$PPID $$ $(pwd)" >> "$d/starts"
@@ -40,6 +67,13 @@ exec sleep 30
 `,
 );
 chmodSync(join(bin, "vx"), 0o755);
+// The first time the system runs a file it has just seen written, it can hold
+// the run back while it vets it: about a second on macOS when idle, and as long
+// as the machine has such first runs queued (a "go test ./..." has dozens in
+// flight) when it is not. That is not what the scenarios test and it landed
+// inside the first wait, so run the fake vx once here, with no deadline.
+const warmUp = () => execFileSync(join(bin, "vx"), ["--warm-up"], { stdio: "ignore" });
+warmUp();
 process.env.PATH = `${bin}:${process.env.PATH}`;
 process.env.HERDR_WORKSPACE_ID = "w-test";
 const home = join(base, "home");
@@ -57,7 +91,7 @@ const reset = () => {
 };
 
 // A fresh extension runtime against a mock pi. idle and failures are scripted.
-function load({ idle = () => true, sendFails = () => false, mode = "tui", where = cwd } = {}) {
+function load({ idle = () => true, sendFails = () => false, mode = "tui", where = cwd, ext = mod } = {}) {
   const handlers = {};
   const sent = [];
   const notices = [];
@@ -68,7 +102,7 @@ function load({ idle = () => true, sendFails = () => false, mode = "tui", where 
       sent.push({ text, opts });
     },
   };
-  mod.default(pi);
+  ext.default(pi);
   const ctx = { mode, cwd: where, isIdle: () => idle(), ui: { notify: (m, t) => notices.push([m, t]) } };
   return {
     sent,
@@ -113,12 +147,15 @@ function load({ idle = () => true, sendFails = () => false, mode = "tui", where 
 {
   reset();
   let failing = true;
+  let refusals = 0;
   plan(1, `echo first >&2\nexit 2\n`);
   plan(2, `echo second >&2\nexit 2\n`);
-  const x = load({ sendFails: () => failing });
+  const x = load({ sendFails: () => failing && ++refusals > 0 });
   x.start();
   await until(() => count() >= 3, "both wakes to have been consumed");
-  await sleep(3 * T.deliverRetryMs);
+  // Pi has refused the held wakes on one try and then on more retries.
+  const seen = refusals;
+  await until(() => refusals >= seen + 3, "the held wakes to be retried");
   assert.equal(x.sent.length, 0, "nothing can be delivered while Pi refuses");
   failing = false;
   await until(() => x.sent.length === 1, "the held wakes");
@@ -162,7 +199,7 @@ function load({ idle = () => true, sendFails = () => false, mode = "tui", where 
 {
   reset();
   for (const n of [1, 2, 3, 4, 5]) plan(n, `exit 0\n`);
-  const x = load();
+  const x = load({ ext: instantExit });
   x.start();
   const t0 = Date.now();
   await until(() => count() >= T.quietLimit, "the tries");
@@ -180,13 +217,13 @@ function load({ idle = () => true, sendFails = () => false, mode = "tui", where 
   reset();
   plan(1, `sleep ${(T.fastMs + 200) / 1000}\nexit 0\n`);
   plan(2, `exit 0\n`);
-  const x = load();
+  const x = load({ ext: longPause });
   x.start();
   await until(() => count() >= 1, "the first await");
   const t0 = Date.now();
   await until(() => count() >= 2, "the second await");
   const gap = Date.now() - t0 - (T.fastMs + 200);
-  assert.ok(gap < T.quietRetryMs[0], `restarted at once, not after the pause (gap ${gap}ms)`);
+  assert.ok(gap < 5_000, `restarted at once, not after the pause (gap ${gap}ms)`);
   x.shutdown();
 }
 
@@ -195,7 +232,7 @@ function load({ idle = () => true, sendFails = () => false, mode = "tui", where 
 {
   reset();
   plan(1, `echo "vx: not found, so the wake cannot work" >&2\nexit 0\n`);
-  const x = load();
+  const x = load({ ext: instantExit });
   x.start();
   await until(() => x.notices.length === 1, "the notice");
   assert.match(x.notices[0][0], /vx: not found/);

@@ -1,12 +1,15 @@
 package piwake_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/piwake"
 )
@@ -50,14 +53,27 @@ func TestExtensionUnderNode(t *testing.T) {
 		}
 	}
 
-	cmd := exec.Command(node, filepath.Join(dir, "driver.mjs"), ext, filepath.Join(dir, "work"))
+	// The driver's own waits end on events and carry their own deadline; this
+	// only stops a driver that hung for good, well above a loaded machine.
+	ctx, cancel := context.WithTimeout(context.Background(), nodeDriverTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, node, filepath.Join(dir, "driver.mjs"), ext, filepath.Join(dir, "work"))
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		`VEXILLUM_WAKE_TUNING={"fastMs":400,"quietLimit":3,"quietRetryMs":[600,1200],"failRetryMs":[50,100],"deliverRetryMs":50}`)
-	if b, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(b), "ok") {
+	b, err := cmd.CombinedOutput()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		t.Fatalf("the node driver did not finish within %s:\n%s", nodeDriverTimeout, b)
+	}
+	if err != nil || !strings.Contains(string(b), "ok") {
 		t.Fatalf("the extension failed under node: %v\n%s", err, b)
 	}
 }
+
+// nodeDriverTimeout bounds the whole driver run: about 8 seconds of scripted
+// waits on an idle machine, plus whatever a machine busy with many other test
+// processes adds.
+const nodeDriverTimeout = 5 * time.Minute
 
 // nodeStripsTypes reports whether a "vMAJOR.MINOR.PATCH" node strips
 // TypeScript types without a flag: 22.18 and newer, 24.3 and newer, and 25+.
