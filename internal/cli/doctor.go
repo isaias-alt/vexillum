@@ -67,6 +67,11 @@ PATH=/usr/bin:/bin, the way a hook shell that never read your profile has it),
 and whether a sentinel is running. A hook that cannot find ` + cmdname.Name + ` is a warning
 that names the fix; it never fails doctor.
 
+A warning also names the case of two live commanders in one project (the
+commander registry knows them, for instance Claude Code and Pi): they share one
+wake queue and a wake reaches only whichever asks first, so keep one commander
+per project.
+
 The sentinel line warns, and never fails, when more than one sentinel process is
 alive (they would race over the same tasks), when the live sentinel is a
 different version than this binary, or when the binary it started from has been
@@ -122,6 +127,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	}
 	if scaffold.ProjectInitialized(projectDir) {
 		checks = append(checks, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
+		checks = append(checks, doctorcheck.SharedWakeQueue(projectDir, vexillumHome)...)
 	}
 
 	ready := true

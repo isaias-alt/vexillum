@@ -231,6 +231,11 @@ PATH=/usr/bin:/bin, como lo tiene el shell de un hook que nunca leyó tu
 perfil), y si hay un sentinel corriendo. Un hook que no puede encontrar vx es
 una advertencia que nombra la solución; nunca hace fallar a doctor.
 
+Una advertencia también nombra el caso de dos commanders vivos en un proyecto
+(el registro de commanders los conoce, por ejemplo Claude Code y Pi): comparten
+una sola cola de wakes y un wake llega solo al primero que lo pide, así que
+mantené un commander por proyecto.
+
 La línea del sentinel advierte, y nunca falla, cuando hay más de un proceso
 sentinel vivo (competirían por las mismas tareas), cuando el sentinel vivo es
 de una versión distinta a la de este binario, o cuando el binario desde el que
@@ -830,6 +835,12 @@ proyecto y registra un wake de forum, que tanto "drain" como "await" informan
 como "forum session <file>: N new messages (ended: false). Run vx forum
 inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
 confirmados se descarta. Ver "vx forum" para el listener.
+
+Un proyecto tiene una sola cola de wakes y un wake se entrega una sola vez, al
+primer commander que lo pide. Dos commanders vivos en el mismo proyecto (por
+ejemplo Claude Code y Pi) por lo tanto no lo oyen los dos: mantené un commander
+por proyecto (el otro puede ponerse al día con vx status y vx forum inbox, y vx
+doctor advierte sobre esa configuración).
 
 Un commander OpenCode 2.x no tiene hook Stop, así que el propio sentinel entrega
 sus wakes: cuando un proyecto tiene un commander opencode registrado y vivo

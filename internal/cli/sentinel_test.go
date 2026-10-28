@@ -209,6 +209,56 @@ func TestRunSentinelAwait_FindsAlreadyPendingWake(t *testing.T) {
 	}
 }
 
+// Two commanders of one project (a Claude Code one and a Pi one) each run their
+// own "vx sentinel await" on the same project root, and a wake is consumed by
+// the drain that claims it. So the wake reaches exactly one of them; the other
+// ends its wait with nothing. This is a known limitation, not an accident (see
+// the sentinel concept page): the test pins it, so changing it is a decision.
+func TestRunSentinelAwait_TwoCommandersOfOneProjectShareOneWake(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+
+	task := newSettledMissionTask(t, proj)
+	if _, err := sentinel.Tick(home, &fakeHerdr{promptStatus: "done"}); err != nil {
+		t.Fatalf("sentinel.Tick: %v", err)
+	}
+
+	type outcome struct {
+		code   int
+		stderr string
+	}
+	results := make(chan outcome, 2)
+	for range 2 {
+		go func() {
+			var stderr bytes.Buffer
+			code := runSentinelAwait(proj, 200*time.Millisecond, 5*time.Millisecond, &stderr, stillWanted, nil)
+			results <- outcome{code, stderr.String()}
+		}()
+	}
+
+	woken, quiet := 0, 0
+	for range 2 {
+		r := <-results
+		switch r.code {
+		case 2:
+			woken++
+			if !strings.Contains(r.stderr, task.ID) {
+				t.Errorf("the woken await should name the task, got: %s", r.stderr)
+			}
+		case 0:
+			quiet++
+			if r.stderr != "" {
+				t.Errorf("the await that lost the wake should say nothing, got: %s", r.stderr)
+			}
+		default:
+			t.Errorf("unexpected exit code %d", r.code)
+		}
+	}
+	if woken != 1 || quiet != 1 {
+		t.Errorf("expected exactly one await woken and one left quiet, got %d woken and %d quiet", woken, quiet)
+	}
+}
+
 // With nothing ever pending, runSentinelAwait exits 0 once maxWait
 // elapses - the async hook lets the turn end quietly, same as
 // runSentinelDrain's {} for the instant-check case.

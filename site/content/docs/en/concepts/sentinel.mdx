@@ -65,6 +65,18 @@ Pi has no Stop hook. A project whose commander runs in [Pi](/docs/guides/pi-comm
 
 An OpenCode 2.x commander has no Stop hook, so the sentinel itself delivers: after it records a wake for a project that has a live registered OpenCode commander (see [the commander registry](/docs/reference/files)) and no live `await`, it posts the same text, once and under the same stale-drop rules, into the commander's session through OpenCode's HTTP API (`POST /api/session/<id>/prompt`, queued behind the running turn, without touching the editor). A wake it cannot deliver (no session yet, the service unreachable) is put back and retried, never dropped, and after 30 seconds of failing it falls back to `herdr agent prompt` when the commander is idle, which can glue the wake onto an unsent draft. See [OpenCode as the commander](/docs/guides/opencode-commander).
 
+## Two commanders in one project
+
+A project has one wake queue, and a wake is consumed by whichever reader claims it first. Every commander of the project, whatever its harness, reads the same `wakes/` directory (its `await` for Claude Code and Pi, the sentinel's injector for OpenCode). If you run two commanders in the same project, for example one in Claude Code and one in Pi, a wake reaches only one of them and the other never hears about that soldier or that forum message. An OpenCode commander next to a Claude Code or Pi one is the worst off: the sentinel injects only when no `await` is alive, so it receives nothing.
+
+This is a known limitation, not something to work around by hand. It is left as it is on purpose. A wake is a doorbell for one commander to act on (land, strike, answer), so delivering it to two would make both act on the same soldier. Giving each commander its own cursor would also need every `await` to say which commander it serves, which the shared hook command does not, and a rule for when a wake is dropped if one commander never reads it. Both are moving parts for a setup the commander model does not aim at.
+
+Keep one commander per project. If you do run two, the one that missed a wake can catch up from disk, since nothing is lost: `vx status` shows every task and `vx forum inbox` the waiting feedback. `vx doctor` warns when the commander registry holds two live commanders for the project:
+
+```text
+[warn] commanders share one wake queue - 2 commanders are live in this project (claude, pi) and a wake is delivered once, to whichever asks first, ...
+```
+
 ## The hook does not depend on your PATH
 
 Claude Code runs the hook in a shell that may never have read your profile, so a bare `vx sentinel await` can fail with `command not found` when vx lives in `~/.local/bin`. The commander would then never be woken, with nothing to say so. The registered command therefore looks for vx itself, in this order:

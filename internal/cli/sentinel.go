@@ -55,6 +55,12 @@ in the project's inbox and records a forum wake, which both "drain" and
 once-only delivery; a forum wake whose messages were already confirmed is
 dropped. See "vx forum" for the listener.
 
+A project has one wake queue and a wake is delivered once, to whichever
+commander asks first. Two commanders live in the same project (say Claude Code
+and Pi) therefore do not both hear it: keep one commander per project (the
+other can catch up with ` + cmdname.Name + ` status and ` + cmdname.Name + ` forum inbox, and ` + cmdname.Name + ` doctor warns about the
+setup).
+
 An OpenCode 2.x commander has no Stop hook, so the sentinel itself delivers its
 wakes: when a project has a live registered opencode commander (` + cmdname.Name + ` doctor reports it)
 and no live await, the sentinel posts the same text into the commander's session

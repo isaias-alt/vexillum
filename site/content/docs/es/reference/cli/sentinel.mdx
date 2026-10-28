@@ -41,6 +41,12 @@ como "forum session <file>: N new messages (ended: false). Run vx forum
 inbox." Es el mismo hook y la misma entrega de una sola vez; un wake de forum cuyos mensajes ya fueron
 confirmados se descarta. Ver "vx forum" para el listener.
 
+Un proyecto tiene una sola cola de wakes y un wake se entrega una sola vez, al
+primer commander que lo pide. Dos commanders vivos en el mismo proyecto (por
+ejemplo Claude Code y Pi) por lo tanto no lo oyen los dos: mantené un commander
+por proyecto (el otro puede ponerse al día con vx status y vx forum inbox, y vx
+doctor advierte sobre esa configuración).
+
 Un commander OpenCode 2.x no tiene hook Stop, así que el propio sentinel entrega
 sus wakes: cuando un proyecto tiene un commander opencode registrado y vivo
 (vx doctor lo informa) y ningún await vivo, el sentinel postea el mismo texto en la sesión

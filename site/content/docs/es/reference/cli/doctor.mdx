@@ -61,6 +61,11 @@ PATH=/usr/bin:/bin, como lo tiene el shell de un hook que nunca leyó tu
 perfil), y si hay un sentinel corriendo. Un hook que no puede encontrar vx es
 una advertencia que nombra la solución; nunca hace fallar a doctor.
 
+Una advertencia también nombra el caso de dos commanders vivos en un proyecto
+(el registro de commanders los conoce, por ejemplo Claude Code y Pi): comparten
+una sola cola de wakes y un wake llega solo al primero que lo pide, así que
+mantené un commander por proyecto.
+
 La línea del sentinel advierte, y nunca falla, cuando hay más de un proceso
 sentinel vivo (competirían por las mismas tareas), cuando el sentinel vivo es
 de una versión distinta a la de este binario, o cuando el binario desde el que
