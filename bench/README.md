@@ -58,7 +58,7 @@ and why nothing here is judged on p95 or max.
 What to expect, measured on the machine the baseline comes from (Apple M1 Pro,
 about 90 percent idle):
 
-- **Quiet machine**: two full runs back to back agreed within 2 percent on the
+- **Quiet machine**: two full runs back to back agreed within 4 percent on the
   min and within 6 percent on the median of every `vx` scenario, including the
   ones that take 8 ms, where half a millisecond is 6 percent. That is why the
   20 percent threshold is a safe margin there.
