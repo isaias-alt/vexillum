@@ -14,40 +14,48 @@ import (
 	"github.com/isaias-alt/vexillum/internal/yolo"
 )
 
-// ProjectChecks reports on what vexillum put in an initialized project: the
-// vexillum block (in AGENTS.md or CLAUDE.md), the CLAUDE.md import when the
-// block is in AGENTS.md, the first-party skills, a leftover rules file from
-// an older version, models.json, yolo mode, and the sentinel Stop hook with
-// the sentinel behind it. The CLAUDE.md import and the Stop hook are
-// Claude Code's, so they are checked only when claude is one of the
-// project's commander harnesses (see Commanders); the Pi wake extension, its
-// settings and the folder's trust (PiWake) only when pi is. Every check is
+// ProjectChecks are the steps that report on what vexillum put in an
+// initialized project: the vexillum block (in AGENTS.md or CLAUDE.md), the
+// CLAUDE.md import when the block is in AGENTS.md, the first-party skills, a
+// leftover rules file from an older version, models.json, yolo mode, and the
+// sentinel Stop hook with the sentinel behind it. The CLAUDE.md import and the
+// Stop hook are Claude Code's, so they are checked only when claude is one of
+// the project's commander harnesses (see Commanders); the Pi wake extension,
+// its settings and the folder's trust (PiWake) only when pi is. Every check is
 // read-only, and none is Required: a stale or missing piece is something to
 // fix with init or upgrade, not a reason to call the environment unusable.
-func ProjectChecks(projectDir, vexillumHome, homeDir string) []Result {
+//
+// They are returned as separate steps, in report order, so the ones that start
+// a process (the Stop hook probe, the process listing behind the sentinel line)
+// can run beside each other and beside the rest of the report (see RunAll).
+func ProjectChecks(projectDir, vexillumHome, homeDir string) []Check {
 	commanders, _ := Commanders(projectDir)
 	claude := slices.Contains(commanders, soldier.HarnessClaude)
 
-	var out []Result
-	slotRes, slotState, inClaude := Slot(projectDir)
-	out = append(out, slotRes)
-	if claude && slotState != slot.StateAbsent && !inClaude {
-		out = append(out, ClaudeImport(projectDir))
+	checks := []Check{
+		func() []Result {
+			slotRes, slotState, inClaude := Slot(projectDir)
+			out := []Result{slotRes}
+			if claude && slotState != slot.StateAbsent && !inClaude {
+				out = append(out, ClaudeImport(projectDir))
+			}
+			return out
+		},
+		func() []Result { return Skills(projectDir) },
 	}
-	out = append(out, Skills(projectDir)...)
 	if slices.Contains(commanders, soldier.HarnessPi) {
-		out = append(out, PiWake(projectDir, homeDir)...)
+		checks = append(checks, func() []Result { return PiWake(projectDir, homeDir) })
 	}
-	out = append(out, Models(projectDir, vexillumHome))
-	out = append(out, Yolo(projectDir))
+	checks = append(checks,
+		One(func() Result { return Models(projectDir, vexillumHome) }),
+		One(func() Result { return Yolo(projectDir) }),
+	)
 	if claude {
-		out = append(out, StopHooks(projectDir, vexillumHome, homeDir)...)
-	} else {
-		// The Stop hook is Claude Code's wake path; the sentinel behind
-		// it serves every commander.
-		out = append(out, SentinelRunning(vexillumHome))
+		return append(checks, StopHookChecks(projectDir, vexillumHome, homeDir)...)
 	}
-	return out
+	// The Stop hook is Claude Code's wake path; the sentinel behind it serves
+	// every commander.
+	return append(checks, One(func() Result { return SentinelRunning(vexillumHome) }))
 }
 
 // Slot reports the state of the vexillum block in the file that holds it,

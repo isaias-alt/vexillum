@@ -56,25 +56,32 @@ var hookProbeTimeout = 5 * time.Second
 // whether a sentinel is running. A hook that cannot find vx is a warning
 // with the exact fix. Read-only.
 func StopHooks(projectDir, vexillumHome, homeDir string) []Result {
+	return RunAll(1, StopHookChecks(projectDir, vexillumHome, homeDir))
+}
+
+// StopHookChecks is StopHooks as separate steps, in report order, for RunAll:
+// the probe that runs the hook command and the sentinel line (a process
+// listing) each start a process. Reading how the hook is registered is cheap
+// and happens before it returns.
+func StopHookChecks(projectDir, vexillumHome, homeDir string) []Check {
 	state, err := scaffold.InspectSentinelHook(projectDir)
 	if err != nil {
-		return []Result{{Name: hookName, Warn: true, Detail: err.Error()}}
+		return []Check{Fixed(Result{Name: hookName, Warn: true, Detail: err.Error()})}
 	}
 
 	up := "run '" + cmdname.Name + " upgrade'"
-	var out []Result
+	var checks []Check
 	if !state.Present {
-		out = append(out, Result{Name: hookName, Warn: true, Detail: "not registered in .claude/settings.json, so the commander is never woken when a soldier finishes; " + up})
+		checks = append(checks, Fixed(Result{Name: hookName, Warn: true, Detail: "not registered in .claude/settings.json, so the commander is never woken when a soldier finishes; " + up}))
 	} else {
 		if state.Current {
-			out = append(out, Result{Name: hookName, OK: true, Detail: "registered in .claude/settings.json"})
+			checks = append(checks, Fixed(Result{Name: hookName, OK: true, Detail: "registered in .claude/settings.json"}))
 		} else {
-			out = append(out, Result{Name: hookName, Warn: true, Detail: "registered but out of date; " + up})
+			checks = append(checks, Fixed(Result{Name: hookName, Warn: true, Detail: "registered but out of date; " + up}))
 		}
-		out = append(out, HookResolves(state.Command, homeDir))
+		checks = append(checks, One(func() Result { return HookResolves(state.Command, homeDir) }))
 	}
-	out = append(out, SentinelRunning(vexillumHome))
-	return out
+	return append(checks, One(func() Result { return SentinelRunning(vexillumHome) }))
 }
 
 // HookResolves runs the hook command the way Claude Code would from a

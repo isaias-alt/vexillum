@@ -37,7 +37,7 @@ func TestSharedWakeQueue_WarnsWithTwoLiveCommanders(t *testing.T) {
 		}
 	})
 
-	got := sharedWakeQueue(dir, home, h)
+	got := sharedWakeQueue(dir, home, h, nil)
 	if len(got) != 1 || !got[0].Warn {
 		t.Fatalf("expected one warning, got %+v", got)
 	}
@@ -51,7 +51,7 @@ func TestSharedWakeQueue_QuietWithOneCommander(t *testing.T) {
 	dir, h := registerCommanders(t, home, func(dir string) []herdr.AgentInfo {
 		return []herdr.AgentInfo{{Kind: "claude", PaneID: "w1:p1", Cwd: dir}}
 	})
-	if got := sharedWakeQueue(dir, home, h); len(got) != 0 {
+	if got := sharedWakeQueue(dir, home, h, nil); len(got) != 0 {
 		t.Errorf("one commander should not warn, got %+v", got)
 	}
 }
@@ -67,13 +67,13 @@ func TestSharedWakeQueue_QuietWhenTheOtherCommanderIsGone(t *testing.T) {
 		}
 	})
 	h.agents = h.agents[:1]
-	if got := sharedWakeQueue(dir, home, h); len(got) != 0 {
+	if got := sharedWakeQueue(dir, home, h, nil); len(got) != 0 {
 		t.Errorf("a closed pane should not count, got %+v", got)
 	}
 }
 
 func TestSharedWakeQueue_QuietWithoutARegistry(t *testing.T) {
-	if got := sharedWakeQueue(t.TempDir(), t.TempDir(), fakeLocator{}); len(got) != 0 {
+	if got := sharedWakeQueue(t.TempDir(), t.TempDir(), fakeLocator{}, nil); len(got) != 0 {
 		t.Errorf("got %+v", got)
 	}
 }

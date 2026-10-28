@@ -47,7 +47,7 @@ func names(rs []Result) string {
 // A Claude-only setup, with no pi anywhere, gets no Pi line at all.
 func TestPiChecks_NothingWithoutPiOrAPiProfile(t *testing.T) {
 	t.Setenv("PATH", binDir(t, map[string]string{"herdr": "exit 0"}))
-	if got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false); len(got) != 0 {
+	if got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false, nil); len(got) != 0 {
 		t.Errorf("expected no Pi checks, got %s", names(got))
 	}
 }
@@ -56,7 +56,7 @@ func TestPiChecks_NothingWithoutPiOrAPiProfile(t *testing.T) {
 // the fix, never a failure.
 func TestPiChecks_PiProfileWithoutPi(t *testing.T) {
 	t.Setenv("PATH", binDir(t, map[string]string{"herdr": "exit 0"}))
-	got := PiChecks(projectWithProfiles(t, piProfile), t.TempDir(), false)
+	got := PiChecks(projectWithProfiles(t, piProfile), t.TempDir(), false, nil)
 	if len(got) != 1 || got[0].Name != "Pi" || !got[0].Warn || got[0].Required {
 		t.Fatalf("got %+v", got)
 	}
@@ -71,7 +71,7 @@ func TestPiChecks_PiProfileIsReadFromTheGlobalFileToo(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "models.json"), []byte(piProfile), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := PiChecks(projectWithProfiles(t, ""), home, false); len(got) != 1 || !got[0].Warn {
+	if got := PiChecks(projectWithProfiles(t, ""), home, false, nil); len(got) != 1 || !got[0].Warn {
 		t.Errorf("expected the global pi profile to be noticed, got %+v", got)
 	}
 }
@@ -83,7 +83,7 @@ func TestPiChecks_PiPresent_AllGood(t *testing.T) {
 		"pi":    `echo 1.3.0`,
 		"herdr": `echo "pi: installed (v9) (/x/herdr-agent-state.ts)"`,
 	}))
-	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false)
+	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false, nil)
 	if names(got) != "Pi, Pi version, herdr integration for pi" {
 		t.Fatalf("got %s", names(got))
 	}
@@ -99,7 +99,7 @@ func TestPiChecks_PiPresent_AllGood(t *testing.T) {
 
 func TestPiChecks_OtherMajorVersionWarns(t *testing.T) {
 	t.Setenv("PATH", binDir(t, map[string]string{"pi": `echo 0.85.1`}))
-	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false)
+	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false, nil)
 	if names(got) != "Pi, Pi version" {
 		t.Fatalf("got %s (herdr is not on PATH, so no integration line)", names(got))
 	}
@@ -110,7 +110,7 @@ func TestPiChecks_OtherMajorVersionWarns(t *testing.T) {
 
 func TestPiChecks_BrokenVersionCommandWarns(t *testing.T) {
 	t.Setenv("PATH", binDir(t, map[string]string{"pi": `exit 3`}))
-	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false)
+	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false, nil)
 	if len(got) < 2 || !got[1].Warn {
 		t.Fatalf("got %+v", got)
 	}
@@ -130,7 +130,7 @@ func TestPiChecks_IntegrationStates(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("PATH", binDir(t, map[string]string{"pi": `echo 1.3.0`, "herdr": c.herdr}))
-			got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false)
+			got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false, nil)
 			if len(got) != 3 {
 				t.Fatalf("got %s", names(got))
 			}

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/models"
@@ -24,11 +25,11 @@ import (
 // The rest is never Required: a missing piece fails an OpenCode dispatch with
 // its own message, it does not make the environment unusable for the other
 // harnesses.
-func OpenCodeChecks(projectDir, vexillumHome string, commander bool) []Result {
-	return openCodeChecks(projectDir, vexillumHome, os.Getenv("PATH"), commander)
+func OpenCodeChecks(projectDir, vexillumHome string, commander bool, probes *Probes) []Result {
+	return openCodeChecks(projectDir, vexillumHome, os.Getenv("PATH"), commander, probes)
 }
 
-func openCodeChecks(projectDir, vexillumHome, pathEnv string, commander bool) []Result {
+func openCodeChecks(projectDir, vexillumHome, pathEnv string, commander bool, probes *Probes) []Result {
 	usesOpenCode := false
 	if t, err := models.Load(projectDir, vexillumHome); err == nil {
 		for _, p := range t.Profiles {
@@ -37,7 +38,7 @@ func openCodeChecks(projectDir, vexillumHome, pathEnv string, commander bool) []
 			}
 		}
 	}
-	installs := openCodeInstalls(pathEnv)
+	installs := probes.openCodeInstalls(pathEnv)
 	if !usesOpenCode && len(installs) == 0 && !commander {
 		return nil
 	}
@@ -52,7 +53,7 @@ func openCodeChecks(projectDir, vexillumHome, pathEnv string, commander bool) []
 	if shadow, ok := openCodeShadow(installs); ok {
 		out = append(out, shadow)
 	}
-	if integration, ok := openCodeIntegration(); ok {
+	if integration, ok := openCodeIntegration(probes); ok {
 		out = append(out, integration)
 	}
 	return out
@@ -66,10 +67,10 @@ type openCodeInstall struct {
 	Err     error // from reading the version
 }
 
-// openCodeInstalls lists every distinct opencode executable in pathEnv's
+// scanOpenCodeInstalls lists every distinct opencode executable in pathEnv's
 // directories, first to win first, with its version. A path that resolves to
 // one already listed (a brew link and the Cellar file) is one install.
-func openCodeInstalls(pathEnv string) []openCodeInstall {
+func scanOpenCodeInstalls(pathEnv string) []openCodeInstall {
 	var out []openCodeInstall
 	seen := map[string]bool{}
 	for _, dir := range filepath.SplitList(pathEnv) {
@@ -86,10 +87,19 @@ func openCodeInstalls(pathEnv string) []openCodeInstall {
 			continue
 		}
 		seen[real] = true
-		in := openCodeInstall{Path: candidate, Real: real}
-		in.Version, in.Err = soldier.OpenCodeVersionAt(candidate)
-		out = append(out, in)
+		out = append(out, openCodeInstall{Path: candidate, Real: real})
 	}
+	// Each version is a process of its own (about 60 ms for opencode), and the
+	// installs are independent: read them together.
+	var wg sync.WaitGroup
+	for i := range out {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out[i].Version, out[i].Err = soldier.OpenCodeVersionAt(out[i].Path)
+		}()
+	}
+	wg.Wait()
 	return out
 }
 
@@ -128,12 +138,12 @@ func openCodeShadow(installs []openCodeInstall) (Result, bool) {
 // lets an OpenCode soldier tell herdr whether it is working, idle or blocked
 // instead of herdr reading the screen. ok is false when herdr is not on PATH,
 // which the "herdr" check already reports.
-func openCodeIntegration() (Result, bool) {
+func openCodeIntegration(probes *Probes) (Result, bool) {
 	if _, err := exec.LookPath("herdr"); err != nil {
 		return Result{}, false
 	}
 	const name = "herdr integration for opencode"
-	state, detail, err := herdr.IntegrationStatus("opencode")
+	state, detail, err := probes.IntegrationStatus("opencode")
 	if err != nil {
 		return Result{Name: name, Warn: true, Detail: "could not read the integration status: " + err.Error()}, true
 	}

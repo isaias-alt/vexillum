@@ -77,7 +77,7 @@ func withBlock(t *testing.T, dir string, files ...string) {
 
 func TestOpenCodeCommanderChecks_NothingWithoutTheBinary(t *testing.T) {
 	empty := t.TempDir()
-	if got := openCodeCommanderChecks(t.TempDir(), t.TempDir(), empty, fakeLocator{}); len(got) != 0 {
+	if got := openCodeCommanderChecks(t.TempDir(), t.TempDir(), empty, fakeLocator{}, nil); len(got) != 0 {
 		t.Errorf("got %s", names(got))
 	}
 }
@@ -88,7 +88,7 @@ func TestOpenCodeCommanderChecks_ALiveCommanderOnAnAnsweringServiceIsAllOK(t *te
 	withBlock(t, dir, "AGENTS.md")
 	bin := ocService(t, "opencode v2.0.32", "http://127.0.0.1:49778", "2.0.32")
 
-	got := openCodeCommanderChecks(dir, home, bin, h)
+	got := openCodeCommanderChecks(dir, home, bin, h, nil)
 	for _, name := range []string{"OpenCode commander registered", "OpenCode wake API", "OpenCode reads the vexillum block"} {
 		r, ok := result(got, name)
 		if !ok || !r.OK || r.Warn || r.Required {
@@ -111,7 +111,7 @@ func TestOpenCodeCommanderChecks_Registration(t *testing.T) {
 	bin := ocService(t, "opencode v2.0.32", "http://127.0.0.1:49778", "2.0.32")
 
 	t.Run("not yet", func(t *testing.T) {
-		got := openCodeCommanderChecks(t.TempDir(), t.TempDir(), bin, fakeLocator{})
+		got := openCodeCommanderChecks(t.TempDir(), t.TempDir(), bin, fakeLocator{}, nil)
 		r, _ := result(got, "OpenCode commander registered")
 		if r.OK || r.Warn || !strings.Contains(r.Detail, "vx dispatch") {
 			t.Errorf("result = %+v, want an optional missing that names the commands that register", r)
@@ -121,7 +121,7 @@ func TestOpenCodeCommanderChecks_Registration(t *testing.T) {
 	t.Run("no session yet", func(t *testing.T) {
 		home := t.TempDir()
 		dir, h := registered(t, home, "")
-		r, _ := result(openCodeCommanderChecks(dir, home, bin, h), "OpenCode commander registered")
+		r, _ := result(openCodeCommanderChecks(dir, home, bin, h, nil), "OpenCode commander registered")
 		if !r.OK || !strings.Contains(r.Detail, "no session yet") {
 			t.Errorf("result = %+v", r)
 		}
@@ -130,7 +130,7 @@ func TestOpenCodeCommanderChecks_Registration(t *testing.T) {
 	t.Run("pane gone", func(t *testing.T) {
 		home := t.TempDir()
 		dir, _ := registered(t, home, "ses_abc")
-		r, _ := result(openCodeCommanderChecks(dir, home, bin, fakeLocator{}), "OpenCode commander registered")
+		r, _ := result(openCodeCommanderChecks(dir, home, bin, fakeLocator{}, nil), "OpenCode commander registered")
 		if r.OK || !r.Warn || !strings.Contains(r.Detail, "no longer runs an opencode") {
 			t.Errorf("result = %+v", r)
 		}
@@ -139,7 +139,7 @@ func TestOpenCodeCommanderChecks_Registration(t *testing.T) {
 	t.Run("herdr failing", func(t *testing.T) {
 		home := t.TempDir()
 		dir, _ := registered(t, home, "ses_abc")
-		r, _ := result(openCodeCommanderChecks(dir, home, bin, fakeLocator{err: errors.New("herdr is down")}), "OpenCode commander registered")
+		r, _ := result(openCodeCommanderChecks(dir, home, bin, fakeLocator{err: errors.New("herdr is down")}, nil), "OpenCode commander registered")
 		if !r.Warn || !strings.Contains(r.Detail, "herdr is down") {
 			t.Errorf("result = %+v", r)
 		}
@@ -171,7 +171,7 @@ func TestOpenCodeCommanderChecks_WakeAPI(t *testing.T) {
 				h = live
 			}
 			bin := ocService(t, tc.version, tc.status, tc.svc)
-			r, ok := result(openCodeCommanderChecks(dir, home, bin, h), "OpenCode wake API")
+			r, ok := result(openCodeCommanderChecks(dir, home, bin, h, nil), "OpenCode wake API")
 			if !ok || r.OK != tc.wantOK || r.Warn == tc.wantOK || r.Required || !strings.Contains(r.Detail, tc.want) {
 				t.Errorf("wake API = %+v (found %v), want ok=%v mentioning %q", r, ok, tc.wantOK, tc.want)
 			}
@@ -188,7 +188,7 @@ case "$1 $2" in
   "service status") echo stopped;;
   *) echo 'opencode v2.0.32';;
 esac`})
-	openCodeCommanderChecks(t.TempDir(), t.TempDir(), bin, fakeLocator{})
+	openCodeCommanderChecks(t.TempDir(), t.TempDir(), bin, fakeLocator{}, nil)
 	data, _ := os.ReadFile(log)
 	if strings.Contains(string(data), "api ") {
 		t.Errorf("opencode api ran against a stopped service:\n%s", data)
@@ -252,7 +252,7 @@ func TestOpenCodeBlockVisible(t *testing.T) {
 func TestOpenCodeCommanderChecks_SkillsSwitchedOff(t *testing.T) {
 	bin := ocService(t, "opencode v2.0.32", "stopped", "")
 	run := func() (Result, bool) {
-		return result(openCodeCommanderChecks(t.TempDir(), t.TempDir(), bin, fakeLocator{}), "OpenCode reads .claude/skills")
+		return result(openCodeCommanderChecks(t.TempDir(), t.TempDir(), bin, fakeLocator{}, nil), "OpenCode reads .claude/skills")
 	}
 	if _, ok := run(); ok {
 		t.Error("a line without the switch set")

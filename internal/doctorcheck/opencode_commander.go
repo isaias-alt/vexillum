@@ -26,18 +26,18 @@ import (
 // process's HOME and XDG directories, the way the sentinel's own calls find
 // the service, so it speaks for the sentinel only when both run with the same
 // ones.
-func OpenCodeCommanderChecks(projectDir, vexillumHome string) []Result {
-	return openCodeCommanderChecks(projectDir, vexillumHome, os.Getenv("PATH"), herdr.CLI{})
+func OpenCodeCommanderChecks(projectDir, vexillumHome string, probes *Probes) []Result {
+	return openCodeCommanderChecks(projectDir, vexillumHome, os.Getenv("PATH"), herdr.CLI{}, probes)
 }
 
-func openCodeCommanderChecks(projectDir, vexillumHome, pathEnv string, h herdr.Locator) []Result {
-	installs := openCodeInstalls(pathEnv)
+func openCodeCommanderChecks(projectDir, vexillumHome, pathEnv string, h herdr.Locator, probes *Probes) []Result {
+	installs := probes.openCodeInstalls(pathEnv)
 	if len(installs) == 0 {
 		return nil
 	}
 	binary := installs[0]
 
-	reg, live := openCodeRegistry(projectDir, vexillumHome, h)
+	reg, live := openCodeRegistry(projectDir, vexillumHome, h, probes)
 	out := []Result{reg}
 	out = append(out, openCodeWakeAPI(binary, live))
 	if block, ok := OpenCodeBlockVisible(projectDir); ok {
@@ -52,7 +52,7 @@ func openCodeCommanderChecks(projectDir, vexillumHome, pathEnv string, h herdr.L
 // openCodeRegistry reports whether the project has a live OpenCode commander
 // in its registry, and whether it was found (so the API check knows a TUI is
 // supposed to be running).
-func openCodeRegistry(projectDir, vexillumHome string, h herdr.Locator) (Result, bool) {
+func openCodeRegistry(projectDir, vexillumHome string, h herdr.Locator, probes *Probes) (Result, bool) {
 	const name = "OpenCode commander registered"
 	root, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
@@ -67,7 +67,7 @@ func openCodeRegistry(projectDir, vexillumHome string, h herdr.Locator) (Result,
 			" dispatch' or '" + cmdname.Name + " forum open' here, and until then the sentinel cannot wake it"}, false
 	}
 
-	live, err := commanderreg.Resolve(root, vexillumHome, h)
+	live, err := probes.resolveCommanders(root, vexillumHome, h)
 	for _, c := range live {
 		if c.Harness != "opencode" {
 			continue

@@ -66,21 +66,21 @@ func TestCommanders_NotInitializedIsClaude(t *testing.T) {
 // otherwise nothing changes.
 func TestPiChecks_CommanderRequiresTheBinary(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), true)
+	got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), true, nil)
 	if len(got) != 1 || got[0].Name != "Pi" || got[0].OK || !got[0].Required || !strings.Contains(got[0].Detail, "pi not found in PATH") {
 		t.Errorf("PiChecks as commander without pi = %+v", got)
 	}
-	if got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false); len(got) != 0 {
+	if got := PiChecks(projectWithProfiles(t, ""), t.TempDir(), false, nil); len(got) != 0 {
 		t.Errorf("PiChecks as nothing special without pi = %+v, want none", got)
 	}
 }
 
 func TestOpenCodeChecks_CommanderRequiresTheBinary(t *testing.T) {
-	got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), t.TempDir(), true)
+	got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), t.TempDir(), true, nil)
 	if len(got) != 1 || got[0].Name != "OpenCode" || got[0].OK || !got[0].Required || !strings.Contains(got[0].Detail, "opencode not found in PATH") {
 		t.Errorf("openCodeChecks as commander without opencode = %+v", got)
 	}
-	if got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), t.TempDir(), false); len(got) != 0 {
+	if got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), t.TempDir(), false, nil); len(got) != 0 {
 		t.Errorf("openCodeChecks as nothing special without opencode = %+v, want none", got)
 	}
 }

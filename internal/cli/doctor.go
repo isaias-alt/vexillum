@@ -83,6 +83,12 @@ Usage:
   ` + cmdname.Name + ` doctor
 `
 
+// doctorConcurrency bounds how many checks of the report run at once. The
+// slowest steps start processes and mostly wait, so a handful covers them
+// all; the bound keeps a project with many steps from starting every process
+// in the report at the same instant.
+const doctorConcurrency = 8
+
 // Doctor runs the "vx doctor" command.
 func Doctor(args []string) int {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
@@ -109,26 +115,42 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	commanders, commanderWarns := doctorcheck.Commanders(projectDir)
 	isCommander := func(harness string) bool { return slices.Contains(commanders, harness) }
 
-	checks := []doctorcheck.Result{
-		doctorcheck.Binary("Claude Code", "claude", isCommander(soldier.HarnessClaude)),
-		doctorcheck.Binary("herdr", "herdr", true),
-		doctorcheck.HerdrVersion(),
-		doctorcheck.GitHubCLI(),
-		doctorcheck.VXShadow(),
-		doctorcheck.VexillumHome(vexillumHome),
-		doctorcheck.ProjectInitialized(projectDir),
-		doctorcheck.GitRepo(projectDir),
+	// The checks that start a process (git, pi and opencode --version, herdr,
+	// ps, the Stop hook probe) are independent, so they run side by side and
+	// the report takes about as long as the slowest one. RunAll keeps the
+	// results in the order listed here, so the report reads the same.
+	probes := &doctorcheck.Probes{}
+	steps := []doctorcheck.Check{
+		doctorcheck.One(func() doctorcheck.Result {
+			return doctorcheck.Binary("Claude Code", "claude", isCommander(soldier.HarnessClaude))
+		}),
+		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.Binary("herdr", "herdr", true) }),
+		doctorcheck.One(doctorcheck.HerdrVersion),
+		doctorcheck.One(doctorcheck.GitHubCLI),
+		doctorcheck.One(doctorcheck.VXShadow),
+		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.VexillumHome(vexillumHome) }),
+		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.ProjectInitialized(projectDir) }),
+		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.GitRepo(projectDir) }),
+		doctorcheck.Fixed(commanderWarns...),
+		func() []doctorcheck.Result {
+			return doctorcheck.PiChecks(projectDir, vexillumHome, isCommander(soldier.HarnessPi), probes)
+		},
+		func() []doctorcheck.Result {
+			return doctorcheck.OpenCodeChecks(projectDir, vexillumHome, isCommander(soldier.HarnessOpenCode), probes)
+		},
 	}
-	checks = append(checks, commanderWarns...)
-	checks = append(checks, doctorcheck.PiChecks(projectDir, vexillumHome, isCommander(soldier.HarnessPi))...)
-	checks = append(checks, doctorcheck.OpenCodeChecks(projectDir, vexillumHome, isCommander(soldier.HarnessOpenCode))...)
 	if isCommander(soldier.HarnessOpenCode) {
-		checks = append(checks, doctorcheck.OpenCodeCommanderChecks(projectDir, vexillumHome)...)
+		steps = append(steps, func() []doctorcheck.Result {
+			return doctorcheck.OpenCodeCommanderChecks(projectDir, vexillumHome, probes)
+		})
 	}
 	if scaffold.ProjectInitialized(projectDir) {
-		checks = append(checks, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
-		checks = append(checks, doctorcheck.SharedWakeQueue(projectDir, vexillumHome)...)
+		steps = append(steps, doctorcheck.ProjectChecks(projectDir, vexillumHome, homeDir)...)
+		steps = append(steps, func() []doctorcheck.Result {
+			return doctorcheck.SharedWakeQueue(projectDir, vexillumHome, probes)
+		})
 	}
+	checks := doctorcheck.RunAll(doctorConcurrency, steps)
 
 	ready := true
 	var optionalMissing []string

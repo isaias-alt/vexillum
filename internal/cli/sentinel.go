@@ -326,6 +326,17 @@ func resolveDrainTarget(cwd, vexillumHome string) (string, error) {
 // repository, git not installed, ...) is reported as a plain error -
 // resolveDrainTarget treats every such failure the same way: nothing to
 // drain here.
+//
+// It spawns git (about 8 ms, half of a Stop hook run) on purpose. Walking up to
+// the nearest ".git" in-process would answer differently from git in cases the
+// project key depends on: GIT_DIR, GIT_WORK_TREE and GIT_CEILING_DIRECTORIES in
+// the hook's environment, a "core.worktree" set in the repository or the
+// worktree's config (also through an include), a stray ".git" directory that is
+// not a repository (git skips it and keeps climbing), a ".git" file of a
+// linked worktree or submodule pointing at a gitdir that has gone, and
+// "safe.directory" refusing a repository owned by someone else. A wrong
+// toplevel drains the wrong project's queue, or none, and the commander is
+// never woken, so the exact answer is worth the spawn.
 func gitToplevel(dir string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	cmd.Dir = dir

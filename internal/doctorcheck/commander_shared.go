@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
-	"github.com/isaias-alt/vexillum/internal/commanderreg"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
 )
@@ -19,18 +18,18 @@ import (
 // Read-only. A registry entry only counts while its pane still runs that
 // harness in the project (see commanderreg.Resolve), so a commander that was
 // closed long ago does not trigger it.
-func SharedWakeQueue(projectDir, vexillumHome string) []Result {
-	return sharedWakeQueue(projectDir, vexillumHome, herdr.CLI{})
+func SharedWakeQueue(projectDir, vexillumHome string, probes *Probes) []Result {
+	return sharedWakeQueue(projectDir, vexillumHome, herdr.CLI{}, probes)
 }
 
-func sharedWakeQueue(projectDir, vexillumHome string, h herdr.Locator) []Result {
+func sharedWakeQueue(projectDir, vexillumHome string, h herdr.Locator, probes *Probes) []Result {
 	root, err := project.Root(vexillumHome, projectDir)
 	if err != nil {
 		return nil
 	}
 	// The error is ignored on purpose: Resolve still returns the commanders it
 	// did find, and a herdr that cannot be asked proves nothing either way.
-	live, _ := commanderreg.Resolve(root, vexillumHome, h)
+	live, _ := probes.resolveCommanders(root, vexillumHome, h)
 	if len(live) < 2 {
 		return nil
 	}

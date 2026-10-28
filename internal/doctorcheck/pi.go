@@ -25,7 +25,7 @@ const PiSupportedVersionPrefix = "1."
 // harnesses (see Commanders); then it is always reported. The rest is never
 // Required: a missing piece fails a Pi dispatch with its own message, it does
 // not make the environment unusable for Claude.
-func PiChecks(projectDir, vexillumHome string, commander bool) []Result {
+func PiChecks(projectDir, vexillumHome string, commander bool, probes *Probes) []Result {
 	usesPi := false
 	if t, err := models.Load(projectDir, vexillumHome); err == nil {
 		for _, p := range t.Profiles {
@@ -47,7 +47,7 @@ func PiChecks(projectDir, vexillumHome string, commander bool) []Result {
 		return []Result{{Name: "Pi", Warn: true, Detail: "a model profile uses harness pi but pi is not on PATH - " + installHints["pi"]}}
 	}
 	out := []Result{{Name: "Pi", OK: true, Required: commander}, piVersion()}
-	if integration, ok := piIntegration(); ok {
+	if integration, ok := piIntegration(probes); ok {
 		out = append(out, integration)
 	}
 	return out
@@ -74,12 +74,12 @@ func piVersion() Result {
 // Pi soldier tell herdr whether it is working or idle instead of herdr
 // reading the screen. ok is false when herdr is not on PATH, which the
 // "herdr" check already reports.
-func piIntegration() (Result, bool) {
+func piIntegration(probes *Probes) (Result, bool) {
 	if _, err := exec.LookPath("herdr"); err != nil {
 		return Result{}, false
 	}
 	const name = "herdr integration for pi"
-	state, detail, err := herdr.IntegrationStatus("pi")
+	state, detail, err := probes.IntegrationStatus("pi")
 	if err != nil {
 		return Result{Name: name, Warn: true, Detail: "could not read the integration status: " + err.Error()}, true
 	}

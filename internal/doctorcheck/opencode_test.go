@@ -26,14 +26,14 @@ func result(rs []Result, name string) (Result, bool) {
 
 func TestOpenCodeChecks_NothingWithoutOpenCodeOrAProfileForIt(t *testing.T) {
 	t.Setenv("PATH", binDir(t, map[string]string{"herdr": "exit 0"}))
-	if got := OpenCodeChecks(projectWithProfiles(t, ""), t.TempDir(), false); len(got) != 0 {
+	if got := OpenCodeChecks(projectWithProfiles(t, ""), t.TempDir(), false, nil); len(got) != 0 {
 		t.Errorf("expected no OpenCode checks, got %s", names(got))
 	}
 }
 
 func TestOpenCodeChecks_ProfileWithoutOpenCodeWarns(t *testing.T) {
 	t.Setenv("PATH", binDir(t, map[string]string{"herdr": "exit 0"}))
-	got := OpenCodeChecks(projectWithProfiles(t, openCodeProfile), t.TempDir(), false)
+	got := OpenCodeChecks(projectWithProfiles(t, openCodeProfile), t.TempDir(), false, nil)
 	if len(got) != 1 || got[0].Name != "OpenCode" || !got[0].Warn || got[0].Required {
 		t.Fatalf("got %+v", got)
 	}
@@ -59,7 +59,7 @@ func TestOpenCodeChecks_VersionsAreClassified(t *testing.T) {
 		t.Run(c.out, func(t *testing.T) {
 			dir := ocBin(t, c.out)
 			t.Setenv("PATH", dir)
-			got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), dir, false)
+			got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), dir, false, nil)
 			v, ok := result(got, "OpenCode version")
 			if !ok {
 				t.Fatalf("no version line in %s", names(got))
@@ -80,7 +80,7 @@ func TestOpenCodeChecks_V1ShadowingV2Warns(t *testing.T) {
 	pathEnv := v1 + string(os.PathListSeparator) + v2
 	t.Setenv("PATH", pathEnv)
 
-	got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), pathEnv, false)
+	got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), pathEnv, false, nil)
 	shadow, ok := result(got, "OpenCode V1 shadowing V2 in PATH")
 	if !ok || !shadow.Warn || shadow.Required {
 		t.Fatalf("expected a shadow warning, got %s", names(got))
@@ -105,7 +105,7 @@ func TestOpenCodeChecks_NoShadowWhenV2WinsOrThereIsOneInstall(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("PATH", pathEnv)
-			if _, ok := result(openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), pathEnv, false), "OpenCode V1 shadowing V2 in PATH"); ok {
+			if _, ok := result(openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), pathEnv, false, nil), "OpenCode V1 shadowing V2 in PATH"); ok {
 				t.Error("unexpected shadow warning")
 			}
 		})
@@ -129,7 +129,7 @@ func TestOpenCodeChecks_HerdrIntegration(t *testing.T) {
 				"herdr":    `echo '` + c.status + `'`,
 			})
 			t.Setenv("PATH", dir)
-			got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), dir, false)
+			got := openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), dir, false, nil)
 			r, ok := result(got, "herdr integration for opencode")
 			if !ok || r.OK != c.wantOK || r.Warn != c.wantWarn || r.Required || !strings.Contains(r.Detail, c.want) {
 				t.Errorf("integration = %+v (found %v), want ok=%v warn=%v mentioning %q", r, ok, c.wantOK, c.wantWarn, c.want)
@@ -140,7 +140,7 @@ func TestOpenCodeChecks_HerdrIntegration(t *testing.T) {
 	// herdr itself missing is the "herdr" check's to report.
 	dir := ocBin(t, "opencode v2.0.32")
 	t.Setenv("PATH", dir)
-	if _, ok := result(openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), dir, false), "herdr integration for opencode"); ok {
+	if _, ok := result(openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), dir, false, nil), "herdr integration for opencode"); ok {
 		t.Error("an integration line without herdr on PATH")
 	}
 }
