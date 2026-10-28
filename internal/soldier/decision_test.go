@@ -225,6 +225,71 @@ func TestExtractNeedsDecisionSignal_AngleBracketsInsideARealQuestion(t *testing.
 	}
 }
 
+// The bug seen in a real session: a soldier that had nothing to ask wrote
+// "needs-decision: none..." and was blocked on a question that said nothing.
+// A value that says there is nothing to decide is not a question.
+func TestExtractNeedsDecisionSignal_NoneIsNotAQuestion(t *testing.T) {
+	cases := []string{
+		"needs-decision: none",
+		"needs-decision: none...",
+		"needs-decision: None.",
+		"needs-decision: NONE",
+		"needs-decision: none - the plan was unambiguous",
+		"needs-decision: none (everything resolved)",
+		"needs-decision: none, carrying on",
+		"needs-decision: n/a",
+		"needs-decision: N/A - nothing blocks me",
+		"needs-decision: nil",
+		"needs-decision: null",
+		"needs-decision: nothing",
+		"needs-decision: no",
+		"needs-decision: no.",
+		"needs-decision: `none`",
+		"needs-decision: \"none\"",
+		"needs-decision: *none*",
+		"needs-decision: -",
+		"needs-decision: ...",
+		"  needs-decision:   none   ",
+	}
+	for _, line := range cases {
+		t.Run(line, func(t *testing.T) {
+			if d, found := soldier.ExtractNeedsDecisionSignal("all done\n" + line + "\n"); found {
+				t.Errorf("expected no signal for %q, got %+v", line, d)
+			}
+		})
+	}
+}
+
+// Words that merely start like a "none" value are still real questions.
+func TestExtractNeedsDecisionSignal_QuestionsStartingLikeNoneStillCount(t *testing.T) {
+	cases := []string{
+		"none of the options fit, which one should I pick?",
+		"nothing in the spec covers retries - should I add them?",
+		"no, wait: should the cache be per-user or global?",
+		"nonexistent config key: create it or fail?",
+		"nilable or non-nil receiver?",
+	}
+	for _, question := range cases {
+		t.Run(question, func(t *testing.T) {
+			got, found := soldier.ExtractNeedsDecisionSignal("needs-decision: " + question + "\n")
+			if !found || got.Question != question {
+				t.Errorf("expected the question %q, got %+v found=%v", question, got, found)
+			}
+		})
+	}
+}
+
+// A "none" line after the real question (the soldier changed its mind and
+// said nothing is needed) must not hide the question before it either: the
+// last line that is a real question wins.
+func TestExtractNeedsDecisionSignal_SkipsNoneButKeepsRealLines(t *testing.T) {
+	transcript := promptTrailer + "\nneeds-decision: pick A or B?\nneeds-decision: none\n"
+	got, found := soldier.ExtractNeedsDecisionSignal(transcript)
+	if !found || got.Question != "pick A or B?" {
+		t.Errorf("expected the real question, got %+v found=%v", got, found)
+	}
+}
+
 // Only what follows the end of the dispatched prompt counts: a
 // needs-decision line inside the echoed prompt (a task that quotes one, or
 // the template itself) must not block, whatever it says.

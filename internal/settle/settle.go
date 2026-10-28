@@ -62,6 +62,58 @@ var (
 	backgroundWorkRE = regexp.MustCompile(`·\s*(\d+\s+[^·\n]*?\bstill running)\b`)
 )
 
+// activeTurnRE matches the live status Claude Code paints while a turn is
+// still being worked: the spinner line ("· Tomfoolering… (5m 30s · ↓ 34.2k
+// tokens)"), a running tool's line ("⎿ Running… (3m 12s)") and, in other
+// versions, the "esc to interrupt" hint. A finished turn replaces them with
+// its summary line, which has neither an ellipsis before the timer nor the
+// hint.
+var activeTurnRE = regexp.MustCompile(`…\s*\(\d+\s*[hms]\b|\besc to interrupt\b`)
+
+// TurnInProgress reports whether output, a pane read, still shows a turn being
+// worked, and returns the line that says so. The scan goes from the bottom
+// like BackgroundWorkPending and stops at the first turn summary: an active
+// line above a finished turn is history.
+//
+// herdr classifies a pane from its title and screen, and that can read idle
+// while the soldier is in the middle of a long tool call, for example a test
+// suite that prints nothing for minutes. A pane that still paints the live
+// status of a turn is not finished whatever the classification says, so
+// internal/sentinel and the quick-settle probe in internal/soldier keep such
+// a task running.
+func TurnInProgress(output string) (string, bool) {
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	seen := 0
+	for i := len(lines) - 1; i >= 0 && seen < backgroundWorkTailLines; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		seen++
+		if activeTurnRE.MatchString(line) {
+			return line, true
+		}
+		if turnSummaryRE.MatchString(line) {
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// TurnNotOver reports whether output shows that the soldier's turn is not
+// really over although herdr says idle, and why, in words fit for a note:
+// either the turn is still being worked (TurnInProgress) or it ended with
+// background work still running (BackgroundWorkPending).
+func TurnNotOver(output string) (string, bool) {
+	if line, active := TurnInProgress(output); active {
+		return "the pane still shows a turn in progress (" + line + ")", true
+	}
+	if pending, found := BackgroundWorkPending(output); found {
+		return "background work still running (" + pending + ")", true
+	}
+	return "", false
+}
+
 // BackgroundWorkPending reports whether output, a pane read, ends on a turn
 // that Claude Code itself says has background work still running, and returns
 // that segment of its turn summary ("1 shell still running"). Only the last

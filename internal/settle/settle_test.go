@@ -34,3 +34,51 @@ func TestBackgroundWorkPending(t *testing.T) {
 		})
 	}
 }
+
+func TestTurnInProgress(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{"spinner line", "⏺ Bash(go test ./...)\n\n· Tomfoolering… (5m 30s · ↓ 34.2k tokens · still thinking with high effort)" + footer, true},
+		{"running tool", "⏺ Bash(go test ./...)\n  ⎿  Running… (3m 12s)\n\n❯\n", true},
+		{"spinner under an hours timer", "✻ Cogitating… (1h 2m 3s · ↑ 3k tokens)" + footer, true},
+		{"esc to interrupt hint", "⏺ Reading\n\n  esc to interrupt\n❯\n", true},
+		{"finished turn", "⏺ done\n\n✻ Sautéed for 3s · done 3:38 PM" + footer, false},
+		{"finished turn above a spinner is history", "· Tomfoolering… (5m 30s)\n\n⏺ report\n\n✻ Sautéed for 3s · done 3:38 PM" + footer, false},
+		{"old spinner scrolled far above", "· Tomfoolering… (5m 30s)\n" + strings.Repeat("later line\n", 30) + "❯\n", false},
+		{"prose with an ellipsis", "the build is slow… (it took a while)\n", false},
+		{"no summary line", "just some text\n", false},
+		{"empty", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			line, got := settle.TurnInProgress(tc.output)
+			if got != tc.want || (got && line == "") {
+				t.Errorf("TurnInProgress = %q, %v; want %v", line, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTurnNotOver(t *testing.T) {
+	cases := []struct {
+		name    string
+		output  string
+		want    bool
+		contain string
+	}{
+		{"in progress", "· Tomfoolering… (5m 30s)" + footer, true, "turn in progress"},
+		{"background work", "✻ Brewed for 6s · done 3:37 PM · 1 shell still running" + footer, true, "1 shell still running"},
+		{"over", "✻ Sautéed for 3s · done 3:38 PM" + footer, false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			why, got := settle.TurnNotOver(tc.output)
+			if got != tc.want || !strings.Contains(why, tc.contain) {
+				t.Errorf("TurnNotOver = %q, %v; want %v containing %q", why, got, tc.want, tc.contain)
+			}
+		})
+	}
+}

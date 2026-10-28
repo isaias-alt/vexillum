@@ -154,7 +154,7 @@ type Task struct {
 	// observed this task's live herdr status as idle/done with neither a
 	// strong completion signal nor a currently valid declared pause
 	// (internal/pause), or with its turn ending on background work still
-	// running (settle.BackgroundWorkPending) - zero means never. Same
+	// running or a pane still showing a turn in progress (settle.TurnNotOver) - zero means never. Same
 	// purely-additive reasoning
 	// as AgentNotFoundSince: an older task file without it decodes to the
 	// zero value, which already means "never observed ambiguous".

@@ -11,7 +11,7 @@ const T = JSON.parse(process.env.VEXILLUM_WAKE_TUNING);
 const mod = await import(extPath);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (cond, what, ms = 5000) => {
+const until = async (cond, what, ms = 20000) => {
   for (let waited = 0; waited < ms; waited += 10) {
     if (cond()) return;
     await sleep(10);

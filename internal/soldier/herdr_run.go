@@ -611,7 +611,7 @@ func finishAnswerBlocked(projectRoot string, task state.Task, answer, chosen, st
 	var newDecision *state.Decision
 	if settleErr == nil {
 		task.Status = MapAgentStatus(status)
-		if _, pending := settle.BackgroundWorkPending(task.Output); pending && task.Status == state.StatusDone {
+		if _, notOver := settle.TurnNotOver(task.Output); notOver && task.Status == state.StatusDone {
 			// Same as corroboratedStatus: not the last turn yet.
 			task.Status = state.StatusRunning
 		}
@@ -930,12 +930,13 @@ func corroboratedStatus(projectRoot string, task state.Task, liveStatus string) 
 		return state.StatusBlocked
 	}
 
-	// An idle turn that Claude Code says has background work still running
-	// is not the soldier's last: it will write its final report when the
-	// job completes. Leave the task Running for internal/sentinel, which
-	// holds it until then, instead of saving a transcript without that
-	// report as done.
-	if _, pending := settle.BackgroundWorkPending(task.Output); pending {
+	// An idle turn whose pane still paints a turn in progress, or that
+	// Claude Code says has background work still running, is not the
+	// soldier's last: it is mid-tool-call, or it will write its final
+	// report when the job completes. Leave the task Running for
+	// internal/sentinel, which holds it until then, instead of saving a
+	// transcript without that report as done.
+	if _, notOver := settle.TurnNotOver(task.Output); notOver {
 		return state.StatusRunning
 	}
 

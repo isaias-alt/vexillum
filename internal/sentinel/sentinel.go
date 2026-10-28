@@ -460,6 +460,12 @@ func settleTransition(projectRoot string, task state.Task, newStatus state.Statu
 //     over, mirroring handleAgentNotFound's own confirm-window pattern
 //     instead of trusting it as done.
 //
+// Between steps 0 and 1 sits a hold: a turn that is not provably over
+// (settle.TurnNotOver: the pane still paints a turn in progress, or the turn
+// ended with background work still running) keeps the task running, and only
+// if that outlasts backgroundWorkMaxWait is the task settled unconfirmed,
+// never done, whatever completion signal it has.
+//
 // Steps 0 and 1 end the turn, so before either one is taken the pane is
 // read until it stops changing (awaitSettledTranscript): the output saved with
 // the wake is the soldier's whole last message, not whatever was painted at the
@@ -479,8 +485,8 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	switch {
 	case readErr != nil:
 		note = transcriptUnreadNote
-	case backgroundWorkIn(output) && !needsDecisionIn(task, output):
-		// Not a finished turn (see holdForBackgroundWork), so there is no
+	case turnNotOverIn(output) && !needsDecisionIn(task, output):
+		// Not a finished turn (see holdUnfinishedTurn), so there is no
 		// last message to wait for: the pane is read again on a later tick.
 	case signalErr == nil && strong || needsDecisionIn(task, output):
 		var stable bool
@@ -496,15 +502,17 @@ func settleIdleTask(projectRoot string, task state.Task, client herdr.Client) (b
 	}
 
 	if readErr == nil {
-		if pending, found := settle.BackgroundWorkPending(output); found {
-			hold, giveUpNote, err := holdForBackgroundWork(projectRoot, task, pending)
+		if why, found := settle.TurnNotOver(output); found {
+			hold, giveUpNote, err := holdUnfinishedTurn(projectRoot, task, why)
 			if err != nil {
 				return false, err
 			}
 			if hold {
 				return false, nil
 			}
-			note = giveUpNote
+			// Waited as long as it is worth: the turn is still not provably
+			// over, so the task is not reported done either.
+			return settleUnconfirmed(projectRoot, task, output, giveUpNote)
 		}
 	}
 
@@ -537,17 +545,19 @@ func needsDecisionIn(task state.Task, output string) bool {
 	return found
 }
 
-func backgroundWorkIn(output string) bool {
-	_, found := settle.BackgroundWorkPending(output)
+func turnNotOverIn(output string) bool {
+	_, found := settle.TurnNotOver(output)
 	return found
 }
 
-// backgroundWorkMaxWait is how long a task whose turn ended with background
-// work still running (settle.BackgroundWorkPending) is held running before the
-// sentinel stops waiting for it. The soldier writes its final report when the
-// job completes, but a job that never does (a dev server left running) must
-// not keep a finished task from ever being reported.
-var backgroundWorkMaxWait = 10 * time.Minute
+// backgroundWorkMaxWait is how long a task whose idle turn is not provably
+// over (settle.TurnNotOver: background work still running, or a pane that
+// still paints a turn in progress) is held running before the sentinel stops
+// waiting for it. The soldier writes its final report when the job completes,
+// and a test suite can take well over ten minutes, but a job that never does
+// (a dev server left running) must not keep a finished task from ever being
+// reported.
+var backgroundWorkMaxWait = 30 * time.Minute
 
 // SetBackgroundWorkMaxWait swaps that bound and returns a function that
 // restores it. For tests.
@@ -557,18 +567,19 @@ func SetBackgroundWorkMaxWait(d time.Duration) (restore func()) {
 	return func() { backgroundWorkMaxWait = old }
 }
 
-// holdForBackgroundWork decides what to do with an idle turn that Claude Code
-// reports as still having background work running (pending, for example "1
-// shell still running"). That is not the soldier's final turn: it will wake up
-// and write its report when the job completes, so settling it now would save
-// a transcript without one.
+// holdUnfinishedTurn decides what to do with an idle turn that is not provably
+// over (why, from settle.TurnNotOver: for example "background work still
+// running (1 shell still running)"). That is not the soldier's final turn: it
+// is mid-tool-call, or it will wake up and write its report when the job
+// completes, so settling it now would save a transcript without one.
 //
 // hold is true while the sentinel should keep waiting: the task stays Running
 // with no wake, rechecked next tick. The first such tick stamps
 // IdleUnconfirmedSince, and once backgroundWorkMaxWait has passed since then
 // hold turns false with a note for the caller to save with the task's output,
-// so the gap is visible where the commander reads the result.
-func holdForBackgroundWork(projectRoot string, task state.Task, pending string) (hold bool, note string, err error) {
+// so the gap is visible where the commander reads the result. The caller
+// settles the task unconfirmed, not done: nothing proved it finished.
+func holdUnfinishedTurn(projectRoot string, task state.Task, why string) (hold bool, note string, err error) {
 	if task.IdleUnconfirmedSince.IsZero() {
 		task.IdleUnconfirmedSince = time.Now().UTC()
 		if _, err := saveIfRunning(projectRoot, task); err != nil {
@@ -579,9 +590,9 @@ func holdForBackgroundWork(projectRoot string, task state.Task, pending string) 
 	if time.Since(task.IdleUnconfirmedSince) < backgroundWorkMaxWait {
 		return true, "", nil
 	}
-	return false, fmt.Sprintf("[vexillum] the soldier's turn ended with background work still running (%s) and it was marked done after waiting %s for it, "+
+	return false, fmt.Sprintf("[vexillum] the soldier's turn is not provably over: %s. It was marked unconfirmed, not done, after waiting %s for it, "+
 		"so its final report may not exist yet. Read the pane, or ask the soldier for the report with '%s prompt'.",
-		pending, backgroundWorkMaxWait, cmdname.Name), nil
+		why, backgroundWorkMaxWait, cmdname.Name), nil
 }
 
 // settleReadGap is how long awaitSettledTranscript waits between two reads
@@ -721,15 +732,28 @@ func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
 		return false, nil
 	}
 
+	return settleUnconfirmed(projectRoot, task, "", "[vexillum] this soldier's turn went idle with no completion signal (no report for a scout, "+
+		"no new commit for a mission) and no declared pause (internal/pause) - marked unconfirmed, not done. "+
+		"Check its camp/pane before assuming either way.")
+}
+
+// settleUnconfirmed persists task's transition to StatusUnconfirmed - idle,
+// but nothing proves it finished - and records a wake for it. output, when
+// not empty, is the fresh pane read to save as the task's Output; note is
+// appended to whatever Output ends up being, so the commander reads why the
+// task is not done. Returns whether it settled the task: false when the task
+// is no longer Running on disk (see saveIfRunning).
+func settleUnconfirmed(projectRoot string, task state.Task, output, note string) (bool, error) {
 	old := task.Status
 	task.Status = state.StatusUnconfirmed
 	task.UpdatedAt = time.Now().UTC()
+	if output != "" {
+		task.Output = output
+	}
 	if task.Output != "" {
 		task.Output += "\n\n"
 	}
-	task.Output += "[vexillum] this soldier's turn went idle with no completion signal (no report for a scout, " +
-		"no new commit for a mission) and no declared pause (internal/pause) - marked unconfirmed, not done. " +
-		"Check its camp/pane before assuming either way."
+	task.Output += note
 	saved, err := saveIfRunning(projectRoot, task)
 	if err != nil {
 		return false, fmt.Errorf("persisting unconfirmed task %s: %w", task.ID, err)

@@ -1081,6 +1081,29 @@ func TestRunInHerdr_BackgroundWorkNeverSettlesDoneFromQuickSettle(t *testing.T) 
 	}
 }
 
+// The same through the quick-settle probe for a pane that still paints a turn
+// in progress (a long test run herdr read as idle): never done from here.
+func TestRunInHerdr_TurnInProgressNeverSettlesDoneFromQuickSettle(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	campPath, base := newEmptyMissionCamp(t)
+	writeAndCommit(t, campPath, "output.txt", "soldier's work\n", "soldier's work")
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: campPath, Slot: 1, Branch: "vexillum/" + task.ID, Base: base}
+
+	client := &fakeHerdr{
+		tabID: "w1:t2", paneID: "w1:p2", promptStatus: "idle",
+		readOutput: "⏺ Bash(go test ./...)\n  ⎿  Running… (3m 12s)\n\n· Tomfoolering… (5m 30s · ↓ 34.2k tokens)\n\n❯\n",
+	}
+
+	got, err := runInHerdr(t, home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Fatalf("expected the task to stay running while its turn goes on, got %s", got.Status)
+	}
+}
+
 // newBlockedTask persists a task already in StatusBlocked with a real
 // decision attached - the shape internal/cli.Decide hands AnswerBlocked in
 // the real flow, after loading it fresh off disk.

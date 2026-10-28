@@ -855,9 +855,10 @@ func TestTick_SavesTheReportWrittenAfterBackgroundWork(t *testing.T) {
 }
 
 // A job that never completes (a dev server left running) cannot keep a
-// finished task from being reported: past the bound it settles done, and the
-// output says the final report may not exist yet.
-func TestTick_BackgroundWorkThatNeverEndsSettlesWithANote(t *testing.T) {
+// finished task from being reported: past the bound it is reported, but as
+// unconfirmed, not done - nothing proved the turn was over - and the output
+// says the final report may not exist yet.
+func TestTick_BackgroundWorkThatNeverEndsSettlesUnconfirmedWithANote(t *testing.T) {
 	defer sentinel.SetBackgroundWorkMaxWait(time.Minute)()
 	home := t.TempDir()
 	proj := projectRoot(home, "proj1")
@@ -880,11 +881,157 @@ func TestTick_BackgroundWorkThatNeverEndsSettlesWithANote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != state.StatusDone {
-		t.Fatalf("expected done after the bound, got %s", got.Status)
+	if got.Status != state.StatusUnconfirmed {
+		t.Fatalf("expected unconfirmed after the bound, got %s", got.Status)
 	}
-	if !strings.HasPrefix(got.Output, turnWithBackgroundJob) || !strings.Contains(got.Output, "1 shell still running") || !strings.Contains(got.Output, "vx prompt") {
+	if !strings.HasPrefix(got.Output, turnWithBackgroundJob) || !strings.Contains(got.Output, "1 shell still running") ||
+		!strings.Contains(got.Output, "unconfirmed, not done") || !strings.Contains(got.Output, "vx prompt") {
 		t.Errorf("expected the transcript followed by a note about the pending job, got %q", got.Output)
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil || len(wakes) != 1 || wakes[0].NewStatus != state.StatusUnconfirmed {
+		t.Errorf("expected one wake for running -> unconfirmed, got %+v err=%v", wakes, err)
+	}
+}
+
+// A test suite that runs for longer than the old ten minute bound is still
+// the soldier working: the default wait must outlast it.
+func TestTick_BackgroundWorkIsHeldPastTenMinutes(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-15 * time.Minute)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{turnWithBackgroundJob},
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("Tick: woke=%d err=%v, want no wake 15 minutes into a running job", woke, err)
+	}
+	if got, err := state.Load(proj, task.ID); err != nil || got.Status != state.StatusRunning {
+		t.Fatalf("expected running, got %s err=%v", got.Status, err)
+	}
+}
+
+const (
+	// What Claude Code paints while the soldier sits in a long tool call, for
+	// example a test suite that prints nothing for minutes: the running
+	// tool's line and the spinner line with its timer. herdr's screen
+	// classification can still read such a pane as idle.
+	paneMidTestRun = "⏺ Bash(go test ./...)\n  ⎿  Running… (3m 12s)\n\n· Tomfoolering… (5m 30s · ↓ 34.2k tokens · still thinking with high effort)\n\n" +
+		"───────────────\n❯\n───────────────\n  Sonnet 5.5 | Context: 20% used of 1M\n  ⏵⏵ bypass permissions on (shift+tab to cycle)\n"
+	paneTestRunFinished = paneMidTestRun + "\n⏺ ok, all packages pass\n\n⏺ FINAL REPORT: committed d.txt\n\n✻ Sautéed for 6m 2s · done 3:38 PM\n\n❯\n"
+)
+
+// The false done as users hit it: a mission committed early, then ran a long
+// test, and herdr read the pane as idle. The commit is a strong completion
+// signal, but the pane still shows the turn being worked, so the sentinel
+// must keep the task running and wake nobody.
+func TestTick_PaneStillShowingATurnInProgressIsNotDone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{paneMidTestRun},
+	}
+	for range 3 {
+		if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+			t.Fatalf("Tick: woke=%d err=%v, want no wake while the test run goes on", woke, err)
+		}
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Fatalf("expected running while the pane shows a turn in progress, got %s", got.Status)
+	}
+}
+
+// The same for a scout whose report file exists from an earlier step.
+func TestTick_ScoutWithReportButTurnInProgressIsNotDone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningScoutTask(t, proj, "vx-look-around")
+	if err := os.MkdirAll(filepath.Dir(report.Path(proj, "vx-look-around", task.ID)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(report.Path(proj, "vx-look-around", task.ID), []byte("draft"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-look-around": "idle"}},
+		reads:     []string{"⏺ Read(a.go)\n\n✢ Cogitating… (45s · ↓ 1.2k tokens)\n\n❯\n"},
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("Tick: woke=%d err=%v, want no wake while the turn goes on", woke, err)
+	}
+}
+
+// Once the run ends and the turn summary replaces the spinner, the next idle
+// settles the task done with the whole report in Output.
+func TestTick_SavesTheReportWrittenAfterATurnInProgress(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-time.Minute)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{paneTestRunFinished},
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusDone || got.Output != paneTestRunFinished {
+		t.Errorf("expected done with the final report, got %s %q", got.Status, got.Output)
+	}
+}
+
+// A pane stuck on a spinner line for good (herdr idle all along) is not held
+// forever either: past the bound it is reported unconfirmed.
+func TestTick_TurnInProgressThatNeverEndsSettlesUnconfirmed(t *testing.T) {
+	defer sentinel.SetBackgroundWorkMaxWait(time.Minute)()
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newCommittedMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-2 * time.Minute)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedHerdr{
+		fakeHerdr: &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}},
+		reads:     []string{paneMidTestRun},
+	}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+		t.Fatalf("Tick: woke=%d err=%v", woke, err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != state.StatusUnconfirmed || !strings.Contains(got.Output, "still shows a turn in progress") {
+		t.Errorf("expected unconfirmed with a note, got %s %q", got.Status, got.Output)
 	}
 }
 
@@ -1641,6 +1788,35 @@ func TestTick_NeedsDecisionLineForcesBlockedInsteadOfDone(t *testing.T) {
 	}
 	if len(wakes) != 1 || wakes[0].NewStatus != state.StatusBlocked {
 		t.Errorf("expected one drained wake for %s -> blocked, got %+v", task.ID, wakes)
+	}
+}
+
+// The false blocked as a user hit it: a mission committed and finished, and
+// its last message carried a needs-decision line saying there is nothing to
+// decide. That is a finished task, not a question for the general.
+func TestTick_NeedsDecisionNoneDoesNotBlock(t *testing.T) {
+	for _, line := range []string{"needs-decision: none", "needs-decision: none...", "needs-decision: n/a - all resolved"} {
+		t.Run(line, func(t *testing.T) {
+			home := t.TempDir()
+			proj := projectRoot(home, "proj1")
+			campPath, base := newCommittedMissionCamp(t)
+			task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+
+			client := &fakeHerdr{
+				statuses:   map[string]string{"vx-do-the-thing": "idle"},
+				readOutput: "Committed d.txt.\n\n" + line + "\n",
+			}
+			if woke, err := sentinel.Tick(home, client); err != nil || woke != 1 {
+				t.Fatalf("Tick: woke=%d err=%v", woke, err)
+			}
+			got, err := state.Load(proj, task.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != state.StatusDone || got.Decision != nil {
+				t.Errorf("expected done with no decision, got %s %+v", got.Status, got.Decision)
+			}
+		})
 	}
 }
 

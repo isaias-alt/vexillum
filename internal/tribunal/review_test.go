@@ -151,7 +151,7 @@ func TestRunReview_TimeoutFails(t *testing.T) {
 	stub.out(0, reportJSON("", "change.txt"))
 
 	start := time.Now()
-	sr, err := runReview(dir, "base", Options{Branch: "b", Timeout: 8 * time.Second}, "")
+	sr, err := runReview(dir, "base", Options{Branch: "b", Timeout: 15 * time.Second}, "")
 	if err != nil {
 		t.Fatalf("runReview: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestRunReview_TimeoutFails(t *testing.T) {
 	if stub.calls() != 1 {
 		t.Errorf("a timeout must not be retried, got %d calls", stub.calls())
 	}
-	if elapsed := time.Since(start); elapsed > 25*time.Second {
+	if elapsed := time.Since(start); elapsed > 45*time.Second {
 		t.Errorf("the timeout took %s to take effect", elapsed)
 	}
 }

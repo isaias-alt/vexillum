@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/isaias-alt/vexillum/internal/state"
 )
@@ -107,7 +108,7 @@ func ExtractNeedsDecisionSignal(transcript string) (*state.Decision, bool) {
 	matches := needsDecisionPattern.FindAllStringSubmatch(afterDispatchPrompt(transcript), -1)
 	for i := len(matches) - 1; i >= 0; i-- {
 		question := strings.TrimSpace(matches[i][1])
-		if question == "" || isNeedsDecisionPlaceholder(question) {
+		if question == "" || isNeedsDecisionPlaceholder(question) || isNeedsDecisionNone(question) {
 			continue
 		}
 		return &state.Decision{
@@ -162,6 +163,32 @@ var placeholderPattern = regexp.MustCompile(`^<[^<>]*>$`)
 func isNeedsDecisionPlaceholder(question string) bool {
 	question = strings.TrimSpace(question)
 	return question == needsDecisionPlaceholder || placeholderPattern.MatchString(question)
+}
+
+// noneValuePattern matches a needs-decision: value that says there is
+// nothing to decide: one of the "no value" words, then the end of the text
+// or punctuation / a dash / a parenthesis, so "none", "None.", "none...",
+// "n/a - all resolved" and "none (the plan is unambiguous)" match while
+// "none of the options fit, which one?" (a real question that merely starts
+// with the word) does not.
+var noneValuePattern = regexp.MustCompile(`(?i)^(?:none|n/a|nil|null|nothing)(?:$|[^\p{L}\p{N}\s]|\s+[-\x{2013}\x{2014}(\[])`)
+
+// isNeedsDecisionNone reports whether question, the text after
+// "needs-decision:", states that there is no decision to make: empty or
+// pure punctuation ("-", "..."), a bare "no", or a "no value" word (see
+// noneValuePattern), possibly wrapped in quotes, backticks or emphasis
+// marks. A soldier that writes the line to report "nothing to ask" must not
+// block its own task, which is what a plain syntactic match on the prefix
+// would do.
+func isNeedsDecisionNone(question string) bool {
+	question = strings.Trim(strings.TrimSpace(question), "\"'`*_ ")
+	if !strings.ContainsFunc(question, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
+		return true
+	}
+	if strings.EqualFold(strings.TrimRight(question, ".!"), "no") {
+		return true
+	}
+	return noneValuePattern.MatchString(question)
 }
 
 // paragraphStart walks lines backward from end (exclusive) to the start of
