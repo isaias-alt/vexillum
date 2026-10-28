@@ -42,6 +42,13 @@ task closed (an interrupted or failed task becomes struck); striking again
 retries closing the pane, and on a task whose camp is already back in the pool
 it only cleans up the record. A camp leased to another task is never touched.
 
+When the task's camp slot was reused by another task since (a stale entry
+that used to be impossible to clean while that task held the slot), strike
+retires only the stale entry: it never touches the slot's worktree or pane,
+which belong to the other task now. It first checks that the task's own branch
+vexillum/<task-id> is landed, or gone, and refuses otherwise; --discard skips
+that check and lists the unlanded commits, keeping the branch.
+
 On success, returns the worktree to the pool for reuse and closes the
 herdr pane, then prunes: it deletes the task's local branch
 vexillum/<task-id> with git branch -d semantics (never -D) when the branch

@@ -95,7 +95,7 @@ func pruneBranch(c Camp, opts StrikeOptions, report *PruneReport) error {
 	}
 	merged := false
 	if !ancestor && opts.Shipped && opts.PRMerged != nil {
-		merged, _ = verifyMerged(c, base, *opts.PRMerged)
+		merged, _ = verifyMerged(c.Path, "HEAD", c.ProjectDir, base, *opts.PRMerged)
 	}
 	if !ancestor && !merged {
 		if out, err := runGit(c.ProjectDir, "rev-list", "--count", base+".."+ref); err == nil {

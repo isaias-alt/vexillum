@@ -54,6 +54,13 @@ task closed (an interrupted or failed task becomes struck); striking again
 retries closing the pane, and on a task whose camp is already back in the pool
 it only cleans up the record. A camp leased to another task is never touched.
 
+When the task's camp slot was reused by another task since (a stale entry
+that used to be impossible to clean while that task held the slot), strike
+retires only the stale entry: it never touches the slot's worktree or pane,
+which belong to the other task now. It first checks that the task's own branch
+vexillum/<task-id> is landed, or gone, and refuses otherwise; --discard skips
+that check and lists the unlanded commits, keeping the branch.
+
 On success, returns the worktree to the pool for reuse and closes the
 herdr pane, then prunes: it deletes the task's local branch
 vexillum/<task-id> with git branch -d semantics (never -D) when the branch
@@ -154,10 +161,21 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 		return 1
 	}
 
+	// A slot another task has since taken is not this task's camp any more:
+	// striking it would dismantle someone else's worktree and pane.
+	reused, err := camp.SlotReused(projectRoot, task.CampSlot, task.ID, task.CampBranch)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": reading camp pool: %v\n", err)
+		return 1
+	}
+
 	c, err := camp.Resolve(projectDir, vexillumHome, task.CampSlot)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": resolving camp: %v\n", err)
 		return 1
+	}
+	if reused {
+		return strikeStale(projectRoot, task, c, opts, client, stdout, stderr)
 	}
 
 	campOpts := camp.StrikeOptions{
@@ -176,22 +194,8 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 	// The camp is back in the pool at this point, so the task record is
 	// closed even when the herdr pane could not be: a half state would leave
 	// the task interrupted with nothing left to strike.
-	if task.Status == state.StatusInterrupted || task.Status == state.StatusFailed {
-		// Re-checked against the record on disk under the tasks lock: only
-		// a task still unfinished is closed, and nothing else is rewritten.
-		_, err := state.Update(projectRoot, taskID, func(current *state.Task) (bool, error) {
-			if current.Status != state.StatusInterrupted && current.Status != state.StatusFailed {
-				return false, nil
-			}
-			current.Status = state.StatusStruck
-			current.UpdatedAt = time.Now().UTC()
-			return true, nil
-		})
-		if err != nil {
-			fmt.Fprintf(stderr, cmdname.Name+": camp struck, but recording task %s as struck failed: %v\n", taskID, err)
-			fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' again to finish the cleanup\n", taskID)
-			return 1
-		}
+	if !closeStruckTask(projectRoot, task, stderr) {
+		return 1
 	}
 	code := 0
 	if paneErr != nil {
@@ -210,6 +214,92 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 	}
 	printPruned(stdout, pruned)
 	return code
+}
+
+// closeStruckTask marks an interrupted or failed task struck once its camp is
+// gone, the only states a strike rewrites. It re-checks the record on disk
+// under the tasks lock, so only a task still unfinished is closed and nothing
+// else is rewritten. It reports false, after saying so, when the record
+// could not be written.
+func closeStruckTask(projectRoot string, task state.Task, stderr io.Writer) bool {
+	if task.Status != state.StatusInterrupted && task.Status != state.StatusFailed {
+		return true
+	}
+	_, err := state.Update(projectRoot, task.ID, func(current *state.Task) (bool, error) {
+		if current.Status != state.StatusInterrupted && current.Status != state.StatusFailed {
+			return false, nil
+		}
+		current.Status = state.StatusStruck
+		current.UpdatedAt = time.Now().UTC()
+		return true, nil
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": camp struck, but recording task %s as struck failed: %v\n", task.ID, err)
+		fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' again to finish the cleanup\n", task.ID)
+		return false
+	}
+	return true
+}
+
+// strikeStale closes a task whose camp slot was reused by another task. The
+// slot's worktree and herdr pane belong to that task now, so none of the
+// camp is dismantled: only the task's own branch is checked (it must be
+// landed, or --discard says it is not wanted) and the stale record is
+// retired. The task's own herdr tab is closed too, but only when no other
+// task records the same tab id.
+func strikeStale(projectRoot string, task state.Task, c camp.Camp, opts strikeOptions, client herdr.Client, stdout, stderr io.Writer) int {
+	// The pool's branch and base are the new holder's, never this task's.
+	c.Branch = task.CampBranch
+	c.Path = ""
+	c.Base = task.CampBase
+
+	campOpts := camp.StrikeOptions{
+		Shipped:  task.Status == state.StatusShipped,
+		PRMerged: mergedPullRequest(c.ProjectDir, task, c.Branch),
+		Discard:  opts.Discard,
+	}
+	report, pruned, err := camp.RetireStale(c, task.ID, campOpts)
+	printDiscarded(stdout, c.Branch, report)
+	if err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": strike refused: %v\n", err)
+		return 1
+	}
+
+	if !closeStruckTask(projectRoot, task, stderr) {
+		return 1
+	}
+	fmt.Fprintf(stdout, "struck: camp slot %d now belongs to another task, so its worktree and pane were left alone; the stale entry of task %s is retired.\n", c.Slot, task.ID)
+
+	code := 0
+	if err := closeOwnTab(projectRoot, task, client); err != nil {
+		fmt.Fprintf(stderr, cmdname.Name+": retired, but %v\n", err)
+		fmt.Fprintf(stderr, cmdname.Name+": run '"+cmdname.Name+" strike %s' again to retry closing the pane\n", task.ID)
+		code = 1
+	}
+	printPruned(stdout, pruned)
+	return code
+}
+
+// closeOwnTab closes the herdr tab recorded on a stale task, unless another
+// task in the project records the same tab id: then the tab is not provably
+// this task's and stays open. A tab herdr no longer has is not an error.
+func closeOwnTab(projectRoot string, task state.Task, client herdr.Client) error {
+	if task.HerdrTabID == "" {
+		return nil
+	}
+	tasks, _, err := state.List(projectRoot)
+	if err != nil {
+		return &soldier.PaneCloseError{Err: fmt.Errorf("checking who else uses tab %s: %w", task.HerdrTabID, err)}
+	}
+	for _, other := range tasks {
+		if other.ID != task.ID && other.HerdrTabID == task.HerdrTabID {
+			return nil
+		}
+	}
+	if err := client.TabClose(task.HerdrTabID); err != nil && !herdr.IsTabGone(err) {
+		return &soldier.PaneCloseError{Err: err}
+	}
+	return nil
 }
 
 // printPruned says in one short line what was pruned, and why a branch was

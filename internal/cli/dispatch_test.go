@@ -36,6 +36,7 @@ type fakeHerdr struct {
 	promptCalls   []string
 	promptNames   []string
 	tabClosed     bool
+	tabClosedIDs  []string
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
@@ -68,6 +69,7 @@ func (f *fakeHerdr) AgentWait(name string, until []string, timeoutMS int) (strin
 }
 func (f *fakeHerdr) TabClose(tabID string) error {
 	f.tabClosed = true
+	f.tabClosedIDs = append(f.tabClosedIDs, tabID)
 	return f.tabCloseErr
 }
 

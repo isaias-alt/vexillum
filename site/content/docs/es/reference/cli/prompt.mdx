@@ -26,8 +26,8 @@ soldier trabaja y vuelve como done, no shipped, ya que los commits nuevos
 todavía no están en el pull request; corré 'vx ship <task-id>' de nuevo para
 empujarlos al mismo pull request. Una tarea "blocked" se responde con 'vx
 decide' (o, si se marcó blocked por error, se limpia con 'vx decide <task-id>
---dismiss'), una "interrupted" necesita 'vx redispatch', y una "running" ya
-está trabajando: esperá a que termine.
+--dismiss'), una "interrupted" necesita 'vx redispatch', y una "running" sigue
+trabajando: esperá a que termine (o interrumpila primero) y después enviale el prompt.
 
 <text> se entrega al soldier tal cual. También se registra en la tarea como
 una enmienda, con una marca de tiempo y su comando de origen, una vez

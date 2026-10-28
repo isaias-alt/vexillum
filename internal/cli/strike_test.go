@@ -513,3 +513,208 @@ func TestRunStrike_OtherHerdrErrorLeavesACoherentState(t *testing.T) {
 		t.Errorf("expected a retry to close the pane, got %d: %s", code, out)
 	}
 }
+
+// staleTask is a task whose camp slot was reused: its branch carries one
+// commit (merged into the base when landed), its slot was struck and then
+// leased to another task, whose worktree holds an uncommitted file.
+type staleTask struct {
+	remotelyMergedMission
+	other      camp.Camp
+	otherTask  state.Task
+	projectDir string
+}
+
+func newStaleTask(t *testing.T, landed bool, status state.Status) staleTask {
+	t.Helper()
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if landed {
+		strikeGitT(t, project, "merge", "--ff-only", task.CampBranch)
+	}
+	c, err := camp.Resolve(project, home, task.CampSlot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := camp.StrikeWith(c, task.ID, camp.StrikeOptions{Discard: !landed}); err != nil {
+		t.Fatalf("first strike: %v", err)
+	}
+	task.Status = status
+	task.HerdrTabID = "w1:tStale"
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+
+	otherTask, err := state.New(state.KindMission, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := camp.Acquire(project, home, otherTask.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.Slot != task.CampSlot {
+		t.Fatalf("expected the slot reused, got %d and %d", task.CampSlot, other.Slot)
+	}
+	otherTask.CampSlot, otherTask.CampPath, otherTask.CampBranch = other.Slot, other.Path, other.Branch
+	otherTask.Status = state.StatusRunning
+	otherTask.HerdrTabID = "w1:tOther"
+	if err := state.Save(projectRoot, otherTask); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other.Path, "other.txt"), []byte("keep\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return staleTask{
+		remotelyMergedMission: remotelyMergedMission{project: project, home: home, task: task},
+		other:                 other,
+		otherTask:             otherTask,
+		projectDir:            project,
+	}
+}
+
+func (s staleTask) assertOtherUntouched(t *testing.T, client *fakeHerdr) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(s.other.Path, "other.txt")); err != nil {
+		t.Errorf("another task's worktree was reset: %v", err)
+	}
+	if got := strikeGitT(t, s.other.Path, "branch", "--show-current"); got != s.other.Branch {
+		t.Errorf("another task's worktree moved from %q to %q", s.other.Branch, got)
+	}
+	projectRoot, _ := vxproject.Root(s.home, s.project)
+	leased, err := camp.LeasedTasks(projectRoot)
+	if err != nil || !leased[s.otherTask.ID] {
+		t.Errorf("another task's lease was released: %v %v", leased, err)
+	}
+	for _, id := range client.tabClosedIDs {
+		if id == s.otherTask.HerdrTabID {
+			t.Errorf("another task's pane %s was closed", id)
+		}
+	}
+}
+
+// The reported bug: a stale task entry could not be cleaned while another
+// task held its slot. A landed branch retires the entry; nothing of the
+// other task is touched and its own branch survives.
+func TestRunStrike_StaleTaskWhoseSlotWasReusedIsRetiredWhenLanded(t *testing.T) {
+	s := newStaleTask(t, true, state.StatusInterrupted)
+	client := &fakeHerdr{}
+
+	code, out := strikeWith(t, s.remotelyMergedMission, client, strikeOptions{})
+
+	if code != 0 || !strings.Contains(out, "struck:") || !strings.Contains(out, "left alone") {
+		t.Fatalf("expected the stale entry retired, got %d: %s", code, out)
+	}
+	if got := loadTask(t, s.remotelyMergedMission).Status; got != state.StatusStruck {
+		t.Errorf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+	if !strings.Contains(out, "deleted branch "+s.task.CampBranch) || projectHasBranch(t, s.remotelyMergedMission) {
+		t.Errorf("expected the landed branch deleted, got: %s", out)
+	}
+	if len(client.tabClosedIDs) != 1 || client.tabClosedIDs[0] != "w1:tStale" {
+		t.Errorf("expected only the stale task's own tab closed, got %v", client.tabClosedIDs)
+	}
+	s.assertOtherUntouched(t, client)
+}
+
+// A done task keeps its status (strike never rewrites it), the entry is
+// still accepted.
+func TestRunStrike_StaleDoneTaskKeepsItsStatus(t *testing.T) {
+	s := newStaleTask(t, true, state.StatusDone)
+	client := &fakeHerdr{}
+
+	code, out := strikeWith(t, s.remotelyMergedMission, client, strikeOptions{})
+
+	if code != 0 {
+		t.Fatalf("expected success, got %d: %s", code, out)
+	}
+	if got := loadTask(t, s.remotelyMergedMission).Status; got != state.StatusDone {
+		t.Errorf("expected done untouched, got %s", got)
+	}
+	s.assertOtherUntouched(t, client)
+}
+
+// Unlanded work is never silently retired: the refusal names the branch and
+// nothing at all changes.
+func TestRunStrike_StaleTaskWithUnlandedWorkIsRefused(t *testing.T) {
+	s := newStaleTask(t, false, state.StatusInterrupted)
+	client := &fakeHerdr{}
+
+	code, out := strikeWith(t, s.remotelyMergedMission, client, strikeOptions{})
+
+	if code == 0 || !strings.Contains(out, "not yet landed") || !strings.Contains(out, s.task.CampBranch) {
+		t.Fatalf("expected a refusal naming the unlanded branch, got %d: %s", code, out)
+	}
+	if got := loadTask(t, s.remotelyMergedMission).Status; got != state.StatusInterrupted {
+		t.Errorf("expected the task untouched, got %s", got)
+	}
+	if !projectHasBranch(t, s.remotelyMergedMission) {
+		t.Error("the unlanded branch must survive")
+	}
+	if len(client.tabClosedIDs) != 0 {
+		t.Errorf("no pane may be closed on a refusal, got %v", client.tabClosedIDs)
+	}
+	s.assertOtherUntouched(t, client)
+}
+
+// --discard retires the stale entry anyway, says what was dropped, and keeps
+// the branch; the other task is still untouched.
+func TestRunStrike_StaleTaskDiscardListsTheCommitsAndKeepsTheBranch(t *testing.T) {
+	s := newStaleTask(t, false, state.StatusInterrupted)
+	client := &fakeHerdr{}
+
+	code, out := strikeWith(t, s.remotelyMergedMission, client, strikeOptions{Discard: true})
+
+	if code != 0 || !strings.Contains(out, "discarded 1 unlanded commit(s) of "+s.task.CampBranch) {
+		t.Fatalf("expected the discard reported, got %d: %s", code, out)
+	}
+	if got := loadTask(t, s.remotelyMergedMission).Status; got != state.StatusStruck {
+		t.Errorf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+	if !projectHasBranch(t, s.remotelyMergedMission) {
+		t.Error("an unlanded branch must survive --discard")
+	}
+	s.assertOtherUntouched(t, client)
+}
+
+// A tab id that another task records as well is not provably the stale
+// task's: it is never closed.
+func TestRunStrike_StaleTaskNeverClosesATabAnotherTaskUses(t *testing.T) {
+	s := newStaleTask(t, true, state.StatusInterrupted)
+	projectRoot, _ := vxproject.Root(s.home, s.project)
+	s.otherTask.HerdrTabID = s.task.HerdrTabID
+	if err := state.Save(projectRoot, s.otherTask); err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeHerdr{}
+
+	code, out := strikeWith(t, s.remotelyMergedMission, client, strikeOptions{})
+
+	if code != 0 {
+		t.Fatalf("expected success, got %d: %s", code, out)
+	}
+	if len(client.tabClosedIDs) != 0 {
+		t.Errorf("a shared tab must stay open, got %v", client.tabClosedIDs)
+	}
+}
+
+// A pane that cannot be closed is reported after the entry was retired, and
+// striking again retries it.
+func TestRunStrike_StaleTaskPaneErrorIsReportedAfterRetiring(t *testing.T) {
+	s := newStaleTask(t, true, state.StatusInterrupted)
+	client := &fakeHerdr{tabCloseErr: errors.New("herdr socket closed")}
+
+	code, out := strikeWith(t, s.remotelyMergedMission, client, strikeOptions{})
+
+	if code == 0 || !strings.Contains(out, "closing soldier pane") {
+		t.Fatalf("expected the pane error reported, got %d: %s", code, out)
+	}
+	if got := loadTask(t, s.remotelyMergedMission).Status; got != state.StatusStruck {
+		t.Errorf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+	s.assertOtherUntouched(t, client)
+}

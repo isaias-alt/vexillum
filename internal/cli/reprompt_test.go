@@ -194,7 +194,7 @@ func TestReprompt_RefusesStatusesThatCannotBePrompted(t *testing.T) {
 		status state.Status
 		want   string
 	}{
-		{state.StatusRunning, "already running"},
+		{state.StatusRunning, "still running"},
 		{state.StatusBlocked, "--dismiss"},
 		{state.StatusInterrupted, "redispatch"},
 		{state.StatusFailed, "only a done, shipped or unconfirmed"},
@@ -361,5 +361,28 @@ func TestReprompt_AmendmentsAccumulateInOrder(t *testing.T) {
 	}
 	if len(got.Amendments) != 2 || got.Amendments[0].Text != "first extra" || got.Amendments[1].Text != "second extra" {
 		t.Errorf("expected both amendments in order, got %+v", got.Amendments)
+	}
+}
+
+// A running task is refused with the reason (the soldier has not settled),
+// and the next step: wait, or interrupt it first, then prompt it.
+func TestReprompt_RunningRefusalNamesTheNextStep(t *testing.T) {
+	project, home, _, task := repromptFixture(t, state.StatusRunning, true)
+
+	client := &fakeHerdr{}
+	var out, errOut bytes.Buffer
+	if code := runReprompt(project, home, task.ID, "x", client, &out, &errOut); code == 0 {
+		t.Fatal("expected a non-zero exit")
+	}
+	for _, want := range []string{
+		"still running",
+		"has not settled",
+		"Wait for it to settle",
+		"interrupt it first",
+		"prompt " + task.ID,
+	} {
+		if !strings.Contains(errOut.String(), want) {
+			t.Errorf("expected the refusal to contain %q, got: %s", want, errOut.String())
+		}
 	}
 }

@@ -32,8 +32,8 @@ for its pull request to be merged: prompting it asks for follow-up work. The
 task goes to running while the soldier works and comes back as done, not
 shipped, since the new commits are not on the pull request yet; run
 '` + cmdname.Name + ` ship <task-id>' again to push them to the same pull request. A "blocked" task is answered with '` + cmdname.Name + ` decide'
-(or, if it was marked blocked by mistake, cleared with '` + cmdname.Name + ` decide <task-id> --dismiss'), an "interrupted" one needs '` + cmdname.Name + ` redispatch', and a "running" one is already
-working - wait for it to settle.
+(or, if it was marked blocked by mistake, cleared with '` + cmdname.Name + ` decide <task-id> --dismiss'), an "interrupted" one needs '` + cmdname.Name + ` redispatch', and a "running" one is still
+working: wait for it to settle (or interrupt it first), then prompt it.
 
 <text> is delivered to the soldier verbatim. It is also recorded on the task
 as an amendment, with a timestamp and its source command, once it has been
@@ -137,7 +137,8 @@ func repromptRefusal(task state.Task) string {
 		}
 		return ""
 	case state.StatusRunning:
-		return fmt.Sprintf("task %s is already running - wait for it to settle", task.ID)
+		return fmt.Sprintf("task %s is still running - its soldier has not settled yet. Wait for it to settle (the sentinel wakes you), then run '%s prompt %s <text>'; to redirect it now, interrupt it first and prompt it once it has settled",
+			task.ID, cmdname.Name, task.ID)
 	case state.StatusBlocked:
 		return blockedHint(task)
 	case state.StatusInterrupted:

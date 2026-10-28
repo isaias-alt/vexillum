@@ -1,6 +1,7 @@
 package camp
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -739,4 +740,218 @@ func TestLoadPool_RefusesFutureSchemaVersion(t *testing.T) {
 	if _, err := loadPool(root); err == nil {
 		t.Fatal("expected an error loading a pool with schema_version 2")
 	}
+}
+
+// A branch with no commit of its own would fast-forward as a no-op and read
+// as landed: Land says there is nothing to land and moves nothing.
+func TestLand_RefusesABranchWithNoCommits(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	before := strings.TrimSpace(runGitT(t, project, "rev-parse", "HEAD"))
+
+	err = Land(c)
+
+	if !errors.Is(err, ErrNothingToLand) {
+		t.Fatalf("expected ErrNothingToLand, got %v", err)
+	}
+	if got := strings.TrimSpace(runGitT(t, project, "rev-parse", "HEAD")); got != before {
+		t.Errorf("the base moved from %s to %s", before, got)
+	}
+}
+
+// A branch that is merely behind the base (the base moved on, the branch
+// never got a commit) has nothing to land either; it is not "diverged".
+func TestLand_BranchBehindTheBaseHasNothingToLand(t *testing.T) {
+	project := initProjectRepo(t)
+	home := t.TempDir()
+	c, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "later.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, project, "base moves on")
+
+	err = Land(c)
+
+	if !errors.Is(err, ErrNothingToLand) {
+		t.Fatalf("expected ErrNothingToLand, got %v", err)
+	}
+	if strings.Contains(err.Error(), "diverged") {
+		t.Errorf("a branch behind the base must not be called diverged: %v", err)
+	}
+}
+
+// reusedSlot leaves task-1 stale: its branch carries one commit (merged into
+// the base when landed is true), its slot was struck and then leased to
+// task-2, whose worktree holds an uncommitted file that must survive.
+type reusedSlot struct {
+	project, home string
+	stale, other  Camp
+}
+
+func newReusedSlot(t *testing.T, landed bool) reusedSlot {
+	t.Helper()
+	project := initProjectRepo(t)
+	home := t.TempDir()
+	c1, err := Acquire(project, home, "task-1")
+	if err != nil {
+		t.Fatalf("Acquire 1: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(c1.Path, "change.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, c1.Path, "task 1 change")
+	if landed {
+		runGitT(t, project, "merge", "--ff-only", c1.Branch)
+	}
+	if _, err := StrikeWith(c1, "task-1", StrikeOptions{Discard: !landed}); err != nil {
+		t.Fatalf("Strike: %v", err)
+	}
+	c2, err := Acquire(project, home, "task-2")
+	if err != nil {
+		t.Fatalf("Acquire 2: %v", err)
+	}
+	if c2.Slot != c1.Slot {
+		t.Fatalf("expected the slot reused, got %d and %d", c1.Slot, c2.Slot)
+	}
+	if err := os.WriteFile(filepath.Join(c2.Path, "other.txt"), []byte("keep\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return reusedSlot{project: project, home: home, stale: c1, other: c2}
+}
+
+func (r reusedSlot) assertOtherUntouched(t *testing.T) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(r.other.Path, "other.txt")); err != nil {
+		t.Errorf("the other task's worktree was cleaned: %v", err)
+	}
+	if got := strings.TrimSpace(runGitT(t, r.other.Path, "branch", "--show-current")); got != r.other.Branch {
+		t.Errorf("the other task's worktree moved to %q, want %q", got, r.other.Branch)
+	}
+	pool, err := loadPool(r.other.PoolRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range pool.Slots {
+		if s.Number == r.other.Slot && s.LeasedBy != "task-2" {
+			t.Errorf("the other task's lease changed to %q", s.LeasedBy)
+		}
+	}
+}
+
+func TestSlotReused(t *testing.T) {
+	r := newReusedSlot(t, true)
+	projectRoot := filepath.Dir(r.other.PoolRoot)
+
+	cases := []struct {
+		name         string
+		slot         int
+		task, branch string
+		want         bool
+	}{
+		{"leased to another task", r.stale.Slot, "task-1", r.stale.Branch, true},
+		{"leased to the task itself", r.other.Slot, "task-2", r.other.Branch, false},
+		{"leased to another task, no branch recorded", r.stale.Slot, "task-1", "", true},
+		{"unknown slot", 99, "task-1", r.stale.Branch, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := SlotReused(projectRoot, tc.slot, tc.task, tc.branch)
+			if err != nil || got != tc.want {
+				t.Errorf("SlotReused = %v, %v; want %v", got, err, tc.want)
+			}
+		})
+	}
+
+	// Idle on a branch that is not the task's: reused and released since.
+	if _, err := StrikeWith(r.other, "task-2", StrikeOptions{Discard: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := SlotReused(projectRoot, r.other.Slot, "task-1", r.stale.Branch); err != nil || !got {
+		t.Errorf("idle slot on another task's branch: SlotReused = %v, %v; want true", got, err)
+	}
+	if got, err := SlotReused(projectRoot, r.other.Slot, "task-2", r.other.Branch); err != nil || got {
+		t.Errorf("idle slot on the task's own branch: SlotReused = %v, %v; want false", got, err)
+	}
+}
+
+func TestRetireStale_LandedBranchIsRetiredAndDeletedAndTheOtherCampIsUntouched(t *testing.T) {
+	r := newReusedSlot(t, true)
+
+	report, pruned, err := RetireStale(r.stale, "task-1", StrikeOptions{})
+
+	if err != nil {
+		t.Fatalf("RetireStale: %v", err)
+	}
+	if len(report.DiscardedCommits) != 0 {
+		t.Errorf("a landed branch discards nothing, got %v", report.DiscardedCommits)
+	}
+	if pruned.DeletedBranch != r.stale.Branch {
+		t.Errorf("expected the landed branch deleted, got %+v", pruned)
+	}
+	if out := runGitT(t, r.project, "branch", "--list", r.stale.Branch); strings.TrimSpace(out) != "" {
+		t.Errorf("the stale branch is still there: %s", out)
+	}
+	r.assertOtherUntouched(t)
+}
+
+func TestRetireStale_RefusesAnUnlandedBranch(t *testing.T) {
+	r := newReusedSlot(t, false)
+
+	_, _, err := RetireStale(r.stale, "task-1", StrikeOptions{})
+
+	if err == nil || !strings.Contains(err.Error(), "not yet landed") {
+		t.Fatalf("expected a refusal for unlanded commits, got %v", err)
+	}
+	if out := runGitT(t, r.project, "branch", "--list", r.stale.Branch); strings.TrimSpace(out) == "" {
+		t.Error("a refused retire must keep the branch")
+	}
+	r.assertOtherUntouched(t)
+}
+
+func TestRetireStale_DiscardListsTheUnlandedCommitsAndKeepsTheBranch(t *testing.T) {
+	r := newReusedSlot(t, false)
+
+	report, pruned, err := RetireStale(r.stale, "task-1", StrikeOptions{Discard: true})
+
+	if err != nil {
+		t.Fatalf("RetireStale: %v", err)
+	}
+	if len(report.DiscardedCommits) != 1 || !strings.Contains(report.DiscardedCommits[0], "task 1 change") {
+		t.Errorf("expected the unlanded commit listed, got %v", report.DiscardedCommits)
+	}
+	if pruned.DeletedBranch != "" || pruned.Kept == "" {
+		t.Errorf("an unlanded branch must be kept with a hint, got %+v", pruned)
+	}
+	if out := runGitT(t, r.project, "branch", "--list", r.stale.Branch); strings.TrimSpace(out) == "" {
+		t.Error("the unlanded branch must survive a discard")
+	}
+	r.assertOtherUntouched(t)
+}
+
+func TestRetireStale_AGoneBranchHasNothingToLose(t *testing.T) {
+	r := newReusedSlot(t, true)
+	runGitT(t, r.project, "branch", "-d", r.stale.Branch)
+
+	if _, _, err := RetireStale(r.stale, "task-1", StrikeOptions{}); err != nil {
+		t.Fatalf("RetireStale: %v", err)
+	}
+	r.assertOtherUntouched(t)
+}
+
+func TestRetireStale_RefusesATaskThatStillHoldsItsSlot(t *testing.T) {
+	r := newReusedSlot(t, true)
+
+	_, _, err := RetireStale(r.other, "task-2", StrikeOptions{Discard: true})
+
+	if err == nil || !strings.Contains(err.Error(), "still belongs") {
+		t.Fatalf("expected a refusal for a slot the task still holds, got %v", err)
+	}
+	r.assertOtherUntouched(t)
 }

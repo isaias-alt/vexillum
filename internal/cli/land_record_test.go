@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
@@ -195,5 +196,56 @@ func TestRunLand_SentinelReopenDoesNotUndoTheLand(t *testing.T) {
 	}
 	if !client.tabClosed {
 		t.Fatalf("expected the land to close the soldier's tab")
+	}
+}
+
+// A mission whose branch has no commit is not landed: land says so plainly,
+// never prints "landed", and leaves the camp, its pane and the task alone.
+func TestRunLand_ZeroCommitMissionIsNotReportedLanded(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task := doneMissionTask(t, project, home)
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Drop the one commit doneMissionTask made, leaving the branch on the
+	// base: a mission that finished without producing anything.
+	strikeGitT(t, task.CampPath, "reset", "--hard", "-q", task.CampBase)
+	task.HerdrTabID = "T1"
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatal(err)
+	}
+	baseBefore := strikeGitT(t, project, "rev-parse", "HEAD")
+
+	client := &fakeHerdr{}
+	var stdout, stderr bytes.Buffer
+	code := runLand(project, home, task.ID, client, &stdout, &stderr)
+
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit, got 0: %s%s", stdout.String(), stderr.String())
+	}
+	if strings.Contains(stdout.String(), "landed") {
+		t.Errorf("must not report landed, got: %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "nothing to land") || !strings.Contains(stderr.String(), "no commits ahead of main") {
+		t.Errorf("expected the refusal to say there is nothing to land, got: %s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "struck") {
+		t.Errorf("must not strike the camp, got: %s", stdout.String())
+	}
+	if client.tabClosed {
+		t.Error("the soldier's pane must stay open")
+	}
+	if got := strikeGitT(t, project, "rev-parse", "HEAD"); got != baseBefore {
+		t.Errorf("the base moved from %s to %s", baseBefore, got)
+	}
+	leased, err := camp.LeasedTasks(projectRoot)
+	if err != nil || !leased[task.ID] {
+		t.Errorf("the camp must stay leased: %v %v", leased, err)
+	}
+	got, err := state.Load(projectRoot, task.ID)
+	if err != nil || got.Status != state.StatusDone {
+		t.Errorf("the task must stay done, got %s %v", got.Status, err)
 	}
 }

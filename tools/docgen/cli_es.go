@@ -486,8 +486,8 @@ soldier trabaja y vuelve como done, no shipped, ya que los commits nuevos
 todavía no están en el pull request; corré 'vx ship <task-id>' de nuevo para
 empujarlos al mismo pull request. Una tarea "blocked" se responde con 'vx
 decide' (o, si se marcó blocked por error, se limpia con 'vx decide <task-id>
---dismiss'), una "interrupted" necesita 'vx redispatch', y una "running" ya
-está trabajando: esperá a que termine.
+--dismiss'), una "interrupted" necesita 'vx redispatch', y una "running" sigue
+trabajando: esperá a que termine (o interrumpila primero) y después enviale el prompt.
 
 <text> se entrega al soldier tal cual. También se registra en la tarea como
 una enmienda, con una marca de tiempo y su comando de origen, una vez
@@ -596,7 +596,10 @@ Uso:
 
 Avanza con fast-forward el propio checkout de este proyecto hasta la rama de la
 mission. Se rechaza (sin tocar nada) a menos que este checkout esté limpio y el
-merge sea un fast-forward limpio: nunca fuerza ni hace rebase de nada.
+merge sea un fast-forward limpio: nunca fuerza ni hace rebase de nada. También
+se rechaza cuando la rama de la mission no tiene ningún commit por delante de
+la rama base: no hay nada que aterrizar, así que lo dice en lugar de informar
+"landed", y deja el camp y la tarea como estaban.
 
 Una vez que ese merge fast-forward tiene éxito, land hace strike automáticamente del
 camp de la mission (lo devuelve al pool) y cierra también su pane de herdr: la
@@ -770,6 +773,14 @@ un strike. Cualquier otro error de herdr se reporta después de devolver el camp
 y cerrar la tarea (una tarea interrupted o failed pasa a struck); volver a
 hacer strike reintenta cerrar el pane, y en una tarea cuyo camp ya volvió al
 pool solo limpia el registro. Un camp arrendado a otra tarea nunca se toca.
+
+Cuando el slot del camp de la tarea ya lo reutilizó otra tarea (una entrada
+vieja que antes era imposible limpiar mientras esa tarea ocupaba el slot),
+strike solo retira la entrada vieja: nunca toca el worktree ni el pane del
+slot, que ahora son de la otra tarea. Antes verifica que la rama propia de la
+tarea, vexillum/<task-id>, esté aterrizada o ya no exista, y se rechaza si no;
+--discard omite esa verificación y lista los commits sin aterrizar, y conserva
+la rama.
 
 Si tiene éxito, devuelve el worktree al pool para reutilizarlo y cierra el
 pane de herdr, y después poda: borra la rama local vexillum/<task-id> de la

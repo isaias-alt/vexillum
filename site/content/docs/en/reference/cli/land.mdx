@@ -13,7 +13,10 @@ Usage:
 
 Fast-forwards this project's own checkout to the mission's branch.
 Refuses (leaving everything untouched) unless this checkout is clean and
-the merge is a clean fast-forward - never forces or rebases anything.
+the merge is a clean fast-forward - never forces or rebases anything. It
+also refuses when the mission's branch has no commit ahead of the base
+branch: there is nothing to land, so it says so instead of reporting
+"landed", and leaves the camp and the task as they were.
 
 Once that fast-forward merge succeeds, land automatically strikes the
 mission's camp, returning it to the pool and closing its herdr pane too - the same

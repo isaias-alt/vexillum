@@ -24,8 +24,8 @@ for its pull request to be merged: prompting it asks for follow-up work. The
 task goes to running while the soldier works and comes back as done, not
 shipped, since the new commits are not on the pull request yet; run
 'vx ship <task-id>' again to push them to the same pull request. A "blocked" task is answered with 'vx decide'
-(or, if it was marked blocked by mistake, cleared with 'vx decide <task-id> --dismiss'), an "interrupted" one needs 'vx redispatch', and a "running" one is already
-working - wait for it to settle.
+(or, if it was marked blocked by mistake, cleared with 'vx decide <task-id> --dismiss'), an "interrupted" one needs 'vx redispatch', and a "running" one is still
+working: wait for it to settle (or interrupt it first), then prompt it.
 
 <text> is delivered to the soldier verbatim. It is also recorded on the task
 as an amendment, with a timestamp and its source command, once it has been

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,7 +23,10 @@ Usage:
 
 Fast-forwards this project's own checkout to the mission's branch.
 Refuses (leaving everything untouched) unless this checkout is clean and
-the merge is a clean fast-forward - never forces or rebases anything.
+the merge is a clean fast-forward - never forces or rebases anything. It
+also refuses when the mission's branch has no commit ahead of the base
+branch: there is nothing to land, so it says so instead of reporting
+"landed", and leaves the camp and the task as they were.
 
 Once that fast-forward merge succeeds, land automatically strikes the
 mission's camp, returning it to the pool and closing its herdr pane too - the same
@@ -94,6 +98,9 @@ func runLand(projectDir, vexillumHome, taskID string, client herdr.Client, stdou
 
 	if err := camp.Land(c); err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": land refused: %v\n", err)
+		if errors.Is(err, camp.ErrNothingToLand) {
+			fmt.Fprintf(stderr, cmdname.Name+": the task is not landed and its camp is untouched - check that the soldier committed its work, or run '"+cmdname.Name+" strike %s' once there is nothing to keep\n", taskID)
+		}
 		return 1
 	}
 	fmt.Fprintf(stdout, "landed: fast-forwarded %s to %s\n", projectDir, c.Branch)

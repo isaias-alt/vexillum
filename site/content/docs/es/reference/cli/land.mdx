@@ -13,7 +13,10 @@ Uso:
 
 Avanza con fast-forward el propio checkout de este proyecto hasta la rama de la
 mission. Se rechaza (sin tocar nada) a menos que este checkout esté limpio y el
-merge sea un fast-forward limpio: nunca fuerza ni hace rebase de nada.
+merge sea un fast-forward limpio: nunca fuerza ni hace rebase de nada. También
+se rechaza cuando la rama de la mission no tiene ningún commit por delante de
+la rama base: no hay nada que aterrizar, así que lo dice en lugar de informar
+"landed", y deja el camp y la tarea como estaban.
 
 Una vez que ese merge fast-forward tiene éxito, land hace strike automáticamente del
 camp de la mission (lo devuelve al pool) y cierra también su pane de herdr: la

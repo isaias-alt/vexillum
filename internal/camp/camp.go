@@ -214,6 +214,17 @@ func Land(c Camp) error {
 		return fmt.Errorf("resolving base branch: %w", err)
 	}
 
+	// A branch with no commit of its own would "fast-forward" as a no-op
+	// and read as landed. Checked before anything else so a branch that is
+	// merely behind the base is not misreported as diverged either.
+	ahead, err := commitsAhead(c.ProjectDir, base, "refs/heads/"+c.Branch)
+	if err != nil {
+		return err
+	}
+	if ahead == 0 {
+		return fmt.Errorf("%w: %s has no commits ahead of %s", ErrNothingToLand, c.Branch, base)
+	}
+
 	dirty, err := isDirty(c.ProjectDir)
 	if err != nil {
 		return fmt.Errorf("checking project checkout for uncommitted changes: %w", err)
@@ -243,6 +254,10 @@ func Land(c Camp) error {
 	}
 	return nil
 }
+
+// ErrNothingToLand is what Land wraps when the camp's branch has no commit
+// that is not already on the base branch: there is nothing to merge.
+var ErrNothingToLand = errors.New("nothing to land")
 
 // PRMerge is what GitHub reports about a merged pull request, handed to
 // StrikeWith so a remote merge counts as landed work.
@@ -403,7 +418,14 @@ func StrikeWith(c Camp, taskID string, opts StrikeOptions) (StrikeReport, error)
 // merged pull request is proof of its own; otherwise a content check
 // covers a squash or rebase merge that was pulled locally.
 func campLanded(c Camp, base string, opts StrikeOptions) (landed bool, why string, err error) {
-	landed, err = isAncestor(c.Path, "HEAD", base)
+	return revLanded(c.Path, "HEAD", c.ProjectDir, base, opts)
+}
+
+// revLanded is campLanded for any revision: rev is resolved in dir, and
+// projectDir is only named in the advice. A stale strike checks a branch
+// from the project checkout this way, with no worktree of its own.
+func revLanded(dir, rev, projectDir, base string, opts StrikeOptions) (landed bool, why string, err error) {
+	landed, err = isAncestor(dir, rev, base)
 	if err != nil {
 		return false, "", fmt.Errorf("checking whether camp branch landed: %w", err)
 	}
@@ -416,7 +438,7 @@ func campLanded(c Camp, base string, opts StrikeOptions) (landed bool, why strin
 		// once later commits touched the same lines. The merge commit has
 		// to be on the local base first: that is what tells the general
 		// has pulled.
-		landed, why = verifyMerged(c, base, *opts.PRMerged)
+		landed, why = verifyMerged(dir, rev, projectDir, base, *opts.PRMerged)
 		return landed, why, nil
 	}
 
@@ -426,7 +448,7 @@ func campLanded(c Camp, base string, opts StrikeOptions) (landed bool, why strin
 	// tip. Fall back to a content check: does merging this branch into the
 	// current base introduce anything base doesn't already have? If not,
 	// the work already landed, just under different commit SHAs.
-	landed, err = contentAlreadyInBase(c.Path, base)
+	landed, err = contentAlreadyInBase(dir, rev, base)
 	if err != nil {
 		return false, "", fmt.Errorf("checking whether camp content already landed: %w", err)
 	}
@@ -435,14 +457,14 @@ func campLanded(c Camp, base string, opts StrikeOptions) (landed bool, why strin
 
 // verifyMerged checks GitHub's report of a merged pull request against the
 // local repository, returning why it does not prove the camp landed.
-func verifyMerged(c Camp, base string, m PRMerge) (bool, string) {
+func verifyMerged(dir, rev, projectDir, base string, m PRMerge) (bool, string) {
 	if m.MergeCommit == "" {
 		return false, "the pull request is merged on GitHub, but GitHub reported no merge commit to check against " + base
 	}
-	if !commitExists(c.Path, m.MergeCommit) || !reachable(c.Path, m.MergeCommit, base) {
-		return false, fmt.Sprintf("the pull request is merged on GitHub, but its merge commit is not on %s yet - run git pull on %s in %s, then retry", base, base, c.ProjectDir)
+	if !commitExists(dir, m.MergeCommit) || !reachable(dir, m.MergeCommit, base) {
+		return false, fmt.Sprintf("the pull request is merged on GitHub, but its merge commit is not on %s yet - run git pull on %s in %s, then retry", base, base, projectDir)
 	}
-	if m.HeadCommit != "" && (!commitExists(c.Path, m.HeadCommit) || !reachable(c.Path, "HEAD", m.HeadCommit)) {
+	if m.HeadCommit != "" && (!commitExists(dir, m.HeadCommit) || !reachable(dir, rev, m.HeadCommit)) {
 		return false, "the pull request is merged, but this camp has commits that were not in it"
 	}
 	return true, ""
@@ -547,15 +569,25 @@ func Discard(c Camp, taskID string) error {
 // decides how to treat "can't tell", the same way internal/report.Exists
 // never guesses either.
 func HasNewCommits(campPath, base string) (bool, error) {
-	out, err := runGit(campPath, "rev-list", "--count", base+"..HEAD")
+	count, err := commitsAhead(campPath, base, "HEAD")
 	if err != nil {
-		return false, fmt.Errorf("counting commits ahead of %s in %s: %w", base, campPath, err)
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// commitsAhead counts the commits reachable from rev that base does not
+// contain, resolved in dir.
+func commitsAhead(dir, base, rev string) (int, error) {
+	out, err := runGit(dir, "rev-list", "--count", base+".."+rev)
+	if err != nil {
+		return 0, fmt.Errorf("counting commits ahead of %s in %s: %w", base, dir, err)
 	}
 	count, convErr := strconv.Atoi(strings.TrimSpace(out))
 	if convErr != nil {
-		return false, fmt.Errorf("parsing commit count %q from %s: %w", out, campPath, convErr)
+		return 0, fmt.Errorf("parsing commit count %q from %s: %w", out, dir, convErr)
 	}
-	return count > 0, nil
+	return count, nil
 }
 
 func poolStatePath(poolRoot string) string {
@@ -654,7 +686,7 @@ func isAncestor(dir, ancestor, descendant string) (bool, error) {
 	return false, fmt.Errorf("git merge-base --is-ancestor %s %s (in %s): %w", ancestor, descendant, dir, err)
 }
 
-// contentAlreadyInBase reports whether campDir's current HEAD introduces
+// contentAlreadyInBase reports whether rev (campDir's HEAD for a camp) introduces
 // nothing that base doesn't already contain - the squash/rebase-merge
 // case isAncestor can't see. campDir is a worktree of the same repository
 // as base, so base resolves there directly; no fetch needed, since the
@@ -665,12 +697,12 @@ func isAncestor(dir, ancestor, descendant string) (bool, error) {
 // lacked, so the content already landed even though the commit graphs
 // never touch. A real conflict returns (false, nil), not an error -
 // that's still-diverged, unlanded work, not a landed match.
-func contentAlreadyInBase(campDir, base string) (bool, error) {
+func contentAlreadyInBase(campDir, rev, base string) (bool, error) {
 	baseTree, err := runGit(campDir, "rev-parse", base+"^{tree}")
 	if err != nil {
 		return false, fmt.Errorf("resolving %s's tree: %w", base, err)
 	}
-	mergedTree, err := runGit(campDir, "merge-tree", "--write-tree", base, "HEAD")
+	mergedTree, err := runGit(campDir, "merge-tree", "--write-tree", base, rev)
 	if err != nil {
 		return false, nil
 	}
