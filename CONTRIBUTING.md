@@ -112,99 +112,20 @@ applies to a soldier doing a manual run as much as to a test:
 ## Benchmarking
 
 Two layers, both measure only; neither changes how vx behaves. Run them on a
-quiet machine (close builds and other agents) and compare numbers taken on the
-same machine.
-
-### Go benchmarks (`testing.B`, standard library only)
-
-The hot in-process paths each have benchmarks next to their package:
-`internal/atomicfile` (the atomic write, with and without fsync),
-`internal/state` (save, load, the locked update, listing 10 to 1000 tasks),
-`internal/project`, `internal/models` (defaults and layered files),
-`internal/pending`, `internal/sentinel` (one polling pass over many projects and
-tasks, with an in-memory herdr), `internal/camp` (one git process, the camp
-cycle), `internal/cli` (`status`, `models`, `pending list` without the process)
-and `internal/buildinfo`. They are skipped by a plain `go test`.
+quiet machine and compare numbers taken on the same machine. [`bench/README.md`](bench/README.md)
+has the details: how to read the numbers, what is noise, when to run it and how
+to update the baseline.
 
 ```sh
-go test ./... -run '^$' -bench . -benchmem
-go test ./internal/state -run '^$' -bench List -benchmem -count 10
-go test ./internal/state -run '^$' -bench 'List/tasks=1000' -cpuprofile cpu.out
-go tool pprof -top cpu.out
+bench/run.sh                                # end-to-end wall time of real vx commands, in throwaway worlds
+bench/run.sh -compare bench/baseline.json   # ... and flag what got slower than the committed baseline
+go test ./... -run '^$' -bench . -benchmem  # Go benchmarks (testing.B) of the hot in-process paths
 ```
 
-A benchmark that creates its own state uses `b.TempDir()` and never touches
-`~/.vexillum`. The camp benchmarks run real `git`, so they show the price of a
-git process, which the in-memory ones cannot.
-
-### End-to-end wall time (`bench/`)
-
-`bench/run.sh` builds `vx` once and times real invocations of it, using only
-the Go toolchain and a shell. For every scenario it reports the first run, then
-min, median and p95 of N warm runs (default 30 after 3 warm-up runs), the CPU
-time the process used, and how many subprocesses a run started.
-
-```sh
-bench/run.sh                        # every scenario, results as markdown on stdout
-bench/run.sh -n 50 -json out.json   # more runs, and the full report as JSON
-bench/run.sh -only 'doctor|models'  # scenarios whose name matches a regexp
-bench/run.sh -slow                  # also the scenario that waits out the probe's 15s bound
-bench/run.sh -real-herdr            # also read-only calls to your real herdr server
-bench/run.sh -h                     # every flag
-```
-
-What it measures:
-
-- **Startup**: an empty Go program (the cost of starting any process here),
-  `vx --version` and `vx --help`. Their difference is vx's own start-up cost,
-  and `GODEBUG=inittrace=1` splits out the time spent in package `init`.
-- **Cheap commands**: `models`, `status` (0, 50 and 500 tasks, text and JSON),
-  `pending list`, `yolo`, `sentinel drain` and `await`, `forum inbox`, `forum
-  stop`, and `doctor`.
-- **Forum without a browser**: `forum <file> --no-open` cold (it starts the
-  server and the listener) and warm, and `forum end`.
-- **Soldier lifecycle**: `dispatch` (a new camp, and a reused one), `strike` and
-  `land`, against a fake herdr and a fake claude (`bench/fakes`). They answer the
-  calls dispatch makes with the real JSON shape, so no model, terminal or herdr
-  server is needed and what is left is vexillum's work plus its git and herdr
-  calls. `dispatch (soldier still working)` has the fake herdr behave like a
-  soldier that is at work when the prompt goes in: it answers `working` at once
-  to a call that asks to stop at `working` (`--until working`), as herdr does,
-  and sleeps for the whole `--timeout` to any other. With `-slow`, `dispatch
-  (soldier state never reported)` has it answer none of the states, so the probe
-  waits out its upper bound (15s). The fake's `VXBENCH_PROMPT_MODE` and
-  `VXBENCH_AGENT_STATUS` (see `bench/fakes/herdr`) also let a test kill a
-  dispatch mid-prompt and show a sentinel an idle soldier.
-- **External tools** vx shells out to (`git`, `herdr --version`, `pi --version`,
-  `opencode --version`, `gh --version`, doctor's Stop hook probe), for scale.
-
-Subprocesses are counted by a traced run: the tools `git`, `herdr`, `gh`,
-`claude`, `pi`, `opencode` and `ps` are put first in `PATH` as symlinks to
-`bench/cmd/spawnlog`, which runs the real tool and logs the call and how long the
-tool took (the harness keeps only the calls whose parent is the vx process under
-test, and the median of three traced runs). It cannot see a program started by
-absolute path (doctor's Stop hook probe runs `/usr/bin/env`, which has its own
-scenario above), a vx that re-executes itself (the auto-started sentinel; the
-harness starts one first, the steady state of a real machine), or what a traced
-tool starts in turn. On Linux, `strace -f -e trace=execve -c` gives the full
-count if you need it; macOS `dtruss` needs root.
-
-Every scenario runs in a world of its own under one temporary directory: a
-temporary `HOME`, a scratch git repository with `vx init` applied, and, where a
-scenario needs one, its own sentinel and forum server. All of it is stopped and
-deleted at the end (`-keep` leaves it for inspection, with the path printed).
-Nothing under your real `HOME` or any other project's `.vexillum/` is read or
-written, the same rule as for the forum E2E runs above. The only exception is
-`-real-herdr`, which makes read-only `herdr agent list` and `agent get` calls
-with your real `HOME` so herdr can find its socket.
-
-Reading the numbers: the median and min are stable, the p95 and max are not on
-a busy laptop. The `first` column of the first scenarios includes the operating
-system scanning a freshly built binary the first time it runs (several seconds
-on macOS), which is why warm-up runs exist. The traced durations are what each
-tool took, but the shim adds a process start on top, so do not add them up to
-the untraced wall time. To add a scenario, append it to `scenarios` in
-`bench/cmd/vxbench/scenarios.go`.
+Everything runs in a temporary directory with a temporary `HOME`; nothing under
+your real `HOME` or another project's `.vexillum/` is read or written (the one
+opt-in exception, `-real-herdr`, is read-only). To add an end-to-end scenario,
+append it to `scenarios` in `bench/cmd/vxbench/scenarios.go`.
 
 ## Installing your own build
 
