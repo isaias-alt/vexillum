@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fake claude for the benchmark harness: dispatch only needs the binary to
+# exist, since the fake herdr never launches it.
+echo "2.1.0 (Claude Code)"
