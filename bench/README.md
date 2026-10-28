@@ -53,11 +53,22 @@ calls that took the longest; the Markdown report (`-md`) lists them all.
 
 Timings on a laptop in use vary by about 2x from run to run, and noise only ever
 adds time. That is why the numbers to trust are the **min** and the **median**,
-and why nothing here is judged on p95 or max. On a quiet machine, two runs in a
-row agree to within a few percent on the scenarios that take 10 ms or more, and
-to within about 10 percent on the ones that take 5 ms or less, where a
-millisecond is a fifth of the time. Under load the median moves first and the
-min last.
+and why nothing here is judged on p95 or max.
+
+What to expect, measured on the machine the baseline comes from (Apple M1 Pro,
+about 90 percent idle):
+
+- **Quiet machine**: two full runs back to back agreed within 2 percent on the
+  min and within 6 percent on the median of every `vx` scenario, including the
+  ones that take 8 ms, where half a millisecond is 6 percent. That is why the
+  20 percent threshold is a safe margin there.
+- **Ambient load** (a few background daemons, load average about 2.6 on 8
+  cores): the min was still within 5 percent of a quiet run's, but the median
+  differed by up to 12 percent. A baseline taken under load makes later quiet
+  runs look faster, which is why the baseline is captured on a quiet machine.
+- **A busy laptop** (builds, browsers, other agents): the same command varies by
+  about 2x from run to run, and min and median disagree. `-compare` calls those
+  `noisy` rather than guess.
 
 The scenarios that are not about `vx` at all (`floor: empty Go program`, `git
 ...`) are there to tell you how the machine is doing. If they moved against the

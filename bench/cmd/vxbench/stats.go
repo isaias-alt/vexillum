@@ -16,7 +16,12 @@ type stats struct {
 	MeanMS float64 `json:"mean_ms"`
 }
 
-func ms(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }
+// ms is d in milliseconds, rounded to the microsecond: finer than any timing
+// here can be trusted, and it keeps the baseline file short and its diffs
+// readable.
+func ms(d time.Duration) float64 {
+	return math.Round(float64(d)/float64(time.Microsecond)) / 1000
+}
 
 // summarize returns the min, median, p95 (nearest rank), max and mean of ds.
 func summarize(ds []time.Duration) stats {
@@ -35,7 +40,7 @@ func summarize(ds []time.Duration) stats {
 		P50MS:  ms(percentile(sorted, 0.50)),
 		P95MS:  ms(percentile(sorted, 0.95)),
 		MaxMS:  ms(sorted[len(sorted)-1]),
-		MeanMS: ms(sum) / float64(len(sorted)),
+		MeanMS: ms(sum / time.Duration(len(sorted))),
 	}
 }
 

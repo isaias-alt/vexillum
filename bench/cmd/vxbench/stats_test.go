@@ -53,3 +53,15 @@ func TestSummarizeDoesNotReorderItsInput(t *testing.T) {
 		t.Errorf("summarize sorted the caller's slice: %v", in)
 	}
 }
+
+func TestMsRoundsToTheMicrosecond(t *testing.T) {
+	if got := ms(2951125 * time.Nanosecond); got != 2.951 {
+		t.Errorf("ms(2951125ns) = %v, want 2.951", got)
+	}
+	if got := ms(15094 * time.Millisecond); got != 15094 {
+		t.Errorf("ms(15.094s) = %v, want 15094", got)
+	}
+	if got := ms(0); got != 0 {
+		t.Errorf("ms(0) = %v", got)
+	}
+}
