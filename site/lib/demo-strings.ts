@@ -79,7 +79,7 @@ const DISPATCH_MISSION =
   'Bash(vx dispatch "refactor the payment module" --kind mission --model sonnet)';
 const DISPATCH_SCOUT = 'Bash(vx dispatch "trace the memory leak" --kind scout)';
 const OUT_MISSION = `task_id=${A} kind=mission camp_slot=1`;
-const OUT_MISSION_RUNNING = "still running past the quick-settle probe";
+const OUT_MISSION_RUNNING = "still running";
 const OUT_SCOUT = `task_id=${B} kind=scout camp_slot=2`;
 
 const WAKE_HOOK = "Stop hook: vx sentinel";

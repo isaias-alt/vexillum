@@ -121,8 +121,8 @@ can be prompted (a `blocked` one is answered with `vx decide`, an `interrupted`
 one needs `vx redispatch`). Prompting a `shipped` task is how you ask for a fix
 on an open PR: it goes `running` while the soldier works and settles as `done`,
 not `shipped`, with one notice for that settle; then `vx ship <task-id>` pushes
-the fix to the same PR. It waits a few seconds for a trivial prompt to settle,
-otherwise leaves the task running, like a fresh dispatch.
+the fix to the same PR. Like a fresh dispatch, it returns as soon as the soldier is
+working (or has already settled) and leaves the task running.
 
 What you send with `vx prompt` (and the answer text you send with `vx decide`,
 not `--dismiss`) also counts as the general's intent for the tribunal: once

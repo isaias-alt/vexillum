@@ -88,10 +88,11 @@ and a soldier that clears or rewrites it destroys them. Put it in the prompt:
 "run any E2E in your own temp directory, never in another project's
 `.vexillum/forum/`".
 
-**It returns quickly, not when the soldier finishes.** It only waits out a short
-probe (a handful of seconds) to catch trivial prompts that settle immediately.
-Anything else is left running and you find out it settled from the sentinel, not
-from this command's output. Run it inline, not backgrounded. Note the task id it
+**It returns quickly, not when the soldier finishes.** It returns as soon as
+herdr sees the soldier working (or already settled), usually within a few
+seconds, and never waits for the work to finish. A task that is still running
+is left running and you find out it settled from the sentinel, not from this
+command's output. Run it inline, not backgrounded. Note the task id it
 reports if the soldier is still running, tell the general it is underway, and
 move on until the sentinel notice interrupts you with the update.
 

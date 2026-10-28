@@ -378,6 +378,29 @@ func (c *chmodBeforePromptHerdr) AgentPrompt(name, text string, until []string, 
 	return c.fakeHerdr.AgentPrompt(name, text, until, timeoutMS)
 }
 
+// A soldier the probe saw working is reported as still running, and the line
+// no longer blames a probe that now ends as soon as the soldier is working.
+func TestRunDispatch_WorkingSoldierReportsStillRunning(t *testing.T) {
+	project := initDispatchTestProject(t)
+	if err := writeLocalConfig(filepath.Join(project, ".vexillum")); err != nil {
+		t.Fatalf("writing local config: %v", err)
+	}
+	home := t.TempDir()
+	client := &fakeHerdr{tabID: "w1:t1", paneID: "w1:p1", promptStatus: "working", promptErr: &herdr.APIError{Code: "timeout", Message: "the soldier is working"}}
+
+	var out bytes.Buffer
+	if code := runDispatch(project, home, "w1", "do a thing", state.KindMission, "", "", "", client, &out, &out); code != 0 {
+		t.Fatalf("runDispatch = %d: %s", code, out.String())
+	}
+	got := out.String()
+	if !strings.Contains(got, "status=running") || !strings.Contains(got, "still running - the sentinel will record its final status") {
+		t.Errorf("output lacks the running status and message:\n%s", got)
+	}
+	if strings.Contains(got, "quick-settle") {
+		t.Errorf("output names the quick-settle probe, which is an internal detail:\n%s", got)
+	}
+}
+
 // Regression test for a narrower bug the review step caught in the
 // camp-slot-leak fix itself: forcing a failed RunInHerdr result to
 // StatusFailed must only happen for the specific case it's meant for

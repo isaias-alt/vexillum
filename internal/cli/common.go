@@ -123,8 +123,8 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 // if the one that is runs from a binary that has since been replaced on disk
 // (it retires on its own; the new one waits for it - see
 // sentinel.AcquireLockRetiring).
-// Dispatch (and redispatch) return after only a short quick-settle probe
-// (see soldier.RunInHerdr) - for anything but a trivial prompt, the
+// Dispatch (and redispatch) return as soon as the soldier is seen working or
+// has settled (see soldier.RunInHerdr) - for anything but a trivial prompt, the
 // sentinel is what eventually records the soldier's real outcome, so a
 // dispatch with no sentinel running would otherwise strand that task
 // Running forever. A failure here is reported but never fails dispatch
@@ -233,7 +233,7 @@ func acquireAndRunInHerdr(projectDir, vexillumHome, workspaceID string, task sta
 		fmt.Fprintf(stdout, "herdr: workspace=%s tab=%s pane=%s agent=%s\n", result.HerdrWorkspaceID, result.HerdrTabID, result.HerdrPaneID, result.HerdrAgentName)
 	}
 	if result.Status == state.StatusRunning {
-		fmt.Fprintln(stdout, "still running past the quick-settle probe - the sentinel will record its final status")
+		fmt.Fprintln(stdout, "still running - the sentinel will record its final status")
 	}
 	if result.Output != "" {
 		fmt.Fprintln(stdout, "output:")

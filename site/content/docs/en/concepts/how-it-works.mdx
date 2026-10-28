@@ -20,7 +20,7 @@ description: The roles, and the life of a task from dispatch to strike.
 1. **You ask.** In the commander's session (Claude Code by default) you say what you want.
 2. **The commander dispatches.** Following the project's rules it runs `vx dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
 3. **A camp is acquired.** vexillum takes a clean worktree from the project's [pool](/docs/concepts/camps) (or creates one) on a new branch, `vexillum/<task-id>`, forked from your current branch.
-4. **A soldier starts.** A real, interactive session of the soldier's harness (Claude Code by default) opens in a herdr pane inside that camp. The command returns quickly: it only waits out a short probe for trivial prompts that settle at once.
+4. **A soldier starts.** A real, interactive session of the soldier's harness (Claude Code by default) opens in a herdr pane inside that camp. The command returns quickly: as soon as herdr sees the soldier working (or already settled), without waiting for the work to finish.
 5. **The sentinel watches.** It polls the soldier's live status and records the outcome on disk. See [Sentinel](/docs/concepts/sentinel).
 6. **The commander is woken.** The change is surfaced to the commander, so it reports to you even if its turn had already ended: by a `Stop` hook in Claude Code, a wake extension in Pi, or the sentinel posting into the session in OpenCode (see [Sentinel](/docs/concepts/sentinel)).
 7. **You decide.** For a mission, you [land it or ship it](/docs/guides/land-vs-ship). For a scout, the commander relays the report.

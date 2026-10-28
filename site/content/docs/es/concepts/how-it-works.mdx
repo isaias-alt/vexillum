@@ -20,7 +20,7 @@ description: Los roles, y la vida de una tarea desde el dispatch hasta el strike
 1. **Pedís.** En la sesión del commander (Claude Code por defecto) decís qué querés.
 2. **El commander despacha.** Siguiendo la skill `vexillum` corre `vx dispatch "<prompt>" --kind mission|scout --model <m> --effort <e>`.
 3. **Se adquiere un camp.** vexillum toma un worktree limpio del [pool](/es/docs/concepts/camps) del proyecto (o crea uno) en una branch nueva, `vexillum/<task-id>`, bifurcada de tu branch actual.
-4. **Arranca un soldier.** Se abre una sesión real e interactiva del harness del soldier (Claude Code por defecto) en un pane de herdr dentro de ese camp. El comando vuelve rápido: solo espera un breve probe para los prompts triviales que terminan enseguida.
+4. **Arranca un soldier.** Se abre una sesión real e interactiva del harness del soldier (Claude Code por defecto) en un pane de herdr dentro de ese camp. El comando vuelve rápido: en cuanto herdr ve al soldier trabajando (o ya terminado), sin esperar a que termine el trabajo.
 5. **El sentinel vigila.** Consulta el estado en vivo del soldier y registra el resultado en disco. Ver [Sentinel](/es/docs/concepts/sentinel).
 6. **Se despierta al commander.** El cambio le llega al commander, así te reporta aunque su turno ya hubiera terminado: por un hook `Stop` en Claude Code, una extensión de wake en Pi, o el sentinel publicando en la sesión en OpenCode (ver [Sentinel](/es/docs/concepts/sentinel)).
 7. **Decidís vos.** Para una mission, [la aterrizás o la enviás](/es/docs/guides/land-vs-ship). Para un scout, el commander transmite el reporte.

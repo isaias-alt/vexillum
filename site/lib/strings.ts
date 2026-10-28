@@ -95,7 +95,7 @@ const en: Dictionary = {
       "also have someone trace that memory leak, just investigate for now",
     outputA: [
       `task_id=${TASK_A} kind=mission camp_slot=1`,
-      "still running past the quick-settle probe",
+      "still running",
     ],
     outputB: `task_id=${TASK_B} kind=scout camp_slot=2`,
   },
