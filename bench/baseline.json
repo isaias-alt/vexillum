@@ -1,0 +1,1400 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-28T17:08:18Z",
+  "host": {
+    "label": "maintainer-laptop",
+    "cpu_model": "Apple M1 Pro",
+    "cpus": 8,
+    "os": "darwin",
+    "arch": "arm64",
+    "go_version": "go1.26.8"
+  },
+  "vx": {
+    "version": "vx dev",
+    "commit": "9e233ee"
+  },
+  "load_start": 1.83,
+  "load_end": 1.36,
+  "runs": 30,
+  "warmup": 3,
+  "results": [
+    {
+      "name": "floor: empty Go program",
+      "group": "startup",
+      "informational": true,
+      "first_run_ms": 491.754,
+      "wall": {
+        "n": 30,
+        "min_ms": 2.939,
+        "median_ms": 3.301,
+        "p95_ms": 5.398,
+        "max_ms": 5.453,
+        "mean_ms": 3.781
+      },
+      "cpu_median_ms": 2.255
+    },
+    {
+      "name": "vx --version",
+      "group": "startup",
+      "first_run_ms": 8.941,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.274,
+        "median_ms": 7.541,
+        "p95_ms": 8.073,
+        "max_ms": 8.101,
+        "mean_ms": 7.587
+      },
+      "cpu_median_ms": 5.596,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx --help",
+      "group": "startup",
+      "first_run_ms": 7.613,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.351,
+        "median_ms": 7.748,
+        "p95_ms": 9.738,
+        "max_ms": 10.351,
+        "mean_ms": 8.028
+      },
+      "cpu_median_ms": 5.773,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx models",
+      "group": "cheap",
+      "first_run_ms": 7.771,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.496,
+        "median_ms": 7.944,
+        "p95_ms": 9.881,
+        "max_ms": 14.531,
+        "mean_ms": 8.349
+      },
+      "cpu_median_ms": 5.923,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx status (0 tasks)",
+      "group": "cheap",
+      "first_run_ms": 7.689,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.444,
+        "median_ms": 7.68,
+        "p95_ms": 9.002,
+        "max_ms": 9.221,
+        "mean_ms": 7.875
+      },
+      "cpu_median_ms": 5.721,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx status (50 tasks)",
+      "group": "cheap",
+      "first_run_ms": 9.677,
+      "wall": {
+        "n": 30,
+        "min_ms": 8.648,
+        "median_ms": 8.978,
+        "p95_ms": 9.678,
+        "max_ms": 9.879,
+        "mean_ms": 9.019
+      },
+      "cpu_median_ms": 6.933,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx status --json (50 tasks)",
+      "group": "cheap",
+      "first_run_ms": 9.627,
+      "wall": {
+        "n": 30,
+        "min_ms": 8.89,
+        "median_ms": 9.232,
+        "p95_ms": 10.926,
+        "max_ms": 17.187,
+        "mean_ms": 9.672
+      },
+      "cpu_median_ms": 7.214,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx status (500 tasks)",
+      "group": "cheap",
+      "first_run_ms": 20.174,
+      "wall": {
+        "n": 30,
+        "min_ms": 18.762,
+        "median_ms": 19.366,
+        "p95_ms": 21.381,
+        "max_ms": 26.291,
+        "mean_ms": 19.882
+      },
+      "cpu_median_ms": 17.053,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx pending list (0 items)",
+      "group": "cheap",
+      "first_run_ms": 8.239,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.364,
+        "median_ms": 7.591,
+        "p95_ms": 8.254,
+        "max_ms": 8.256,
+        "mean_ms": 7.688
+      },
+      "cpu_median_ms": 5.616,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx pending list (50 items)",
+      "group": "cheap",
+      "first_run_ms": 9.582,
+      "wall": {
+        "n": 30,
+        "min_ms": 8.703,
+        "median_ms": 8.901,
+        "p95_ms": 9.452,
+        "max_ms": 9.51,
+        "mean_ms": 8.933
+      },
+      "cpu_median_ms": 6.924,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx yolo",
+      "group": "cheap",
+      "first_run_ms": 7.964,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.266,
+        "median_ms": 7.712,
+        "p95_ms": 8.758,
+        "max_ms": 8.926,
+        "mean_ms": 7.836
+      },
+      "cpu_median_ms": 5.688,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx sentinel drain (nothing pending)",
+      "group": "cheap",
+      "first_run_ms": 14.682,
+      "wall": {
+        "n": 30,
+        "min_ms": 14.041,
+        "median_ms": 14.426,
+        "p95_ms": 15.436,
+        "max_ms": 15.511,
+        "mean_ms": 14.6
+      },
+      "cpu_median_ms": 11.289,
+      "spawns": {
+        "count": 1,
+        "total_ms": 9.181,
+        "calls": [
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 1,
+            "total_ms": 9.181
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx sentinel await (outside a pane)",
+      "group": "cheap",
+      "first_run_ms": 16.675,
+      "wall": {
+        "n": 30,
+        "min_ms": 13.968,
+        "median_ms": 14.676,
+        "p95_ms": 16.765,
+        "max_ms": 17.093,
+        "mean_ms": 14.861
+      },
+      "cpu_median_ms": 11.465,
+      "spawns": {
+        "count": 1,
+        "total_ms": 6.38,
+        "calls": [
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 1,
+            "total_ms": 6.38
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx forum inbox (no server)",
+      "group": "cheap",
+      "first_run_ms": 14.944,
+      "wall": {
+        "n": 30,
+        "min_ms": 14.417,
+        "median_ms": 14.905,
+        "p95_ms": 16.256,
+        "max_ms": 16.597,
+        "mean_ms": 15.031
+      },
+      "cpu_median_ms": 11.776,
+      "spawns": {
+        "count": 1,
+        "total_ms": 6.569,
+        "calls": [
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 1,
+            "total_ms": 6.569
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx forum stop (nothing running)",
+      "group": "cheap",
+      "first_run_ms": 7.831,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.596,
+        "median_ms": 7.737,
+        "p95_ms": 8.303,
+        "max_ms": 8.322,
+        "mean_ms": 7.811
+      },
+      "cpu_median_ms": 5.888,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx doctor (fast tools)",
+      "group": "doctor",
+      "first_run_ms": 150.861,
+      "wall": {
+        "n": 30,
+        "min_ms": 45.11,
+        "median_ms": 46.285,
+        "p95_ms": 48.117,
+        "max_ms": 48.279,
+        "mean_ms": 46.419
+      },
+      "cpu_median_ms": 87.739,
+      "spawns": {
+        "count": 6,
+        "total_ms": 52.620999999999995,
+        "calls": [
+          {
+            "call": "ps -x -o",
+            "count": 1,
+            "total_ms": 19.49
+          },
+          {
+            "call": "git rev-parse --is-inside-work-tree",
+            "count": 1,
+            "total_ms": 8.581
+          },
+          {
+            "call": "pi --version",
+            "count": 1,
+            "total_ms": 7.001
+          },
+          {
+            "call": "opencode --version",
+            "count": 1,
+            "total_ms": 6.317
+          },
+          {
+            "call": "herdr --version",
+            "count": 1,
+            "total_ms": 5.919
+          },
+          {
+            "call": "herdr integration status",
+            "count": 1,
+            "total_ms": 5.313
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx doctor (slow tools: pi 165 ms, opencode 62 ms)",
+      "group": "doctor",
+      "first_run_ms": 195.102,
+      "wall": {
+        "n": 30,
+        "min_ms": 189.229,
+        "median_ms": 204.103,
+        "p95_ms": 211.491,
+        "max_ms": 212.286,
+        "mean_ms": 203.249
+      },
+      "cpu_median_ms": 120.32,
+      "spawns": {
+        "count": 6,
+        "total_ms": 310.363,
+        "calls": [
+          {
+            "call": "pi --version",
+            "count": 1,
+            "total_ms": 185.351
+          },
+          {
+            "call": "opencode --version",
+            "count": 1,
+            "total_ms": 80.277
+          },
+          {
+            "call": "ps -x -o",
+            "count": 1,
+            "total_ms": 22.66
+          },
+          {
+            "call": "git rev-parse --is-inside-work-tree",
+            "count": 1,
+            "total_ms": 8.948
+          },
+          {
+            "call": "herdr --version",
+            "count": 1,
+            "total_ms": 7.179
+          },
+          {
+            "call": "herdr integration status",
+            "count": 1,
+            "total_ms": 5.948
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx forum \u003cfile\u003e (cold: starts server)",
+      "group": "forum",
+      "first_run_ms": 139.497,
+      "wall": {
+        "n": 30,
+        "min_ms": 138.892,
+        "median_ms": 142.754,
+        "p95_ms": 145.432,
+        "max_ms": 155.47,
+        "mean_ms": 143.192
+      },
+      "cpu_median_ms": 31.914,
+      "spawns": {
+        "count": 3,
+        "total_ms": 17.944,
+        "calls": [
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 2,
+            "total_ms": 14.895
+          },
+          {
+            "call": "ps -o command=",
+            "count": 1,
+            "total_ms": 3.049
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx forum \u003cfile\u003e (warm: server up)",
+      "group": "forum",
+      "first_run_ms": 30.39,
+      "wall": {
+        "n": 30,
+        "min_ms": 27.967,
+        "median_ms": 28.532,
+        "p95_ms": 29.242,
+        "max_ms": 30.087,
+        "mean_ms": 28.597
+      },
+      "cpu_median_ms": 24.324,
+      "spawns": {
+        "count": 3,
+        "total_ms": 15.507,
+        "calls": [
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 2,
+            "total_ms": 13.144
+          },
+          {
+            "call": "ps -o command=",
+            "count": 1,
+            "total_ms": 2.363
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx forum end \u003cfile\u003e",
+      "group": "forum",
+      "first_run_ms": 14.271,
+      "wall": {
+        "n": 30,
+        "min_ms": 11.185,
+        "median_ms": 11.436,
+        "p95_ms": 12.089,
+        "max_ms": 12.73,
+        "mean_ms": 11.498
+      },
+      "cpu_median_ms": 9.771,
+      "spawns": {
+        "count": 0,
+        "total_ms": 0,
+        "calls": null
+      }
+    },
+    {
+      "name": "vx dispatch (new camp)",
+      "group": "camp",
+      "first_run_ms": 69.398,
+      "wall": {
+        "n": 30,
+        "min_ms": 68.327,
+        "median_ms": 71.04,
+        "p95_ms": 74.149,
+        "max_ms": 74.785,
+        "mean_ms": 71.11
+      },
+      "cpu_median_ms": 59.506,
+      "spawns": {
+        "count": 6,
+        "total_ms": 64.80499999999999,
+        "calls": [
+          {
+            "call": "git worktree add",
+            "count": 1,
+            "total_ms": 36.444
+          },
+          {
+            "call": "git rev-parse --abbrev-ref",
+            "count": 1,
+            "total_ms": 6.596
+          },
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 1,
+            "total_ms": 6.436
+          },
+          {
+            "call": "herdr tab create",
+            "count": 1,
+            "total_ms": 5.18
+          },
+          {
+            "call": "herdr agent prompt",
+            "count": 1,
+            "total_ms": 5.13
+          },
+          {
+            "call": "herdr agent start",
+            "count": 1,
+            "total_ms": 5.019
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx dispatch (reused camp)",
+      "group": "camp",
+      "first_run_ms": 67.308,
+      "wall": {
+        "n": 30,
+        "min_ms": 64.794,
+        "median_ms": 66.138,
+        "p95_ms": 70.114,
+        "max_ms": 70.586,
+        "mean_ms": 66.563
+      },
+      "cpu_median_ms": 53.535,
+      "spawns": {
+        "count": 8,
+        "total_ms": 54.510000000000005,
+        "calls": [
+          {
+            "call": "git checkout -b",
+            "count": 1,
+            "total_ms": 9.35
+          },
+          {
+            "call": "git checkout --detach",
+            "count": 1,
+            "total_ms": 8.685
+          },
+          {
+            "call": "git status --porcelain",
+            "count": 1,
+            "total_ms": 8.389
+          },
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 1,
+            "total_ms": 6.565
+          },
+          {
+            "call": "git rev-parse --abbrev-ref",
+            "count": 1,
+            "total_ms": 6.32
+          },
+          {
+            "call": "herdr tab create",
+            "count": 1,
+            "total_ms": 5.293
+          },
+          {
+            "call": "herdr agent prompt",
+            "count": 1,
+            "total_ms": 5.084
+          },
+          {
+            "call": "herdr agent start",
+            "count": 1,
+            "total_ms": 4.824
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx strike",
+      "group": "camp",
+      "first_run_ms": 99.109,
+      "wall": {
+        "n": 30,
+        "min_ms": 93.972,
+        "median_ms": 96.077,
+        "p95_ms": 103.293,
+        "max_ms": 104.455,
+        "mean_ms": 96.682
+      },
+      "cpu_median_ms": 79.152,
+      "spawns": {
+        "count": 12,
+        "total_ms": 85.447,
+        "calls": [
+          {
+            "call": "git rev-parse --abbrev-ref",
+            "count": 3,
+            "total_ms": 19.454
+          },
+          {
+            "call": "git merge-base --is-ancestor",
+            "count": 2,
+            "total_ms": 14.495000000000001
+          },
+          {
+            "call": "git checkout --detach",
+            "count": 1,
+            "total_ms": 9.089
+          },
+          {
+            "call": "git status --porcelain",
+            "count": 1,
+            "total_ms": 8.454
+          },
+          {
+            "call": "git branch -d",
+            "count": 1,
+            "total_ms": 8.231
+          },
+          {
+            "call": "git worktree list",
+            "count": 1,
+            "total_ms": 7.075
+          },
+          {
+            "call": "git worktree prune",
+            "count": 1,
+            "total_ms": 7.065
+          },
+          {
+            "call": "git rev-parse --verify",
+            "count": 1,
+            "total_ms": 6.49
+          },
+          {
+            "call": "herdr tab close",
+            "count": 1,
+            "total_ms": 5.094
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx land (ff merge + strike)",
+      "group": "camp",
+      "first_run_ms": 84.587,
+      "wall": {
+        "n": 30,
+        "min_ms": 82.81,
+        "median_ms": 85.044,
+        "p95_ms": 88.924,
+        "max_ms": 94.335,
+        "mean_ms": 85.822
+      },
+      "cpu_median_ms": 70.548,
+      "spawns": {
+        "count": 9,
+        "total_ms": 73.898,
+        "calls": [
+          {
+            "call": "git status --porcelain",
+            "count": 2,
+            "total_ms": 17.099
+          },
+          {
+            "call": "git merge --ff-only",
+            "count": 1,
+            "total_ms": 16.5
+          },
+          {
+            "call": "git merge-base --is-ancestor",
+            "count": 2,
+            "total_ms": 14.918
+          },
+          {
+            "call": "git rev-parse --abbrev-ref",
+            "count": 2,
+            "total_ms": 12.846
+          },
+          {
+            "call": "git rev-list --count",
+            "count": 1,
+            "total_ms": 7.409
+          },
+          {
+            "call": "herdr tab close",
+            "count": 1,
+            "total_ms": 5.126
+          }
+        ]
+      }
+    },
+    {
+      "name": "vx dispatch (soldier still working)",
+      "group": "camp",
+      "first_run_ms": 68.039,
+      "wall": {
+        "n": 30,
+        "min_ms": 67.458,
+        "median_ms": 71.53,
+        "p95_ms": 74.141,
+        "max_ms": 75.644,
+        "mean_ms": 71.408
+      },
+      "cpu_median_ms": 59.421,
+      "spawns": {
+        "count": 6,
+        "total_ms": 64.425,
+        "calls": [
+          {
+            "call": "git worktree add",
+            "count": 1,
+            "total_ms": 35.779
+          },
+          {
+            "call": "git rev-parse --show-toplevel",
+            "count": 1,
+            "total_ms": 6.821
+          },
+          {
+            "call": "git rev-parse --abbrev-ref",
+            "count": 1,
+            "total_ms": 6.438
+          },
+          {
+            "call": "herdr tab create",
+            "count": 1,
+            "total_ms": 5.393
+          },
+          {
+            "call": "herdr agent prompt",
+            "count": 1,
+            "total_ms": 5.121
+          },
+          {
+            "call": "herdr agent start",
+            "count": 1,
+            "total_ms": 4.873
+          }
+        ]
+      },
+      "guard": {
+        "stat": "median",
+        "limit_ms": 5000,
+        "observed_ms": 71.53,
+        "why": "dispatch must return once herdr reports the soldier working, not wait out the 15 s quick-settle probe"
+      }
+    },
+    {
+      "name": "vx dispatch (state never reported)",
+      "group": "camp",
+      "informational": true,
+      "skipped": "slow, pass -slow",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    },
+    {
+      "name": "wake: sentinel poll",
+      "group": "wake",
+      "informational": true,
+      "wall": {
+        "n": 10,
+        "min_ms": 34.332,
+        "median_ms": 2537.023,
+        "p95_ms": 4549.716,
+        "max_ms": 4549.716,
+        "mean_ms": 2317.814
+      },
+      "guard": {
+        "stat": "max",
+        "limit_ms": 10000,
+        "observed_ms": 4549.716,
+        "why": "the sentinel must notice a finished soldier within a couple of poll intervals (5 s each)"
+      }
+    },
+    {
+      "name": "wake: state write",
+      "group": "wake",
+      "wall": {
+        "n": 10,
+        "min_ms": 1040.577,
+        "median_ms": 1064.442,
+        "p95_ms": 1077.023,
+        "max_ms": 1077.023,
+        "mean_ms": 1061.038
+      },
+      "guard": {
+        "stat": "median",
+        "limit_ms": 5000,
+        "observed_ms": 1064.442,
+        "why": "recording a finished soldier (a second pane read, the task save, the wake file) must take seconds at most"
+      }
+    },
+    {
+      "name": "wake: await poll",
+      "group": "wake",
+      "informational": true,
+      "wall": {
+        "n": 10,
+        "min_ms": 771.333,
+        "median_ms": 2478.057,
+        "p95_ms": 4995.867,
+        "max_ms": 4995.867,
+        "mean_ms": 2572.049
+      },
+      "guard": {
+        "stat": "max",
+        "limit_ms": 10000,
+        "observed_ms": 4995.867,
+        "why": "the Stop hook must pick up a wake within a couple of poll intervals (5 s each)"
+      }
+    },
+    {
+      "name": "wake: total",
+      "group": "wake",
+      "informational": true,
+      "wall": {
+        "n": 10,
+        "min_ms": 2675.534,
+        "median_ms": 5900.293,
+        "p95_ms": 8853.336,
+        "max_ms": 8853.336,
+        "mean_ms": 5950.901
+      },
+      "guard": {
+        "stat": "max",
+        "limit_ms": 30000,
+        "observed_ms": 8853.336,
+        "why": "a finished soldier must reach the commander well inside half a minute"
+      }
+    },
+    {
+      "name": "git rev-parse --abbrev-ref HEAD",
+      "group": "tools",
+      "informational": true,
+      "first_run_ms": 7.121,
+      "wall": {
+        "n": 30,
+        "min_ms": 6.387,
+        "median_ms": 6.556,
+        "p95_ms": 7.236,
+        "max_ms": 7.91,
+        "mean_ms": 6.648
+      },
+      "cpu_median_ms": 4.75
+    },
+    {
+      "name": "git status --porcelain",
+      "group": "tools",
+      "informational": true,
+      "first_run_ms": 11.612,
+      "wall": {
+        "n": 30,
+        "min_ms": 7.949,
+        "median_ms": 8.141,
+        "p95_ms": 8.346,
+        "max_ms": 8.349,
+        "mean_ms": 8.153
+      },
+      "cpu_median_ms": 6.226
+    },
+    {
+      "name": "doctor's Stop hook probe (env -i sh -c \u003chook\u003e)",
+      "group": "tools",
+      "informational": true,
+      "first_run_ms": 204.812,
+      "wall": {
+        "n": 30,
+        "min_ms": 30.961,
+        "median_ms": 32.228,
+        "p95_ms": 33.667,
+        "max_ms": 41.22,
+        "mean_ms": 32.478
+      },
+      "cpu_median_ms": 24.987
+    },
+    {
+      "name": "vx doctor (this machine's real tools)",
+      "group": "real",
+      "informational": true,
+      "skipped": "machine specific, pass -real-tools",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    },
+    {
+      "name": "herdr --version (real)",
+      "group": "real",
+      "informational": true,
+      "skipped": "machine specific, pass -real-tools",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    },
+    {
+      "name": "pi --version (real)",
+      "group": "real",
+      "informational": true,
+      "skipped": "machine specific, pass -real-tools",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    },
+    {
+      "name": "opencode --version (real)",
+      "group": "real",
+      "informational": true,
+      "skipped": "machine specific, pass -real-tools",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    },
+    {
+      "name": "gh --version (real)",
+      "group": "real",
+      "informational": true,
+      "skipped": "machine specific, pass -real-tools",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    },
+    {
+      "name": "herdr agent list (real server)",
+      "group": "real",
+      "informational": true,
+      "skipped": "touches the real herdr, pass -real-herdr",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    },
+    {
+      "name": "herdr agent get vxbench-no-such-agent (real server)",
+      "group": "real",
+      "informational": true,
+      "skipped": "touches the real herdr, pass -real-herdr",
+      "wall": {
+        "n": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p95_ms": 0,
+        "max_ms": 0,
+        "mean_ms": 0
+      }
+    }
+  ],
+  "package_init_ms": [
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/soldier",
+      "ms": 0.14
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/forum",
+      "ms": 0.094
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/prbody",
+      "ms": 0.086
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/piask",
+      "ms": 0.055
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/inbox",
+      "ms": 0.039
+    },
+    {
+      "package": "os",
+      "ms": 0.036
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/settle",
+      "ms": 0.031
+    },
+    {
+      "package": "internal/godebug",
+      "ms": 0.027
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/slot",
+      "ms": 0.025
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/state",
+      "ms": 0.022
+    },
+    {
+      "package": "runtime",
+      "ms": 0.02
+    },
+    {
+      "package": "html/template",
+      "ms": 0.013
+    },
+    {
+      "package": "net/netip",
+      "ms": 0.012
+    },
+    {
+      "package": "net/http",
+      "ms": 0.012
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/opencodeapi",
+      "ms": 0.011
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/selfupdate",
+      "ms": 0.011
+    },
+    {
+      "package": "unicode",
+      "ms": 0.011
+    },
+    {
+      "package": "syscall",
+      "ms": 0.01
+    },
+    {
+      "package": "crypto/internal/fips140/edwards25519",
+      "ms": 0.01
+    },
+    {
+      "package": "hash/crc32",
+      "ms": 0.009
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/tribunal",
+      "ms": 0.008
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/pending",
+      "ms": 0.006
+    },
+    {
+      "package": "crypto/tls",
+      "ms": 0.006
+    },
+    {
+      "package": "vendor/golang.org/x/net/http2/hpack",
+      "ms": 0.006
+    },
+    {
+      "package": "compress/flate",
+      "ms": 0.005
+    },
+    {
+      "package": "encoding/base64",
+      "ms": 0.004
+    },
+    {
+      "package": "encoding/base32",
+      "ms": 0.004
+    },
+    {
+      "package": "crypto/internal/fips140/rsa",
+      "ms": 0.004
+    },
+    {
+      "package": "mime",
+      "ms": 0.003
+    },
+    {
+      "package": "crypto/x509",
+      "ms": 0.002
+    },
+    {
+      "package": "archive/tar",
+      "ms": 0.002
+    },
+    {
+      "package": "errors",
+      "ms": 0.002
+    },
+    {
+      "package": "crypto/internal/fips140deps/cpu",
+      "ms": 0.002
+    },
+    {
+      "package": "regexp/syntax",
+      "ms": 0.002
+    },
+    {
+      "package": "crypto/internal/fips140",
+      "ms": 0.002
+    },
+    {
+      "package": "log",
+      "ms": 0.002
+    },
+    {
+      "package": "crypto/ecdsa",
+      "ms": 0.002
+    },
+    {
+      "package": "vendor/golang.org/x/net/dns/dnsmessage",
+      "ms": 0.002
+    },
+    {
+      "package": "crypto/x509/pkix",
+      "ms": 0.002
+    },
+    {
+      "package": "net",
+      "ms": 0.002
+    },
+    {
+      "package": "text/template",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/edwards25519/field",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/hkdf",
+      "ms": 0.001
+    },
+    {
+      "package": "vendor/golang.org/x/text/secure/bidirule",
+      "ms": 0.001
+    },
+    {
+      "package": "vendor/golang.org/x/net/http/httpproxy",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/hpke",
+      "ms": 0.001
+    },
+    {
+      "package": "path/filepath",
+      "ms": 0.001
+    },
+    {
+      "package": "regexp",
+      "ms": 0.001
+    },
+    {
+      "package": "vendor/golang.org/x/crypto/cryptobyte",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/ecdsa",
+      "ms": 0.001
+    },
+    {
+      "package": "internal/routebsd",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/sha512",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/rsa",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/aes/gcm",
+      "ms": 0.001
+    },
+    {
+      "package": "os/signal",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/md5",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/rand",
+      "ms": 0.001
+    },
+    {
+      "package": "text/template/parse",
+      "ms": 0.001
+    },
+    {
+      "package": "io/fs",
+      "ms": 0.001
+    },
+    {
+      "package": "sync",
+      "ms": 0.001
+    },
+    {
+      "package": "encoding/json",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/nistec",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/ed25519",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/drbg",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/sha3",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/check",
+      "ms": 0.001
+    },
+    {
+      "package": "context",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140deps/time",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/tls/internal/fips140tls",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/sha256",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/sha3",
+      "ms": 0.001
+    },
+    {
+      "package": "time",
+      "ms": 0.001
+    },
+    {
+      "package": "mime/multipart",
+      "ms": 0.001
+    },
+    {
+      "package": "github.com/isaias-alt/vexillum/internal/doctorcheck",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/sha512",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/bigmod",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/sha1",
+      "ms": 0.001
+    },
+    {
+      "package": "crypto/internal/fips140/aes",
+      "ms": 0
+    },
+    {
+      "package": "reflect",
+      "ms": 0
+    },
+    {
+      "package": "crypto/internal/fips140/hmac",
+      "ms": 0
+    },
+    {
+      "package": "crypto",
+      "ms": 0
+    },
+    {
+      "package": "html",
+      "ms": 0
+    },
+    {
+      "package": "internal/bytealg",
+      "ms": 0
+    },
+    {
+      "package": "vendor/golang.org/x/text/unicode/norm",
+      "ms": 0
+    },
+    {
+      "package": "internal/runtime/sys",
+      "ms": 0
+    },
+    {
+      "package": "crypto/sha256",
+      "ms": 0
+    },
+    {
+      "package": "crypto/internal/fips140/tls12",
+      "ms": 0
+    },
+    {
+      "package": "crypto/internal/fips140/tls13",
+      "ms": 0
+    },
+    {
+      "package": "vendor/golang.org/x/net/http/httpguts",
+      "ms": 0
+    },
+    {
+      "package": "iter",
+      "ms": 0
+    },
+    {
+      "package": "crypto/internal/fips140/ecdh",
+      "ms": 0
+    },
+    {
+      "package": "crypto/internal/fips140/mlkem",
+      "ms": 0
+    },
+    {
+      "package": "crypto/fips140",
+      "ms": 0
+    },
+    {
+      "package": "encoding/asn1",
+      "ms": 0
+    },
+    {
+      "package": "vendor/golang.org/x/net/idna",
+      "ms": 0
+    },
+    {
+      "package": "compress/gzip",
+      "ms": 0
+    }
+  ],
+  "package_init_total_ms": 0.7790000000000002
+}
