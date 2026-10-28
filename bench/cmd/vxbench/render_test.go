@@ -230,6 +230,39 @@ func TestPrintTerminalSummaryFailsOnAFailedGuardOrScenario(t *testing.T) {
 	}
 }
 
+func TestSummaryLineSaysWhenNoGuardWasEvaluated(t *testing.T) {
+	rep := sampleReport()
+	for i := range rep.Results {
+		rep.Results[i].Guard = nil
+	}
+	if got := summaryLine(palette{}, rep, nil); !strings.Contains(got, "no guards evaluated") || strings.Contains(got, "0 guards") {
+		t.Errorf("plain summary = %q", got)
+	}
+
+	cur, cv := renderFixture()
+	cv.sum.GuardsHeld, cv.sum.GuardsFailed = 0, 0
+	if got := summaryLine(palette{}, cur, cv); !strings.Contains(got, "no guards evaluated") || strings.Contains(got, "0 guards") {
+		t.Errorf("compare summary = %q", got)
+	}
+}
+
+func TestGuardsText(t *testing.T) {
+	for _, tc := range []struct {
+		held, failed int
+		want         string
+	}{
+		{0, 0, "no guards evaluated"},
+		{1, 0, "1 guard held"},
+		{3, 0, "3 guards held"},
+		{2, 1, "2 guards held, 1 FAILED"},
+		{0, 2, "0 guards held, 2 FAILED"},
+	} {
+		if got := guardsText(tc.held, tc.failed); got != tc.want {
+			t.Errorf("guardsText(%d, %d) = %q, want %q", tc.held, tc.failed, got, tc.want)
+		}
+	}
+}
+
 func TestPrintTerminalCompare(t *testing.T) {
 	cur, cv := renderFixture()
 	var buf bytes.Buffer

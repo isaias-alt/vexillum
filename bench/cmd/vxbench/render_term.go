@@ -324,6 +324,20 @@ func printVerbose(w io.Writer, p palette, rep report) {
 	}
 }
 
+// guardsText says how the guards fared, or that none was evaluated: "0 guards
+// held" would read as a failure of the run when it only selected scenarios
+// without one.
+func guardsText(held, failed int) string {
+	if held+failed == 0 {
+		return "no guards evaluated"
+	}
+	text := count(held, "guard") + " held"
+	if failed > 0 {
+		text += fmt.Sprintf(", %d FAILED", failed)
+	}
+	return text
+}
+
 // summaryLine is the last line of the report: one sentence on how it went.
 func summaryLine(p palette, rep report, cv *compareView) string {
 	guardsFailed, guardsHeld := countGuards(rep)
@@ -340,10 +354,7 @@ func summaryLine(p palette, rep report, cv *compareView) string {
 	}
 
 	if cv == nil {
-		text := fmt.Sprintf("%s timed, %d skipped, %d failed; %s held", count(timed, "scenario"), skipped, failed, count(guardsHeld, "guard"))
-		if guardsFailed > 0 {
-			text += fmt.Sprintf(", %d FAILED", guardsFailed)
-		}
+		text := fmt.Sprintf("%s timed, %d skipped, %d failed; %s", count(timed, "scenario"), skipped, failed, guardsText(guardsHeld, guardsFailed))
 		if failed > 0 || guardsFailed > 0 {
 			return p.paint(styleRed, "✗ "+text)
 		}
@@ -355,10 +366,7 @@ func summaryLine(p palette, rep report, cv *compareView) string {
 	if s.New > 0 {
 		text += fmt.Sprintf(", %d new", s.New)
 	}
-	text += "; " + count(s.GuardsHeld, "guard") + " held"
-	if s.GuardsFailed > 0 {
-		text += fmt.Sprintf(", %d FAILED", s.GuardsFailed)
-	}
+	text += "; " + guardsText(s.GuardsHeld, s.GuardsFailed)
 	if s.Failed > 0 {
 		text += fmt.Sprintf("; %s FAILED", count(s.Failed, "scenario"))
 	}

@@ -349,10 +349,16 @@ func (b *bench) runAll(base *report, thr thresholds) []result {
 		}
 	}
 
+	// A scenario that is skipped still gets its row in the report but is not
+	// announced: [6/6] followed by "skipped" would count work that never ran.
+	total := b.countRunnable(selected)
 	var results []result
-	drift := 0.0
-	for i, sc := range selected {
-		fmt.Fprintf(os.Stderr, "vxbench: [%d/%d] %s\n", i+1, len(selected), sc.name)
+	drift, started := 0.0, 0
+	for _, sc := range selected {
+		if b.skipReason(sc) == "" {
+			started++
+			fmt.Fprintf(os.Stderr, "vxbench: [%d/%d] %s\n", started, total, sc.name)
+		}
 		if sc.multi != nil {
 			results = append(results, b.runMulti(sc)...)
 			continue
@@ -367,6 +373,18 @@ func (b *bench) runAll(base *report, thr thresholds) []result {
 		results = append(results, res)
 	}
 	return results
+}
+
+// countRunnable is how many of scs will actually run, the denominator of the
+// progress line.
+func (b *bench) countRunnable(scs []scenario) int {
+	n := 0
+	for _, sc := range scs {
+		if b.skipReason(sc) == "" {
+			n++
+		}
+	}
+	return n
 }
 
 // runMulti runs a scenario that produces several rows, or none when it is
