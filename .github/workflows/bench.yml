@@ -1,0 +1,64 @@
+name: Bench
+
+# Informational only. This runs the vx benchmark (bench/README.md) on demand and
+# once a week, never on push or pull_request, and it does not fail on a
+# regression: a shared GitHub runner is noisy (other jobs on the same host,
+# varying CPU), and bench/baseline.json was captured on a maintainer's quiet
+# laptop, so a baseline from another machine compares badly. Read the numbers as
+# a hint, look at the "host" line of the report, and confirm on a quiet machine
+# before acting. Only a run that cannot produce a report at all (a build or
+# usage error) fails the workflow.
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays, 05:17 UTC.
+    - cron: "17 5 * * 1"
+
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Benchmark against the baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # bench/run.sh exits 0 when nothing regressed, 1 when something did and
+      # 2 on a usage error. The step only reports a regression; any other
+      # non-zero code is a real failure.
+      - name: Run the benchmark
+        run: |
+          mkdir -p bench-out
+          status=0
+          bench/run.sh -compare bench/baseline.json \
+            -json bench-out/bench.json -md bench-out/bench.md || status=$?
+          if [ "$status" -eq 1 ]; then
+            echo "::warning title=Benchmark::The run looks slower than bench/baseline.json. Runner noise and a baseline from another machine make this informational; see the report."
+          elif [ "$status" -ne 0 ]; then
+            echo "::error title=Benchmark::bench/run.sh failed with exit status $status"
+            exit "$status"
+          fi
+          if [ -f bench-out/bench.md ]; then
+            cat bench-out/bench.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vx-bench
+          path: |
+            bench-out/bench.md
+            bench-out/bench.json
+          if-no-files-found: warn
+          retention-days: 30

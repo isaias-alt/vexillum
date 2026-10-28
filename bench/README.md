@@ -24,7 +24,8 @@ bench/run.sh -h                               # every flag
 - **When something feels slow**, to see which command and how many
   subprocesses it starts, instead of guessing.
 - **Not on every commit.** A run takes minutes and is only meaningful on a
-  quiet machine. There is no CI job for it (a decision for later).
+  quiet machine. The only CI job is the optional, informational one described
+  under [Benchmark in CI](#benchmark-in-ci).
 
 Close builds, browsers and other agents first. The header shows the machine's
 load average at the start and the end of the run and says so when it is busy.
@@ -216,6 +217,30 @@ A baseline from another machine is not comparable: `-compare` says so when the
 CPU, core count, OS or architecture differ. Percentages against a different
 machine mean nothing; take a baseline there, or compare two reports taken on the
 same machine with `-against`.
+
+## Benchmark in CI
+
+`.github/workflows/bench.yml` runs `bench/run.sh -compare bench/baseline.json`
+on `ubuntu-latest`. It starts only from the Actions tab (`workflow_dispatch`)
+and on a weekly schedule; it never runs on a push or a pull request, so it
+cannot block a merge. It uploads the Markdown and JSON reports as the
+`vx-bench` artifact (30 days) and copies the Markdown into the run's summary.
+
+It is informational. A regression turns into a warning annotation, not a failed
+run; only a run that produces no report (a build or usage error) fails. Treat
+what it says with suspicion:
+
+- A shared runner is noisy: other jobs on the same host and a CPU that varies
+  from run to run move the numbers more than the thresholds allow for.
+- `bench/baseline.json` comes from another machine, so `-compare` warns that the
+  host differs and the percentages mean little. The `floor: empty Go program`
+  scenario shows how far apart the two are.
+
+If it flags something, reproduce it on a quiet machine with
+`bench/run.sh -compare bench/baseline.json` before acting on it. To get numbers
+that compare, take a baseline from a run of that workflow on the runner (the
+`vx-bench` JSON) and compare later runs against that file, not against the
+laptop's.
 
 ## Go benchmarks
 
