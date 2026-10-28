@@ -50,7 +50,7 @@ says how many are unlanded and that it can be deleted by hand.
 
 A herdr tab that is already gone (a soldier stopped by hand) never fails a
 strike. Any other herdr error is reported after the camp was returned and the
-task closed (an interrupted or failed task becomes struck); striking again
+task closed (an interrupted, failed or unconfirmed task becomes struck); striking again
 retries closing the pane, and on a task whose camp is already back in the pool
 it only cleans up the record. A camp leased to another task is never touched.
 
@@ -216,17 +216,24 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 	return code
 }
 
-// closeStruckTask marks an interrupted or failed task struck once its camp is
-// gone, the only states a strike rewrites. It re-checks the record on disk
-// under the tasks lock, so only a task still unfinished is closed and nothing
-// else is rewritten. It reports false, after saying so, when the record
-// could not be written.
+// neverFinished reports whether s is a state in which a task has no delivery
+// to keep: a strike closes it as struck. A done or shipped task keeps its
+// status, because that status is the record of what it delivered.
+func neverFinished(s state.Status) bool {
+	return s == state.StatusInterrupted || s == state.StatusFailed || s == state.StatusUnconfirmed
+}
+
+// closeStruckTask marks an interrupted, failed or unconfirmed task struck
+// once its camp is gone, the only states a strike rewrites. It re-checks the
+// record on disk under the tasks lock, so only a task still unfinished is
+// closed and nothing else is rewritten. It reports false, after saying so,
+// when the record could not be written.
 func closeStruckTask(projectRoot string, task state.Task, stderr io.Writer) bool {
-	if task.Status != state.StatusInterrupted && task.Status != state.StatusFailed {
+	if !neverFinished(task.Status) {
 		return true
 	}
 	_, err := state.Update(projectRoot, task.ID, func(current *state.Task) (bool, error) {
-		if current.Status != state.StatusInterrupted && current.Status != state.StatusFailed {
+		if !neverFinished(current.Status) {
 			return false, nil
 		}
 		current.Status = state.StatusStruck

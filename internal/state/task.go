@@ -93,9 +93,9 @@ const (
 	// for the sentinel to keep polling for on its own once this fires
 	// (matches Interrupted's own resting-state precedent).
 	StatusUnconfirmed Status = "unconfirmed"
-	// StatusStruck marks a task that never finished (interrupted or failed)
-	// whose camp 'vx strike' has since returned to the pool: nothing is
-	// left to watch, re-prompt or re-dispatch. A done or shipped task keeps
+	// StatusStruck marks a task that never finished (interrupted, failed or
+	// unconfirmed) whose camp 'vx strike' has since returned to the pool:
+	// nothing is left to watch, re-prompt or re-dispatch. A done or shipped task keeps
 	// its status when struck, because that status is the record of what it
 	// delivered.
 	StatusStruck Status = "struck"

@@ -12,6 +12,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/camp"
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/sentinel"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -457,6 +458,21 @@ func TestRunStrike_SecondStrikeIsIdempotent(t *testing.T) {
 	}
 }
 
+// An unconfirmed task never finished: striking its own camp closes it too,
+// not only an interrupted or failed one.
+func TestRunStrike_UnconfirmedTaskIsMarkedStruck(t *testing.T) {
+	m := newRemotelyMergedMission(t, state.StatusUnconfirmed)
+
+	code, out := strikeWith(t, m, &fakeHerdr{}, strikeOptions{Discard: true})
+
+	if code != 0 {
+		t.Fatalf("expected success, got %d: %s", code, out)
+	}
+	if got := loadTask(t, m).Status; got != state.StatusStruck {
+		t.Errorf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+}
+
 // A slot now leased to another task is never reset, detached or released.
 func TestRunStrike_SecondStrikeNeverTouchesACampLeasedToAnotherTask(t *testing.T) {
 	m, client := interruptedMissionWithGonePane(t)
@@ -617,6 +633,31 @@ func TestRunStrike_StaleTaskWhoseSlotWasReusedIsRetiredWhenLanded(t *testing.T) 
 	}
 	if len(client.tabClosedIDs) != 1 || client.tabClosedIDs[0] != "w1:tStale" {
 		t.Errorf("expected only the stale task's own tab closed, got %v", client.tabClosedIDs)
+	}
+	s.assertOtherUntouched(t, client)
+}
+
+// An unconfirmed task never finished either: retiring its stale entry marks
+// it struck, and a sentinel pass (even one that sees its old herdr agent
+// working again) leaves it so.
+func TestRunStrike_StaleUnconfirmedTaskIsStruckAndStaysSo(t *testing.T) {
+	s := newStaleTask(t, true, state.StatusUnconfirmed)
+	client := &fakeHerdr{promptStatus: "working"}
+
+	code, out := strikeWith(t, s.remotelyMergedMission, client, strikeOptions{})
+
+	if code != 0 || !strings.Contains(out, "left alone") {
+		t.Fatalf("expected the stale entry retired, got %d: %s", code, out)
+	}
+	if got := loadTask(t, s.remotelyMergedMission).Status; got != state.StatusStruck {
+		t.Fatalf("expected the task marked %s, got %s", state.StatusStruck, got)
+	}
+
+	if _, err := sentinel.Tick(s.home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if got := loadTask(t, s.remotelyMergedMission).Status; got != state.StatusStruck {
+		t.Errorf("expected the task to stay %s after a sentinel pass, got %s", state.StatusStruck, got)
 	}
 	s.assertOtherUntouched(t, client)
 }
