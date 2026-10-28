@@ -32,6 +32,7 @@ type fakeHerdr struct {
 	readVisibleErr    error
 	waitStatus        string
 	waitErr           error
+	onStatus          func() // runs inside AgentStatus, like a write made while the call is in flight
 }
 
 func (f *fakeHerdr) CreateTab(workspaceID, cwd, label string, env ...string) (string, string, error) {
@@ -41,6 +42,9 @@ func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) e
 func (f *fakeHerdr) AgentSendKeys(name string, keys ...string) error                 { return nil }
 func (f *fakeHerdr) AgentReady(name string) (bool, error)                            { return true, nil }
 func (f *fakeHerdr) AgentStatus(name string) (string, error) {
+	if f.onStatus != nil {
+		f.onStatus()
+	}
 	if err, ok := f.errFor[name]; ok {
 		return "", err
 	}
@@ -49,8 +53,10 @@ func (f *fakeHerdr) AgentStatus(name string) (string, error) {
 	}
 	return f.statuses[name], nil
 }
-func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) { return "", nil }
-func (f *fakeHerdr) AgentRead(name string, lines int) (string, error)             { return f.readOutput, nil }
+func (f *fakeHerdr) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
+	return "", nil
+}
+func (f *fakeHerdr) AgentRead(name string, lines int) (string, error) { return f.readOutput, nil }
 func (f *fakeHerdr) AgentReadVisible(name string) (string, error) {
 	return f.readVisibleOutput, f.readVisibleErr
 }
@@ -138,6 +144,7 @@ func newRunningTask(t *testing.T, projectRoot, agentName string) state.Task {
 	task.HerdrAgentName = agentName
 	task.CampPath, task.CampBase = newCommittedMissionCamp(t)
 	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
+	task.PromptSubmittedAt = task.UpdatedAt
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
@@ -156,6 +163,7 @@ func newRunningScoutTask(t *testing.T, projectRoot, agentName string) state.Task
 	task.Status = state.StatusRunning
 	task.HerdrAgentName = agentName
 	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
+	task.PromptSubmittedAt = task.UpdatedAt
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
@@ -1230,6 +1238,7 @@ func newRunningMissionTaskWithCamp(t *testing.T, projectRoot, agentName, campPat
 	task.CampPath = campPath
 	task.CampBase = base
 	task.UpdatedAt = time.Now().Add(-1 * time.Minute)
+	task.PromptSubmittedAt = task.UpdatedAt
 	if err := state.Save(projectRoot, task); err != nil {
 		t.Fatalf("state.Save: %v", err)
 	}
@@ -2454,5 +2463,172 @@ func TestSweeper_WarnsOncePerProblem(t *testing.T) {
 	}
 	if got := strings.Count(log.String(), "unsupported schema version 3"); got != 2 {
 		t.Errorf("expected the re-broken file to be warned about again (2 warnings total), got %d:\n%s", got, log.String())
+	}
+}
+
+// A soldier that went idle without a completion signal, a pause or a question,
+// whose dispatch never recorded the prompt as submitted, was never sent its
+// prompt (vx dispatch died between pasting and submitting it). Once the
+// confirm window has held, the task is interrupted, not unconfirmed, so 'vx
+// redispatch' can recover it.
+func TestTick_IdleWithNoRecordedPromptBecomesInterruptedNotUnconfirmed(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.PromptSubmittedAt = time.Time{}
+	task.IdleUnconfirmedSince = time.Now().Add(-31 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	woke, err := sentinel.Tick(home, client)
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if woke != 1 {
+		t.Fatalf("expected 1 wake, got %d", woke)
+	}
+
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Status != state.StatusInterrupted {
+		t.Errorf("expected status interrupted, got %s", got.Status)
+	}
+	if !strings.Contains(got.Output, "redispatch") || !strings.Contains(got.Output, "without ever being sent its prompt") {
+		t.Errorf("expected a note pointing at redispatch, got %q", got.Output)
+	}
+	if !got.IdleUnconfirmedSince.IsZero() {
+		t.Error("expected the idle mark cleared once interrupted")
+	}
+
+	wakes, err := sentinel.Drain(proj)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if len(wakes) != 1 || wakes[0].NewStatus != state.StatusInterrupted {
+		t.Errorf("expected one wake -> interrupted, got %+v", wakes)
+	}
+}
+
+// The same idle soldier is still held for the confirm window first: dispatch
+// may simply not have recorded the prompt yet, and a task is never condemned
+// on one observation.
+func TestTick_IdleWithNoRecordedPromptWaitsOutTheConfirmWindow(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.PromptSubmittedAt = time.Time{}
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	if woke, err := sentinel.Tick(home, client); err != nil || woke != 0 {
+		t.Fatalf("Tick = %d, %v; want 0, nil", woke, err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Status != state.StatusRunning || got.IdleUnconfirmedSince.IsZero() {
+		t.Errorf("expected running with the idle mark set, got %s %v", got.Status, got.IdleUnconfirmedSince)
+	}
+}
+
+// A real completion signal beats the missing record: a mission with a commit
+// has plainly been prompted, whatever the task file says (a task dispatched
+// by a build that did not record the prompt, for one).
+func TestTick_CompletionSignalSettlesDoneEvenWithNoRecordedPrompt(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	task := newRunningTask(t, proj, "vx-do-the-thing")
+	task.PromptSubmittedAt = time.Time{}
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Status != state.StatusDone {
+		t.Errorf("expected done, got %s", got.Status)
+	}
+}
+
+// With the prompt recorded, an unexplained idle turn is unconfirmed as ever,
+// and its note says how to carry it on, since redispatch does not take it.
+func TestTick_IdleWithRecordedPromptNoteExplainsHowToCarryOn(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.IdleUnconfirmedSince = time.Now().Add(-31 * time.Second)
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Status != state.StatusUnconfirmed {
+		t.Fatalf("expected unconfirmed, got %s", got.Status)
+	}
+	for _, want := range []string{"Only an interrupted task can be re-dispatched", " prompt", "strike --discard"} {
+		if !strings.Contains(got.Output, want) {
+			t.Errorf("expected the note to contain %q, got %q", want, got.Output)
+		}
+	}
+}
+
+// The sentinel writes back a snapshot it read before dispatch recorded the
+// prompt as submitted; that write must not erase the record.
+func TestTick_KeepsAPromptRecordedWhileTheSnapshotWasInFlight(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	campPath, base := newEmptyMissionCamp(t)
+	task := newRunningMissionTaskWithCamp(t, proj, "vx-do-the-thing", campPath, base)
+	task.PromptSubmittedAt = time.Time{}
+	if err := state.Save(proj, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	// Dispatch records the prompt while the sentinel's herdr call is in flight.
+	recorded := time.Now().UTC().Truncate(time.Second)
+	client := &fakeHerdr{statuses: map[string]string{"vx-do-the-thing": "idle"}}
+	client.onStatus = func() {
+		if _, err := state.Update(proj, task.ID, func(current *state.Task) (bool, error) {
+			current.PromptSubmittedAt = recorded
+			return true, nil
+		}); err != nil {
+			t.Errorf("state.Update: %v", err)
+		}
+	}
+	if _, err := sentinel.Tick(home, client); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	got, err := state.Load(proj, task.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !got.PromptSubmittedAt.Equal(recorded) {
+		t.Errorf("PromptSubmittedAt = %v, want %v", got.PromptSubmittedAt, recorded)
+	}
+	if got.IdleUnconfirmedSince.IsZero() {
+		t.Error("expected the idle mark to be saved")
 	}
 }

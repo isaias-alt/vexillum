@@ -134,7 +134,7 @@ func answerAsk(projectRoot string, task state.Task, answer string, client herdr.
 	}
 	waitUnblocked(client, task.HerdrAgentName)
 
-	status, err := client.AgentWait(task.HerdrAgentName, nil, quickSettleTimeoutMS)
+	status, err := waitProbe(client, task.HerdrAgentName)
 	return finishAnswerBlocked(projectRoot, task, answer, chosen, status, err, client)
 }
 

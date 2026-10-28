@@ -59,13 +59,15 @@ type fakeHerdr struct {
 	promptErr             error
 	promptCalls           []string
 	promptNames           []string
-	promptStalledForCalls int // AgentPrompt reports agent_prompt_stalled for this many calls before promptErr/promptStatus
+	promptUntil           [][]string // the until states of each AgentPrompt call
+	promptStalledForCalls int        // AgentPrompt reports agent_prompt_stalled for this many calls before promptErr/promptStatus
 
 	readVisibleOutput string
 	readVisibleErr    error
 	waitStatus        string
 	waitErr           error
-	waitCalls         []string // agent name on each AgentWait call
+	waitCalls         []string   // agent name on each AgentWait call
+	waitUntil         [][]string // the until states of each AgentWait call
 
 	tabCloseErr   error
 	tabCloseCalls []string
@@ -106,9 +108,10 @@ func (f *fakeHerdr) AgentStatus(name string) (string, error) {
 	return f.promptStatus, nil
 }
 
-func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
+func (f *fakeHerdr) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
 	f.promptCalls = append(f.promptCalls, text)
 	f.promptNames = append(f.promptNames, name)
+	f.promptUntil = append(f.promptUntil, until)
 	if len(f.promptCalls) <= f.promptStalledForCalls {
 		return "", &herdr.APIError{Code: "agent_prompt_stalled", Message: "no observed working or blocked state"}
 	}
@@ -128,6 +131,7 @@ func (f *fakeHerdr) AgentReadVisible(name string) (string, error) {
 
 func (f *fakeHerdr) AgentWait(name string, until []string, timeoutMS int) (string, error) {
 	f.waitCalls = append(f.waitCalls, name)
+	f.waitUntil = append(f.waitUntil, until)
 	return f.waitStatus, f.waitErr
 }
 
@@ -590,6 +594,86 @@ func TestRunInHerdr_TimeoutHandsOffToSentinel(t *testing.T) {
 	}
 	if persisted.Status != state.StatusRunning {
 		t.Errorf("expected persisted status running, got %s", persisted.Status)
+	}
+	if persisted.PromptSubmittedAt.IsZero() {
+		t.Error("expected the prompt recorded as submitted once herdr returned")
+	}
+}
+
+// The probe stops as soon as the soldier is seen working: that is how a
+// dispatch returns in milliseconds instead of sleeping to the probe's timeout.
+// The prompt asks herdr for working as well as the settled states, and a
+// working answer leaves the task Running for the sentinel with the prompt
+// recorded as submitted.
+func TestRunInHerdr_WorkingSoldierEndsTheProbeAndRecordsThePrompt(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "working", readOutput: "should not be read"}
+
+	before := time.Now()
+	got, err := runInHerdr(t, home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Errorf("expected running, got %s", got.Status)
+	}
+	if got.PromptSubmittedAt.Before(before.Add(-time.Second)) || got.PromptSubmittedAt.After(time.Now().Add(time.Second)) {
+		t.Errorf("PromptSubmittedAt = %v, want about now", got.PromptSubmittedAt)
+	}
+	if got.Output != "" {
+		t.Errorf("a working soldier has no transcript to save yet, got %q", got.Output)
+	}
+	if len(client.promptUntil) != 1 {
+		t.Fatalf("expected one prompt call, got %d", len(client.promptUntil))
+	}
+	for _, want := range []string{"working", "idle", "done", "blocked"} {
+		if !slices.Contains(client.promptUntil[0], want) {
+			t.Errorf("expected the probe to stop at %q, got %v", want, client.promptUntil[0])
+		}
+	}
+
+	persisted, err := state.Load(testProjectRoot(t, home), task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if persisted.Status != state.StatusRunning || !persisted.PromptSubmittedAt.Equal(got.PromptSubmittedAt) {
+		t.Errorf("persisted = %s %v, want running %v", persisted.Status, persisted.PromptSubmittedAt, got.PromptSubmittedAt)
+	}
+}
+
+// A trivial prompt that settles before herdr sees the soldier work is still
+// reported by the probe, as before, and records the prompt too.
+func TestRunInHerdr_SettledProbeRecordsThePrompt(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptStatus: "blocked", readOutput: "Which library?"}
+
+	got, err := runInHerdr(t, home, "w1", task, c, client)
+	if err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if got.Status != state.StatusBlocked {
+		t.Errorf("expected blocked, got %s", got.Status)
+	}
+	if got.PromptSubmittedAt.IsZero() {
+		t.Error("expected the prompt recorded as submitted")
+	}
+}
+
+// A prompt herdr rejected was not delivered, so nothing is recorded as
+// submitted.
+func TestRunInHerdr_FailedPromptIsNotRecordedAsSubmitted(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	client := &fakeHerdr{tabID: "w1:t2", paneID: "w1:p2", promptErr: fmt.Errorf("herdr socket exploded")}
+
+	got, _ := runInHerdr(t, home, "w1", task, c, client)
+	if !got.PromptSubmittedAt.IsZero() {
+		t.Errorf("PromptSubmittedAt = %v, want zero for a prompt that failed", got.PromptSubmittedAt)
 	}
 }
 
@@ -1180,6 +1264,48 @@ func TestAnswerBlocked_StillWorkingLeftRunning(t *testing.T) {
 	}
 }
 
+// A soldier seen working after its answer ends the probe like a timeout: the
+// task is Running and the answer recorded, for the plain-text path and the
+// modal key path alike.
+func TestAnswerBlocked_WorkingSoldierLeftRunning(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+	client := &fakeHerdr{promptStatus: "working"}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "Use Auth0", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Errorf("expected running, got %s", got.Status)
+	}
+	if got.Decision == nil || got.Decision.Answer != "Use Auth0" {
+		t.Errorf("expected the answer recorded, got %+v", got.Decision)
+	}
+	if len(client.promptUntil) != 1 || !slices.Contains(client.promptUntil[0], "working") {
+		t.Errorf("expected the probe to stop at working, got %v", client.promptUntil)
+	}
+}
+
+func TestAnswerBlocked_ModalDecision_WorkingSoldierLeftRunning(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newModalBlockedTask(t, projectRoot, "vx-pick-a-database")
+	client := &fakeHerdr{waitStatus: "working"}
+
+	got, err := soldier.AnswerBlocked(projectRoot, task, "1", client)
+	if err != nil {
+		t.Fatalf("AnswerBlocked: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Errorf("expected running, got %s", got.Status)
+	}
+	if len(client.waitUntil) != 1 || !slices.Contains(client.waitUntil[0], "working") {
+		t.Errorf("expected the wait to stop at working, got %v", client.waitUntil)
+	}
+}
+
 // If the soldier immediately asks another question, AnswerBlocked replaces
 // the decision with the new one rather than leaving the just-answered
 // question in place.
@@ -1655,5 +1781,29 @@ func TestDismissBlocked_DoesNotReblockOnTheSameLine(t *testing.T) {
 	}
 	if got.Status == state.StatusBlocked {
 		t.Fatalf("expected the dismissed question not to block again, got %s", got.Status)
+	}
+}
+
+// A soldier seen working after a re-prompt ends the probe at once and is left
+// Running, with the prompt recorded as an amendment: the sentinel records the
+// next settle.
+func TestReprompt_WorkingSoldierLeftRunning(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := testProjectRoot(t, home)
+	task := newBlockedTask(t, projectRoot, "vx-refactor-the-auth-module")
+	client := &fakeHerdr{promptStatus: "working"}
+
+	got, err := soldier.Reprompt(projectRoot, task, "also add tests", client)
+	if err != nil {
+		t.Fatalf("Reprompt: %v", err)
+	}
+	if got.Status != state.StatusRunning {
+		t.Errorf("expected running, got %s", got.Status)
+	}
+	if len(got.Amendments) == 0 {
+		t.Error("expected the prompt recorded as an amendment")
+	}
+	if len(client.promptUntil) != 1 || !slices.Contains(client.promptUntil[0], "working") {
+		t.Errorf("expected the probe to stop at working, got %v", client.promptUntil)
 	}
 }

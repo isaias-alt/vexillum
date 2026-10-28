@@ -63,7 +63,13 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
   task: its herdr pane disappeared (closed by hand, or herdr restarted) while it
   was working. Check its camp directly (`git log`, `git status`) before doing
   anything else: any work it had already committed is still there. If that work
-  matters, land it normally first (`vx land <task-id>`).
+  matters, land it normally first (`vx land <task-id>`). One more cause: a
+  soldier that went idle without ever being sent its prompt (the `vx dispatch`
+  that launched it died between pasting and submitting it, leaving an unsent
+  paste in its pane) is marked interrupted too, and its note says so. Nothing
+  ran, so `vx redispatch <task-id>` relaunches it from the original prompt. An
+  `unconfirmed` task is different: it was prompted, its pane is open, and
+  `vx redispatch` refuses it (carry it on with `vx prompt`).
 
 ## What a wake is, and what you are not told
 

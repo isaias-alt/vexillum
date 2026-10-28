@@ -70,9 +70,9 @@ this from inside a herdr-managed pane) and both herdr and the harness's CLI
 (claude, pi or opencode) on PATH; if any is missing it says so and exits before
 creating anything ('vx doctor' checks your setup).
 
-Returns quickly: it only waits out a short quick-settle probe, not the
-soldier's whole task. A trivial prompt may finish within that window and
-report its result immediately; anything else is left running and
-auto-starts a sentinel (if one isn't already watching this project) to
+Returns quickly: it submits the prompt and stops waiting as soon as the
+soldier is seen working (or has already settled), not for its whole task. A
+trivial prompt that settles at once reports its result immediately; anything
+else is left running and auto-starts a sentinel (if one isn't already watching this project) to
 record its final status. See 'vx sentinel'.
 ```

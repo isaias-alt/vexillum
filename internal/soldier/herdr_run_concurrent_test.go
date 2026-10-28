@@ -20,13 +20,13 @@ type racingHerdr struct {
 	onStatus func()
 }
 
-func (r *racingHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
+func (r *racingHerdr) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
 	if r.onPrompt != nil {
 		during := r.onPrompt
 		r.onPrompt = nil
 		during()
 	}
-	return r.fakeHerdr.AgentPrompt(name, text, timeoutMS)
+	return r.fakeHerdr.AgentPrompt(name, text, until, timeoutMS)
 }
 
 func (r *racingHerdr) AgentStatus(name string) (string, error) {

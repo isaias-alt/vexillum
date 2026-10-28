@@ -148,7 +148,7 @@ time the process used, and how many subprocesses a run started.
 bench/run.sh                        # every scenario, results as markdown on stdout
 bench/run.sh -n 50 -json out.json   # more runs, and the full report as JSON
 bench/run.sh -only 'doctor|models'  # scenarios whose name matches a regexp
-bench/run.sh -slow                  # also the scenario that waits out the 15s probe
+bench/run.sh -slow                  # also the scenario that waits out the probe's 15s bound
 bench/run.sh -real-herdr            # also read-only calls to your real herdr server
 bench/run.sh -h                     # every flag
 ```
@@ -167,10 +167,14 @@ What it measures:
   `land`, against a fake herdr and a fake claude (`bench/fakes`). They answer the
   calls dispatch makes with the real JSON shape, so no model, terminal or herdr
   server is needed and what is left is vexillum's work plus its git and herdr
-  calls. With `-slow`, the fake herdr behaves like a soldier that is still
-  working, so `agent prompt --wait` sleeps for its whole `--timeout` and fails
-  with `timeout`, as the real one does when the quick-settle probe of dispatch
-  expires.
+  calls. `dispatch (soldier still working)` has the fake herdr behave like a
+  soldier that is at work when the prompt goes in: it answers `working` at once
+  to a call that asks to stop at `working` (`--until working`), as herdr does,
+  and sleeps for the whole `--timeout` to any other. With `-slow`, `dispatch
+  (soldier state never reported)` has it answer none of the states, so the probe
+  waits out its upper bound (15s). The fake's `VXBENCH_PROMPT_MODE` and
+  `VXBENCH_AGENT_STATUS` (see `bench/fakes/herdr`) also let a test kill a
+  dispatch mid-prompt and show a sentinel an idle soldier.
 - **External tools** vx shells out to (`git`, `herdr --version`, `pi --version`,
   `opencode --version`, `gh --version`, doctor's Stop hook probe), for scale.
 

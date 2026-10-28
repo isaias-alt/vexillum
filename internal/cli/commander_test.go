@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/isaias-alt/vexillum/internal/doctorcheck"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
@@ -187,6 +188,9 @@ func doctorOutput(t *testing.T, commander []string, tools ...string) (int, strin
 	t.Helper()
 	t.Setenv("PATH", fakeBinDir(t, tools...))
 	t.Cleanup(doctorcheck.SetLiveSentinelPIDs(func() ([]int, error) { return nil, nil }))
+	// The fake vx below exits at once; a loaded machine must not make the
+	// probe give up on it first and report "still waiting".
+	t.Cleanup(doctorcheck.SetHookProbeTimeout(time.Minute))
 	projectDir, _ := newProject(t)
 	writeFileT(t, filepath.Join(projectDir, "AGENTS.md"), englishAgents)
 	if r := doInit(projectDir, t.TempDir(), setupOptions{Yes: true, Commander: commander}, "", false); r.code != 0 {

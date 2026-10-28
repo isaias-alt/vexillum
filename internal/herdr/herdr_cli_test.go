@@ -131,7 +131,7 @@ func TestCLI_AgentPrompt_Success(t *testing.T) {
   "agent prompt") echo '{"result":{"agent":{"agent_status":"done"}}}' ;;
 esac`))
 
-	status, err := (CLI{}).AgentPrompt("soldier-1", "do the thing", 5000)
+	status, err := (CLI{}).AgentPrompt("soldier-1", "do the thing", nil, 5000)
 	if err != nil {
 		t.Fatalf("AgentPrompt: %v", err)
 	}
@@ -413,5 +413,31 @@ esac`))
 	want := []AgentInfo{{Kind: "claude", PaneID: "w1:p1", Cwd: "/a"}, {Kind: "pi", PaneID: "w1:p2", Name: "vx-x", Cwd: "/b"}}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("AgentList = %+v, want %+v", got, want)
+	}
+}
+
+// The states to stop at are passed to herdr as repeated --until flags, after
+// which herdr's default (idle, done, blocked) no longer applies.
+func TestCLI_AgentPrompt_PassesUntilStates(t *testing.T) {
+	t.Setenv("PATH", herdrStub(t, `case "$1 $2" in
+  "agent prompt") echo "$*" > "$HERDR_ARGS_FILE"; echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
+esac`))
+	argsFile := filepath.Join(t.TempDir(), "args")
+	t.Setenv("HERDR_ARGS_FILE", argsFile)
+
+	status, err := (CLI{}).AgentPrompt("soldier-1", "do the thing", []string{"idle", "working"}, 5000)
+	if err != nil {
+		t.Fatalf("AgentPrompt: %v", err)
+	}
+	if status != "working" {
+		t.Errorf("AgentPrompt = %q, want working", status)
+	}
+	args, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("reading the recorded args: %v", err)
+	}
+	want := "agent prompt soldier-1 do the thing --wait --timeout 5000 --until idle --until working"
+	if got := strings.TrimSpace(string(args)); got != want {
+		t.Errorf("herdr args = %q, want %q", got, want)
 	}
 }

@@ -50,7 +50,7 @@ type OpenCodeAPI interface {
 // falls back to prompting; herdr.CLI satisfies it.
 type InjectorHerdr interface {
 	herdr.Locator
-	AgentPrompt(name, text string, timeoutMS int) (status string, err error)
+	AgentPrompt(name, text string, until []string, timeoutMS int) (status string, err error)
 }
 
 // OpenCodeInjector delivers wakes to OpenCode commanders. One value serves the
@@ -196,7 +196,7 @@ func (i *OpenCodeInjector) commanderPane(root string) (pane string, found bool, 
 }
 
 func (i *OpenCodeInjector) promptViaHerdr(pane, text string) error {
-	_, err := i.Herdr.AgentPrompt(pane, text, herdrFallbackTimeoutMS)
+	_, err := i.Herdr.AgentPrompt(pane, text, nil, herdrFallbackTimeoutMS)
 	if err == nil || herdr.IsTimeout(err) {
 		// Accepted: the commander is working on it.
 		return nil

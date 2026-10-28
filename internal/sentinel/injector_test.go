@@ -52,7 +52,7 @@ func (f *fakeInjHerdr) AgentList() ([]herdr.AgentInfo, error) {
 	return f.agents, nil
 }
 
-func (f *fakeInjHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
+func (f *fakeInjHerdr) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.prompts = append(f.prompts, name+": "+text)

@@ -11,7 +11,7 @@ set -euo pipefail
 #
 # Usage:
 #   bench/run.sh                       # all scenarios, 30 timed runs each
-#   bench/run.sh -n 50 -slow           # more runs, plus the 15s-timeout scenario
+#   bench/run.sh -n 50 -slow           # more runs, plus the scenario that waits out the 15s probe bound
 #   bench/run.sh -only 'doctor|models' # a subset, by regexp on the name
 #   bench/run.sh -json bench.json      # also write the full report as JSON
 #

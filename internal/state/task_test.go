@@ -468,7 +468,7 @@ func TestOwnedKeys_CoversEveryTaskField(t *testing.T) {
 	task.CampSlot, task.CampPath, task.CampBranch, task.CampBase = 1, "p", "b", "main"
 	task.ExitCode, task.Output = &one, "o"
 	task.HerdrWorkspaceID, task.HerdrTabID, task.HerdrPaneID, task.HerdrAgentName = "w", "t", "p", "a"
-	task.AgentNotFoundSince, task.IdleUnconfirmedSince = now, now
+	task.AgentNotFoundSince, task.IdleUnconfirmedSince, task.PromptSubmittedAt = now, now, now
 	task.Redispatches, task.Model, task.Effort = 1, "m", "e"
 	task.Decision = &Decision{Question: "q"}
 	task.Amendments = []Amendment{{Text: "t"}}

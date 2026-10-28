@@ -5,9 +5,18 @@
 #
 # VXBENCH_PROMPT_MODE decides what "agent prompt --wait" does:
 #   working  (default) the agent is already working: return at once
-#   busy     the soldier is still at work: sleep for --timeout, then fail with
-#            the "timeout" error, as the real herdr does when the quick-settle
-#            probe of dispatch expires
+#   busy     the soldier is at work and stays so. A call that asks to stop at
+#            "working" (--until working) gets it at once; any other call sleeps
+#            for --timeout and fails with the "timeout" error, as the real
+#            herdr does when it never sees one of the requested states
+#   silent   herdr never sees any of the requested states, even working: every
+#            call sleeps for --timeout and fails with the "timeout" error. The
+#            upper bound of dispatch's probe
+#   hang     the call does not return for a minute: a vx dispatch killed here
+#            dies between pasting the prompt and submitting it
+#
+# VXBENCH_AGENT_STATUS is the agent_status "agent get" reports (default
+# working), so a sentinel run against the fake can see an idle soldier.
 
 ok() {
 	printf '{"id":"1","result":%s}\n' "$1"
@@ -26,7 +35,7 @@ case "$1 $2" in
 	ok '{}'
 	;;
 "agent get")
-	ok '{"agent":{"agent":"claude","name":"'"$3"'","pane_id":"p1","agent_status":"working","interactive_ready":true}}'
+	ok '{"agent":{"agent":"claude","name":"'"$3"'","pane_id":"p1","agent_status":"'"${VXBENCH_AGENT_STATUS:-working}"'","interactive_ready":true}}'
 	;;
 "agent list")
 	ok '{"agents":[]}'
@@ -35,19 +44,30 @@ case "$1 $2" in
 	echo "fake transcript"
 	;;
 "agent wait" | "agent prompt")
-	if [ "${VXBENCH_PROMPT_MODE:-working}" = "busy" ]; then
-		timeout_ms=15000
-		prev=""
-		for arg in "$@"; do
-			if [ "$prev" = "--timeout" ]; then
-				timeout_ms="$arg"
-			fi
-			prev="$arg"
-		done
-		sleep "$((timeout_ms / 1000))"
-		printf '{"id":"1","error":{"code":"timeout","message":"timed out waiting for the agent"}}\n' >&2
-		exit 1
-	fi
+	timeout_ms=15000
+	until_working=no
+	prev=""
+	for arg in "$@"; do
+		if [ "$prev" = "--timeout" ]; then
+			timeout_ms="$arg"
+		fi
+		if [ "$prev" = "--until" ] && [ "$arg" = "working" ]; then
+			until_working=yes
+		fi
+		prev="$arg"
+	done
+	case "${VXBENCH_PROMPT_MODE:-working}" in
+	hang)
+		sleep 60
+		;;
+	busy | silent)
+		if [ "$until_working" = "no" ] || [ "${VXBENCH_PROMPT_MODE}" = "silent" ]; then
+			sleep "$((timeout_ms / 1000))"
+			printf '{"id":"1","error":{"code":"timeout","message":"timed out waiting for the agent"}}\n' >&2
+			exit 1
+		fi
+		;;
+	esac
 	ok '{"agent":{"agent_status":"working"}}'
 	;;
 *)

@@ -18,10 +18,14 @@ import (
 )
 
 const (
-	// quickSettleTimeoutMS bounds a short probe, not the soldier's real
-	// work budget: "did this settle fast" (a trivial prompt), not "wait
-	// for it to finish". A real task almost always outlives this and
-	// hands off to internal/sentinel's polling instead - see RunInHerdr.
+	// quickSettleTimeoutMS is the upper bound of a short probe, not the
+	// soldier's real work budget: "did this settle fast" (a trivial
+	// prompt), not "wait for it to finish". The probe stops at the first
+	// state in probeStates, so it ends as soon as the soldier is seen
+	// working and this bound is only reached when herdr reports none of
+	// them (an unknown status). A real task almost always outlives the
+	// probe and hands off to internal/sentinel's polling instead - see
+	// RunInHerdr.
 	quickSettleTimeoutMS    = 15 * 1000 // 15 seconds
 	defaultReadLines        = 500
 	trustDialogSettleWindow = 15 * time.Second
@@ -40,6 +44,35 @@ const (
 
 	notReadyPollInterval = 500 * time.Millisecond
 )
+
+// probeStates are the states a quick probe (a prompt or a wait that is not a
+// wait for the soldier's work to finish) stops at: idle, done and blocked are
+// a settle, working means the soldier took the prompt and is at it. Without
+// working herdr sleeps to the probe's timeout whenever the soldier is busy,
+// which is the normal case.
+var probeStates = []string{"idle", "done", "blocked", "working"}
+
+// errStillWorking is what a probe that stopped on "working" reports. It has
+// herdr's timeout code on purpose: a probe that outlasts its window and one
+// that sees the soldier at work mean the same to every caller (the task stays
+// Running and the sentinel records the eventual settle), so they share the
+// herdr.IsTimeout branch.
+var errStillWorking = &herdr.APIError{Code: "timeout", Message: "the soldier is working"}
+
+// probeResult turns a probe that stopped on "working" into errStillWorking,
+// and returns every other outcome unchanged.
+func probeResult(status string, err error) (string, error) {
+	if err == nil && status == "working" {
+		return "", errStillWorking
+	}
+	return status, err
+}
+
+// waitProbe is client.AgentWait as a quick probe: it stops at the first of
+// probeStates, with a working soldier reported as errStillWorking.
+func waitProbe(client herdr.Client, name string) (string, error) {
+	return probeResult(client.AgentWait(name, probeStates, quickSettleTimeoutMS))
+}
 
 // notReadyPollWindow is how long startAgent keeps asking herdr whether an
 // agent that failed to start with agent_not_ready came up after all. herdr
@@ -238,14 +271,23 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	promptText += pauseInstructions(pause.Path(projectRoot, task.HerdrAgentName))
 	promptText += needsDecisionInstructions(harness)
 	status, err := promptWithStalledRetry(client, agentName, promptText, quickSettleTimeoutMS)
+	submittedAt := time.Now().UTC()
 	if err != nil {
 		if herdr.IsTimeout(err) {
-			// Not a failure: the soldier is still working past the quick
-			// probe window, which is the normal case for real work. The
-			// task stays Running (already persisted above) - the
-			// sentinel owns detecting and recording its eventual
-			// settlement.
-			return task, nil
+			// Not a failure: the soldier is working (or still going past
+			// the quick probe window), which is the normal case for real
+			// work. The task stays Running (already persisted above) -
+			// the sentinel owns detecting and recording its eventual
+			// settlement. herdr returned, so the prompt was delivered:
+			// that is recorded, and it is what tells the sentinel this
+			// dispatch did not die before submitting.
+			saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
+				current.PromptSubmittedAt = submittedAt
+			})
+			if err != nil {
+				return task, fmt.Errorf("recording the prompt as submitted: %w", err)
+			}
+			return saved, nil
 		}
 		if herdr.IsNotRunning(err) {
 			// The pane closed while herdr was waiting on it (confirmed
@@ -271,6 +313,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		task.Decision = blockedDecision(projectRoot, client, task, agentName, status, task.Output)
 	}
 	saved, err = updateTask(projectRoot, task.ID, func(current *state.Task) {
+		current.PromptSubmittedAt = submittedAt
 		applySettled(current, task, readErr == nil)
 	})
 	if err != nil {
@@ -377,7 +420,7 @@ func AnswerBlocked(projectRoot string, task state.Task, answer string, client he
 			if err := client.AgentSendKeys(task.HerdrAgentName, strconv.Itoa(n)); err != nil {
 				return task, fmt.Errorf("selecting option %d on the soldier's pane: %w", n, err)
 			}
-			status, err := client.AgentWait(task.HerdrAgentName, nil, quickSettleTimeoutMS)
+			status, err := waitProbe(client, task.HerdrAgentName)
 			// The amendment names the option, not the digit the general may
 			// have typed: "1" means nothing to the tribunal.
 			return finishAnswerBlocked(projectRoot, task, answer, label, status, err, client)
@@ -1014,12 +1057,12 @@ func startAgentWithBusyRetry(client herdr.Client, harness Harness, name, paneID 
 // agent (see herdr.IsStalled), not a real failure, and safe to retry: a
 // stalled attempt never actually reached the agent in the first place.
 func promptWithStalledRetry(client herdr.Client, name, text string, timeoutMS int) (string, error) {
-	status, err := client.AgentPrompt(name, text, timeoutMS)
+	status, err := client.AgentPrompt(name, text, probeStates, timeoutMS)
 	for attempt := 1; attempt < promptStalledMaxAttempts && herdr.IsStalled(err); attempt++ {
 		time.Sleep(promptStalledRetryDelay)
-		status, err = client.AgentPrompt(name, text, timeoutMS)
+		status, err = client.AgentPrompt(name, text, probeStates, timeoutMS)
 	}
-	return status, err
+	return probeResult(status, err)
 }
 
 func shortSuffix(taskID string) string {

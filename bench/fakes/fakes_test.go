@@ -58,6 +58,35 @@ func TestFakeHerdrBusyPromptTimesOut(t *testing.T) {
 	}
 }
 
+// A call that asks to stop at "working" is answered at once by a busy soldier,
+// as herdr does; the timeout test above is the same call without --until.
+func TestFakeHerdrBusyPromptStopsAtWorkingWhenAsked(t *testing.T) {
+	out, _, err := runFakeHerdr(t, []string{"VXBENCH_PROMPT_MODE=busy"}, "agent", "prompt", "a", "text", "--wait", "--timeout", "60000",
+		"--until", "idle", "--until", "working")
+	if err != nil || !strings.Contains(out, `"agent_status":"working"`) {
+		t.Errorf("want a working agent at once, got %q, %v", out, err)
+	}
+}
+
+func TestFakeHerdrSilentSoldierTimesOutEvenWhenAskedForWorking(t *testing.T) {
+	_, stderr, err := runFakeHerdr(t, []string{"VXBENCH_PROMPT_MODE=silent"}, "agent", "prompt", "a", "text", "--wait", "--timeout", "1000",
+		"--until", "working")
+	if err == nil || !strings.Contains(stderr, `"code":"timeout"`) {
+		t.Errorf("want the timeout error, got %q, %v", stderr, err)
+	}
+}
+
+func TestFakeHerdrAgentGetReportsTheConfiguredStatus(t *testing.T) {
+	out, _, err := runFakeHerdr(t, []string{"VXBENCH_AGENT_STATUS=idle"}, "agent", "get", "a")
+	if err != nil || !strings.Contains(out, `"agent_status":"idle"`) {
+		t.Errorf("want an idle agent, got %q, %v", out, err)
+	}
+	out, _, err = runFakeHerdr(t, nil, "agent", "get", "a")
+	if err != nil || !strings.Contains(out, `"agent_status":"working"`) {
+		t.Errorf("want a working agent by default, got %q, %v", out, err)
+	}
+}
+
 func TestFakeHerdrRefusesWhatItDoesNotKnow(t *testing.T) {
 	_, stderr, err := runFakeHerdr(t, nil, "pane", "split")
 	if err == nil || !strings.Contains(stderr, "unsupported") {

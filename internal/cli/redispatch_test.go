@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/cmdname"
+	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/pause"
 	vxproject "github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/report"
@@ -220,6 +222,72 @@ func TestRunRedispatch_RefusesNonInterrupted(t *testing.T) {
 	}
 	if reloaded.Status != state.StatusDone || reloaded.Redispatches != 0 {
 		t.Errorf("expected the task to be untouched, got status=%s redispatches=%d", reloaded.Status, reloaded.Redispatches)
+	}
+}
+
+// An unconfirmed task is still refused (its pane is open and it may have
+// worked), and the refusal says what to do with it instead of pointing at the
+// done-mission advice.
+func TestRunRedispatch_RefusesUnconfirmedAndSaysWhatToDo(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+
+	task, err := state.New(state.KindMission, "do a thing")
+	if err != nil {
+		t.Fatalf("state.New: %v", err)
+	}
+	task.Status = state.StatusUnconfirmed
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if err := state.Save(projectRoot, task); err != nil {
+		t.Fatalf("state.Save: %v", err)
+	}
+
+	var out bytes.Buffer
+	code := runRedispatch(project, home, "w1", task.ID, &fakeHerdr{}, &out, &out)
+	if code == 0 {
+		t.Fatal("expected non-zero exit for an unconfirmed task")
+	}
+	for _, want := range []string{"is unconfirmed, not interrupted", cmdname.Name + " prompt", cmdname.Name + " strike --discard"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("expected the refusal to contain %q, got: %s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "a done mission is landed") {
+		t.Errorf("an unconfirmed task should not get the done-mission advice, got: %s", out.String())
+	}
+}
+
+// The prompt record of the dead launch must not survive into the new one: a
+// relaunch that dies before its own prompt would otherwise look delivered.
+func TestRunRedispatch_ClearsThePromptRecord(t *testing.T) {
+	project := initDispatchTestProject(t)
+	home := t.TempDir()
+	task := interruptedTestTask(t, project, home)
+	projectRoot, err := vxproject.Root(home, project)
+	if err != nil {
+		t.Fatalf("project.Root: %v", err)
+	}
+	if _, err := state.Update(projectRoot, task.ID, func(current *state.Task) (bool, error) {
+		current.PromptSubmittedAt = time.Now().UTC().Add(-time.Hour)
+		return true, nil
+	}); err != nil {
+		t.Fatalf("state.Update: %v", err)
+	}
+
+	// The relaunch fails before it gets as far as a prompt.
+	client := &fakeHerdr{createTabErr: &herdr.APIError{Code: "not_found", Message: "workspace not found"}}
+	var out bytes.Buffer
+	runRedispatch(project, home, "w1", task.ID, client, &out, &out)
+
+	reloaded, err := state.Load(projectRoot, task.ID)
+	if err != nil {
+		t.Fatalf("state.Load: %v", err)
+	}
+	if !reloaded.PromptSubmittedAt.IsZero() {
+		t.Errorf("expected PromptSubmittedAt cleared by the reset, got %v", reloaded.PromptSubmittedAt)
 	}
 }
 

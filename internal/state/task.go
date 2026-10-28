@@ -160,6 +160,19 @@ type Task struct {
 	// zero value, which already means "never observed ambiguous".
 	IdleUnconfirmedSince time.Time `json:"idle_unconfirmed_since,omitzero"`
 
+	// PromptSubmittedAt marks when internal/soldier.RunInHerdr's prompt call
+	// returned, that is, when herdr had taken the original prompt and
+	// submitted it (zero means never confirmed). RunInHerdr saves the task
+	// Running before it sends the prompt, so a vx dispatch that dies
+	// between pasting and submitting leaves a Running task whose soldier
+	// sits on an unsent paste: internal/sentinel reads a zero value on an
+	// idle task as exactly that and marks it interrupted, so 'vx
+	// redispatch' can relaunch it. Only the original prompt counts; a
+	// 'vx prompt' or 'vx decide' does not touch it. Purely additive, same
+	// reasoning as AgentNotFoundSince: an older task file decodes to the
+	// zero value, and no SchemaVersion bump is needed.
+	PromptSubmittedAt time.Time `json:"prompt_submitted_at,omitzero"`
+
 	// Redispatches counts how many times this task has been re-dispatched
 	// after going Interrupted - zero means never. Re-dispatch
 	// reuses this same Task (same ID), so a re-dispatched task's identity

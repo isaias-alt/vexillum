@@ -207,11 +207,17 @@ func (b *bench) scenarios() []scenario {
 		scenario{name: "vx strike", group: "camp", spec: fakeSpec("strike", "ID"), sentinel: true, prepare: prepareWithTask("strike", false)},
 		scenario{name: "vx land (fast-forward merge + strike)", group: "camp", spec: fakeSpec("land", "ID"), sentinel: true, prepare: prepareWithTask("land", true)},
 	)
-	// A real soldier is still at work when the quick-settle probe expires, so
-	// dispatch waits out the whole probe. The fake herdr reproduces that.
+	// A real soldier is still at work when the prompt is submitted (the normal
+	// case), and herdr reports it working at once: dispatch must not wait.
 	busy := dispatchSpec
 	busy.env = []string{"VXBENCH_PROMPT_MODE=busy"}
-	out = append(out, scenario{name: "vx dispatch (soldier still working: quick-settle probe expires)", group: "camp", spec: busy, sentinel: true, slow: true})
+	out = append(out, scenario{name: "vx dispatch (soldier still working)", group: "camp", spec: busy, sentinel: true})
+	// herdr sees none of the states dispatch's probe stops at: the probe waits
+	// out its whole bound, which is what a still-working soldier cost before
+	// the probe stopped at "working".
+	silent := dispatchSpec
+	silent.env = []string{"VXBENCH_PROMPT_MODE=silent"}
+	out = append(out, scenario{name: "vx dispatch (soldier state never reported: probe bound)", group: "camp", spec: silent, sentinel: true, slow: true})
 
 	// External tools vx shells out to, for scale. These are not vx.
 	for _, t := range []struct {

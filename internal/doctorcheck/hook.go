@@ -136,6 +136,16 @@ func probeAwait(name, command string, env []string, envName, envNote, fix string
 // so tests can stand in for ps (see SetLiveSentinelPIDs).
 var liveSentinelPIDs = sentinel.LivePIDs
 
+// SetHookProbeTimeout swaps the bound on the Stop hook probe and returns a
+// function that restores it. For tests whose probe exits at once on an idle
+// machine but can outlast the default one on a loaded machine, which would
+// turn "found" into "found, still waiting".
+func SetHookProbeTimeout(d time.Duration) (restore func()) {
+	old := hookProbeTimeout
+	hookProbeTimeout = d
+	return func() { hookProbeTimeout = old }
+}
+
 // SetLiveSentinelPIDs swaps the process listing SentinelRunning counts
 // sentinels with and returns a function that restores it. For tests, which
 // must not depend on the sentinels running on the machine they run on.

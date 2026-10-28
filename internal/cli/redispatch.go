@@ -124,7 +124,11 @@ func runRedispatch(projectDir, vexillumHome, workspaceID, taskID string, client 
 	}
 
 	if task.Status != state.StatusInterrupted {
-		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not interrupted - only an interrupted task can be re-dispatched (a done mission is landed with '"+cmdname.Name+" land' and struck; a running one is left alone)\n", taskID, task.Status)
+		hint := "a done mission is landed with '" + cmdname.Name + " land' and struck; a running one is left alone"
+		if task.Status == state.StatusUnconfirmed {
+			hint = "an unconfirmed soldier's pane is still open, so check it, then carry it on with '" + cmdname.Name + " prompt', or abandon it with '" + cmdname.Name + " strike --discard' once the general approves"
+		}
+		fmt.Fprintf(stderr, cmdname.Name+": task %s is %s, not interrupted - only an interrupted task can be re-dispatched (%s)\n", taskID, task.Status, hint)
 		return 1
 	}
 
@@ -211,6 +215,9 @@ func updateRedispatchReset(projectRoot, taskID string, major int, version string
 		// re-dispatched task back to interrupted on its very first
 		// AgentStatus hiccup.
 		task.AgentNotFoundSince = time.Time{}
+		// The new launch records its own prompt delivery; a stale stamp from
+		// the previous one would hide that it never happened.
+		task.PromptSubmittedAt = time.Time{}
 		task.UpdatedAt = time.Now().UTC()
 		reset = *task
 		return true, nil

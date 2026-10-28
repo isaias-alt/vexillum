@@ -52,7 +52,7 @@ func (f *fakeHerdr) AgentStart(name, kind, paneID string, agentArgs ...string) e
 func (f *fakeHerdr) AgentSendKeys(name string, keys ...string) error { return nil }
 func (f *fakeHerdr) AgentReady(name string) (bool, error)            { return true, nil }
 func (f *fakeHerdr) AgentStatus(name string) (string, error)         { return f.promptStatus, nil }
-func (f *fakeHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
+func (f *fakeHerdr) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
 	f.promptCalls = append(f.promptCalls, text)
 	f.promptNames = append(f.promptNames, name)
 	if f.promptErr != nil {
@@ -371,11 +371,11 @@ type chmodBeforePromptHerdr struct {
 	dir string
 }
 
-func (c *chmodBeforePromptHerdr) AgentPrompt(name, text string, timeoutMS int) (string, error) {
+func (c *chmodBeforePromptHerdr) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
 	if err := os.Chmod(c.dir, 0o555); err != nil {
 		return "", err
 	}
-	return c.fakeHerdr.AgentPrompt(name, text, timeoutMS)
+	return c.fakeHerdr.AgentPrompt(name, text, until, timeoutMS)
 }
 
 // Regression test for a narrower bug the review step caught in the

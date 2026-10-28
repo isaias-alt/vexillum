@@ -51,9 +51,10 @@ type Client interface {
 	AgentStatus(name string) (string, error)
 
 	// AgentPrompt submits text to the named agent and waits (up to
-	// timeoutMS) for it to settle into idle, done, or blocked.
-	// Returns the settled agent_status.
-	AgentPrompt(name, text string, timeoutMS int) (status string, err error)
+	// timeoutMS) for it to reach one of the given states; nil/empty
+	// until matches herdr's own default (idle, done, or blocked, same as
+	// AgentWait). Returns the agent_status it reached.
+	AgentPrompt(name, text string, until []string, timeoutMS int) (status string, err error)
 
 	// AgentRead returns recent unwrapped transcript text from the
 	// named agent's pane.
@@ -282,8 +283,12 @@ func (CLI) AgentStatus(name string) (string, error) {
 	return status, nil
 }
 
-func (CLI) AgentPrompt(name, text string, timeoutMS int) (string, error) {
-	result, err := run("agent", "prompt", name, text, "--wait", "--timeout", strconv.Itoa(timeoutMS))
+func (CLI) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
+	args := []string{"agent", "prompt", name, text, "--wait", "--timeout", strconv.Itoa(timeoutMS)}
+	for _, u := range until {
+		args = append(args, "--until", u)
+	}
+	result, err := run(args...)
 	if err != nil {
 		return "", err
 	}

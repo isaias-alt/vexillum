@@ -261,7 +261,7 @@ func answerOpenCodeBlocked(projectRoot string, task state.Task, answer string, c
 	// task was recorded blocked with a stale question while the soldier was
 	// already working). Wait for it to leave blocked first.
 	waitLeavesBlocked(client, task.HerdrAgentName)
-	status, werr := client.AgentWait(task.HerdrAgentName, nil, quickSettleTimeoutMS)
+	status, werr := waitProbe(client, task.HerdrAgentName)
 	result, err = finishAnswerBlocked(projectRoot, task, answer, chosen, status, werr, client)
 	return result, true, err
 }

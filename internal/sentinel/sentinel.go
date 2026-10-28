@@ -392,6 +392,11 @@ func saveIfRunning(projectRoot string, task state.Task) (bool, error) {
 		if current.Status != state.StatusRunning {
 			return false, nil
 		}
+		// The snapshot may predate the moment dispatch recorded its prompt
+		// as submitted; writing it back must not erase that.
+		if task.PromptSubmittedAt.IsZero() {
+			task.PromptSubmittedAt = current.PromptSubmittedAt
+		}
 		*current = task
 		return true, nil
 	})
@@ -732,9 +737,59 @@ func handleIdleUnconfirmed(projectRoot string, task state.Task) (bool, error) {
 		return false, nil
 	}
 
+	if task.PromptSubmittedAt.IsZero() {
+		return interruptUndelivered(projectRoot, task)
+	}
+
 	return settleUnconfirmed(projectRoot, task, "", "[vexillum] this soldier's turn went idle with no completion signal (no report for a scout, "+
 		"no new commit for a mission) and no declared pause (internal/pause) - marked unconfirmed, not done. "+
-		"Check its camp/pane before assuming either way.")
+		"Check its camp/pane before assuming either way. Only an interrupted task can be re-dispatched; "+
+		"to carry this one on, send it the next step with '"+cmdname.Name+" prompt', or abandon it with '"+cmdname.Name+" strike --discard' once the general approves.")
+}
+
+// interruptUndelivered marks a Running task interrupted because its idle
+// soldier never got the original prompt: dispatch did not record the prompt
+// as submitted (state.Task.PromptSubmittedAt), which means it died between
+// pasting the prompt and submitting it and left the pane on an unsent paste.
+// Unlike an unconfirmed task, nothing has run, so 'vx redispatch' can relaunch
+// it from the original prompt. Whether the prompt is still unrecorded is
+// checked again under the tasks lock, since dispatch may have recorded it
+// since the sentinel read the task. Returns whether it interrupted the task
+// (and so recorded a wake) on this call.
+func interruptUndelivered(projectRoot string, task state.Task) (bool, error) {
+	old := task.Status
+	interrupted := false
+	var saved state.Task
+	_, err := state.Update(projectRoot, task.ID, func(current *state.Task) (bool, error) {
+		if current.Status != state.StatusRunning || !current.PromptSubmittedAt.IsZero() {
+			return false, nil
+		}
+		current.Status = state.StatusInterrupted
+		current.UpdatedAt = time.Now().UTC()
+		current.IdleUnconfirmedSince = time.Time{}
+		if current.Output != "" {
+			current.Output += "\n\n"
+		}
+		current.Output += "[vexillum] this soldier went idle without ever being sent its prompt: the dispatch that launched it did not confirm the prompt as " +
+			"submitted (it most likely died between pasting and submitting it, which leaves an unsent paste in the pane; a task dispatched by an older " +
+			"build has no such record either). Marked interrupted, not unconfirmed - nothing ran, so '" + cmdname.Name + " redispatch' can relaunch it from its original prompt."
+		interrupted = true
+		saved = *current
+		return true, nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("persisting interrupted task %s: %w", task.ID, err)
+	}
+	if !interrupted {
+		return false, nil
+	}
+	if err := recordWake(projectRoot, saved, old, state.StatusInterrupted, ""); err != nil {
+		return false, fmt.Errorf("recording wake for interrupted task %s: %w", task.ID, err)
+	}
+	return true, nil
 }
 
 // settleUnconfirmed persists task's transition to StatusUnconfirmed - idle,
