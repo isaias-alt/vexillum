@@ -12,6 +12,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/opencodeapi"
 	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
 // The Claude Code commander is woken from inside: its Stop hook runs
@@ -33,9 +34,14 @@ import (
 // instead, when the commander is idle.
 const DefaultFallbackAfter = 30 * time.Second
 
-// herdrFallbackTimeoutMS bounds the fallback's "herdr agent prompt --wait": it
-// returns once the pane started working (the text was taken) or after this
-// long, which is not a failure, since the commander is then busy with it.
+// herdrFallbackTimeoutMS is the upper bound of the fallback's "herdr agent
+// prompt --wait". The wait stops at the first of soldier.ProbeStates, working
+// above all, so it returns as soon as the pane took the text and only runs to
+// this bound when herdr reports none of them. Hitting the bound is not a
+// failure either, since the commander is then busy with the text. Without
+// --until herdr waits for idle, done or blocked, which a commander that took
+// the wake never reaches quickly: the single polling goroutine would sleep
+// the whole bound on every fallback.
 const herdrFallbackTimeoutMS = 10000
 
 // OpenCodeAPI is what the injector needs from a running OpenCode V2: opencodeapi.CLI
@@ -196,7 +202,7 @@ func (i *OpenCodeInjector) commanderPane(root string) (pane string, found bool, 
 }
 
 func (i *OpenCodeInjector) promptViaHerdr(pane, text string) error {
-	_, err := i.Herdr.AgentPrompt(pane, text, nil, herdrFallbackTimeoutMS)
+	_, err := i.Herdr.AgentPrompt(pane, text, soldier.ProbeStates(), herdrFallbackTimeoutMS)
 	if err == nil || herdr.IsTimeout(err) {
 		// Accepted: the commander is working on it.
 		return nil

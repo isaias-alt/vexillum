@@ -52,6 +52,13 @@ const (
 // which is the normal case.
 var probeStates = []string{"idle", "done", "blocked", "working"}
 
+// ProbeStates returns the states a quick probe stops at, for callers outside
+// this package that bound their own "herdr agent prompt --wait" the same way
+// (the sentinel's OpenCode injector).
+func ProbeStates() []string {
+	return append([]string(nil), probeStates...)
+}
+
 // errStillWorking is what a probe that stopped on "working" reports. It has
 // herdr's timeout code on purpose: a probe that outlasts its window and one
 // that sees the soldier at work mean the same to every caller (the task stays

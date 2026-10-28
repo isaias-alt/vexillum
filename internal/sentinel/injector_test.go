@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/isaias-alt/vexillum/internal/inbox"
 	"github.com/isaias-alt/vexillum/internal/opencodeapi"
 	"github.com/isaias-alt/vexillum/internal/sentinel"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
 // fakeInjHerdr is the herdr the injector asks: a mutable set of agents, and a
@@ -28,6 +30,8 @@ type fakeInjHerdr struct {
 	gets      int
 	lists     int
 	prompts   []string // "<target>: <text>"
+	until     [][]string
+	timeouts  []int
 }
 
 func (f *fakeInjHerdr) AgentGet(target string) (herdr.AgentInfo, error) {
@@ -56,6 +60,8 @@ func (f *fakeInjHerdr) AgentPrompt(name, text string, until []string, timeoutMS 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.prompts = append(f.prompts, name+": "+text)
+	f.until = append(f.until, until)
+	f.timeouts = append(f.timeouts, timeoutMS)
 	return "working", f.promptErr
 }
 
@@ -343,6 +349,30 @@ func TestInjector_FallsBackToHerdrWhenTheAPIKeepsFailingAndTheCommanderIsIdle(t 
 	}
 	if !strings.Contains(e.log.String(), "woke the opencode commander") || !strings.Contains(e.log.String(), "herdr agent prompt") {
 		t.Errorf("the fallback was not logged: %q", e.log)
+	}
+}
+
+// The fallback must not block the sentinel's single polling goroutine: without
+// --until herdr waits for idle, done or blocked, so a commander that took the
+// wake would hold the sweep for the whole timeout.
+func TestInjector_TheHerdrFallbackEndsWhenTheCommanderIsWorkingAndIsBounded(t *testing.T) {
+	e := newInjEnv(t)
+	e.forumWake("s1")
+	e.api.err = errors.New("boom")
+	e.inj.Sweep()
+	e.clock = e.clock.Add(time.Hour)
+
+	if got := e.inj.Sweep(); got != 1 {
+		t.Fatalf("Sweep woke %d (log: %s)", got, e.log)
+	}
+	if len(e.herdr.until) != 1 {
+		t.Fatalf("herdr prompts = %q", e.herdr.prompts)
+	}
+	if !slices.Equal(e.herdr.until[0], soldier.ProbeStates()) || !slices.Contains(e.herdr.until[0], "working") {
+		t.Errorf("until = %q, want the probe states, working included", e.herdr.until[0])
+	}
+	if got := e.herdr.timeouts[0]; got <= 0 || got > 15000 {
+		t.Errorf("timeout = %d ms, want a bound of at most 15 s", got)
 	}
 }
 
