@@ -639,12 +639,27 @@ func TestDoctor_StopHookResolvingVXIsOK(t *testing.T) {
 	}
 }
 
-func TestDoctor_StopHookNotFindingVXWarnsWithTheFix(t *testing.T) {
-	for _, p := range []string{"/opt/homebrew/bin/vx", "/usr/local/bin/vx", "/home/linuxbrew/.linuxbrew/bin/vx", "/usr/bin/vx", "/bin/vx"} {
-		if _, err := os.Stat(p); err == nil {
-			t.Skipf("a real vx is installed at %s", p)
-		}
+// hermeticHookProbe keeps a vx installed on the machine running the test out of
+// doctor's hook probe: its PATH holds nothing but sh (which the hook command's
+// own "sh -c" needs) and the absolute install directories the hook also looks
+// in are moved under a temp dir.
+func hermeticHookProbe(t *testing.T) {
+	t.Helper()
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.Symlink("/bin/sh", filepath.Join(bin, "sh")); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(doctorcheck.SetHookProbe(bin, func(command string) string {
+		return scaffold.RelocateHookInstallDirs(command, filepath.Join(root, "dirs"))
+	}))
+}
+
+func TestDoctor_StopHookNotFindingVXWarnsWithTheFix(t *testing.T) {
+	hermeticHookProbe(t)
 	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr", "vx"))
 	projectDir := initializedProject(t)
 	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {

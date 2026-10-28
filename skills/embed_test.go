@@ -278,3 +278,19 @@ func TestSkillsDoNotNameTheStopHookOutsideTheSentinelChapter(t *testing.T) {
 		}
 	}
 }
+
+// The sentinel chapter is where the delivery mechanism is explained, so it
+// must be accurate for every harness a commander can run in, not only Claude
+// Code's Stop hook.
+func TestSentinelChapterCoversEveryHarness(t *testing.T) {
+	data, err := ReadFile("vexillum", "sentinel.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"Claude Code", "Stop hook", "Pi", ".pi/extensions/", "OpenCode"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("sentinel.md does not mention %q", want)
+		}
+	}
+}

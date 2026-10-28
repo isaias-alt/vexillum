@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/slot"
@@ -51,8 +52,8 @@ const (
 	// same script as its own "sh -c" so that it finds vx exactly the way the
 	// hook does, and the await it execs stays a direct child of Pi.
 	SentinelHookScript = `for v in "$(command -v ` + cmdname.Name + ` 2>/dev/null)" ` +
-		`"$HOME/.local/bin/` + cmdname.Name + `" /opt/homebrew/bin/` + cmdname.Name + ` ` +
-		`/usr/local/bin/` + cmdname.Name + ` /home/linuxbrew/.linuxbrew/bin/` + cmdname.Name + `; do ` +
+		`"$HOME/.local/bin/` + cmdname.Name + `" ` + hookHomebrewDir + `/` + cmdname.Name + ` ` +
+		hookUsrLocalDir + `/` + cmdname.Name + ` ` + hookLinuxbrewDir + `/` + cmdname.Name + `; do ` +
 		`[ -f "$v" ] && [ -x "$v" ] && exec "$v" sentinel await; done; ` +
 		`echo "` + SentinelHookNotFoundMessage + `" >&2; exit 0`
 
@@ -70,7 +71,27 @@ const (
 	// it - Claude Code re-fires this hook on every turn end regardless,
 	// so a shorter self-imposed deadline costs nothing.
 	SentinelHookTimeoutSeconds = 3600
+
+	// The absolute directories SentinelHookScript looks in after PATH and
+	// $HOME/.local/bin.
+	hookHomebrewDir  = "/opt/homebrew/bin"
+	hookUsrLocalDir  = "/usr/local/bin"
+	hookLinuxbrewDir = "/home/linuxbrew/.linuxbrew/bin"
 )
+
+// RelocateHookInstallDirs returns command with every absolute directory the
+// sentinel hook script looks for vx in (the Homebrew and /usr/local ones) moved
+// under root. It exists for tests: on a machine with a real vx installed in one
+// of those directories the hook would always find it, so a test of the "vx is
+// nowhere" and "vx is only in $HOME/.local/bin" paths runs the relocated
+// command instead. Anything that is not one of those directories is untouched.
+func RelocateHookInstallDirs(command, root string) string {
+	var pairs []string
+	for _, dir := range []string{hookHomebrewDir, hookUsrLocalDir, hookLinuxbrewDir} {
+		pairs = append(pairs, dir+"/"+cmdname.Name, filepath.Join(root, dir)+"/"+cmdname.Name)
+	}
+	return strings.NewReplacer(pairs...).Replace(command)
+}
 
 // EnsureSentinelHook merges the async sentinel Stop hook into the
 // project's .claude/settings.json, so a soldier's status change surfaces

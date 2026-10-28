@@ -62,10 +62,16 @@ func TestEnsureSentinelHook_IdempotentOnSecondCall(t *testing.T) {
 
 // runHookCommand runs the hook command through sh with exactly the given
 // environment, the way a hook runner with a bare shell would, and returns
-// its stdout, stderr and exit code.
+// its stdout, stderr and exit code. The absolute directories the command
+// also looks in (Homebrew, /usr/local) are moved under a temp dir, so a vx
+// installed on the machine running the test cannot be the one it finds.
 func runHookCommand(t *testing.T, env ...string) (stdout, stderr string, code int) {
 	t.Helper()
-	cmd := exec.Command("/usr/bin/env", append([]string{"-i"}, append(env, "sh", "-c", SentinelHookCommand)...)...)
+	command := RelocateHookInstallDirs(SentinelHookCommand, t.TempDir())
+	if command == SentinelHookCommand {
+		t.Fatal("RelocateHookInstallDirs left the hook command as it was")
+	}
+	cmd := exec.Command("/usr/bin/env", append([]string{"-i"}, append(env, "/bin/sh", "-c", command)...)...)
 	var out, errOut strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()
@@ -78,6 +84,18 @@ func runHookCommand(t *testing.T, env ...string) (stdout, stderr string, code in
 		t.Fatalf("running the hook command: %v", err)
 	}
 	return out.String(), errOut.String(), code
+}
+
+// shOnlyPath returns a PATH value holding nothing but sh, which the hook
+// command's own "sh -c" needs: the bare PATH of a hook shell, without the
+// /usr/bin and /bin a vx could be installed in.
+func shOnlyPath(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Symlink("/bin/sh", filepath.Join(dir, "sh")); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 // writeFakeVX writes a vx stub into dir that prints its own path and
@@ -100,7 +118,7 @@ func TestSentinelHookCommand_ResolvesWithoutPATH(t *testing.T) {
 	home := t.TempDir()
 	vx := writeFakeVX(t, filepath.Join(home, ".local", "bin"))
 
-	stdout, stderr, code := runHookCommand(t, "HOME="+home, "PATH=/usr/bin:/bin")
+	stdout, stderr, code := runHookCommand(t, "HOME="+home, "PATH="+shOnlyPath(t))
 	if code != 0 || stderr != "" {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
 	}
@@ -114,7 +132,7 @@ func TestSentinelHookCommand_PrefersVXOnPATH(t *testing.T) {
 	writeFakeVX(t, filepath.Join(home, ".local", "bin"))
 	onPath := writeFakeVX(t, t.TempDir())
 
-	stdout, _, code := runHookCommand(t, "HOME="+home, "PATH="+filepath.Dir(onPath)+":/usr/bin:/bin")
+	stdout, _, code := runHookCommand(t, "HOME="+home, "PATH="+filepath.Dir(onPath)+":"+shOnlyPath(t))
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -124,14 +142,9 @@ func TestSentinelHookCommand_PrefersVXOnPATH(t *testing.T) {
 }
 
 func TestSentinelHookCommand_NotFoundIsLoudAndNonBlocking(t *testing.T) {
-	for _, known := range []string{"/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin"} {
-		if _, err := os.Stat(filepath.Join(known, cmdname.Name)); err == nil {
-			t.Skipf("a real %s is installed in %s on this machine", cmdname.Name, known)
-		}
-	}
 	home := t.TempDir()
 
-	stdout, stderr, code := runHookCommand(t, "HOME="+home, "PATH=/usr/bin:/bin")
+	stdout, stderr, code := runHookCommand(t, "HOME="+home, "PATH="+shOnlyPath(t))
 	if code != 0 {
 		t.Errorf("a missing vx must not block Claude Code, got exit %d", code)
 	}

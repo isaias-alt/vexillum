@@ -4,7 +4,8 @@
 //
 //  1. writes the prompt, all of its fields, to the project's durable inbox
 //     (internal/inbox), one atomic file per uid,
-//  2. rings a forum wake (internal/sentinel) for the commander's Stop hook,
+//  2. rings a forum wake (internal/sentinel) for the commander, whichever
+//     harness it runs in (Stop hook, Pi extension, OpenCode session),
 //  3. tells the server the round was relayed, which posts one fixed,
 //     non-answering notice and keeps the browser waiting for the commander,
 //  4. and only then acknowledges the delivery.

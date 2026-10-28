@@ -43,7 +43,7 @@ func FormatInbox(projectRoot string, entries []inbox.Entry) string {
 	fmt.Fprintf(&b, "unread_prompts: %d\n", len(entries))
 	if len(entries) == 0 {
 		b.WriteString("shown_prompts: 0\n")
-		fmt.Fprintf(&b, "next_step: Nothing is waiting. You do not poll: when a user sends feedback from a review panel the listener stores it here and wakes you through the Stop hook.\n")
+		fmt.Fprintf(&b, "next_step: Nothing is waiting. You do not poll: when a user sends feedback from a review panel the listener stores it here and wakes you.\n")
 		return b.String()
 	}
 

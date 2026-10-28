@@ -176,7 +176,7 @@ func Sentinel(args []string) int {
 	fmt.Fprintf(os.Stdout, "sentinel: polling %s every %s as %s %s (ctrl-c to stop)\n", vexillumHome, sentinelPollInterval, cmdname.Name, build.Version)
 	injector := sentinel.NewOpenCodeInjector(vexillumHome, herdr.CLI{}, opencodeapi.CLI{}, os.Stdout)
 	reason := sentinel.RunInjecting(vexillumHome, herdr.CLI{}, injector, sentinelPollInterval, os.Stdout, build.Stale)
-	fmt.Fprintf(os.Stdout, "sentinel: retiring, %s - the next %s dispatch, prompt or Stop hook await starts a fresh one\n", reason, cmdname.Name)
+	fmt.Fprintf(os.Stdout, "sentinel: retiring, %s - the next %s dispatch, prompt or sentinel await starts a fresh one\n", reason, cmdname.Name)
 	return 0
 }
 

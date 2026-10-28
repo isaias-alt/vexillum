@@ -238,7 +238,7 @@ func TestDoctor_DefaultCommanderOutputIsUnchanged(t *testing.T) {
 		"[ok] yolo mode - off",
 		"[ok] sentinel Stop hook - registered in .claude/settings.json",
 		"[ok] sentinel Stop hook finds vx - found with a minimal environment",
-		"[ok] sentinel - not running (the next 'vx dispatch' starts it), 0 Stop hook await(s) waiting",
+		"[ok] sentinel - not running (the next 'vx dispatch' starts it), 0 sentinel await(s) waiting",
 		"",
 		"Environment ready (optional: GitHub CLI (gh) missing; warnings: herdr version).",
 		"",

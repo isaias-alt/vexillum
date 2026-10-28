@@ -189,7 +189,7 @@ func OpenNextStepForwarded(file string, res OpenResponse) string {
 	if res.Status == OpenUserEnded {
 		return OpenNextStep(file, res)
 	}
-	step := "Tell the user the review is open at the URL above. Do not poll: a listener forwards their feedback to this project's inbox and wakes you through the Stop hook when you end a turn. On a forum wake run `" +
+	step := "Tell the user the review is open at the URL above. Do not poll: a listener forwards their feedback to this project's inbox and wakes you with a sentinel notice. On a forum wake run `" +
 		cmdname.Name + " forum inbox`, act on it, then answer with `" + cmdname.Name + " forum reply " + shellQuote(file) + " --reply \"<what you did>\"` and confirm with `" + cmdname.Name + " forum inbox --ack <uid>...`."
 	if res.Pending > 0 {
 		step = fmt.Sprintf("The user already sent %d prompt(s); the listener is forwarding them, so `%s forum inbox` shows them shortly. ", res.Pending, cmdname.Name) + step

@@ -5,10 +5,11 @@ normally do not think about it. It polls every dispatched soldier's live status
 and, when one settles, surfaces that to you as a sentinel notice: it keeps your
 turn from quietly ending and tells you what changed. Keep doing other things (or
 talk to the general) while a soldier works; you will be interrupted with the
-update the next time you would otherwise stop. In Claude Code the notice is
-delivered by an async Stop hook that `vx init` registers in
-`.claude/settings.json`; the mechanism depends on the harness you run in, the
-notice you act on is the same.
+update the next time you would otherwise stop. How the notice reaches you depends
+on the harness you run in, and the notice you act on is the same: in Claude Code
+an async Stop hook that `vx init` registers in `.claude/settings.json`; in Pi an
+extension that `vx init` writes to `.pi/extensions/`; in OpenCode the sentinel
+itself, which posts the notice into your session.
 
 If you ever need to start one yourself (the auto-start failed; `vx dispatch`
 warns on stderr if so), run `vx sentinel` in the background. It refuses a second
@@ -113,8 +114,9 @@ short follow-up that finishes between two polls could still slip past.
 
 ## Stray `vx sentinel await` processes
 
-The wake path runs `vx sentinel await` (in Claude Code, its Stop hook does it on
-every turn end). Each one records itself in `~/.vexillum/sentinel-awaiters/`,
+The wake path of Claude Code and Pi runs `vx sentinel await` (the Stop hook does it
+on every turn end, the Pi extension from inside Pi; OpenCode has none, the
+sentinel delivers by itself). Each one records itself in `~/.vexillum/sentinel-awaiters/`,
 exits by itself when the process that launched it is gone, and a newer one from
 the same session replaces the previous turn's. Starting `vx sentinel` (or any new `await`) also stops
 orphans left by a dead session, only ever after verifying the pid is a

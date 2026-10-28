@@ -22,13 +22,29 @@ func installFakeVX(t *testing.T, dir string) {
 	}
 }
 
-func skipIfRealVXInstalled(t *testing.T) {
+// sandboxHookProbe keeps any vx installed on the machine running the test out
+// of the hook probe: its PATH holds nothing but sh (which the hook command's
+// own "sh -c" needs), and the absolute install directories the hook also looks
+// in are moved under a temp dir. What is left to find is what the test installs.
+// It returns that PATH.
+func sandboxHookProbe(t *testing.T) (bin string) {
 	t.Helper()
-	for _, known := range []string{"/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin", "/usr/bin", "/bin"} {
-		if _, err := os.Stat(filepath.Join(known, cmdname.Name)); err == nil {
-			t.Skipf("a real %s is installed in %s on this machine", cmdname.Name, known)
-		}
+	root := t.TempDir()
+	bin = filepath.Join(root, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.Symlink("/bin/sh", filepath.Join(bin, "sh")); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(SetHookProbe(bin, func(command string) string {
+		out := scaffold.RelocateHookInstallDirs(command, filepath.Join(root, "dirs"))
+		if command == scaffold.SentinelHookCommand && out == command {
+			t.Error("RelocateHookInstallDirs left the hook command as it was")
+		}
+		return out
+	}))
+	return bin
 }
 
 func byName(t *testing.T, results []Result, name string) Result {
@@ -61,7 +77,8 @@ func jsonString(s string) string {
 }
 
 func TestStopHooks_ResolvesWithMinimalEnvironment(t *testing.T) {
-	skipIfRealVXInstalled(t)
+	sandboxHookProbe(t)
+	stubSentinelPIDs(t, nil, nil)
 	projectDir, home, vexillumHome := t.TempDir(), t.TempDir(), t.TempDir()
 	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {
 		t.Fatal(err)
@@ -82,7 +99,7 @@ func TestStopHooks_ResolvesWithMinimalEnvironment(t *testing.T) {
 }
 
 func TestStopHooks_UnresolvableBinaryWarnsWithTheFix(t *testing.T) {
-	skipIfRealVXInstalled(t)
+	sandboxHookProbe(t)
 	projectDir, home := t.TempDir(), t.TempDir()
 	if _, err := scaffold.EnsureSentinelHook(projectDir); err != nil {
 		t.Fatal(err)
@@ -95,7 +112,7 @@ func TestStopHooks_UnresolvableBinaryWarnsWithTheFix(t *testing.T) {
 	if !r.Warn || r.OK {
 		t.Fatalf("resolution = %+v, want a warning", r)
 	}
-	for _, want := range []string{"not found", "PATH=/usr/bin:/bin", "brew", "~/.local/bin"} {
+	for _, want := range []string{"not found", "PATH=" + hookProbePath, "brew", "~/.local/bin"} {
 		if !strings.Contains(r.Detail, want) {
 			t.Errorf("detail %q should mention %q", r.Detail, want)
 		}

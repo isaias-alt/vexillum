@@ -178,9 +178,8 @@ func TestPiTrust_DefaultDirAndSymlinks(t *testing.T) {
 }
 
 func TestPiWake_VXNotFoundWarns(t *testing.T) {
-	skipIfRealVXInstalled(t)
+	t.Setenv("PATH", sandboxHookProbe(t))
 	projectDir, _ := piProject(t)
-	t.Setenv("PATH", "/usr/bin:/bin")
 
 	r := byName(t, PiWake(projectDir, t.TempDir()), piResolvesName)
 

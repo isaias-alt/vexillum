@@ -22,11 +22,28 @@ const (
 	hookName     = "sentinel Stop hook"
 	hookResolves = "sentinel Stop hook finds " + cmdname.Name
 	sentinelName = "sentinel"
-
-	// hookProbePath is the bare PATH the hook is probed with: what a
-	// shell that never sourced the user's profile has.
-	hookProbePath = "/usr/bin:/bin"
 )
+
+// hookProbePath is the bare PATH the hook is probed with: what a shell that
+// never sourced the user's profile has. A variable so tests can keep a vx
+// installed on their machine out of it (see SetHookProbe).
+var hookProbePath = "/usr/bin:/bin"
+
+// hookProbeCommand rewrites the command a probe runs. Identity outside tests.
+var hookProbeCommand = func(command string) string { return command }
+
+// SetHookProbe swaps the PATH the hook probes run with and a rewrite of the
+// command they run, and returns a function that restores both. For tests: the
+// hook looks in absolute install directories as well as PATH, so on a machine
+// with a real vx installed in one of them it would always find it, and a test
+// of the "vx is not found" paths would have to skip. Pointing the probe at a
+// PATH and install directories under a temp dir makes them the same everywhere
+// (see scaffold.RelocateHookInstallDirs).
+func SetHookProbe(path string, rewrite func(command string) string) (restore func()) {
+	oldPath, oldRewrite := hookProbePath, hookProbeCommand
+	hookProbePath, hookProbeCommand = path, rewrite
+	return func() { hookProbePath, hookProbeCommand = oldPath, oldRewrite }
+}
 
 // hookProbeTimeout bounds the probe. A hook that found vx and is waiting
 // for a wake is killed at this point and counts as found. A variable so
@@ -80,6 +97,7 @@ func HookResolves(command, homeDir string) Result {
 // says what the environment is, for the message, and envNote is appended to the
 // "not found" one. See HookResolves.
 func probeAwait(name, command string, env []string, envName, envNote, fix string) Result {
+	command = hookProbeCommand(command)
 	dir, err := os.MkdirTemp("", "vx-hook-probe-")
 	if err != nil {
 		return Result{Name: name, Warn: true, Detail: "could not run the probe: " + err.Error()}
@@ -128,16 +146,18 @@ func SetLiveSentinelPIDs(f func() ([]int, error)) (restore func()) {
 }
 
 // SentinelRunning reports whether the polling sentinel is alive, and how
-// many Stop hook awaits are waiting on it. Not running is never a failure: the
-// sentinel starts by itself with the next dispatch, so not running is normal
-// while nothing is dispatched.
+// many "vx sentinel await" processes are waiting on it: the Claude Code Stop
+// hook and the Pi wake extension each run one, an OpenCode commander has none
+// (the sentinel posts into its session), so 0 is normal there. Not running is
+// never a failure: the sentinel starts by itself with the next dispatch, so
+// not running is normal while nothing is dispatched.
 //
 // It warns, never fails, about the two ways a sentinel goes wrong over time:
 // more than one sentinel process alive at once (they race over the same tasks),
 // and a live sentinel that is not the installed binary - a different version,
 // or the same version string ("dev") whose executable was replaced on disk
 // since it started. Either way it names the pid to stop; the next dispatch,
-// prompt or Stop hook await then starts a current one.
+// prompt or sentinel await then starts a current one.
 func SentinelRunning(vexillumHome string) Result {
 	waiting := sentinel.LiveAwaiters(vexillumHome)
 	running := sentinel.IsRunning(vexillumHome)
@@ -154,9 +174,9 @@ func SentinelRunning(vexillumHome string) Result {
 	}
 
 	if running {
-		return Result{Name: sentinelName, OK: true, Detail: fmt.Sprintf("running, %d Stop hook await(s) waiting", waiting)}
+		return Result{Name: sentinelName, OK: true, Detail: fmt.Sprintf("running, %d sentinel await(s) waiting", waiting)}
 	}
-	return Result{Name: sentinelName, OK: true, Detail: fmt.Sprintf("not running (the next '%s dispatch' starts it), %d Stop hook await(s) waiting", cmdname.Name, waiting)}
+	return Result{Name: sentinelName, OK: true, Detail: fmt.Sprintf("not running (the next '%s dispatch' starts it), %d sentinel await(s) waiting", cmdname.Name, waiting)}
 }
 
 // staleSentinelProblem describes how the live sentinel differs from the
