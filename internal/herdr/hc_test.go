@@ -19,12 +19,11 @@ func fakeHC(t *testing.T) *HC {
 	t.Setenv("VXFAKE_HC_DIR", t.TempDir())
 	t.Setenv("VXFAKE_HC_WORK_SECS", "1")
 
-	oldPoll, oldStall, oldStart, oldShell, oldGrace := hcPollInterval, hcStallWindow, hcStartWindow, hcShellWindow, hcBlockedGrace
-	hcPollInterval, hcStallWindow, hcStartWindow, hcShellWindow, hcBlockedGrace = 50*time.Millisecond, 400*time.Millisecond, 800*time.Millisecond, time.Second, 0
-	t.Cleanup(func() {
-		hcPollInterval, hcStallWindow, hcStartWindow, hcShellWindow, hcBlockedGrace = oldPoll, oldStall, oldStart, oldShell, oldGrace
-	})
-	return &HC{Bin: fake, Session: "fakesession"}
+	return &HC{
+		Bin: fake, Session: "fakesession",
+		PollInterval: 50 * time.Millisecond, StallWindow: 400 * time.Millisecond, StartWindow: 800 * time.Millisecond,
+		ShellWindow: time.Second, BlockedGrace: -1,
+	}
 }
 
 func callsLog(t *testing.T) string {
@@ -263,7 +262,7 @@ func TestHC_StartAgent_TrustDialog(t *testing.T) {
 		t.Error("an agent that has reported nothing is not ready")
 	}
 	screen, err := h.AgentRead("vx-trust", 20)
-	if err != nil || !strings.Contains(strings.ToLower(screen), "trust the files") {
+	if err != nil || !strings.Contains(strings.ToLower(screen), "trust this folder") {
 		t.Fatalf("AgentRead = %q, %v; want the trust dialog", screen, err)
 	}
 	if err := h.AgentSendKeys("vx-trust", "down", "enter"); err != nil {
@@ -277,9 +276,7 @@ func TestHC_StartAgent_TrustDialog(t *testing.T) {
 func TestHC_StartAgent_ProgramExitsAtOnce(t *testing.T) {
 	h := fakeHC(t)
 	t.Setenv("VXFAKE_HC_START", "exit")
-	oldStart := hcStartWindow
-	hcStartWindow = 3 * time.Second
-	defer func() { hcStartWindow = oldStart }()
+	h.StartWindow = 3 * time.Second
 	_, pane, _ := h.CreateTab("vx-p", t.TempDir(), "vx-gone")
 	err := h.AgentStart("vx-gone", "claude", pane)
 	if !IsNotRunning(err) || !strings.Contains(err.Error(), "command not found") {

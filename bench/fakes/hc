@@ -121,7 +121,7 @@ launch() {
 		;;
 	silent)
 		printf '' >"$T/status"
-		printf '> Do you trust the files in this folder?\n  1. Yes, proceed\n  2. No, exit\n' >"$T/screen"
+		printf 'Is this a project you created or one you trust?\n❯ No, exit\n  Yes, I trust this folder\n\nEnter to confirm · Esc to cancel\n' >"$T/screen"
 		;;
 	exit)
 		printf '' >"$T/prog"
@@ -280,7 +280,7 @@ send)
 		if [ -n "$(cat "$T/status")" ]; then
 			if [ -n "$VXFAKE_HC_BLOCK" ]; then
 				printf blocked >"$T/status"
-				printf '? Which color do you prefer?\n\n❯ 1. Red\n  2. Blue\n  3. Type something.\n' >"$T/screen"
+				printf ' ☐ Color\n\nWhich color do you prefer?\n\n❯ 1. Red\n  2. Blue\n  3. Type something.\n  4. Chat about this\n\nEnter to select · ↑/↓ to navigate · Esc to cancel\n' >"$T/screen"
 			else
 				printf working >"$T/status"
 				echo $(($(now) + ${VXFAKE_HC_WORK_SECS:-1})) >"$T/work_until"
@@ -327,7 +327,7 @@ keys)
 	case "$*" in
 	*ctrl+c*) printf '' >"$T/prog" ;; # the program exits; the last status it reported stays
 	esac
-	if [ -z "$st" ] && grep -q "trust the files" "$T/screen"; then
+	if [ -z "$st" ] && grep -q "trust this folder" "$T/screen"; then
 		case "$*" in
 		*enter*)
 			printf idle >"$T/status"

@@ -68,23 +68,25 @@ func HCSpace(projectRoot string) string {
 	return SpacePrefix + filepath.Base(projectRoot)
 }
 
-var (
-	// hcPollInterval is how often the hc backend looks at a terminal while it
-	// waits for a status (hc has no wait for "working").
-	hcPollInterval = 250 * time.Millisecond
-	// hcStallWindow is how long a prompt may go without any sign the agent took
-	// it (no working status, no finished turn) before it is reported as
+// Defaults of the waits the hc backend makes; HC's fields of the same names
+// override them (tests do).
+const (
+	// defaultPollInterval is how often the hc backend looks at a terminal while
+	// it waits for a status (hc has no wait for "working").
+	defaultPollInterval = 250 * time.Millisecond
+	// defaultStallWindow is how long a prompt may go without any sign the agent
+	// took it (no working status, no finished turn) before it is reported as
 	// agent_prompt_stalled, the same startup race herdr reports.
-	hcStallWindow = 5 * time.Second
-	// hcStartWindow is how long AgentStart waits for the agent to report its
-	// first status before it gives up with agent_not_ready.
-	hcStartWindow = 10 * time.Second
-	// hcShellWindow is how long AgentStart waits for the new shell to draw its
-	// prompt before typing the launch line anyway.
-	hcShellWindow = 8 * time.Second
-	// hcBlockedGrace is how long AgentWait ignores a "blocked" reading it sees
-	// right away: a modal answered with keys stays blocked for a moment.
-	hcBlockedGrace = 600 * time.Millisecond
+	defaultStallWindow = 5 * time.Second
+	// defaultStartWindow is how long AgentStart waits for the agent to report
+	// its first status before it gives up with agent_not_ready.
+	defaultStartWindow = 10 * time.Second
+	// defaultShellWindow is how long AgentStart waits for the new shell to draw
+	// its prompt before typing the launch line anyway.
+	defaultShellWindow = 8 * time.Second
+	// defaultBlockedGrace is how long AgentWait ignores a "blocked" reading it
+	// sees right away: a modal answered with keys stays blocked for a moment.
+	defaultBlockedGrace = 600 * time.Millisecond
 )
 
 // HC is the hc (herdr-core) backend. The zero value works: it finds the hc
@@ -97,6 +99,10 @@ type HC struct {
 	// Session is the hc session every call is pinned to. Empty means the one
 	// the calling terminal runs in (PinnedSession).
 	Session string
+
+	// The waits below take their default (the default* constants) when zero;
+	// BlockedGrace is off when negative. Tests shorten them.
+	PollInterval, StallWindow, StartWindow, ShellWindow, BlockedGrace time.Duration
 
 	mu    sync.Mutex
 	bin   string
@@ -661,7 +667,7 @@ func (h *HC) AgentStart(name, kind, paneID string, agentArgs ...string) error {
 	}
 
 	started := time.Now()
-	deadline := started.Add(hcStartWindow)
+	deadline := started.Add(h.startWindow())
 	for {
 		t, err := h.getAddr(paneID)
 		if err != nil {
@@ -682,17 +688,17 @@ func (h *HC) AgentStart(name, kind, paneID string, agentArgs ...string) error {
 			// Still no status: a first-run dialog (Claude's trust prompt reports
 			// nothing) or a program that never reports. Same verdict herdr gives,
 			// and startAgent looks at the screen from here.
-			return &APIError{Code: "agent_not_ready", Message: fmt.Sprintf("%s reported no status within %s", kind, hcStartWindow)}
+			return &APIError{Code: "agent_not_ready", Message: fmt.Sprintf("%s reported no status within %s", kind, h.startWindow())}
 		}
-		time.Sleep(hcPollInterval)
+		time.Sleep(h.pollInterval())
 	}
 }
 
 // waitShellPrompt waits for the new shell to draw something, so the launch line
-// is not typed before it reads input. Best effort: after hcShellWindow the line
+// is not typed before it reads input. Best effort: after h.shellWindow() the line
 // is typed anyway.
 func (h *HC) waitShellPrompt(addr string) {
-	deadline := time.Now().Add(hcShellWindow)
+	deadline := time.Now().Add(h.shellWindow())
 	for time.Now().Before(deadline) {
 		if out, err := h.exec("read", addr); err == nil && strings.TrimSpace(string(out)) != "" {
 			return
@@ -808,13 +814,13 @@ func (h *HC) AgentPrompt(name, text string, until []string, timeoutMS int) (stri
 			return st, nil
 		}
 		now := time.Now()
-		if !seenWorking && now.Sub(start) > hcStallWindow && st == before && cur.Turn == reply.Turn {
-			return "", &APIError{Code: "agent_prompt_stalled", Message: fmt.Sprintf("terminal %s showed no sign of taking the prompt within %s", t.Address, hcStallWindow)}
+		if !seenWorking && now.Sub(start) > h.stallWindow() && st == before && cur.Turn == reply.Turn {
+			return "", &APIError{Code: "agent_prompt_stalled", Message: fmt.Sprintf("terminal %s showed no sign of taking the prompt within %s", t.Address, h.stallWindow())}
 		}
 		if now.After(deadline) {
 			return "", &APIError{Code: "timeout", Message: fmt.Sprintf("terminal %s did not settle within %dms", t.Address, timeoutMS)}
 		}
-		time.Sleep(hcPollInterval)
+		time.Sleep(h.pollInterval())
 	}
 }
 
@@ -868,14 +874,14 @@ func (h *HC) AgentWait(name string, until []string, timeoutMS int) (string, erro
 			return "", &APIError{Code: "agent_not_running", Message: fmt.Sprintf("terminal %s finished while it was waited on", t.Address)}
 		}
 		st := cur.statusWord()
-		graced := st == "blocked" && time.Since(start) < hcBlockedGrace
+		graced := st == "blocked" && time.Since(start) < h.blockedGrace()
 		if want[st] && !graced {
 			return st, nil
 		}
 		if time.Now().After(deadline) {
 			return "", &APIError{Code: "timeout", Message: fmt.Sprintf("terminal %s did not reach %v within %dms", t.Address, until, timeoutMS)}
 		}
-		time.Sleep(hcPollInterval)
+		time.Sleep(h.pollInterval())
 	}
 }
 
@@ -1076,4 +1082,22 @@ func (h *HC) HelloOK() error {
 		return fmt.Errorf("the core speaks protocol generation %d, vexillum was written against %d", gen, hcGeneration)
 	}
 	return nil
+}
+
+func orDefault(v, def time.Duration) time.Duration {
+	if v == 0 {
+		return def
+	}
+	return v
+}
+
+func (h *HC) pollInterval() time.Duration { return orDefault(h.PollInterval, defaultPollInterval) }
+func (h *HC) stallWindow() time.Duration  { return orDefault(h.StallWindow, defaultStallWindow) }
+func (h *HC) startWindow() time.Duration  { return orDefault(h.StartWindow, defaultStartWindow) }
+func (h *HC) shellWindow() time.Duration  { return orDefault(h.ShellWindow, defaultShellWindow) }
+func (h *HC) blockedGrace() time.Duration {
+	if h.BlockedGrace < 0 {
+		return 0
+	}
+	return orDefault(h.BlockedGrace, defaultBlockedGrace)
 }
