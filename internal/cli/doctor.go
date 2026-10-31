@@ -133,6 +133,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		}),
 		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.Binary("herdr", "herdr", true) }),
 		doctorcheck.One(doctorcheck.HerdrVersion),
+		doctorcheck.One(doctorcheck.HerdrApp),
 		doctorcheck.One(doctorcheck.GitHubCLI),
 		doctorcheck.One(doctorcheck.VXShadow),
 		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.VexillumHome(vexillumHome) }),

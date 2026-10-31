@@ -232,7 +232,7 @@ func runSentinelDrainOrAwait(mode string) int {
 	if projectRoot == "" {
 		return 0
 	}
-	return runSentinelAwaitGuarded(os.Getenv("HERDR_WORKSPACE_ID"), func() int {
+	return runSentinelAwaitGuarded(os.Getenv, os.Stderr, func() int {
 		return runSentinelAwaitRegistered(vexillumHome, projectRoot, os.Getenv("HERDR_PANE_ID"))
 	})
 }
@@ -242,8 +242,8 @@ func runSentinelDrainOrAwait(mode string) int {
 // commander's own interactive session, or a dispatched soldier's - both
 // of which always run inside a herdr-managed pane (vx dispatch and
 // redispatch already require the same HERDR_WORKSPACE_ID from their
-// caller; see cli/dispatch.go). workspaceID is that same env var, read
-// by the caller, and run is the real await to start when it is set.
+// caller; see cli/dispatch.go). getenv supplies that same env var, and run
+// is the real await to start when it is set.
 //
 // The Stop hook itself is registered in .claude/settings.json, which
 // ensureSentinelHook writes into the project directory and which git
@@ -257,9 +257,14 @@ func runSentinelDrainOrAwait(mode string) int {
 // has no task tracking an invocation it never dispatched, so a wake for
 // it can never arrive. An empty workspaceID means exactly that - exit 0
 // immediately, the same "let the turn end quietly" result runSentinelAwait
-// itself returns on a real timeout, just without waiting first.
-func runSentinelAwaitGuarded(workspaceID string, run func() int) int {
-	if workspaceID == "" {
+// itself returns on a real timeout, just without waiting first. In a Herdr
+// app terminal (see inHerdrApp) it also says why on stderr; exit 0 keeps that
+// from being read as a wake.
+func runSentinelAwaitGuarded(getenv func(string) string, stderr io.Writer, run func() int) int {
+	if getenv("HERDR_WORKSPACE_ID") == "" {
+		if inHerdrApp(getenv) {
+			fmt.Fprintln(stderr, cmdname.Name+": sentinel await: "+herdrAppMessage("it"))
+		}
 		return 0
 	}
 	return run()

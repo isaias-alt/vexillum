@@ -77,6 +77,20 @@ func herdrPreconditions(command string, getenv func(string) string, lookPath fun
 	return harnessPreconditions(command, soldier.HarnessClaude, getenv, lookPath)
 }
 
+// inHerdrApp reports whether this terminal belongs to the Herdr desktop app
+// (herdr-core), which sets HC_TERMINAL_ID and none of the HERDR_* variables,
+// rather than to a herdr TUI pane.
+func inHerdrApp(getenv func(string) string) bool {
+	return getenv("HC_TERMINAL_ID") != "" && getenv("HERDR_WORKSPACE_ID") == ""
+}
+
+// herdrAppMessage is the problem shown when command runs in a Herdr app
+// terminal: a different product from the herdr TUI vexillum runs on.
+func herdrAppMessage(command string) string {
+	return "this terminal belongs to the Herdr app (HC_TERMINAL_ID is set), not the herdr TUI - " +
+		cmdname.Name + " currently runs on the herdr TUI, so run " + command + " from a herdr TUI pane"
+}
+
 // harnessPreconditions is herdrPreconditions for a soldier that runs on the
 // harness registered under harness ("" means claude): the CLI that must be on
 // PATH next to herdr is that harness's own, not always claude. A harness this
@@ -89,7 +103,10 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 	}
 
 	var problems []string
-	if workspaceID == "" {
+	switch {
+	case workspaceID == "" && inHerdrApp(getenv):
+		problems = append(problems, herdrAppMessage(command))
+	case workspaceID == "":
 		problems = append(problems, "HERDR_WORKSPACE_ID is not set - "+command+" must run from inside a herdr-managed pane")
 	}
 	harnessFound := true

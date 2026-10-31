@@ -188,3 +188,26 @@ func TestVXShadow_DifferentlyNamedBuildDoesNotWarn(t *testing.T) {
 		t.Errorf("detail should name vx-dev and the vx on PATH, got %q", result.Detail)
 	}
 }
+
+func TestHerdrApp(t *testing.T) {
+	for _, name := range []string{"hc", "herdr-app"} {
+		t.Run(name+" on PATH is informational", func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			r := herdrApp(dir)
+			if !r.OK || r.Warn || r.Required || r.Name == "" {
+				t.Fatalf("want an informational ok result, got %+v", r)
+			}
+			if !strings.Contains(r.Detail, name) || !strings.Contains(r.Detail, "herdr TUI") {
+				t.Errorf("detail should name %s and the herdr TUI, got %q", name, r.Detail)
+			}
+		})
+	}
+	t.Run("neither on PATH reports nothing", func(t *testing.T) {
+		if r := herdrApp(t.TempDir()); r.Name != "" {
+			t.Errorf("want the zero result, got %+v", r)
+		}
+	})
+}

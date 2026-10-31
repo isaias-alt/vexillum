@@ -94,6 +94,37 @@ func TestHerdrPreconditions(t *testing.T) {
 			want:     []string{"HERDR_WORKSPACE_ID is not set", "herdr is not on PATH", "claude is not on PATH", "vx doctor"},
 		},
 	}
+	t.Run("Herdr app terminal gets its own message", func(t *testing.T) {
+		app := func(key string) string {
+			if key == "HC_TERMINAL_ID" {
+				return "t1"
+			}
+			return ""
+		}
+		_, err := herdrPreconditions("dispatch", app, found)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		for _, w := range []string{"Herdr app", "herdr TUI", "dispatch from a herdr TUI pane"} {
+			if !strings.Contains(err.Error(), w) {
+				t.Errorf("error missing %q:\n%s", w, err)
+			}
+		}
+		if strings.Contains(err.Error(), "HERDR_WORKSPACE_ID is not set") {
+			t.Errorf("must not show the plain message:\n%s", err)
+		}
+	})
+	t.Run("a TUI pane wins over a leftover HC_TERMINAL_ID", func(t *testing.T) {
+		both := func(key string) string {
+			if key == "HC_TERMINAL_ID" {
+				return "t1"
+			}
+			return env("w7")(key)
+		}
+		if id, err := herdrPreconditions("dispatch", both, found); err != nil || id != "w7" {
+			t.Errorf("got %q, %v; want w7, nil", id, err)
+		}
+	})
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := herdrPreconditions("dispatch", c.getenv, c.lookPath)

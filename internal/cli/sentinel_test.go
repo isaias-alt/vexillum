@@ -319,7 +319,7 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 
 	start := time.Now()
 	var stderr bytes.Buffer
-	code := runSentinelAwaitGuarded("", func() int {
+	code := runSentinelAwaitGuarded(func(string) string { return "" }, &stderr, func() int {
 		return runSentinelAwait(proj, time.Hour, 5*time.Millisecond, &stderr, stillWanted, nil)
 	})
 	elapsed := time.Since(start)
@@ -332,6 +332,27 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 	}
 	if elapsed > 100*time.Millisecond {
 		t.Errorf("expected an immediate return, took %s", elapsed)
+	}
+}
+
+// In a Herdr app terminal (HC_TERMINAL_ID set, no HERDR_WORKSPACE_ID) the guard
+// also exits 0 without running, but says why.
+func TestRunSentinelAwaitGuarded_HerdrAppExplains(t *testing.T) {
+	var stderr bytes.Buffer
+	ran := false
+	code := runSentinelAwaitGuarded(func(k string) string {
+		if k == "HC_TERMINAL_ID" {
+			return "t1"
+		}
+		return ""
+	}, &stderr, func() int { ran = true; return 2 })
+	if code != 0 || ran {
+		t.Fatalf("code = %d, ran = %v; want 0, false", code, ran)
+	}
+	for _, w := range []string{"Herdr app", "herdr TUI"} {
+		if !strings.Contains(stderr.String(), w) {
+			t.Errorf("stderr missing %q: %s", w, stderr.String())
+		}
 	}
 }
 
@@ -349,7 +370,12 @@ func TestRunSentinelAwaitGuarded_WithWorkspaceFindsWake(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	code := runSentinelAwaitGuarded("ws-123", func() int {
+	code := runSentinelAwaitGuarded(func(k string) string {
+		if k == "HERDR_WORKSPACE_ID" {
+			return "ws-123"
+		}
+		return ""
+	}, &stderr, func() int {
 		return runSentinelAwait(proj, time.Hour, time.Millisecond, &stderr, stillWanted, nil)
 	})
 	if code != 2 {

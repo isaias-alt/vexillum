@@ -146,6 +146,29 @@ func vxShadow(exe, pathEnv string) Result {
 	}
 }
 
+// HerdrApp reports, informationally, when the Herdr desktop app's CLI ("hc" or
+// "herdr-app", herdr-core) is on PATH: a different product from the herdr TUI
+// vexillum targets. It looks at PATH only and never starts a process, so doctor
+// stays fast. It returns the zero Result (which doctor skips) when neither is
+// there.
+func HerdrApp() Result {
+	return herdrApp(os.Getenv("PATH"))
+}
+
+// herdrApp is HerdrApp with PATH injected, so tests control it.
+func herdrApp(pathEnv string) Result {
+	for _, name := range []string{"hc", "herdr-app"} {
+		if found := firstOnPath(name, pathEnv); found != "" {
+			return Result{
+				Name:   "Herdr desktop app",
+				OK:     true,
+				Detail: fmt.Sprintf("%s found on PATH (%s) - %s runs on the herdr TUI and does not use it", name, found, cmdname.Name),
+			}
+		}
+	}
+	return Result{}
+}
+
 // firstOnPath returns the first executable file called name in pathEnv's
 // directories, in order, the way a shell resolves a bare command, or ""
 // if there is none. Empty and relative entries are skipped, as
