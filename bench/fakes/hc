@@ -1,0 +1,407 @@
+#!/bin/sh
+# Fake hc (herdr-core) for tests and the benchmark harness. It keeps a tiny
+# terminal table on disk and answers the calls vexillum's hc backend makes
+# (internal/herdr/hc.go), with the shapes and exit codes the real hc 0.1.16
+# prints, and costs one shell start. It is never on PATH outside tests and bench/.
+#
+# State lives in $VXFAKE_HC_DIR (required): one directory per terminal with its
+# labels, status, turn, screen and a log of what was typed. Every call is
+# appended to $VXFAKE_HC_DIR/calls.log with the HC_* variables it saw, so a test
+# can check the session pin and the stripped variables.
+#
+# The terminals are shells. Typing a line that starts with "env" or names a
+# harness (claude, pi, opencode) into one launches that program; what it does
+# is chosen by VXFAKE_HC_START:
+#   idle    (default) it reports idle at once, as Claude Code does
+#   silent  it reports nothing and shows Claude's trust dialog; the keys
+#           "down enter" accept it and it then reports idle
+#   exit    it exits at once, back to the shell prompt
+# Typing anything else into a launched program starts a turn that lasts
+# VXFAKE_HC_WORK_SECS seconds (default 1): working, then done with turn+1. With
+# VXFAKE_HC_BLOCK set the turn blocks instead, on an AskUserQuestion-shaped
+# screen, until a digit key is pressed.
+#
+# VXFAKE_HC_VERSION_OUT replaces the --version line (to play the herdr TUI);
+# VXFAKE_HC_GENERATION is the generation "hc connect" answers hello with.
+
+if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then
+	echo "${VXFAKE_HC_VERSION_OUT:-hc 0.1.16}"
+	exit 0
+fi
+
+D="${VXFAKE_HC_DIR:?VXFAKE_HC_DIR is required}"
+mkdir -p "$D"
+echo "session=${HC_SESSION-unset} socket=${HC_SOCKET-unset} terminal=${HC_TERMINAL_ID-unset} scope=${HC_SCOPE-unset} args=$*" >>"$D/calls.log"
+
+fail() { # kind exit message hint
+	printf '{"error":{"hint":"%s","kind":"%s","message":"%s"}}\n' "$4" "$1" "$3" >&2
+	exit "$2"
+}
+
+now() { date +%s; }
+
+# find_term <target>: sets T to the terminal directory or fails with not_found.
+find_term() {
+	T=""
+	if [ -d "$D/$1" ]; then
+		T="$D/$1"
+		return 0
+	fi
+	for d in "$D"/t*; do
+		[ -d "$d" ] || continue
+		if [ -f "$d/name" ] && [ "$(cat "$d/name")" = "$1" ]; then
+			T="$d"
+			return 0
+		fi
+	done
+	fail not_found 3 "no terminal \"$1\"" 'see `hc ls --all`'
+}
+
+# settle: a working turn that has run its time becomes done.
+settle() {
+	if [ "$(cat "$T/status")" = working ] && [ "$(now)" -ge "$(cat "$T/work_until")" ]; then
+		printf done >"$T/status"
+		echo $(($(cat "$T/turn") + 1)) >"$T/turn"
+	fi
+}
+
+addr() { basename "$T"; }
+
+# status_json: the status object of "hc get", or null.
+status_json() {
+	s=$(cat "$T/status")
+	if [ -z "$s" ]; then
+		printf null
+	elif [ -s "$T/app" ]; then
+		printf '{"app":"%s","state":"%s"}' "$(cat "$T/app")" "$s"
+	else
+		printf '{"state":"%s"}' "$s"
+	fi
+}
+
+labels_json() {
+	out=""
+	while IFS= read -r l; do
+		[ -n "$l" ] || continue
+		k=${l%%=*}
+		v=${l#*=}
+		out="$out${out:+,}\"$k\":\"$v\""
+	done <"$T/labels"
+	printf '{%s}' "$out"
+}
+
+has_labels() { # all "k=v" filters in $FILTERS (newline-separated) are in $T/labels
+	[ -z "$FILTERS" ] && return 0
+	printf '%s\n' "$FILTERS" | while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		grep -qxF "$f" "$T/labels" || exit 1
+	done
+}
+
+state_of() { cat "$T/state"; }
+
+# launch <line>: a harness started from the shell by the typed line.
+launch() {
+	prog=""
+	for w in $1; do
+		case "$w" in
+		env | *=*) ;;
+		*)
+			prog=$w
+			break
+			;;
+		esac
+	done
+	printf '%s' "$prog" >"$T/prog"
+	case "${VXFAKE_HC_START:-idle}" in
+	idle)
+		printf idle >"$T/status"
+		printf claude-code >"$T/app"
+		printf '' >"$T/screen"
+		;;
+	silent)
+		printf '' >"$T/status"
+		printf '> Do you trust the files in this folder?\n  1. Yes, proceed\n  2. No, exit\n' >"$T/screen"
+		;;
+	exit)
+		printf '' >"$T/prog"
+		printf '%s: command not found\n$ ' "$prog" >"$T/screen"
+		;;
+	esac
+}
+
+cmd=$1
+shift
+case "$cmd" in
+run)
+	cwd=$PWD
+	name=""
+	labels=""
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--cwd)
+			cwd=$2
+			shift 2
+			;;
+		--name)
+			name=$2
+			shift 2
+			;;
+		--label)
+			labels="$labels$2
+"
+			shift 2
+			;;
+		--timeout | --on | --parent)
+			shift 2
+			;;
+		--) shift; break ;;
+		--*) shift ;;
+		*) break ;;
+		esac
+	done
+	if [ -n "$name" ]; then
+		for d in "$D"/t*; do
+			[ -d "$d" ] && [ -f "$d/name" ] && [ "$(cat "$d/name")" = "$name" ] && [ "$(cat "$d/state")" = live ] &&
+				fail name_taken 1 "name \"$name\" is taken" "pick another"
+		done
+	fi
+	n=$(cat "$D/next" 2>/dev/null || echo 1)
+	echo $((n + 1)) >"$D/next"
+	T="$D/t$n"
+	mkdir -p "$T"
+	printf '%s' "$labels" >"$T/labels"
+	printf '%s' "$cwd" >"$T/cwd"
+	printf '%s' "$name" >"$T/name"
+	printf live >"$T/state"
+	printf '' >"$T/status"
+	printf '' >"$T/app"
+	printf '' >"$T/prog"
+	printf 0 >"$T/turn"
+	printf 0 >"$T/work_until"
+	printf '$ ' >"$T/screen"
+	: >"$T/sent"
+	: >"$T/keys"
+	printf '{"address":"t%s","agent":"zsh","cwd":"%s","state":"live","turn":0}\n' "$n" "$cwd"
+	;;
+ls)
+	FILTERS=""
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--label)
+			FILTERS="$FILTERS$2
+"
+			shift 2
+			;;
+		*) shift ;;
+		esac
+	done
+	out=""
+	for d in "$D"/t*; do
+		[ -d "$d" ] || continue
+		T=$d
+		[ "$(state_of)" = live ] || continue
+		has_labels || continue
+		settle
+		s=$(cat "$T/status")
+		entry=$(printf '{"address":"%s","agent":"zsh","cwd":"%s","state":"live"' "$(addr)" "$(cat "$T/cwd")")
+		[ -n "$s" ] && entry="$entry,\"status\":\"$s\""
+		entry="$entry,\"turn\":$(cat "$T/turn")}"
+		out="$out${out:+,}$entry"
+	done
+	printf '{"hidden_finished":0,"terminals":[%s]}\n' "$out"
+	;;
+get)
+	find_term "$1"
+	settle
+	prog=$(cat "$T/prog")
+	fg=""
+	if [ -n "$prog" ]; then
+		fg=$(printf ',"foreground":{"argv":["%s"],"cwd":"%s","name":"%s","pid":%s}' "$prog" "$(cat "$T/cwd")" "$prog" "$((2000 + ${T##*/t}))")
+	fi
+	rep=false
+	[ -n "$(cat "$T/status")" ] && rep=true
+	printf '{"address":"%s","argv":["/bin/zsh","-l"],"cwd":"%s","labels":%s,"pid":%s,"reported":%s,"state":"%s","status":%s,"turn":%s%s}\n' \
+		"$(addr)" "$(cat "$T/cwd")" "$(labels_json)" "$((1000 + ${T##*/t}))" "$rep" "$(state_of)" "$(status_json)" "$(cat "$T/turn")" "$fg"
+	;;
+label)
+	find_term "$1"
+	shift
+	for kv in "$@"; do
+		k=${kv%%=*}
+		grep -v "^$k=" "$T/labels" >"$T/labels.new"
+		[ "${kv#*=}" != "" ] && echo "$kv" >>"$T/labels.new"
+		mv "$T/labels.new" "$T/labels"
+	done
+	printf '{"address":"%s"}\n' "$(addr)"
+	;;
+read)
+	find_term "$1"
+	cat "$T/screen"
+	;;
+send)
+	find_term "$1"
+	shift
+	wait=no
+	timeout=180
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--wait)
+			wait=yes
+			shift
+			;;
+		--timeout)
+			timeout=$2
+			shift 2
+			;;
+		--if)
+			shift 2
+			;;
+		--) shift; break ;;
+		--*) shift ;;
+		*) break ;;
+		esac
+	done
+	text="$*"
+	[ "$(state_of)" = live ] || fail finished 11 "$(addr) has finished" "hc read $(addr)"
+	settle
+	before=$(cat "$T/status")
+	turn=$(cat "$T/turn")
+	[ "$before" = blocked ] && fail blocked 9 "$(addr) is blocked (question)" "typing would answer its dialog; read its screen first"
+	printf '%s\n' "$text" >>"$T/sent"
+	prog=$(cat "$T/prog")
+	started=null
+	if [ -z "$prog" ]; then
+		case "$text" in
+		env\ * | claude* | pi\ * | opencode*) launch "$text" ;;
+		esac
+	else
+		started=true
+		if [ -n "$(cat "$T/status")" ]; then
+			if [ -n "$VXFAKE_HC_BLOCK" ]; then
+				printf blocked >"$T/status"
+				printf '? Which color do you prefer?\n\n❯ 1. Red\n  2. Blue\n  3. Type something.\n' >"$T/screen"
+			else
+				printf working >"$T/status"
+				echo $(($(now) + ${VXFAKE_HC_WORK_SECS:-1})) >"$T/work_until"
+			fi
+		else
+			started=null
+		fi
+	fi
+	bj=null
+	[ -n "$before" ] && bj="\"$before\""
+	wait_json=""
+	if [ "$wait" = yes ]; then
+		end=$(($(now) + timeout))
+		while :; do
+			settle
+			s=$(cat "$T/status")
+			[ -n "$s" ] && [ "$s" != working ] && break
+			[ "$(now)" -ge "$end" ] && break
+			sleep 1
+		done
+		s=$(cat "$T/status")
+		if [ -n "$s" ] && [ "$s" != working ]; then
+			wait_json=$(printf ',"wait":{"ended":true,"reason":"status","status":"%s","terminal":"%s","turn":%s}' "$s" "$(addr)" "$(cat "$T/turn")")
+		else
+			sj=null
+			[ -n "$s" ] && sj="\"$s\""
+			wait_json=$(printf ',"wait":{"ended":false,"reason":"timeout","status":%s,"terminal":"%s","turn":%s}' "$sj" "$(addr)" "$(cat "$T/turn")")
+		fi
+	fi
+	printf '{"started":%s,"status":%s,"turn":%s%s}\n' "$started" "$bj" "$turn" "$wait_json"
+	;;
+keys)
+	find_term "$1"
+	shift
+	[ "$1" = "--" ] && shift
+	for k in "$@"; do
+		case "$k" in
+		+ | _) fail invalid_params 6 "unknown key \"$k\" (try enter, esc, up, ctrl+c, alt+x, f5, a)" "see hc keys --help" ;;
+		esac
+	done
+	echo "$*" >>"$T/keys"
+	settle
+	st=$(cat "$T/status")
+	case "$*" in
+	*ctrl+c*) printf '' >"$T/prog" ;; # the program exits; the last status it reported stays
+	esac
+	if [ -z "$st" ] && grep -q "trust the files" "$T/screen"; then
+		case "$*" in
+		*enter*)
+			printf idle >"$T/status"
+			printf claude-code >"$T/app"
+			printf '' >"$T/screen"
+			;;
+		esac
+	elif [ "$st" = blocked ]; then
+		case "$*" in
+		[0-9]*)
+			printf working >"$T/status"
+			echo $(($(now) + ${VXFAKE_HC_WORK_SECS:-1})) >"$T/work_until"
+			printf '' >"$T/screen"
+			unset VXFAKE_HC_BLOCK
+			;;
+		esac
+	fi
+	sj=null
+	[ -n "$st" ] && sj="\"$st\""
+	printf '{"status":%s,"turn":%s}\n' "$sj" "$(cat "$T/turn")"
+	;;
+wait)
+	find_term "$1"
+	shift
+	timeout=180
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--timeout)
+			timeout=$2
+			shift 2
+			;;
+		*) shift ;;
+		esac
+	done
+	end=$(($(now) + timeout))
+	while :; do
+		settle
+		s=$(cat "$T/status")
+		[ "$(state_of)" = live ] || {
+			printf '{"children":[],"ended":true,"exit_code":null,"reason":"exit","signal":1,"status":null,"terminal":"%s","turn":%s}\n' "$(addr)" "$(cat "$T/turn")"
+			exit 0
+		}
+		if [ -n "$s" ] && [ "$s" != working ]; then
+			printf '{"children":[],"ended":true,"exit_code":null,"reason":"status","signal":null,"status":"%s","terminal":"%s","turn":%s}\n' "$s" "$(addr)" "$(cat "$T/turn")"
+			exit 0
+		fi
+		if [ "$(now)" -ge "$end" ]; then
+			sj=null
+			[ -n "$s" ] && sj="\"$s\""
+			printf '{"children":[],"ended":false,"exit_code":null,"reason":"timeout","signal":null,"status":%s,"terminal":"%s","turn":%s}\n' "$sj" "$(addr)" "$(cat "$T/turn")"
+			exit 0
+		fi
+		sleep 1
+	done
+	;;
+kill)
+	find_term "$1"
+	printf finished >"$T/state"
+	printf '{"address":"%s","reason":"killed","state":"finished"}\n' "$(addr)"
+	;;
+rm)
+	find_term "$1"
+	[ "$(state_of)" = finished ] || fail live 1 "$(addr) is live" "kill it first: hc kill $(addr)"
+	rm -rf "$T"
+	printf '{"removed":"%s"}\n' "$1"
+	;;
+connect)
+	read -r line
+	printf '{"id":1,"jsonrpc":"2.0","result":{"features":["status"],"generation":%s}}\n' "${VXFAKE_HC_GENERATION:-1}"
+	;;
+server)
+	printf '{"live":1,"version":"0.1.16"}\n'
+	;;
+*)
+	fail usage 2 "fake hc does not know: $cmd $*" "see hc --help"
+	;;
+esac

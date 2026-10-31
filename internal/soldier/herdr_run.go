@@ -212,6 +212,15 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	}
 	task = saved
 
+	// A backend that marks its terminals with the task that owns them (the hc
+	// one) does it now that the task records the terminal, so a failure here
+	// is a failed task like any later one and the terminal can be struck.
+	if binder, ok := client.(herdr.TaskBinder); ok {
+		if err := binder.BindTask(paneID, task.ID); err != nil {
+			return failHerdrTask(projectRoot, task, fmt.Errorf("marking the soldier's terminal: %w", err))
+		}
+	}
+
 	agentName, err = startAgent(client, harness, agentName, task.ID, paneID, launchArgs)
 	if err != nil {
 		return failHerdrTask(projectRoot, task, err)
