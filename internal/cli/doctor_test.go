@@ -756,3 +756,56 @@ func TestDoctor_GitNotInstalled(t *testing.T) {
 		t.Errorf("must not claim the directory is not a repository, got:\n%s", out.String())
 	}
 }
+
+// With VX_BACKEND=hc doctor checks herdr-core instead of the herdr TUI: no
+// herdr is needed, and the core's version gate and hello are reported.
+func TestDoctor_HCBackend(t *testing.T) {
+	bin := fakeBinDir(t, "claude")
+	fake, err := filepath.Abs(filepath.Join("..", "..", "bench", "fakes", "hc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(fake, filepath.Join(bin, "herdr-core")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("VX_BACKEND", "hc")
+	t.Setenv("HC_TERMINAL_ID", "t1")
+	t.Setenv("VXFAKE_HC_DIR", t.TempDir())
+
+	var out bytes.Buffer
+	code := runDoctor(initializedProject(t), t.TempDir(), t.TempDir(), &out)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d\noutput:\n%s", code, out.String())
+	}
+	for _, want := range []string{"[ok] terminal backend", "[ok] herdr-core", "(hc 0.1.16)", "[ok] herdr-core protocol - hello answered generation 1", "[ok] Herdr app terminal - terminal t1"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("doctor output lacks %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "herdr version") || strings.Contains(out.String(), "[missing] herdr\n") {
+		t.Errorf("the herdr TUI must not be checked under the hc backend:\n%s", out.String())
+	}
+}
+
+func TestDoctor_HCBackendMissingCore(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude"))
+	t.Setenv("VX_BACKEND", "hc")
+
+	var out bytes.Buffer
+	code := runDoctor(initializedProject(t), t.TempDir(), t.TempDir(), &out)
+	if code == 0 || !strings.Contains(out.String(), "[missing] herdr-core") {
+		t.Fatalf("a missing core must fail doctor, got exit %d:\n%s", code, out.String())
+	}
+}
+
+func TestDoctor_UnknownBackend(t *testing.T) {
+	t.Setenv("PATH", fakeBinDir(t, "claude", "herdr"))
+	t.Setenv("VX_BACKEND", "tmux")
+
+	var out bytes.Buffer
+	code := runDoctor(initializedProject(t), t.TempDir(), t.TempDir(), &out)
+	if code == 0 || !strings.Contains(out.String(), "[missing] VX_BACKEND") {
+		t.Fatalf("an unknown backend must fail doctor, got exit %d:\n%s", code, out.String())
+	}
+}

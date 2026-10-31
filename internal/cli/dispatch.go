@@ -130,9 +130,15 @@ func Dispatch(args []string) int {
 		return 1
 	}
 
+	workspaceID, err = backendWorkspace(workspaceID, vexillumHome, projectDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
+		return 1
+	}
+
 	ensureSentinelRunning(vexillumHome, os.Stderr)
 
-	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, model, effort, harness, herdr.CLI{}, os.Stdout, os.Stderr)
+	return runDispatch(projectDir, vexillumHome, workspaceID, prompt, kind, model, effort, harness, herdr.Default(), os.Stdout, os.Stderr)
 }
 
 // resolveProfile fills model and effort from the named profile, leaving any

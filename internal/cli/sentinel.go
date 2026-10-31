@@ -157,6 +157,11 @@ func Sentinel(args []string) int {
 		return runSentinelDrainOrAwait(mode)
 	}
 
+	if err := CheckBackend(); err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
+		return 1
+	}
+
 	_, vexillumHome, err := resolveDirs()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
@@ -188,8 +193,8 @@ func Sentinel(args []string) int {
 	}
 
 	fmt.Fprintf(os.Stdout, "sentinel: polling %s every %s as %s %s (ctrl-c to stop)\n", vexillumHome, sentinelPollInterval, cmdname.Name, build.Version)
-	injector := sentinel.NewOpenCodeInjector(vexillumHome, herdr.CLI{}, opencodeapi.CLI{}, os.Stdout)
-	reason := sentinel.RunInjecting(vexillumHome, herdr.CLI{}, injector, sentinelPollInterval, os.Stdout, build.Stale)
+	injector := sentinel.NewOpenCodeInjector(vexillumHome, herdr.Default(), opencodeapi.CLI{}, os.Stdout)
+	reason := sentinel.RunInjecting(vexillumHome, herdr.Default(), injector, sentinelPollInterval, os.Stdout, build.Stale)
 	fmt.Fprintf(os.Stdout, "sentinel: retiring, %s - the next %s dispatch, prompt or sentinel await starts a fresh one\n", reason, cmdname.Name)
 	return 0
 }
@@ -233,7 +238,7 @@ func runSentinelDrainOrAwait(mode string) int {
 		return 0
 	}
 	return runSentinelAwaitGuarded(os.Getenv, os.Stderr, func() int {
-		return runSentinelAwaitRegistered(vexillumHome, projectRoot, os.Getenv("HERDR_PANE_ID"))
+		return runSentinelAwaitRegistered(vexillumHome, projectRoot, commanderPane(os.Getenv))
 	})
 }
 
@@ -261,7 +266,7 @@ func runSentinelDrainOrAwait(mode string) int {
 // app terminal (see inHerdrApp) it also says why on stderr; exit 0 keeps that
 // from being read as a wake.
 func runSentinelAwaitGuarded(getenv func(string) string, stderr io.Writer, run func() int) int {
-	if getenv("HERDR_WORKSPACE_ID") == "" {
+	if !inManagedTerminal(getenv) {
 		if inHerdrApp(getenv) {
 			fmt.Fprintln(stderr, cmdname.Name+": sentinel await: "+herdrAppMessage("it"))
 		}

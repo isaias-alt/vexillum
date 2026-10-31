@@ -71,7 +71,7 @@ func Reprompt(args []string) int {
 	taskID := args[0]
 	text := strings.Join(args[1:], " ")
 
-	code := runReprompt(projectDir, vexillumHome, taskID, text, herdr.CLI{}, os.Stdout, os.Stderr)
+	code := runReprompt(projectDir, vexillumHome, taskID, text, herdr.Default(), os.Stdout, os.Stderr)
 	if code == 0 {
 		// The prompt went out, so the sentinel is what records its settle
 		// if it outlives the quick probe - same reasoning as dispatch.

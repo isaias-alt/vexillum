@@ -27,7 +27,7 @@ import (
 // the service, so it speaks for the sentinel only when both run with the same
 // ones.
 func OpenCodeCommanderChecks(projectDir, vexillumHome string, probes *Probes) []Result {
-	return openCodeCommanderChecks(projectDir, vexillumHome, os.Getenv("PATH"), herdr.CLI{}, probes)
+	return openCodeCommanderChecks(projectDir, vexillumHome, os.Getenv("PATH"), herdr.Default(), probes)
 }
 
 func openCodeCommanderChecks(projectDir, vexillumHome, pathEnv string, h herdr.Locator, probes *Probes) []Result {

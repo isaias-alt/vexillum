@@ -19,10 +19,10 @@ import (
 
 // commanderLocator is the herdr that registerCommander asks which agent runs in
 // the pane. A variable so tests can answer without a herdr server.
-var commanderLocator herdr.Locator = herdr.CLI{}
+var commanderLocator herdr.Locator = herdr.Default()
 
 // registerCommander records the herdr pane the running command was typed in
-// (HERDR_PANE_ID) in the project's commander registry, under the harness herdr
+// (HERDR_PANE_ID, or HC_TERMINAL_ID with VX_BACKEND=hc) in the project's commander registry, under the harness herdr
 // reports for it. The commands a commander runs ("dispatch", "forum open") call
 // it, so the sentinel and the forum listener can find a commander that has no
 // Stop hook await to find. It is best effort: a command run outside a herdr
@@ -40,7 +40,7 @@ func registerCommander(projectRoot, cwd string, stderr io.Writer) {
 // registerCommanderAt is registerCommander for a project directory already
 // known, asking loc which agent the pane runs.
 func registerCommanderAt(projectRoot, dir string, loc herdr.Locator, stderr io.Writer) {
-	_, err := commanderreg.Register(projectRoot, dir, os.Getenv("HERDR_PANE_ID"), loc, time.Now())
+	_, err := commanderreg.Register(projectRoot, dir, commanderPane(os.Getenv), loc, time.Now())
 	if err == nil || errors.Is(err, commanderreg.ErrNoPane) || errors.Is(err, commanderreg.ErrNotAnAgent) {
 		return
 	}
@@ -104,7 +104,7 @@ func (m *memoLocator) AgentList() ([]herdr.AgentInfo, error) { return m.inner.Ag
 //     live in the dispatch project, which is what every command assumed before
 //     the commander was looked up at all.
 func resolveCommanderHome(vexillumHome, dispatchRoot, dispatchDir string, loc herdr.Locator) commanderHome {
-	pane := os.Getenv("HERDR_PANE_ID")
+	pane := commanderPane(os.Getenv)
 	if pane == "" {
 		return commanderHome{}
 	}

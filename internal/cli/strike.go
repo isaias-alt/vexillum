@@ -95,7 +95,7 @@ func Strike(args []string) int {
 		return 1
 	}
 
-	return runStrike(projectDir, vexillumHome, taskID, opts, herdr.CLI{}, os.Stdout, os.Stderr)
+	return runStrike(projectDir, vexillumHome, taskID, opts, herdr.Default(), os.Stdout, os.Stderr)
 }
 
 // strikeOptions are strike's flags.

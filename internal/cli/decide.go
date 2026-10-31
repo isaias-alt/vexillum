@@ -98,11 +98,11 @@ func Decide(args []string) int {
 			fmt.Fprintln(os.Stderr, cmdname.Name+": --dismiss takes only the task id, there is no answer to send")
 			return 1
 		}
-		return runDecideDismiss(projectDir, vexillumHome, taskID, herdr.CLI{}, os.Stdout, os.Stderr)
+		return runDecideDismiss(projectDir, vexillumHome, taskID, herdr.Default(), os.Stdout, os.Stderr)
 	}
 	answer := strings.Join(args[1:], " ")
 
-	return runDecide(projectDir, vexillumHome, taskID, answer, herdr.CLI{}, os.Stdout, os.Stderr)
+	return runDecide(projectDir, vexillumHome, taskID, answer, herdr.Default(), os.Stdout, os.Stderr)
 }
 
 func runDecide(projectDir, vexillumHome, taskID, answer string, client herdr.Client, stdout, stderr io.Writer) int {

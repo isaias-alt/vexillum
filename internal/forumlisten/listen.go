@@ -93,7 +93,7 @@ func (o *Options) defaults() {
 		home := o.Home
 		locator := o.Herdr
 		if locator == nil {
-			locator = herdr.CLI{}
+			locator = herdr.Default()
 		}
 		o.Commander = func(root string) bool {
 			// The await comes first and settles it alone, so a project with a

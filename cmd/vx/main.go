@@ -31,6 +31,19 @@ func run(args []string) int {
 	case "-v", "--version":
 		fmt.Println(buildinfo.FormatVersion(cmdname.Name, version, buildinfo.ReadVCS()))
 		return 0
+	}
+
+	// A VX_BACKEND typo must not silently run on the herdr TUI. Not for
+	// "sentinel" (its Stop hook reads anything printed on stderr as a wake; the
+	// daemon checks the value itself) or "doctor" (which reports it).
+	if args[0] != "sentinel" && args[0] != "doctor" {
+		if err := cli.CheckBackend(); err != nil {
+			fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
+			return 1
+		}
+	}
+
+	switch args[0] {
 	case "init":
 		return cli.Init(args[1:])
 	case "upgrade":

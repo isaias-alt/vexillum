@@ -59,9 +59,15 @@ func Redispatch(args []string) int {
 		return 1
 	}
 
+	workspaceID, err = backendWorkspace(workspaceID, vexillumHome, projectDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
+		return 1
+	}
+
 	ensureSentinelRunning(vexillumHome, os.Stderr)
 
-	return runRedispatch(projectDir, vexillumHome, workspaceID, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
+	return runRedispatch(projectDir, vexillumHome, workspaceID, args[0], herdr.Default(), os.Stdout, os.Stderr)
 }
 
 // taskHarness is the harness name recorded on the task with the given id, or

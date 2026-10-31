@@ -65,7 +65,7 @@ func Land(args []string) int {
 		return 1
 	}
 
-	return runLand(projectDir, vexillumHome, args[0], herdr.CLI{}, os.Stdout, os.Stderr)
+	return runLand(projectDir, vexillumHome, args[0], herdr.Default(), os.Stdout, os.Stderr)
 }
 
 func runLand(projectDir, vexillumHome, taskID string, client herdr.Client, stdout, stderr io.Writer) int {

@@ -19,7 +19,7 @@ import (
 // harness in the project (see commanderreg.Resolve), so a commander that was
 // closed long ago does not trigger it.
 func SharedWakeQueue(projectDir, vexillumHome string, probes *Probes) []Result {
-	return sharedWakeQueue(projectDir, vexillumHome, herdr.CLI{}, probes)
+	return sharedWakeQueue(projectDir, vexillumHome, herdr.Default(), probes)
 }
 
 func sharedWakeQueue(projectDir, vexillumHome string, h herdr.Locator, probes *Probes) []Result {

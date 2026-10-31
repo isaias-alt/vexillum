@@ -26,7 +26,7 @@ const pendingWakeGrace = time.Minute
 // empty or has a listener. Read-only; it starts processes only for a project
 // that has wakes waiting.
 func PendingWakes(vexillumHome string) []Result {
-	return pendingWakes(vexillumHome, herdr.CLI{}, time.Now(), sentinel.HasLiveAwaiter)
+	return pendingWakes(vexillumHome, herdr.Default(), time.Now(), sentinel.HasLiveAwaiter)
 }
 
 func pendingWakes(vexillumHome string, h herdr.Locator, now time.Time, hasAwaiter func(vexillumHome, projectRoot string) bool) []Result {

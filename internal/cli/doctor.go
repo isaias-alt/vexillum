@@ -10,6 +10,7 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/cmdname"
 	"github.com/isaias-alt/vexillum/internal/doctorcheck"
+	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 )
@@ -127,13 +128,24 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	// the report takes about as long as the slowest one. RunAll keeps the
 	// results in the order listed here, so the report reads the same.
 	probes := &doctorcheck.Probes{}
+	// The terminal backend lines: the herdr TUI by default, herdr-core with
+	// VX_BACKEND=hc.
+	terminal := []doctorcheck.Check{
+		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.Binary("herdr", "herdr", true) }),
+		doctorcheck.One(doctorcheck.HerdrVersion),
+		doctorcheck.One(doctorcheck.HerdrApp),
+	}
+	if herdr.WantsHC(os.Getenv) {
+		terminal = []doctorcheck.Check{doctorcheck.HCBackend}
+	}
 	steps := []doctorcheck.Check{
 		doctorcheck.One(func() doctorcheck.Result {
 			return doctorcheck.Binary("Claude Code", "claude", isCommander(soldier.HarnessClaude))
 		}),
-		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.Binary("herdr", "herdr", true) }),
-		doctorcheck.One(doctorcheck.HerdrVersion),
-		doctorcheck.One(doctorcheck.HerdrApp),
+		doctorcheck.One(doctorcheck.BackendValue),
+	}
+	steps = append(steps, terminal...)
+	steps = append(steps,
 		doctorcheck.One(doctorcheck.GitHubCLI),
 		doctorcheck.One(doctorcheck.VXShadow),
 		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.VexillumHome(vexillumHome) }),
@@ -147,7 +159,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		func() []doctorcheck.Result {
 			return doctorcheck.OpenCodeChecks(projectDir, vexillumHome, isCommander(soldier.HarnessOpenCode), probes)
 		},
-	}
+	)
 	if isCommander(soldier.HarnessOpenCode) {
 		steps = append(steps, func() []doctorcheck.Result {
 			return doctorcheck.OpenCodeCommanderChecks(projectDir, vexillumHome, probes)

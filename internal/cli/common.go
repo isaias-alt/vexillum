@@ -88,13 +88,19 @@ func inHerdrApp(getenv func(string) string) bool {
 // terminal: a different product from the herdr TUI vexillum runs on.
 func herdrAppMessage(command string) string {
 	return "this terminal belongs to the Herdr app (HC_TERMINAL_ID is set), not the herdr TUI - " +
-		cmdname.Name + " currently runs on the herdr TUI, so run " + command + " from a herdr TUI pane"
+		cmdname.Name + " currently runs on the herdr TUI, so run " + command + " from a herdr TUI pane " +
+		"(or try the experimental app backend with " + herdr.BackendEnv + "=hc)"
 }
 
 // harnessPreconditions is herdrPreconditions for a soldier that runs on the
 // harness registered under harness ("" means claude): the CLI that must be on
 // PATH next to herdr is that harness's own, not always claude. A harness this
 // build cannot drive is an error too, before anything is started.
+//
+// With VX_BACKEND=hc the terminal backend is herdr-core instead: the command
+// must run in a Herdr app terminal (HC_TERMINAL_ID) and a real hc binary must
+// be on PATH, and no workspace id comes back (the space is chosen from the
+// project, see backendWorkspace).
 func harnessPreconditions(command, harness string, getenv func(string) string, lookPath func(string) (string, error)) (string, error) {
 	workspaceID := getenv("HERDR_WORKSPACE_ID")
 	harnessBinary, err := soldier.HarnessBinary(harness)
@@ -103,14 +109,28 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 	}
 
 	var problems []string
+	multiplexer := "herdr"
 	switch {
+	case herdr.WantsHC(getenv):
+		multiplexer = ""
+		workspaceID = ""
+		if getenv("HC_TERMINAL_ID") == "" {
+			problems = append(problems, herdr.BackendEnv+"=hc is set but HC_TERMINAL_ID is not - "+command+" must run from inside a Herdr app terminal")
+		}
+		if _, _, err := herdr.ResolveHC(lookPath, herdr.HCVersionOf); err != nil {
+			problems = append(problems, err.Error())
+		}
 	case workspaceID == "" && inHerdrApp(getenv):
 		problems = append(problems, herdrAppMessage(command))
 	case workspaceID == "":
 		problems = append(problems, "HERDR_WORKSPACE_ID is not set - "+command+" must run from inside a herdr-managed pane")
 	}
 	harnessFound := true
-	for _, tool := range []string{"herdr", harnessBinary} {
+	tools := []string{harnessBinary}
+	if multiplexer != "" {
+		tools = []string{multiplexer, harnessBinary}
+	}
+	for _, tool := range tools {
 		if _, err := lookPath(tool); err != nil {
 			problem := tool + " is not on PATH"
 			if hint := doctorcheck.InstallHint(tool); hint != "" {
@@ -133,6 +153,50 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 		return workspaceID, nil
 	}
 	return "", fmt.Errorf("cannot %s from here, nothing was started:\n  - %s\nRun '%s doctor' to check your setup", command, strings.Join(problems, "\n  - "), cmdname.Name)
+}
+
+// backendWorkspace is the workspace id a soldier's tab is created in. On the
+// herdr TUI it is the caller's own workspace (workspaceID, from
+// harnessPreconditions). herdr-core has no "current workspace" a process can
+// read, so with the hc backend vexillum picks its own space for the project,
+// vx-<project>, which the Herdr app creates when it does not know it.
+func backendWorkspace(workspaceID, vexillumHome, projectDir string) (string, error) {
+	if !herdr.UsingHC() {
+		return workspaceID, nil
+	}
+	root, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving project root: %w", err)
+	}
+	return herdr.HCSpace(root), nil
+}
+
+// commanderPane is the terminal the running command was typed in: the herdr
+// pane (HERDR_PANE_ID), or with VX_BACKEND=hc the Herdr app terminal
+// (HC_TERMINAL_ID). Empty outside either, which means nothing is known about
+// the commander.
+func commanderPane(getenv func(string) string) string {
+	if herdr.WantsHC(getenv) {
+		return getenv("HC_TERMINAL_ID")
+	}
+	return getenv("HERDR_PANE_ID")
+}
+
+// inManagedTerminal reports whether the process runs in a terminal its backend
+// manages: a herdr pane (HERDR_WORKSPACE_ID) or, with VX_BACKEND=hc, a Herdr app
+// terminal (HC_TERMINAL_ID).
+func inManagedTerminal(getenv func(string) string) bool {
+	if herdr.WantsHC(getenv) {
+		return getenv("HC_TERMINAL_ID") != ""
+	}
+	return getenv("HERDR_WORKSPACE_ID") != ""
+}
+
+// CheckBackend reports a VX_BACKEND value vexillum does not know, so a typo
+// fails loudly instead of running on the herdr TUI.
+func CheckBackend() error {
+	_, err := herdr.BackendName(os.Getenv)
+	return err
 }
 
 // ensureSentinelRunning best-effort auto-starts "vx sentinel"
