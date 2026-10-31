@@ -139,6 +139,11 @@ func openCodeShadow(installs []openCodeInstall) (Result, bool) {
 // instead of herdr reading the screen. ok is false when herdr is not on PATH,
 // which the "herdr" check already reports.
 func openCodeIntegration(probes *Probes) (Result, bool) {
+	// herdr's integration is for the herdr TUI; under the hc backend the
+	// program reports its own status (OSC 7501) and there is nothing to install.
+	if herdr.UsingHC() {
+		return Result{}, false
+	}
 	if _, err := exec.LookPath("herdr"); err != nil {
 		return Result{}, false
 	}

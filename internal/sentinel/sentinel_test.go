@@ -2776,3 +2776,76 @@ func TestTick_KeepsAPromptRecordedWhileTheSnapshotWasInFlight(t *testing.T) {
 		t.Error("expected the idle mark to be saved")
 	}
 }
+
+// A soldier on another terminal backend is not this client's to look for: the
+// herdr TUI sentinel must not ask about an hc soldier (it would find it gone and
+// mark it interrupted), and an hc one must not touch a herdr TUI soldier.
+type hcNamed struct{ *fakeHerdr }
+
+func (hcNamed) BackendName() string { return "hc" }
+
+func TestTick_LeavesSoldiersOfAnotherBackendAlone(t *testing.T) {
+	home := t.TempDir()
+	proj := projectRoot(home, "proj1")
+	hcTask := newRunningTask(t, proj, "vx-on-hc")
+	tuiTask := newRunningTask(t, proj, "vx-on-tui")
+	if _, err := state.Update(proj, hcTask.ID, func(current *state.Task) (bool, error) {
+		current.Backend = "hc"
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	statuses := map[string]string{"vx-on-hc": "done", "vx-on-tui": "done"}
+	notFound := &herdr.APIError{Code: "agent_not_found", Message: "gone"}
+
+	// The herdr TUI sentinel (a client that names no backend) settles its own
+	// soldier and never asks about the hc one.
+	tui := &fakeHerdr{statuses: statuses, errFor: map[string]error{"vx-on-hc": notFound}}
+	if _, err := sentinel.Tick(home, tui); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := state.Load(proj, hcTask.ID)
+	if got.Status != state.StatusRunning || !got.AgentNotFoundSince.IsZero() {
+		t.Errorf("the hc soldier was touched by the herdr sentinel: status %s, not-found since %v", got.Status, got.AgentNotFoundSince)
+	}
+	got, _ = state.Load(proj, tuiTask.ID)
+	if got.Status != state.StatusDone {
+		t.Errorf("the herdr soldier = %s, want done", got.Status)
+	}
+
+	// An hc sentinel settles the hc soldier.
+	if _, err := sentinel.Tick(home, hcNamed{&fakeHerdr{statuses: statuses}}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = state.Load(proj, hcTask.ID)
+	if got.Status != state.StatusDone {
+		t.Errorf("the hc soldier = %s, want done under the hc sentinel", got.Status)
+	}
+}
+
+func TestPublishInfoFor_RecordsTheBackend(t *testing.T) {
+	home := t.TempDir()
+	build, err := sentinel.CurrentBuild("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := sentinel.AcquireLockRetiring(home, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if err := sentinel.PublishInfoFor(home, build, "hc"); err != nil {
+		t.Fatal(err)
+	}
+	info, ok := sentinel.LiveInfo(home)
+	if !ok || info.Backend != "hc" {
+		t.Errorf("LiveInfo = %+v, %v; want backend hc", info, ok)
+	}
+	if err := sentinel.PublishInfoFor(home, build, "herdr"); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := sentinel.LiveInfo(home); info.Backend != "" {
+		t.Errorf("the herdr TUI is recorded as no backend (as before backends existed), got %q", info.Backend)
+	}
+}

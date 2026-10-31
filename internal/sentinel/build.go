@@ -89,6 +89,9 @@ type Info struct {
 	PID       int       `json:"pid"`
 	StartedAt time.Time `json:"started_at"`
 	Build     Build     `json:"build"`
+	// Backend is the terminal backend the sentinel watches soldiers on; empty
+	// for a sentinel that predates backends, which is the herdr TUI.
+	Backend string `json:"backend,omitempty"`
 }
 
 func infoPath(vexillumHome string) string {
@@ -98,7 +101,16 @@ func infoPath(vexillumHome string) string {
 // PublishInfo records, for the calling sentinel (which must hold the lock),
 // the build it runs from.
 func PublishInfo(vexillumHome string, b Build) error {
-	info := Info{PID: os.Getpid(), StartedAt: time.Now().UTC(), Build: b}
+	return PublishInfoFor(vexillumHome, b, "")
+}
+
+// PublishInfoFor is PublishInfo for a sentinel that watches soldiers on the
+// given terminal backend ("" or "herdr" is the herdr TUI).
+func PublishInfoFor(vexillumHome string, b Build, backend string) error {
+	if backend == "herdr" {
+		backend = ""
+	}
+	info := Info{PID: os.Getpid(), StartedAt: time.Now().UTC(), Build: b, Backend: backend}
 	if err := atomicfile.WriteJSON(infoPath(vexillumHome), info); err != nil {
 		return fmt.Errorf("recording sentinel build: %w", err)
 	}

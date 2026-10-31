@@ -193,6 +193,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 	task.HerdrTabID = tabID
 	task.HerdrPaneID = paneID
 	task.HerdrAgentName = agentName
+	task.Backend = herdr.RecordedBackend(client)
 	task.Status = state.StatusRunning
 	task.UpdatedAt = time.Now().UTC()
 	saved, err := updateTask(projectRoot, task.ID, func(current *state.Task) {
@@ -204,6 +205,7 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		current.HerdrTabID = task.HerdrTabID
 		current.HerdrPaneID = task.HerdrPaneID
 		current.HerdrAgentName = task.HerdrAgentName
+		current.Backend = task.Backend
 		current.Status = task.Status
 		current.UpdatedAt = task.UpdatedAt
 	})

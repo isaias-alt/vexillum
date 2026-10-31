@@ -148,6 +148,10 @@ func runStrike(projectDir, vexillumHome, taskID string, opts strikeOptions, clie
 		fmt.Fprintf(stderr, cmdname.Name+": loading task %s: %v\n", taskID, err)
 		return 1
 	}
+	if err := requireTaskBackend(task, client); err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
 
 	// A scout's report is its work product, the same way a mission's
 	// landed commit is (checked by camp.Strike itself, via

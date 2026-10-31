@@ -80,7 +80,7 @@ const (
 	defaultStallWindow = 5 * time.Second
 	// defaultStartWindow is how long AgentStart waits for the agent to report
 	// its first status before it gives up with agent_not_ready.
-	defaultStartWindow = 10 * time.Second
+	defaultStartWindow = 4 * time.Second
 	// defaultShellWindow is how long AgentStart waits for the new shell to draw
 	// its prompt before typing the launch line anyway.
 	defaultShellWindow = 8 * time.Second

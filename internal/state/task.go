@@ -141,6 +141,10 @@ type Task struct {
 	HerdrTabID       string `json:"herdr_tab_id,omitempty"`
 	HerdrPaneID      string `json:"herdr_pane_id,omitempty"`
 	HerdrAgentName   string `json:"herdr_agent_name,omitempty"`
+	// Backend names the terminal backend the soldier runs on when it is not the
+	// herdr TUI ("hc"): the ids above are that backend's, and only it can find
+	// the soldier again. Empty means the herdr TUI.
+	Backend string `json:"backend,omitempty"`
 
 	// AgentNotFoundSince marks when internal/sentinel.Tick first observed
 	// this task's herdr agent as gone (herdr's specific "agent_not_found",

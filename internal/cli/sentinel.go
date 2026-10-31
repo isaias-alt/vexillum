@@ -183,7 +183,7 @@ func Sentinel(args []string) int {
 	}
 	defer release()
 
-	if err := sentinel.PublishInfo(vexillumHome, build); err != nil {
+	if err := sentinel.PublishInfoFor(vexillumHome, build, herdr.NameOf(herdr.Default())); err != nil {
 		fmt.Fprintln(os.Stderr, cmdname.Name+":", err)
 		return 1
 	}

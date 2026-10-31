@@ -101,6 +101,10 @@ func runReprompt(projectDir, vexillumHome, taskID, text string, client herdr.Cli
 		fmt.Fprintf(stderr, cmdname.Name+": loading task %s: %v\n", taskID, err)
 		return 1
 	}
+	if err := requireTaskBackend(task, client); err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
 
 	if msg := repromptRefusal(task); msg != "" {
 		fmt.Fprintf(stderr, cmdname.Name+": %s\n", msg)

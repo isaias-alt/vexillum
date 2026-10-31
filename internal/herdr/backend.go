@@ -50,6 +50,42 @@ func WantsHC(getenv func(string) string) bool {
 // UsingHC is WantsHC for the process environment.
 func UsingHC() bool { return WantsHC(os.Getenv) }
 
+// Namer is implemented by a Backend that can say which one it is.
+type Namer interface {
+	BackendName() string
+}
+
+func (CLI) BackendName() string { return BackendHerdr }
+func (*HC) BackendName() string { return BackendHC }
+
+// NameOf is the backend c is: BackendHerdr for anything that does not say, which
+// is every client but HC (and the fakes tests use).
+func NameOf(c any) string {
+	if n, ok := c.(Namer); ok {
+		return n.BackendName()
+	}
+	return BackendHerdr
+}
+
+// RecordedBackend is what a task dispatched through c records as its backend:
+// empty for the herdr TUI, which keeps task files written before backends
+// existed valid as they are.
+func RecordedBackend(c any) string {
+	if name := NameOf(c); name != BackendHerdr {
+		return name
+	}
+	return ""
+}
+
+// SameBackend reports whether a task that recorded taskBackend (see
+// RecordedBackend) belongs to the backend c is.
+func SameBackend(taskBackend string, c any) bool {
+	if taskBackend == "" {
+		taskBackend = BackendHerdr
+	}
+	return taskBackend == NameOf(c)
+}
+
 // Default is the backend the process environment selects: the herdr TUI client
 // unless VX_BACKEND=hc.
 func Default() Backend {

@@ -9,6 +9,8 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/project"
+	"github.com/isaias-alt/vexillum/internal/sentinel"
+	"github.com/isaias-alt/vexillum/internal/state"
 )
 
 // fakeHCPath is the fake hc: its --version answers like the real core, so it
@@ -160,5 +162,57 @@ func TestCheckBackend(t *testing.T) {
 	t.Setenv("VX_BACKEND", "hc")
 	if err := CheckBackend(); err != nil {
 		t.Errorf("hc is valid: %v", err)
+	}
+}
+
+type hcNamedClient struct{ herdr.Client }
+
+func (hcNamedClient) BackendName() string { return "hc" }
+
+func TestRequireTaskBackend(t *testing.T) {
+	onHC := state.Task{ID: "abc", HerdrTabID: "t9", Backend: "hc"}
+	onTUI := state.Task{ID: "def", HerdrTabID: "w1:t2"}
+	var tui herdr.Client = herdr.CLI{}
+	var hc herdr.Client = hcNamedClient{}
+
+	if err := requireTaskBackend(onHC, hc); err != nil {
+		t.Errorf("hc task on hc: %v", err)
+	}
+	if err := requireTaskBackend(onTUI, tui); err != nil {
+		t.Errorf("herdr task on herdr: %v", err)
+	}
+	if err := requireTaskBackend(onHC, tui); err == nil || !strings.Contains(err.Error(), "VX_BACKEND=hc") {
+		t.Errorf("hc task on herdr = %v, want a refusal pointing at VX_BACKEND=hc", err)
+	}
+	if err := requireTaskBackend(onTUI, hc); err == nil || !strings.Contains(err.Error(), "unset VX_BACKEND") {
+		t.Errorf("herdr task on hc = %v, want a refusal telling to unset VX_BACKEND", err)
+	}
+	if err := requireTaskBackend(state.Task{ID: "x", Backend: "hc"}, tui); err != nil {
+		t.Errorf("a task that never got a terminal has nothing to mismatch: %v", err)
+	}
+}
+
+func TestBackendMismatchWarning(t *testing.T) {
+	info := func(backend string) sentinel.Info {
+		return sentinel.Info{PID: 4242, Build: sentinel.Build{Version: "v1"}, Backend: backend}
+	}
+	if got := backendMismatchWarning(info(""), false, "hc"); got != "" {
+		t.Errorf("no sentinel running, got %q", got)
+	}
+	if got := backendMismatchWarning(info(""), true, "herdr"); got != "" {
+		t.Errorf("herdr on herdr, got %q", got)
+	}
+	if got := backendMismatchWarning(info("hc"), true, "hc"); got != "" {
+		t.Errorf("hc on hc, got %q", got)
+	}
+	// A sentinel that predates backends watches the herdr TUI.
+	got := backendMismatchWarning(info(""), true, "hc")
+	for _, want := range []string{"pid 4242", "herdr backend", "on hc", "kill 4242"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("warning lacks %q: %s", want, got)
+		}
+	}
+	if got := backendMismatchWarning(info("hc"), true, "herdr"); got == "" {
+		t.Error("an hc sentinel cannot supervise a herdr soldier: want a warning")
 	}
 }

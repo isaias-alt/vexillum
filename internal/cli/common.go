@@ -192,6 +192,43 @@ func inManagedTerminal(getenv func(string) string) bool {
 	return getenv("HERDR_WORKSPACE_ID") != ""
 }
 
+// requireTaskBackend refuses to act on a soldier through the wrong terminal
+// backend: its ids belong to the backend it was dispatched on, and another one
+// would report it gone (a strike would even close nothing and say it had). A
+// task that never got a terminal has nothing to mismatch.
+func requireTaskBackend(task state.Task, client herdr.Client) error {
+	if task.HerdrTabID == "" || herdr.SameBackend(task.Backend, client) {
+		return nil
+	}
+	dispatched := task.Backend
+	if dispatched == "" {
+		dispatched = herdr.BackendHerdr
+	}
+	hint := "unset " + herdr.BackendEnv
+	if dispatched == herdr.BackendHC {
+		hint = "set " + herdr.BackendEnv + "=" + herdr.BackendHC
+	}
+	return fmt.Errorf("task %s was dispatched on the %s backend, but this command runs on the %s one - %s and try again", task.ID, dispatched, herdr.NameOf(client), hint)
+}
+
+// backendMismatchWarning says, for a dispatch on the backend want, that the
+// sentinel already running watches soldiers on another one: it would report
+// this soldier gone. Empty when they match or when there is no such sentinel.
+func backendMismatchWarning(info sentinel.Info, running bool, want string) string {
+	if !running {
+		return ""
+	}
+	has := info.Backend
+	if has == "" {
+		has = herdr.BackendHerdr
+	}
+	if has == want {
+		return ""
+	}
+	return fmt.Sprintf("the sentinel already running (pid %d, %s) watches soldiers on the %s backend and cannot supervise this one on %s - stop it (kill %d) so the next %s command starts one that can; a sentinel serves one backend at a time",
+		info.PID, info.Build.Version, has, want, info.PID, cmdname.Name)
+}
+
 // CheckBackend reports a VX_BACKEND value vexillum does not know, so a typo
 // fails loudly instead of running on the herdr TUI.
 func CheckBackend() error {
@@ -213,6 +250,10 @@ func CheckBackend() error {
 // remains available to start by hand if this doesn't work.
 func ensureSentinelRunning(vexillumHome string, stderr io.Writer) {
 	if sentinel.IsRunning(vexillumHome) && !sentinel.HolderStale(vexillumHome) {
+		info, ok := sentinel.LiveInfo(vexillumHome)
+		if msg := backendMismatchWarning(info, ok, herdr.NameOf(herdr.Default())); msg != "" {
+			fmt.Fprintln(stderr, cmdname.Name+": warning: "+msg)
+		}
 		return
 	}
 

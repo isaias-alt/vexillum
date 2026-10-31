@@ -231,6 +231,11 @@ func tickProject(projectRoot string, client herdr.Client, note func(subject, lin
 		if task.Status != state.StatusRunning || task.HerdrAgentName == "" {
 			continue
 		}
+		// A soldier on another terminal backend is not this client's to look
+		// for: asking would only report it gone.
+		if !herdr.SameBackend(task.Backend, client) {
+			continue
+		}
 		if time.Since(task.UpdatedAt) < settleGracePeriod {
 			continue
 		}
@@ -340,7 +345,7 @@ func reopenActiveTasks(projectRoot string, tasks []state.Task, client herdr.Clie
 	var leased map[string]bool
 	leasesLoaded := false
 	for _, task := range tasks {
-		if !reopenable(task.Status) || task.HerdrAgentName == "" {
+		if !reopenable(task.Status) || task.HerdrAgentName == "" || !herdr.SameBackend(task.Backend, client) {
 			continue
 		}
 		if !leasesLoaded {

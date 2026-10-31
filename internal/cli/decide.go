@@ -117,6 +117,10 @@ func runDecide(projectDir, vexillumHome, taskID, answer string, client herdr.Cli
 		fmt.Fprintf(stderr, cmdname.Name+": loading task %s: %v\n", taskID, err)
 		return 1
 	}
+	if err := requireTaskBackend(task, client); err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
+		return 1
+	}
 
 	if task.Status != state.StatusBlocked {
 		if task.Status == state.StatusInterrupted {
@@ -155,6 +159,10 @@ func runDecideDismiss(projectDir, vexillumHome, taskID string, client herdr.Clie
 	task, err := state.Load(projectRoot, taskID)
 	if err != nil {
 		fmt.Fprintf(stderr, cmdname.Name+": loading task %s: %v\n", taskID, err)
+		return 1
+	}
+	if err := requireTaskBackend(task, client); err != nil {
+		fmt.Fprintln(stderr, cmdname.Name+":", err)
 		return 1
 	}
 	if task.Status != state.StatusBlocked {

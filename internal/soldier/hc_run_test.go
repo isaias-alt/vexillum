@@ -57,6 +57,9 @@ func TestRunInHerdr_HCBackend(t *testing.T) {
 	if got.HerdrWorkspaceID != "vx-proj-1" || got.HerdrTabID != "t1" || got.HerdrPaneID != "t1" || got.HerdrAgentName != "vx-do-the-thing" {
 		t.Errorf("recorded ids = %+v", got)
 	}
+	if got.Backend != "hc" {
+		t.Errorf("Backend = %q, want hc recorded on the task", got.Backend)
+	}
 	if got.PromptSubmittedAt.IsZero() {
 		t.Error("the prompt was delivered and must be recorded as submitted")
 	}
