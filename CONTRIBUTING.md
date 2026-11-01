@@ -211,6 +211,12 @@ list; when a release deserves it, the maintainer writes a short highlights
 paragraph by hand on the GitHub release page. There is no `CHANGELOG.md` and no
 changelog page on the site.
 
+Nothing in the docs pins the stable channel to a version, so a release needs no
+docs edit. The curl commands point at the `canary` branch copy of
+`scripts/install.sh`, which installs the latest stable on its own, and version
+examples use `vX.Y.Z` placeholders. `go test ./scripts` fails when a docs file
+pins a release tag again.
+
 ## Third-party notices
 
 `THIRD-PARTY-NOTICES.md` is generated and never edited by hand. After changing

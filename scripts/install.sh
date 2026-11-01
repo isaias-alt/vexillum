@@ -5,16 +5,16 @@ set -euo pipefail
 # vexillum - install script (installs the `vx` command)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/v0.1.1/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --channel canary
-#   curl -fsSL .../install.sh | bash -s -- --version v0.1.0
+#   curl -fsSL .../install.sh | bash -s -- --version <tag>
 #
 # Options:
 #   --channel stable|canary   stable (default) installs the latest stable
 #                             release and never a pre-release; canary installs
 #                             the latest canary build, by direct download
-#   --version <tag>           install exactly this release, for example v0.1.0
-#                             or v0.1.1, by direct download. The leading
+#   --version <tag>           install exactly this release, for example vX.Y.Z
+#                             or vX.Y.Z-rc.N, by direct download. The leading
 #                             "v" is optional. Cannot be combined with --channel
 #   -h, --help                print this help
 #
@@ -54,8 +54,8 @@ Usage: install.sh [--channel stable|canary] [--version <tag>]
                             and never a pre-release. canary installs the latest
                             canary build by direct download, without Homebrew
                             and with no stability promise.
-  --version <tag>           install exactly this release (for example v0.1.0 or
-                            v0.1.1) by direct download, without Homebrew.
+  --version <tag>           install exactly this release (for example vX.Y.Z or
+                            vX.Y.Z-rc.N) by direct download, without Homebrew.
                             Cannot be combined with --channel.
   -h, --help                print this help
 USAGE
@@ -88,7 +88,7 @@ parse_args() {
     fi
     if [ -n "$version" ]; then
         printf '%s' "$version" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
-            || fatal "Invalid version: ${version} (want a release tag such as v0.1.0 or v0.1.1)"
+            || fatal "Invalid version: ${version} (want a release tag such as vX.Y.Z or vX.Y.Z-rc.N)"
         REQUESTED_VERSION="v${version#v}"
     fi
 }
