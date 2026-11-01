@@ -40,6 +40,11 @@ fail() { # kind exit message hint
 
 now() { date +%s; }
 
+# work_until_after: when a turn started now stops working. The clock ticks in
+# whole seconds, so now+N alone could leave the turn only a fraction of a
+# second to be observed as working; the extra second guarantees at least N.
+work_until_after() { echo $(($(now) + ${VXFAKE_HC_WORK_SECS:-1} + 1)); }
+
 # find_term <target>: sets T to the terminal directory or fails with not_found.
 find_term() {
 	T=""
@@ -283,7 +288,7 @@ send)
 				printf ' ☐ Color\n\nWhich color do you prefer?\n\n❯ 1. Red\n  2. Blue\n  3. Type something.\n  4. Chat about this\n\nEnter to select · ↑/↓ to navigate · Esc to cancel\n' >"$T/screen"
 			else
 				printf working >"$T/status"
-				echo $(($(now) + ${VXFAKE_HC_WORK_SECS:-1})) >"$T/work_until"
+				work_until_after >"$T/work_until"
 			fi
 		else
 			started=null
@@ -339,7 +344,7 @@ keys)
 		case "$*" in
 		[0-9]*)
 			printf working >"$T/status"
-			echo $(($(now) + ${VXFAKE_HC_WORK_SECS:-1})) >"$T/work_until"
+			work_until_after >"$T/work_until"
 			printf '' >"$T/screen"
 			unset VXFAKE_HC_BLOCK
 			;;
