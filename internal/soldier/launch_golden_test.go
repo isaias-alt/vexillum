@@ -1,9 +1,11 @@
 package soldier_test
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/isaias-alt/vexillum/internal/opencodeosc"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
@@ -48,5 +50,41 @@ func TestLaunch_ClaudeAndPiAreUnchanged(t *testing.T) {
 				t.Errorf("Launch = %#v, want %#v", got, c.want)
 			}
 		})
+	}
+}
+
+// Only an OpenCode 2.x soldier gets a status reporter, and what it gets is one
+// TUI-only variable carrying the plugins list, written outside the camp. The
+// value is exactly what lands on the hc launch line, so a change here is a
+// change to how an OpenCode soldier starts.
+func TestReporterEnv(t *testing.T) {
+	root := t.TempDir()
+	got, err := soldier.OpenCodeHarness{Major: 2}.ReporterEnv(root)
+	if err != nil {
+		t.Fatalf("ReporterEnv: %v", err)
+	}
+	want := map[string]string{"OPENCODE_CLI_CONFIG_CONTENT": `{"plugins":["` + filepath.Join(root, "opencode", "osc7501") + `"]}`}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReporterEnv = %#v, want %#v", got, want)
+	}
+	if st, err := opencodeosc.Inspect(root); err != nil || st != opencodeosc.Current {
+		t.Errorf("plugin state = %v, %v; want installed and current", st, err)
+	}
+
+	for _, major := range []int{0, 1} {
+		other := t.TempDir()
+		env, err := soldier.OpenCodeHarness{Major: major}.ReporterEnv(other)
+		if err != nil || len(env) != 0 {
+			t.Errorf("Major %d ReporterEnv = %v, %v; want nothing (the plugin is for OpenCode 2.x)", major, env, err)
+		}
+		if st, _ := opencodeosc.Inspect(other); st != opencodeosc.Missing {
+			t.Errorf("Major %d installed the plugin", major)
+		}
+	}
+
+	for _, h := range []soldier.Harness{soldier.ClaudeHarness{}, soldier.PiHarness{}} {
+		if _, ok := h.(soldier.StatusReporterHarness); ok {
+			t.Errorf("%T is a StatusReporterHarness: it reports its own status", h)
+		}
 	}
 }

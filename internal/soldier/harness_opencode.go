@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/isaias-alt/vexillum/internal/opencodeapi"
+	"github.com/isaias-alt/vexillum/internal/opencodeosc"
 	"github.com/isaias-alt/vexillum/internal/state"
 )
 
@@ -162,6 +163,25 @@ func (h OpenCodeHarness) launchV2(task state.Task, model, variant string) Launch
 		}
 	}
 	return spec
+}
+
+// ReporterEnv gives a V2 soldier under the hc backend the OSC 7501 status
+// plugin, which herdr-core needs because OpenCode prints no status itself. The
+// plugin directory is registered through OPENCODE_CLI_CONFIG_CONTENT, a
+// variable only the TUI reads: unlike OPENCODE_CONFIG_CONTENT (see
+// OpenCodeHarness) it reaches neither the shared service nor another TUI, and
+// nothing is written into the camp or the user's OpenCode config. It replaces
+// the TUI plugins the user's own cli.json lists, for this soldier only. V1 has
+// a different plugin API and gets nothing.
+func (h OpenCodeHarness) ReporterEnv(projectRoot string) (map[string]string, error) {
+	if h.Major != 2 {
+		return nil, nil
+	}
+	dir, err := opencodeosc.Install(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{opencodeosc.EnvVar: opencodeosc.ConfigContent(dir)}, nil
 }
 
 // newOpenCodeSessions is how the V2 launch reaches the OpenCode service. A

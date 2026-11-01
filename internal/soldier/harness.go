@@ -137,6 +137,19 @@ type Harness interface {
 	QuestionModal() bool
 }
 
+// StatusReporterHarness is implemented by a harness that reports no status to
+// herdr-core by itself, and so is launched under the hc backend with a reporter
+// of vexillum's own (OpenCode 2.x: the OSC 7501 plugin in internal/opencodeosc).
+// It is separate from Harness so a harness without one is untouched: callers
+// ask for it with a type assertion.
+type StatusReporterHarness interface {
+	// ReporterEnv installs the reporter outside the camp and returns the
+	// environment that loads it into the soldier, added to the launch
+	// environment. It returns nothing for a generation of the CLI the reporter
+	// does not cover.
+	ReporterEnv(projectRoot string) (map[string]string, error)
+}
+
 // The harness names a model profile may select and a task records. HarnessClaude
 // is the default, the one a profile or task without a harness means.
 const (

@@ -178,9 +178,26 @@ func RunInHerdr(vexillumHome, workspaceID string, task state.Task, c camp.Camp, 
 		launchArgs = append(launchArgs, extra...)
 	}
 
+	// Under the hc backend herdr-core reads a status from the OSC 7501 the
+	// agent prints, and a harness that prints none (OpenCode) gets a reporter
+	// of vexillum's own through its environment. The herdr TUI has its own
+	// integration for that, so a second reporter there would be pointless.
+	// Redispatch comes through here too, so it is launched the same way.
+	launchEnv := launch.Env
+	if reporter, ok := harness.(StatusReporterHarness); ok && herdr.RecordedBackend(client) == herdr.BackendHC {
+		extra, err := reporter.ReporterEnv(projectRoot)
+		if err != nil {
+			return task, fmt.Errorf("preparing the soldier's status reporter: %w", err)
+		}
+		launchEnv = cloneEnv(launch.Env)
+		for k, v := range extra {
+			launchEnv[k] = v
+		}
+	}
+
 	agentName := herdrAgentName(task)
 
-	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName, envList(launch.Env)...)
+	tabID, paneID, err := client.CreateTab(workspaceID, c.Path, agentName, envList(launchEnv)...)
 	if err != nil {
 		return task, fmt.Errorf("creating herdr tab for camp: %w", err)
 	}

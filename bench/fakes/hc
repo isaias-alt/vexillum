@@ -12,9 +12,12 @@
 # The terminals are shells. Typing a line that starts with "env" or names a
 # harness (claude, pi, opencode) into one launches that program; what it does
 # is chosen by VXFAKE_HC_START:
-#   idle    (default) it reports idle at once, as Claude Code does
+#   idle    (default) it reports idle at once, as Claude Code does (as app
+#           opencode for opencode, which reports through vexillum's plugin)
 #   silent  it reports nothing and shows Claude's trust dialog; the keys
 #           "down enter" accept it and it then reports idle
+#   mute    it reports nothing and shows no dialog (opencode whose status
+#           plugin did not load)
 #   exit    it exits at once, back to the shell prompt
 # Typing anything else into a launched program starts a turn that lasts
 # VXFAKE_HC_WORK_SECS seconds (default 1): working, then done with turn+1. With
@@ -121,12 +124,17 @@ launch() {
 	case "${VXFAKE_HC_START:-idle}" in
 	idle)
 		printf idle >"$T/status"
-		printf claude-code >"$T/app"
+		# opencode's app name is what vexillum's plugin sends (app=opencode)
+		if [ "$prog" = opencode ]; then printf opencode >"$T/app"; else printf claude-code >"$T/app"; fi
 		printf '' >"$T/screen"
 		;;
 	silent)
 		printf '' >"$T/status"
 		printf 'Is this a project you created or one you trust?\n❯ No, exit\n  Yes, I trust this folder\n\nEnter to confirm · Esc to cancel\n' >"$T/screen"
+		;;
+	mute)
+		printf '' >"$T/status"
+		printf '' >"$T/screen"
 		;;
 	exit)
 		printf '' >"$T/prog"

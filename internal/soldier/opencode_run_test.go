@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/camp"
+	"github.com/isaias-alt/vexillum/internal/opencodeosc"
 	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 	"github.com/isaias-alt/vexillum/internal/state"
@@ -95,6 +96,11 @@ func TestRunInHerdr_OpenCodeV2StartsOnItsOwnSessionAndWritesNothing(t *testing.T
 
 	if !slices.Equal(client.tabEnv, []string{"OPENCODE_DISABLE_AUTOUPDATE=1"}) {
 		t.Errorf("tab env = %v", client.tabEnv)
+	}
+	// The herdr TUI has its own OpenCode integration: the hc status plugin is
+	// neither registered nor installed there.
+	if st, _ := opencodeosc.Inspect(testProjectRootFor(t, projectDir, home)); st != opencodeosc.Missing {
+		t.Errorf("the hc status plugin was installed for a herdr TUI soldier: %v", st)
 	}
 	if len(client.startArgs) != 1 || !slices.Equal(client.startArgs[0], []string{"--auto", "--session", "ses_fake1"}) {
 		t.Errorf("start args = %v, want [--auto --session ses_fake1]", client.startArgs)
