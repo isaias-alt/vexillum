@@ -18,7 +18,7 @@
 //
 // "model" and "effort" are checked by the profile's harness
 // (soldier.ValidateModelEffort): on claude "model" is one of haiku, sonnet,
-// opus, fable and "effort" one of low, medium, high, xhigh, max; on pi "model"
+// opus, fable or a full model id such as claude-sonnet-5-5 (shape only), and "effort" one of low, medium, high, xhigh, max; on pi "model"
 // is a provider/id such as "anthropic/claude-sonnet-5" and "effort" is a
 // thinking level (off, minimal, low, medium, high, xhigh, max); on opencode
 // "model" is provider/model with an optional #variant, such as

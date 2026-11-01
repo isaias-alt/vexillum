@@ -272,7 +272,8 @@ Una mission cambia código y entrega algo para aterrizar; un scout solo
 investiga y reporta (por defecto: mission).
 
 --model y --effort se pasan tal cual al CLI real del harness. En claude (el
-valor por defecto): --model haiku, sonnet, opus o fable; --effort low, medium,
+valor por defecto): --model haiku, sonnet, opus, fable o un id de modelo completo como
+claude-sonnet-5-5; --effort low, medium,
 high, xhigh o max. En un perfil que selecciona el harness pi: --model es un
 provider/id como anthropic/claude-sonnet-5 (se convierte en pi --model) y
 --effort es un nivel de thinking, off, minimal, low, medium, high, xhigh o max
@@ -367,7 +368,7 @@ a 'vx dispatch --profile <name>'.
 Esto es una tabla de consulta, no un router: qué perfil conviene a una tarea es
 un juicio del commander, hecho a partir de las líneas "when". Un archivo de
 modelos que no es JSON válido, que nombra un modelo o un effort que su harness
-no acepta (claude: haiku, sonnet, opus, fable y low a max; pi: un modelo
+no acepta (claude: haiku, sonnet, opus, fable o un id completo como claude-sonnet-5-5, y low a max; pi: un modelo
 provider/id como anthropic/claude-sonnet-5 y un nivel de thinking off a max;
 opencode: un provider/model con un #variant opcional, y cualquier etiqueta
 simple como effort), o que nombra un harness desconocido, es un error que nombra el archivo y el

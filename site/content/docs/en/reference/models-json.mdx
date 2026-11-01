@@ -35,7 +35,7 @@ The file is JSON, in English:
 | Field | Meaning |
 | --- | --- |
 | `profiles.<name>` | A named profile. The name has no whitespace and is not `default`. |
-| `profiles.<name>.model` | The model passed to the harness. On `claude`: `haiku`, `sonnet`, `opus` or `fable`. On `pi`: a `provider/id` such as `anthropic/claude-sonnet-5`, passed as `--model`. On `opencode`: a `provider/model` with an optional `#variant`, such as `opencode/glm-5.3-flash-free` or `anthropic/claude-sonnet-5#high`. |
+| `profiles.<name>.model` | The model passed to the harness. On `claude`: `haiku`, `sonnet`, `opus` or `fable`, or a full model id such as `claude-sonnet-5-5`, passed as is to `claude --model`. A full id is checked for shape only (lowercase letters, digits and dashes, starting with `claude-`), because the set of ids keeps growing. On `pi`: a `provider/id` such as `anthropic/claude-sonnet-5`, passed as `--model`. On `opencode`: a `provider/model` with an optional `#variant`, such as `opencode/glm-5.3-flash-free` or `anthropic/claude-sonnet-5#high`. |
 | `profiles.<name>.effort` | The effort passed to the harness. On `claude`: `low`, `medium`, `high`, `xhigh` or `max`. On `pi`: a thinking level, `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`, passed as `--thinking` (Pi clamps it to what the model supports). On `opencode`: any plain label, which is recorded on the task and never passed to OpenCode; the variant comes only from the model string. |
 | `profiles.<name>.when` | Free text that tells the commander when the profile applies. It must not be empty. |
 | `profiles.<name>.harness` | Optional. The agent CLI the profile's soldiers run on. `claude` (Claude Code) is the default when the field is absent. `pi` runs the profile's soldiers on the [Pi](/docs/guides/using-pi) coding agent. `opencode` runs them on [OpenCode](/docs/guides/using-opencode), 1.x or 2.x. Any other name is an error that names the file and the field. |
@@ -129,6 +129,20 @@ A profile that runs on OpenCode names a `provider/model` (with an optional `#var
 ```
 
 The effort is only recorded, because variant names differ per model; write a variant after the model, as in `anthropic/claude-sonnet-5#high`. The model is checked for shape only. [Using OpenCode](/docs/guides/using-opencode) covers setup, the files vexillum writes in the camp, and the privacy of free models.
+
+## Pinning a model version
+
+An alias such as `sonnet` follows whatever Claude Code resolves it to. To pin a profile to one version, set a full model id instead:
+
+```json
+{
+  "profiles": {
+    "mission-big": { "model": "claude-sonnet-5-5" }
+  }
+}
+```
+
+The id is passed unchanged to `claude --model`, recorded on the task and shown by `vx status`. A project file can set a full id over a global alias and the other fields are still inherited.
 
 ## A worked example
 

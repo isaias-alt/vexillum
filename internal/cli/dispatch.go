@@ -24,7 +24,8 @@ A mission changes code and delivers something to land; a scout only
 investigates and reports back (default: mission).
 
 --model and --effort are passed straight through to the harness's real CLI.
-On claude (the default): --model haiku, sonnet, opus or fable; --effort low,
+On claude (the default): --model haiku, sonnet, opus, fable or a full model id such as
+claude-sonnet-5-5; --effort low,
 medium, high, xhigh or max. On a profile that selects the pi harness: --model
 is a provider/id such as anthropic/claude-sonnet-5 (it becomes pi --model) and
 --effort is a thinking level, off, minimal, low, medium, high, xhigh or max (it

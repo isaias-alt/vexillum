@@ -2,6 +2,7 @@ package soldier
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -255,7 +256,10 @@ var claudeHerdrExtraArgs = []string{claudeSkipPermissionsArg, "--prompt-suggesti
 // --help` on the supported Claude Code CLI version. vexillum never
 // interprets them for routing (that judgment belongs to the commander's
 // own AGENTS.md) - it only checks a value is one claude
-// itself understands before passing it through verbatim.
+// itself understands before passing it through verbatim. A model is one of
+// the four aliases or a full model id such as claude-sonnet-5-5, which
+// `claude --model` accepts as is; a full id is checked for shape only
+// (claudeModelID) because the set of ids keeps growing.
 var (
 	claudeAllowedModels = map[string]bool{
 		"haiku":  true,
@@ -272,9 +276,13 @@ var (
 	}
 )
 
+// claudeModelID is the shape of a full Claude model id: lowercase letters,
+// digits and dashes, starting with "claude-".
+var claudeModelID = regexp.MustCompile(`^claude-[a-z0-9]+(-[a-z0-9]+)*$`)
+
 func (ClaudeHarness) ValidateModelEffort(model, effort string) error {
-	if model != "" && !claudeAllowedModels[model] {
-		return fmt.Errorf("unknown model %q (expected one of haiku, sonnet, opus, fable)", model)
+	if model != "" && !claudeAllowedModels[model] && !claudeModelID.MatchString(model) {
+		return fmt.Errorf("unknown model %q (expected one of haiku, sonnet, opus, fable, or a full model id such as claude-sonnet-5-5)", model)
 	}
 	if effort != "" && !claudeAllowedEfforts[effort] {
 		return fmt.Errorf("unknown effort %q (expected one of low, medium, high, xhigh, max)", effort)

@@ -180,6 +180,28 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func TestMergeFullModelIDOverGlobalAlias(t *testing.T) {
+	project, home := layout(t)
+	writeModels(t, home, `{"profiles": {"mission-big": {"model": "opus", "effort": "max"}}}`)
+	writeModels(t, projectModels(project), `{"profiles": {"mission-big": {"model": "claude-opus-4-8"}, "pinned": {"model": "claude-sonnet-5-5", "effort": "low", "when": "pinned"}}, "default": {"model": "claude-haiku-4-5"}}`)
+
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	big, _ := tbl.Lookup("mission-big")
+	if big != (Choice{Model: "claude-opus-4-8", Effort: "max"}) {
+		t.Errorf("mission-big = %+v, want full id from project and effort from global", big)
+	}
+	pinned, _ := tbl.Lookup("pinned")
+	if pinned != (Choice{Model: "claude-sonnet-5-5", Effort: "low"}) {
+		t.Errorf("pinned = %+v", pinned)
+	}
+	if tbl.Default.Model != "claude-haiku-4-5" {
+		t.Errorf("default = %+v", tbl.Default)
+	}
+}
+
 func TestInvalidFiles(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -191,6 +213,9 @@ func TestInvalidFiles(t *testing.T) {
 		{"unknown top-level field", `{"profile": {}}`, []string{"invalid JSON", "profile"}},
 		{"unknown profile field", `{"profiles": {"mission-big": {"efort": "low"}}}`, []string{"efort"}},
 		{"bad model", `{"profiles": {"mission-big": {"model": "gpt"}}}`, []string{`profiles["mission-big"].model`, `"gpt"`, "haiku, sonnet, opus, fable"}},
+		{"uppercase full id", `{"profiles": {"mission-big": {"model": "Claude-Sonnet-5-5"}}}`, []string{`profiles["mission-big"].model`, "full model id"}},
+		{"pi style id on claude", `{"profiles": {"mission-big": {"model": "anthropic/claude-sonnet-5"}}}`, []string{`profiles["mission-big"].model`}},
+		{"full id with space", `{"default": {"model": "claude-sonnet 5"}}`, []string{"default.model"}},
 		{"bad effort", `{"profiles": {"mission-big": {"effort": "ultra"}}}`, []string{`profiles["mission-big"].effort`, `"ultra"`, "low, medium, high, xhigh, max"}},
 		{"bad default model", `{"default": {"model": "x"}}`, []string{"default.model"}},
 		{"bad default effort", `{"default": {"effort": "x"}}`, []string{"default.effort"}},
