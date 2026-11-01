@@ -196,7 +196,11 @@ terminada sin preguntar).
 Con VX_BACKEND=hc (el backend experimental de la app de Herdr) las líneas de
 herdr se reemplazan por 'terminal backend', 'herdr-core' (obligatorio),
 'herdr-core protocol', 'Herdr app terminal' y 'herdr-app' (opcional: nombra el
-tab de cada soldier).
+tab de cada soldier). Cuando un perfil de modelo selecciona el harness opencode,
+se agrega una línea 'opencode status plugin': los soldiers de OpenCode 2.x se
+vigilan ahí a través de un plugin de estado que vexillum embebe, y avisa si el
+opencode del PATH es 1.x, que dispatch rechaza bajo hc. La integración de herdr
+para opencode no se revisa bajo hc.
 
 Cuando un perfil de modelo selecciona el harness pi, o hay un binario pi en el
 PATH, doctor también informa sobre Pi: el binario, su versión y si la
