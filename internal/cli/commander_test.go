@@ -238,7 +238,7 @@ func TestDoctor_DefaultCommanderOutputIsUnchanged(t *testing.T) {
 		"[ok] skill vexillum - installed, current",
 		"[ok] skill forum - installed, current",
 		"[ok] skill muster - installed, current",
-		"[ok] models.json - valid, 5 profiles",
+		"[ok] models.json - valid, 17 profiles",
 		"[ok] yolo mode - off",
 		"[ok] sentinel Stop hook - registered in .claude/settings.json",
 		"[ok] sentinel Stop hook finds vx - found with a minimal environment",

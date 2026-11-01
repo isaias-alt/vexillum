@@ -13,7 +13,7 @@ Three layers are merged, later ones winning:
 
 | Layer | Location | Notes |
 | --- | --- | --- |
-| built-in defaults | embedded in the binary | what `vx init` writes to a new project |
+| built-in defaults | embedded in the binary | the profiles below; `vx init` writes only the five general-purpose ones to a new project |
 | global base | `~/.vexillum/models.json` | optional; applies to every project |
 | project | `.vexillum/models.json` | per project; overrides the global base |
 
@@ -52,7 +52,21 @@ The built-in profiles, in priority order (the first that matches wins):
 | `mission-mechanical` | `haiku`, `low` | a trivial mechanical edit |
 | `mission-big` | `sonnet`, `high` | a big, ambiguous or risky mission |
 | `opus-on-request` | `opus`, `high` | only when you explicitly ask for Opus |
+| `haiku-4-5` | `claude-haiku-4-5`, `medium` | only when you explicitly ask for Haiku 4.5 |
+| `haiku-5-5` | `claude-haiku-5-5`, `medium` | only when you explicitly ask for Haiku 5.5 |
+| `sonnet-4-6` | `claude-sonnet-4-6`, `medium` | only when you explicitly ask for Sonnet 4.6 |
+| `sonnet-5` | `claude-sonnet-5`, `medium` | only when you explicitly ask for Sonnet 5 |
+| `sonnet-5-5` | `claude-sonnet-5-5`, `medium` | only when you explicitly ask for Sonnet 5.5 |
+| `opus-4-6` | `claude-opus-4-6`, `high` | only when you explicitly ask for Opus 4.6 |
+| `opus-4-7` | `claude-opus-4-7`, `high` | only when you explicitly ask for Opus 4.7 |
+| `opus-4-8` | `claude-opus-4-8`, `high` | only when you explicitly ask for Opus 4.8 |
+| `opus-5` | `claude-opus-5`, `high` | only when you explicitly ask for Opus 5 |
+| `opus-5-5` | `claude-opus-5-5`, `high` | only when you explicitly ask for Opus 5.5 |
+| `fable-5` | `claude-fable-5`, `high` | only when you explicitly ask for Fable 5; expensive, the commander asks for your OK first |
+| `fable-5-1` | `claude-fable-5-1`, `high` | only when you explicitly ask for Fable 5.1; expensive, the commander asks for your OK first |
 | default | `sonnet`, `medium` | nothing above fits |
+
+The last twelve are pinned model versions. They are built in, so every project inherits them without listing them in its own file, and they sit after the general-purpose profiles so they never shadow one. Each is used only when you ask for that exact model; the two Fable profiles are expensive, so the commander tells you and waits for your explicit OK before dispatching with one.
 
 ## How layers merge
 
@@ -169,13 +183,18 @@ mission-big  (sonnet, xhigh)
   Mission that is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.
 opus-on-request  (opus, high)
   Only when the general explicitly asks for Opus on this task. Never chosen on your own.
+haiku-4-5  (claude-haiku-4-5, medium)
+  Only when the general explicitly asks for Haiku 4.5 on this task. Never chosen on your own.
+...
+fable-5-1  (claude-fable-5-1, high)
+  Only when the general explicitly asks for Fable 5.1 on this task. Never chosen on your own. It is an expensive model: ...
 docs-sweep  (haiku, medium)
   Mission that only touches documentation or comments, no behavior change.
 default  (opus, medium)
   Nothing above fits. Fall back to it, do not reach for it on purpose.
 ```
 
-The new profile is listed after the built-in ones, and the commander can now pick it from its `when` line.
+The new profile is listed after the built-in ones, pinned versions included, and the commander can now pick it from its `when` line.
 
 ## Related
 

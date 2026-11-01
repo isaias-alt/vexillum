@@ -1,0 +1,64 @@
+{
+  "profiles": {
+    "haiku-4-5": {
+      "model": "claude-haiku-4-5",
+      "effort": "medium",
+      "when": "Only when the general explicitly asks for Haiku 4.5 on this task. Never chosen on your own."
+    },
+    "haiku-5-5": {
+      "model": "claude-haiku-5-5",
+      "effort": "medium",
+      "when": "Only when the general explicitly asks for Haiku 5.5 on this task. Never chosen on your own."
+    },
+    "sonnet-4-6": {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "when": "Only when the general explicitly asks for Sonnet 4.6 on this task. Never chosen on your own."
+    },
+    "sonnet-5": {
+      "model": "claude-sonnet-5",
+      "effort": "medium",
+      "when": "Only when the general explicitly asks for Sonnet 5 on this task. Never chosen on your own."
+    },
+    "sonnet-5-5": {
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "when": "Only when the general explicitly asks for Sonnet 5.5 on this task. Never chosen on your own."
+    },
+    "opus-4-6": {
+      "model": "claude-opus-4-6",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Opus 4.6 on this task. Never chosen on your own."
+    },
+    "opus-4-7": {
+      "model": "claude-opus-4-7",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Opus 4.7 on this task. Never chosen on your own."
+    },
+    "opus-4-8": {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Opus 4.8 on this task. Never chosen on your own."
+    },
+    "opus-5": {
+      "model": "claude-opus-5",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Opus 5 on this task. Never chosen on your own."
+    },
+    "opus-5-5": {
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Opus 5.5 on this task. Never chosen on your own."
+    },
+    "fable-5": {
+      "model": "claude-fable-5",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Fable 5 on this task. Never chosen on your own. It is an expensive model: before dispatching with this profile, tell the general it is expensive and wait for their explicit OK; without that OK, do not use it."
+    },
+    "fable-5-1": {
+      "model": "claude-fable-5-1",
+      "effort": "high",
+      "when": "Only when the general explicitly asks for Fable 5.1 on this task. Never chosen on your own. It is an expensive model: before dispatching with this profile, tell the general it is expensive and wait for their explicit OK; without that OK, do not use it."
+    }
+  }
+}

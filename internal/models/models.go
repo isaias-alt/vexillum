@@ -39,7 +39,8 @@
 //
 // Three layers are merged, later ones winning:
 //
-//  1. the defaults embedded in the binary (DefaultJSON),
+//  1. the defaults embedded in the binary: the five general-purpose
+//     profiles (DefaultJSON) followed by the pinned model-version profiles,
 //  2. the optional global base, <vexillumHome>/models.json,
 //  3. the optional project file, <projectDir>/.vexillum/models.json.
 //
@@ -77,8 +78,17 @@ const DefaultName = "default"
 //go:embed default-models.json
 var defaultJSON []byte
 
-// DefaultJSON returns the embedded defaults: the content `vx init` writes to
-// a new project's .vexillum/models.json. The returned slice is a copy.
+// pinnedJSON holds the pinned model-version profiles (haiku-4-5 ... fable-5-1).
+// They are built in, so every project inherits them, but they are not part of
+// DefaultJSON: `vx init` writes only the five general-purpose profiles to keep
+// a new project's models.json short, and the layer merge supplies the rest.
+//
+//go:embed pinned-models.json
+var pinnedJSON []byte
+
+// DefaultJSON returns the embedded general-purpose defaults: the content
+// `vx init` writes to a new project's .vexillum/models.json. The pinned
+// profiles are built in too but are not written there. The returned slice is a copy.
 func DefaultJSON() []byte {
 	return append([]byte(nil), defaultJSON...)
 }
@@ -161,13 +171,15 @@ type choiceLayer struct {
 // A missing file is skipped; an unreadable or invalid one is an error naming
 // the file and the offending field.
 func Load(projectDir, vexillumHome string) (Table, error) {
-	base, err := parse("built-in defaults", defaultJSON)
-	if err != nil {
-		return Table{}, err
-	}
 	acc := newAccumulator()
-	if err := acc.apply("built-in defaults", base); err != nil {
-		return Table{}, err
+	for _, data := range [][]byte{defaultJSON, pinnedJSON} {
+		base, err := parse("built-in defaults", data)
+		if err != nil {
+			return Table{}, err
+		}
+		if err := acc.apply("built-in defaults", base); err != nil {
+			return Table{}, err
+		}
 	}
 
 	var sources []string
@@ -409,4 +421,13 @@ func (a *accumulator) table(sources []string) Table {
 
 // canonicalOrder is the display and priority order of the built-in profiles:
 // the order the commander rules always listed them in (first match wins).
-var canonicalOrder = []string{"scout-facts", "scout-judgment", "mission-mechanical", "mission-big", "opus-on-request"}
+// The five general-purpose profiles come first and the pinned model-version
+// profiles follow, grouped by family (haiku, sonnet, opus, fable) and by
+// version within it, so a pinned profile never shadows a general-purpose one.
+var canonicalOrder = []string{
+	"scout-facts", "scout-judgment", "mission-mechanical", "mission-big", "opus-on-request",
+	"haiku-4-5", "haiku-5-5",
+	"sonnet-4-6", "sonnet-5", "sonnet-5-5",
+	"opus-4-6", "opus-4-7", "opus-4-8", "opus-5", "opus-5-5",
+	"fable-5", "fable-5-1",
+}

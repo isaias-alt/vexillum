@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
 func writeModels(t *testing.T, dir, content string) string {
@@ -35,6 +37,80 @@ func names(t Table) string {
 	return strings.Join(out, ",")
 }
 
+const allBuiltIn = "scout-facts,scout-judgment,mission-mechanical,mission-big,opus-on-request," +
+	"haiku-4-5,haiku-5-5,sonnet-4-6,sonnet-5,sonnet-5-5,opus-4-6,opus-4-7,opus-4-8,opus-5,opus-5-5,fable-5,fable-5-1"
+
+func TestBuiltInsHaveSeventeenProfilesInOrder(t *testing.T) {
+	project, home := layout(t)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(tbl) != allBuiltIn {
+		t.Errorf("got %s", names(tbl))
+	}
+	if len(tbl.Profiles) != 17 {
+		t.Errorf("got %d profiles, want 17", len(tbl.Profiles))
+	}
+}
+
+func TestPinnedProfilesPassClaudeValidation(t *testing.T) {
+	project, home := layout(t)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range tbl.Profiles[5:] {
+		if p.Harness != "" {
+			t.Errorf("%s: harness = %q, want the claude default", p.Name, p.Harness)
+		}
+		if err := soldier.ValidateModelEffort("", p.Model, p.Effort); err != nil {
+			t.Errorf("%s: %v", p.Name, err)
+		}
+		if !strings.Contains(p.When, "explicitly asks") {
+			t.Errorf("%s: when = %q, want it to say it is used only on explicit request", p.Name, p.When)
+		}
+	}
+}
+
+func TestFableProfilesRequireApproval(t *testing.T) {
+	project, home := layout(t)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"fable-5", "fable-5-1"} {
+		for _, p := range tbl.Profiles {
+			if p.Name != name {
+				continue
+			}
+			for _, want := range []string{"expensive", "explicit OK", "do not use it"} {
+				if !strings.Contains(p.When, want) {
+					t.Errorf("%s: when = %q, missing %q", name, p.When, want)
+				}
+			}
+		}
+	}
+}
+
+func TestProjectOverridesPinnedEffortKeepsModelAndWhen(t *testing.T) {
+	project, home := layout(t)
+	writeModels(t, projectModels(project), `{"profiles": {"opus-5-5": {"effort": "max"}}}`)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range tbl.Profiles {
+		if p.Name == "opus-5-5" {
+			if p.Model != "claude-opus-5-5" || p.Effort != "max" || !strings.Contains(p.When, "Opus 5.5") {
+				t.Errorf("opus-5-5 = %+v", p)
+			}
+			return
+		}
+	}
+	t.Error("opus-5-5 missing")
+}
+
 func TestDefaultsMirrorTheSixRules(t *testing.T) {
 	project, home := layout(t)
 	tbl, err := Load(project, home)
@@ -48,7 +124,7 @@ func TestDefaultsMirrorTheSixRules(t *testing.T) {
 		{"mission-big", "sonnet", "high"},
 		{"opus-on-request", "opus", "high"},
 	}
-	if len(tbl.Profiles) != len(want) {
+	if len(tbl.Profiles) < len(want) {
 		t.Fatalf("got profiles %s", names(tbl))
 	}
 	for i, w := range want {
@@ -73,7 +149,7 @@ func TestDefaultJSONIsAValidModelsFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if names(tbl) != "scout-facts,scout-judgment,mission-mechanical,mission-big,opus-on-request" {
+	if names(tbl) != allBuiltIn {
 		t.Errorf("got %s", names(tbl))
 	}
 	// DefaultJSON hands out a copy.
@@ -104,7 +180,7 @@ func TestMergeProjectOverGlobalOverDefaults(t *testing.T) {
 	if tbl.Default != (Choice{Model: "sonnet", Effort: "high"}) {
 		t.Errorf("default = %+v", tbl.Default)
 	}
-	if got := names(tbl); !strings.HasSuffix(got, "opus-on-request,docs-writer") {
+	if got := names(tbl); !strings.HasSuffix(got, "fable-5-1,docs-writer") {
 		t.Errorf("order = %s, user profiles must come after the built-ins", got)
 	}
 	if len(tbl.Sources) != 2 || tbl.Sources[0] != globalPath || tbl.Sources[1] != projectPath {

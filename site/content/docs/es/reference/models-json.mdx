@@ -13,7 +13,7 @@ Se combinan tres capas, y las posteriores ganan:
 
 | Capa | Ubicación | Notas |
 | --- | --- | --- |
-| valores por defecto embebidos | dentro del binario | lo que `vx init` escribe en un proyecto nuevo |
+| valores por defecto embebidos | dentro del binario | los perfiles de abajo; `vx init` escribe en un proyecto nuevo solo los cinco de propósito general |
 | base global | `~/.vexillum/models.json` | opcional; aplica a todos los proyectos |
 | proyecto | `.vexillum/models.json` | por proyecto; pisa a la base global |
 
@@ -52,7 +52,21 @@ Los perfiles incluidos, en orden de prioridad (gana el primero que coincide):
 | `mission-mechanical` | `haiku`, `low` | una edición mecánica trivial |
 | `mission-big` | `sonnet`, `high` | una mission grande, ambigua o riesgosa |
 | `opus-on-request` | `opus`, `high` | solo cuando pedís Opus explícitamente |
+| `haiku-4-5` | `claude-haiku-4-5`, `medium` | solo cuando pedís Haiku 4.5 explícitamente |
+| `haiku-5-5` | `claude-haiku-5-5`, `medium` | solo cuando pedís Haiku 5.5 explícitamente |
+| `sonnet-4-6` | `claude-sonnet-4-6`, `medium` | solo cuando pedís Sonnet 4.6 explícitamente |
+| `sonnet-5` | `claude-sonnet-5`, `medium` | solo cuando pedís Sonnet 5 explícitamente |
+| `sonnet-5-5` | `claude-sonnet-5-5`, `medium` | solo cuando pedís Sonnet 5.5 explícitamente |
+| `opus-4-6` | `claude-opus-4-6`, `high` | solo cuando pedís Opus 4.6 explícitamente |
+| `opus-4-7` | `claude-opus-4-7`, `high` | solo cuando pedís Opus 4.7 explícitamente |
+| `opus-4-8` | `claude-opus-4-8`, `high` | solo cuando pedís Opus 4.8 explícitamente |
+| `opus-5` | `claude-opus-5`, `high` | solo cuando pedís Opus 5 explícitamente |
+| `opus-5-5` | `claude-opus-5-5`, `high` | solo cuando pedís Opus 5.5 explícitamente |
+| `fable-5` | `claude-fable-5`, `high` | solo cuando pedís Fable 5 explícitamente; es caro, el commander te pide el OK antes |
+| `fable-5-1` | `claude-fable-5-1`, `high` | solo cuando pedís Fable 5.1 explícitamente; es caro, el commander te pide el OK antes |
 | default | `sonnet`, `medium` | nada de lo anterior aplica |
+
+Los últimos doce son versiones de modelo fijadas. Vienen incluidos, así que todos los proyectos los heredan sin listarlos en su propio archivo, y van después de los perfiles de propósito general para no taparlos nunca. Cada uno se usa solo cuando pedís ese modelo exacto; los dos perfiles Fable son caros, así que el commander te avisa y espera tu OK explícito antes de despachar con uno.
 
 ## Cómo se combinan las capas
 
@@ -169,13 +183,18 @@ mission-big  (sonnet, xhigh)
   Mission that is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.
 opus-on-request  (opus, high)
   Only when the general explicitly asks for Opus on this task. Never chosen on your own.
+haiku-4-5  (claude-haiku-4-5, medium)
+  Only when the general explicitly asks for Haiku 4.5 on this task. Never chosen on your own.
+...
+fable-5-1  (claude-fable-5-1, high)
+  Only when the general explicitly asks for Fable 5.1 on this task. Never chosen on your own. It is an expensive model: ...
 docs-sweep  (haiku, medium)
   Mission that only touches documentation or comments, no behavior change.
 default  (opus, medium)
   Nothing above fits. Fall back to it, do not reach for it on purpose.
 ```
 
-El perfil nuevo aparece después de los incluidos, y el commander ya puede elegirlo a partir de su línea `when`.
+El perfil nuevo aparece después de los incluidos (las versiones fijadas también), y el commander ya puede elegirlo a partir de su línea `when`.
 
 ## Relacionado
 

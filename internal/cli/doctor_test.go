@@ -410,7 +410,7 @@ func TestDoctor_FirstPartySkills(t *testing.T) {
 		"[ok] skill vexillum - installed, current",
 		"[ok] skill forum - installed, current",
 		"[ok] skill muster - installed, current",
-		"[ok] models.json - valid, 5 profiles",
+		"[ok] models.json - valid, 17 profiles",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
