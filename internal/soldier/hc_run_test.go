@@ -1,6 +1,7 @@
 package soldier_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,6 +128,68 @@ func TestAnswerBlocked_HCBackendModal(t *testing.T) {
 	d, err := soldier.ParseAskUserQuestionModal(screen)
 	if err != nil {
 		t.Fatalf("ParseAskUserQuestionModal(hc read) = %v\n%s", err, screen)
+	}
+	if d.Question != "Which color do you prefer?" || len(d.Options) != 4 || d.Options[0] != "Red" {
+		t.Errorf("parsed modal = %+v", d)
+	}
+}
+
+// The same modal with Claude Code's side panel on screen (a "│" column shared
+// with the conversation) still parses once hc read strips the panel.
+func TestAnswerBlocked_HCBackendModalWithSidePanel(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+	client := hcClient(t)
+
+	if _, err := runInHerdr(t, home, "vx-proj-1", task, c, client); err != nil {
+		t.Fatalf("RunInHerdr: %v", err)
+	}
+	if st, err := client.AgentWait("vx-do-the-thing", nil, 5000); err != nil || st != "done" {
+		t.Fatalf("waiting for the first turn: %q, %v", st, err)
+	}
+	t.Setenv("VXFAKE_HC_BLOCK", "1")
+	if st, err := client.AgentPrompt("vx-do-the-thing", "ask me something", []string{"idle", "done", "blocked", "working"}, 10000); err != nil || st != "blocked" {
+		t.Fatalf("prompt = %q, %v; want blocked", st, err)
+	}
+
+	rows := []string{
+		" ☐ Color",
+		"",
+		"Which color do you prefer?",
+		"",
+		"❯ 1. Red",
+		"  2. Blue",
+		"  3. Type something.",
+		"  4. Chat about this",
+		"",
+		"Enter to select · ↑/↓ to navigate · Esc to cancel",
+	}
+	var grid strings.Builder
+	for i, r := range rows {
+		panel := "    "
+		if i == 0 {
+			panel = " source: Current ▾"
+		} else if i == 2 {
+			panel = " No changes this session"
+		}
+		grid.WriteString(fmt.Sprintf("%-60s │%s\n", r, panel))
+	}
+	screenPath := filepath.Join(os.Getenv("VXFAKE_HC_DIR"), "t1", "screen")
+	if err := os.WriteFile(screenPath, []byte(grid.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	screen, err := client.AgentReadVisible("vx-do-the-thing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(screen, "│") {
+		t.Errorf("the panel column was not stripped:\n%s", screen)
+	}
+	d, err := soldier.ParseAskUserQuestionModal(screen)
+	if err != nil {
+		t.Fatalf("ParseAskUserQuestionModal(hc read with panel) = %v\n%s", err, screen)
 	}
 	if d.Question != "Which color do you prefer?" || len(d.Options) != 4 || d.Options[0] != "Red" {
 		t.Errorf("parsed modal = %+v", d)

@@ -346,3 +346,27 @@ func TestFinalTurnNeedsDecision_IgnoresAnAlreadyAnsweredQuestion(t *testing.T) {
 		t.Errorf("expected the new question to count, got %+v found=%v", got, found)
 	}
 }
+
+// A rendered grid with a side panel leaves " │" after the echoed template
+// line and wraps the prompt's trailer across rows: that is not a question.
+func TestExtractNeedsDecisionSignal_PanelAfterTemplateDoesNotBlock(t *testing.T) {
+	transcript := "  needs-decision: <a one-line summary of the question and any options>      │\n" +
+		"Say it only when you cannot proceed; do not use it for an   │ source: Current\n" +
+		"ordinary status update.                                      │\n" +
+		"  needs-decision: <a one-line summary of the question and any options>      │\n"
+	if d, found := soldier.ExtractNeedsDecisionSignal(transcript); found {
+		t.Fatalf("a placeholder with panel residue blocked: %+v", d)
+	}
+	wrapped := "  needs-decision: <a one-line summary of the question and  │\n"
+	if d, found := soldier.ExtractNeedsDecisionSignal(wrapped); found {
+		t.Fatalf("a wrapped placeholder blocked: %+v", d)
+	}
+}
+
+func TestExtractNeedsDecisionSignal_RealQuestionWithPanel(t *testing.T) {
+	transcript := "all done so far\n  needs-decision: Which DB?  │\n"
+	got, found := soldier.ExtractNeedsDecisionSignal(transcript)
+	if !found || got.Question != "Which DB?" {
+		t.Fatalf("got %+v, %v; want question %q", got, found, "Which DB?")
+	}
+}

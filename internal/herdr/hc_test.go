@@ -608,3 +608,16 @@ func TestHCErrorMapping(t *testing.T) {
 		t.Errorf("an unparsable failure must stay a plain error, got %v", err)
 	}
 }
+
+func TestStripPanelColumn(t *testing.T) {
+	in := "hello world      │ source: Current\nsecond row       │\n\nthird            │ x\n"
+	want := "hello world\nsecond row\n\nthird\n"
+	if got := stripPanelColumn(in); got != want {
+		t.Errorf("stripPanelColumn = %q, want %q", got, want)
+	}
+	// No shared column: untouched, including a lone box border.
+	plain := "a │ b\nplain\nmore text\n"
+	if got := stripPanelColumn(plain); got != plain {
+		t.Errorf("stripPanelColumn changed text without a panel: %q", got)
+	}
+}

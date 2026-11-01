@@ -862,7 +862,7 @@ func (h *HC) AgentRead(name string, lines int) (string, error) {
 	if err != nil {
 		return string(out), fmt.Errorf("reading soldier transcript: %w", err)
 	}
-	return string(out), nil
+	return stripPanelColumn(string(out)), nil
 }
 
 // AgentReadVisible returns the visible screen only (hc read with no history).
@@ -875,7 +875,46 @@ func (h *HC) AgentReadVisible(name string) (string, error) {
 	if err != nil {
 		return string(out), fmt.Errorf("reading soldier's visible pane: %w", err)
 	}
-	return string(out), nil
+	return stripPanelColumn(string(out)), nil
+}
+
+// stripPanelColumn removes a side panel from a rendered grid. hc read returns
+// the terminal grid as drawn, so Claude Code's side panel shares each row with
+// the conversation, behind a "│" in the same column. When one column holds a
+// "│" on most non-empty rows, every row is cut there, which gives the text
+// herdr's unwrapped read would. Text without such a column is returned as is.
+func stripPanelColumn(s string) string {
+	lines := strings.Split(s, "\n")
+	counts := map[int]int{}
+	rows := 0
+	for _, l := range lines {
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		rows++
+		seen := map[int]bool{}
+		for i, r := range []rune(l) {
+			if r == '│' && !seen[i] {
+				seen[i] = true
+				counts[i]++
+			}
+		}
+	}
+	col, best := -1, 0
+	for c, n := range counts {
+		if n > best || (n == best && c < col) {
+			col, best = c, n
+		}
+	}
+	if col < 0 || best < 2 || best*2 <= rows {
+		return s
+	}
+	for i, l := range lines {
+		if r := []rune(l); col < len(r) && r[col] == '│' {
+			lines[i] = strings.TrimRight(string(r[:col]), " \t")
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // AgentWait waits for the agent to reach one of until (empty: idle, done, blocked

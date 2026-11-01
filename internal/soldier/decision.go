@@ -107,7 +107,7 @@ func ExtractDecision(transcript string) *state.Decision {
 func ExtractNeedsDecisionSignal(transcript string) (*state.Decision, bool) {
 	matches := needsDecisionPattern.FindAllStringSubmatch(afterDispatchPrompt(transcript), -1)
 	for i := len(matches) - 1; i >= 0; i-- {
-		question := strings.TrimSpace(matches[i][1])
+		question := trimPanelResidue(matches[i][1])
 		if question == "" || isNeedsDecisionPlaceholder(question) || isNeedsDecisionNone(question) {
 			continue
 		}
@@ -145,11 +145,55 @@ func FinalTurnNeedsDecision(task state.Task, transcript string) (*state.Decision
 // is returned whole: then none of the prompt's own lines can be in it
 // either, apart from the template line isNeedsDecisionPlaceholder covers.
 func afterDispatchPrompt(transcript string) string {
-	i := strings.LastIndex(transcript, needsDecisionTrailer)
-	if i < 0 {
+	// Match with whitespace and panel separators removed from both sides: a
+	// rendered grid hard-wraps the trailer across rows with " │ " between.
+	var kept []rune
+	var offsets []int
+	for i, r := range transcript {
+		if unicode.IsSpace(r) || isPanelRune(r) {
+			continue
+		}
+		kept = append(kept, r)
+		offsets = append(offsets, i+len(string(r)))
+	}
+	want := []rune(squashPanel(needsDecisionTrailer))
+	at := lastIndexRunes(kept, want)
+	if at < 0 {
 		return transcript
 	}
-	return transcript[i+len(needsDecisionTrailer):]
+	return transcript[offsets[at+len(want)-1]:]
+}
+
+// lastIndexRunes returns the index of the last occurrence of sub in s, or -1.
+func lastIndexRunes(s, sub []rune) int {
+	for i := len(s) - len(sub); i >= 0; i-- {
+		if string(s[i:i+len(sub)]) == string(sub) {
+			return i
+		}
+	}
+	return -1
+}
+
+// isPanelRune reports whether r is a vertical box/panel separator that a
+// rendered terminal grid can leave next to the conversation text.
+func isPanelRune(r rune) bool {
+	return r == '|' || r == '\u2502' || r == '\u2503'
+}
+
+// squashPanel removes whitespace and panel separators from s.
+func squashPanel(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || isPanelRune(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// trimPanelResidue trims the trailing spaces and panel separators a rendered
+// grid leaves after a line's text.
+func trimPanelResidue(s string) string {
+	return strings.TrimRightFunc(s, func(r rune) bool { return unicode.IsSpace(r) || isPanelRune(r) })
 }
 
 // placeholderPattern matches text that is entirely one angle-bracket
@@ -161,8 +205,12 @@ var placeholderPattern = regexp.MustCompile(`^<[^<>]*>$`)
 // "needs-decision:", is the template's own placeholder or another bare
 // angle-bracket placeholder rather than a real question.
 func isNeedsDecisionPlaceholder(question string) bool {
-	question = strings.TrimSpace(question)
-	return question == needsDecisionPlaceholder || placeholderPattern.MatchString(question)
+	question = strings.Join(strings.Fields(trimPanelResidue(question)), " ")
+	if question == needsDecisionPlaceholder || placeholderPattern.MatchString(question) {
+		return true
+	}
+	// A grid hard-wraps the template line, so only its first row may be here.
+	return len(question) > 1 && strings.HasPrefix(needsDecisionPlaceholder, question)
 }
 
 // noneValuePattern matches a needs-decision: value that says there is
