@@ -212,6 +212,19 @@ func IsStalled(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.Code == "agent_prompt_stalled"
 }
 
+// CodeNotReporting is the APIError code of the hc backend for a prompt sent to
+// a terminal that has never reported a status. Unlike agent_prompt_stalled it
+// does not mean the text was not delivered, so IsStalled does not match it and
+// nobody retypes the prompt on it.
+const CodeNotReporting = "agent_not_reporting"
+
+// IsNotReporting reports whether err is the hc backend's "this terminal never
+// reported a status" error (CodeNotReporting).
+func IsNotReporting(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Code == CodeNotReporting
+}
+
 // IsTimeout reports whether err is the "timeout" APIError herdr returns
 // when a caller-supplied --timeout on "agent prompt --wait" expires
 // before the agent settles ("herdr agent prompt --help": "A caller

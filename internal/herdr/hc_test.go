@@ -338,17 +338,39 @@ func TestHC_PromptTimeout(t *testing.T) {
 	}
 }
 
-// An agent that never reports (opencode, or a booting one) cannot be watched:
-// the prompt ends as the stalled error the soldier retries on.
-func TestHC_PromptStalled(t *testing.T) {
+// A prompt to a terminal that never reported a status cannot be watched, and the
+// text may well have been taken: it ends as agent_not_reporting, which the
+// soldier does not retry, and it is typed exactly once.
+func TestHC_PromptToATerminalThatNeverReported(t *testing.T) {
 	h := fakeHC(t)
-	t.Setenv("VXFAKE_HC_START", "silent")
+	t.Setenv("VXFAKE_HC_START", "mute")
 	_, pane, _ := h.CreateTab("vx-p", t.TempDir(), "vx-mute")
 	_ = h.BindTask(pane, "t")
-	_ = h.AgentStart("vx-mute", "claude", pane)
-	_, err := h.AgentPrompt("vx-mute", "hello", []string{"working"}, 15000)
-	if !IsStalled(err) {
-		t.Fatalf("AgentPrompt to an agent that reports nothing = %v, want stalled", err)
+	_ = h.AgentStart("vx-mute", "opencode", pane)
+	_, err := h.AgentPrompt("vx-mute", "hello there", []string{"working"}, 15000)
+	if !IsNotReporting(err) {
+		t.Fatalf("AgentPrompt to an agent that reports nothing = %v, want agent_not_reporting", err)
+	}
+	if IsStalled(err) {
+		t.Errorf("%v is also stalled: the soldier would type the prompt again", err)
+	}
+	if !strings.Contains(err.Error(), "never reported") {
+		t.Errorf("the error does not name the cause: %v", err)
+	}
+	if n := strings.Count(termFile(t, pane, "sent"), "hello there"); n != 1 {
+		t.Errorf("the prompt was typed %d times, want exactly once", n)
+	}
+}
+
+// A terminal that did report and still shows no sign of taking the prompt is the
+// startup race herdr calls stalled, and that one is retried.
+func TestHC_PromptStalled(t *testing.T) {
+	h := fakeHC(t)
+	started(t, h, "vx-deaf")
+	t.Setenv("VXFAKE_HC_IGNORE", "1")
+	_, err := h.AgentPrompt("vx-deaf", "hello", []string{"working"}, 15000)
+	if !IsStalled(err) || IsNotReporting(err) {
+		t.Fatalf("AgentPrompt to an agent that reports but ignores the text = %v, want stalled", err)
 	}
 }
 

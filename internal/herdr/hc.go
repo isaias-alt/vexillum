@@ -21,7 +21,10 @@ package herdr
 //     addressed by name or tab id.
 //   - Status is the OSC 7501 word the program reported: idle, working, blocked,
 //     done (not idle), error (new), and "unknown" for a program that never
-//     reported (hc says null). Claude Code and pi report; opencode does not.
+//     reported (hc says null). Claude Code and pi report; OpenCode 2.x reports
+//     through the OSC 7501 plugin vexillum launches it with (internal/opencodeosc,
+//     see the soldier package), and a terminal whose plugin did not load reports
+//     nothing at all.
 //
 // Decisions
 //
@@ -43,8 +46,9 @@ package herdr
 //     vx-<project>; and whether the app keeps showing a killed soldier until rm.
 //   - Claude's OSC 7501 status under the "env K=V claude" launch line and the
 //     real trust dialog were not run here (only a stand-in that reports like
-//     Claude does); opencode never reports a status, so it cannot be watched
-//     (a prompt to it ends agent_prompt_stalled).
+//     Claude does). OpenCode 2.x under the plugin was run live against a fake
+//     provider only (no real model); OpenCode 1.x has no plugin here and is
+//     refused at dispatch.
 //   - Pi's working and done states; Claude's permission-blocked screens;
 //     modals other than one AskUserQuestion; hc events instead of polling.
 //   - Passing env through terminal.run over "hc connect" instead of a launch
@@ -99,7 +103,8 @@ const (
 	defaultPollInterval = 250 * time.Millisecond
 	// defaultStallWindow is how long a prompt may go without any sign the agent
 	// took it (no working status, no finished turn) before it is reported as
-	// agent_prompt_stalled, the same startup race herdr reports.
+	// agent_prompt_stalled, the same startup race herdr reports. A terminal that
+	// never reported at all is agent_not_reporting instead (see AgentPrompt).
 	defaultStallWindow = 5 * time.Second
 	// defaultStartWindow is how long AgentStart waits for the agent to report
 	// its first status before it gives up with agent_not_ready.
@@ -836,6 +841,13 @@ func untilSet(until []string) map[string]bool {
 // agent starts. So the text goes in with a plain send, and the terminal is
 // then watched: a "working" status (when asked for), or a turn that ended
 // since the send, settles it. done is not idle: both are reported as they come.
+//
+// A prompt that shows no sign of being taken is agent_prompt_stalled, which
+// callers retry (herdr's own meaning: the text was not delivered). That does not
+// hold for a terminal that has never reported a status: its program may well have
+// taken the text, only nothing can be seen of it. Typing the text again would
+// queue the prompt twice, so that case is agent_not_reporting, which is not
+// retried.
 func (h *HC) AgentPrompt(name, text string, until []string, timeoutMS int) (string, error) {
 	t, err := h.writable(name)
 	if err != nil {
@@ -876,6 +888,9 @@ func (h *HC) AgentPrompt(name, text string, until []string, timeoutMS int) (stri
 		}
 		now := time.Now()
 		if !seenWorking && now.Sub(start) > h.stallWindow() && st == before && cur.Turn == reply.Turn {
+			if !cur.Reported && reply.Started == nil {
+				return "", &APIError{Code: CodeNotReporting, Message: fmt.Sprintf("terminal %s has never reported a status, so whether it took the prompt cannot be seen (its status reporter did not load, or the program does not report to herdr-core); the prompt was typed once and is not typed again", t.Address)}
+			}
 			return "", &APIError{Code: "agent_prompt_stalled", Message: fmt.Sprintf("terminal %s showed no sign of taking the prompt within %s", t.Address, h.stallWindow())}
 		}
 		if now.After(deadline) {

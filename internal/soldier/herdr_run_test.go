@@ -827,6 +827,32 @@ func TestRunInHerdr_GivesUpOnPersistentlyStalledPrompt(t *testing.T) {
 	}
 }
 
+// A prompt to a terminal that never reported a status (hc: agent_not_reporting)
+// may well have been taken, so it is not retyped the way a stalled one is: it
+// fails the task after the one attempt.
+func TestRunInHerdr_DoesNotRetypeAPromptToANonReportingTerminal(t *testing.T) {
+	home := t.TempDir()
+	task := newMissionTask(t)
+	c := camp.Camp{ProjectDir: testCampProjectDir, Path: "/camps/1/project", Slot: 1, Branch: "vexillum/" + task.ID}
+
+	client := &fakeHerdr{
+		tabID:     "w1:t2",
+		paneID:    "w1:p2",
+		promptErr: &herdr.APIError{Code: herdr.CodeNotReporting, Message: "terminal t2 has never reported a status"},
+	}
+
+	got, err := runInHerdr(t, home, "w1", task, c, client)
+	if err == nil || !herdr.IsNotReporting(err) {
+		t.Fatalf("RunInHerdr = %v, want the not-reporting error", err)
+	}
+	if got.Status != state.StatusFailed {
+		t.Errorf("status = %s, want failed", got.Status)
+	}
+	if len(client.promptCalls) != 1 {
+		t.Errorf("the prompt was submitted %d times, want exactly once", len(client.promptCalls))
+	}
+}
+
 // A candidate agent name that collides with another live agent (two
 // prompts producing the same slug, seen dispatching soldiers close
 // together) falls back to a disambiguated name instead of failing the

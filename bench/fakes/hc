@@ -24,6 +24,9 @@
 # VXFAKE_HC_BLOCK set the turn blocks instead, on an AskUserQuestion-shaped
 # screen, until a digit key is pressed.
 #
+# VXFAKE_HC_IGNORE set makes a program that has reported ignore what is typed
+# into it: status and turn do not move.
+#
 # VXFAKE_HC_VERSION_OUT replaces the --version line (to play the herdr TUI);
 # VXFAKE_HC_GENERATION is the generation "hc connect" answers hello with.
 
@@ -291,7 +294,9 @@ send)
 	else
 		started=true
 		if [ -n "$(cat "$T/status")" ]; then
-			if [ -n "$VXFAKE_HC_BLOCK" ]; then
+			if [ -n "$VXFAKE_HC_IGNORE" ]; then
+				: # a program that reports but shows no sign of taking the text
+			elif [ -n "$VXFAKE_HC_BLOCK" ]; then
 				printf blocked >"$T/status"
 				printf ' ☐ Color\n\nWhich color do you prefer?\n\n❯ 1. Red\n  2. Blue\n  3. Type something.\n  4. Chat about this\n\nEnter to select · ↑/↓ to navigate · Esc to cancel\n' >"$T/screen"
 			else
