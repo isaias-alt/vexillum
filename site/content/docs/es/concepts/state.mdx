@@ -24,7 +24,7 @@ Ningún proceso en segundo plano (sentinel, servidor del forum) guarda estado qu
       pending/             decisiones pendientes del commander
       reports/             reportes de scouts
       pauses/              pausas declaradas por soldiers
-      commanders.json      el pane de herdr de cada harness de commander
+      commanders.json      el pane de herdr (o terminal de la app Herdr) de cada harness de commander
 ```
 
 En el proyecto mismo, `init` escribe `AGENTS.md` o `CLAUDE.md`, `.claude/` (las skills y el hook del sentinel), `.vexillum/` (`config.json`, `models.json`, `.gitignore`) y, para un [commander Pi](/es/docs/guides/pi-commander), `.pi/` (la extension de despertar y los ajustes de proyecto de Pi):
@@ -49,7 +49,7 @@ El namespace de un proyecto es `<repo>-<hash>`: el nombre del directorio más lo
 
 ## Tareas
 
-Un archivo de tarea es el schema `Task`: id, kind, prompt, status, timestamps, el slot, la ruta, la branch y la base del camp, los identificadores del pane de herdr, el modelo, el effort y el harness, y, una vez bloqueada, un `decision` estructurado. `vx status --json` imprime exactamente este schema; ver [status --json](/es/docs/reference/status-json).
+Un archivo de tarea es el schema `Task`: id, kind, prompt, status, timestamps, el slot, la ruta, la branch y la base del camp, los identificadores del pane de herdr, el `backend` (solo se fija con `hc`), el modelo, el effort y el harness, y, una vez bloqueada, un `decision` estructurado. `vx status --json` imprime exactamente este schema; ver [status --json](/es/docs/reference/status-json).
 
 ## Escrituras atómicas
 
@@ -57,4 +57,4 @@ El estado se escribe en un archivo temporal y se renombra a su lugar, así un le
 
 ## Después de un reinicio
 
-herdr restaura el layout de panes pero no el proceso dentro de ellos. vexillum reconcilia desde disco: las tareas que estaban `running` y cuyo agente de herdr se confirma desaparecido pasan a `interrupted`. Cualquier trabajo que el soldier hubiera commiteado sigue en su camp.
+herdr restaura el layout de panes pero no el proceso dentro de ellos (qué hace la app Herdr con una terminal terminada bajo `VX_BACKEND=hc` no está confirmado). vexillum reconcilia desde disco: las tareas que estaban `running` y cuyo agente de herdr se confirma desaparecido pasan a `interrupted`. Cualquier trabajo que el soldier hubiera commiteado sigue en su camp.

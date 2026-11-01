@@ -33,7 +33,8 @@ Sin tareas, `tasks` es `[]`, nunca `null`. Las tareas vienen ordenadas, la actua
 | `camp_slot`, `camp_path`, `camp_branch` | number, string, string | se definen cuando se adquiere un camp |
 | `camp_base` | string | branch de la que se bifurcó el camp; puede estar vacío |
 | `output` | string | el transcript capturado |
-| `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | el pane de herdr del soldier |
+| `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | el pane de herdr del soldier. Con `VX_BACKEND=hc`, `herdr_workspace_id` guarda la etiqueta del space `vx-<project>`, y `herdr_tab_id` y `herdr_pane_id` guardan ambos la dirección de la terminal del soldier (por ejemplo `t7`) |
+| `backend` | string | el backend de terminal en el que corre el soldier: omitido para la TUI de herdr, `"hc"` para herdr-core (experimental, `VX_BACKEND=hc`) |
 | `agent_not_found_since`, `idle_unconfirmed_since` | hora | cuándo el sentinel vio la condición por primera vez |
 | `pause_seen_at` | hora | cuándo el sentinel vio por primera vez una pausa declarada válida en la tarea idle; se borra cuando la tarea termina. Permite que la nota de un `unconfirmed` diga que existió una pausa y ya no está |
 | `redispatches` | number | cuántas veces se re-despachó la tarea |

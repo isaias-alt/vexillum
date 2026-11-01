@@ -24,7 +24,7 @@ No background process (sentinel, forum server) holds state that is not on disk. 
       pending/             the commander's pending decisions
       reports/             scout reports
       pauses/              declared soldier pauses
-      commanders.json      the herdr pane of each commander harness
+      commanders.json      the herdr pane (or Herdr app terminal) of each commander harness
 ```
 
 In the project itself, `init` writes `AGENTS.md` or `CLAUDE.md`, `.claude/` (the skills and the sentinel hook), `.vexillum/` (`config.json`, `models.json`, `.gitignore`) and, for a [Pi commander](/docs/guides/pi-commander), `.pi/` (the wake extension and Pi's project settings):
@@ -49,7 +49,7 @@ A project's namespace is `<repo>-<hash>`: the directory name plus the first 8 he
 
 ## Tasks
 
-A task file is the `Task` schema: id, kind, prompt, status, timestamps, the camp slot, path, branch and base, the herdr pane identifiers, the model, effort and harness, and, once blocked, a structured `decision`. `vx status --json` prints exactly this schema; see [status --json](/docs/reference/status-json).
+A task file is the `Task` schema: id, kind, prompt, status, timestamps, the camp slot, path, branch and base, the herdr pane identifiers, the `backend` (set only for `hc`), the model, effort and harness, and, once blocked, a structured `decision`. `vx status --json` prints exactly this schema; see [status --json](/docs/reference/status-json).
 
 ## Atomic writes
 
@@ -57,4 +57,4 @@ State is written to a temporary file and renamed into place, so a reader (the se
 
 ## After a restart
 
-herdr restores a pane layout but not the process inside it. vexillum reconciles from disk: tasks that were `running` and whose herdr agent is confirmed gone become `interrupted`. Any work the soldier had committed is still in its camp.
+herdr restores a pane layout but not the process inside it (what the Herdr app does with a killed terminal under `VX_BACKEND=hc` is not confirmed). vexillum reconciles from disk: tasks that were `running` and whose herdr agent is confirmed gone become `interrupted`. Any work the soldier had committed is still in its camp.

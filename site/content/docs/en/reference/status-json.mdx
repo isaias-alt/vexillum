@@ -33,7 +33,8 @@ With no tasks, `tasks` is `[]`, never `null`. Tasks are ordered most recently up
 | `camp_slot`, `camp_path`, `camp_branch` | number, string, string | set once a camp is acquired |
 | `camp_base` | string | branch the camp was forked from; may be empty |
 | `output` | string | the captured transcript |
-| `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | the soldier's herdr pane |
+| `herdr_workspace_id`, `herdr_tab_id`, `herdr_pane_id`, `herdr_agent_name` | string | the soldier's herdr pane. With `VX_BACKEND=hc`, `herdr_workspace_id` holds the space label `vx-<project>`, and `herdr_tab_id` and `herdr_pane_id` both hold the soldier's terminal address (for example `t7`) |
+| `backend` | string | the terminal backend the soldier runs on: omitted for the herdr TUI, `"hc"` for herdr-core (experimental, `VX_BACKEND=hc`) |
 | `agent_not_found_since`, `idle_unconfirmed_since` | time | when the sentinel first saw the condition |
 | `pause_seen_at` | time | when the sentinel first saw a valid declared pause on the idle task; cleared when the task settles. It lets an `unconfirmed` note say a pause existed and is gone |
 | `redispatches` | number | how many times the task was re-dispatched |
