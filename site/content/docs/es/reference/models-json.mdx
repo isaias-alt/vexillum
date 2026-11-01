@@ -13,7 +13,7 @@ Se combinan tres capas, y las posteriores ganan:
 
 | Capa | Ubicación | Notas |
 | --- | --- | --- |
-| valores por defecto embebidos | dentro del binario | los perfiles de abajo; `vx init` escribe en un proyecto nuevo solo los cinco de propósito general |
+| valores por defecto embebidos | dentro del binario | los perfiles de abajo; `vx init` escribe los 17 en el archivo de un proyecto nuevo, y aplican a todos los proyectos aunque su archivo liste menos |
 | base global | `~/.vexillum/models.json` | opcional; aplica a todos los proyectos |
 | proyecto | `.vexillum/models.json` | por proyecto; pisa a la base global |
 
@@ -66,7 +66,7 @@ Los perfiles incluidos, en orden de prioridad (gana el primero que coincide):
 | `fable-5-1` | `claude-fable-5-1`, `high` | solo cuando pedís Fable 5.1 explícitamente; es caro, el commander te pide el OK antes |
 | default | `sonnet`, `medium` | nada de lo anterior aplica |
 
-Los últimos doce son versiones de modelo fijadas. Vienen incluidos, así que todos los proyectos los heredan sin listarlos en su propio archivo, y van después de los perfiles de propósito general para no taparlos nunca. Cada uno se usa solo cuando pedís ese modelo exacto; los dos perfiles Fable son caros, así que el commander te avisa y espera tu OK explícito antes de despachar con uno.
+Los últimos doce son versiones de modelo fijadas. `vx init` escribe los 17 perfiles en el `models.json` de un proyecto nuevo, así que podés ver y editar cada uno ahí. También vienen incluidos, así que un proyecto con un archivo más corto, o sin archivo, hereda igual los que no lista, y van después de los perfiles de propósito general para no taparlos nunca. Cada uno se usa solo cuando pedís ese modelo exacto; los dos perfiles Fable son caros, así que el commander te avisa y espera tu OK explícito antes de despachar con uno.
 
 ## Cómo se combinan las capas
 
@@ -160,7 +160,7 @@ El id se pasa sin cambios a `claude --model`, se registra en la tarea y lo muest
 
 ## Un ejemplo completo
 
-Supongamos que querés que las missions grandes corran con effort `xhigh`, un perfil barato para trabajo solo de documentación, y Opus como respaldo. Escribí esto en `.vexillum/models.json`:
+Supongamos que querés que las missions grandes corran con effort `xhigh`, un perfil barato para trabajo solo de documentación, y Opus como respaldo. Editá `.vexillum/models.json` (el archivo que escribió `vx init` ya lista todos los perfiles incluidos, así que podés cambiar esas líneas en su lugar). Un archivo que liste solo las líneas de abajo también funciona, porque lo que omite se hereda:
 
 ```json
 {

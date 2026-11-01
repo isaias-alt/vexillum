@@ -13,7 +13,7 @@ Three layers are merged, later ones winning:
 
 | Layer | Location | Notes |
 | --- | --- | --- |
-| built-in defaults | embedded in the binary | the profiles below; `vx init` writes only the five general-purpose ones to a new project |
+| built-in defaults | embedded in the binary | the profiles below; `vx init` writes all 17 of them to a new project's file, and they apply to every project even if its file lists fewer |
 | global base | `~/.vexillum/models.json` | optional; applies to every project |
 | project | `.vexillum/models.json` | per project; overrides the global base |
 
@@ -66,7 +66,7 @@ The built-in profiles, in priority order (the first that matches wins):
 | `fable-5-1` | `claude-fable-5-1`, `high` | only when you explicitly ask for Fable 5.1; expensive, the commander asks for your OK first |
 | default | `sonnet`, `medium` | nothing above fits |
 
-The last twelve are pinned model versions. They are built in, so every project inherits them without listing them in its own file, and they sit after the general-purpose profiles so they never shadow one. Each is used only when you ask for that exact model; the two Fable profiles are expensive, so the commander tells you and waits for your explicit OK before dispatching with one.
+The last twelve are pinned model versions. `vx init` writes all 17 profiles to a new project's `models.json`, so you can see and edit each one there. They are also built in, so a project whose file is shorter, or has none, still inherits the ones it does not list, and they sit after the general-purpose profiles so they never shadow one. Each is used only when you ask for that exact model; the two Fable profiles are expensive, so the commander tells you and waits for your explicit OK before dispatching with one.
 
 ## How layers merge
 
@@ -160,7 +160,7 @@ The id is passed unchanged to `claude --model`, recorded on the task and shown b
 
 ## A worked example
 
-Say you want large missions to run at `xhigh` effort, a cheap profile for documentation-only work, and Opus as the fallback. Write this to `.vexillum/models.json`:
+Say you want large missions to run at `xhigh` effort, a cheap profile for documentation-only work, and Opus as the fallback. Edit `.vexillum/models.json` (the file `vx init` wrote already lists every built-in profile, so you can change those lines in place). A file that lists only the lines below works too, because everything it leaves out is inherited:
 
 ```json
 {
