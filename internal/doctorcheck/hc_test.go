@@ -2,6 +2,8 @@ package doctorcheck
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -88,5 +90,26 @@ func TestBackendValue(t *testing.T) {
 	t.Setenv("VX_BACKEND", "zellij")
 	if r := BackendValue(); r.Name != "VX_BACKEND" || r.OK || !r.Required || !strings.Contains(r.Detail, `"zellij"`) {
 		t.Errorf("a typo must be a required failure, got %+v", r)
+	}
+}
+
+func TestHCOpenCodeProfiles(t *testing.T) {
+	home := t.TempDir()
+	project := t.TempDir()
+	if got := HCOpenCodeProfiles(project, home); len(got) != 0 {
+		t.Fatalf("no opencode profile: got %+v, want nothing", got)
+	}
+
+	dir := filepath.Join(project, ".vexillum")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"profiles":{"ocode":{"model":"some/model","effort":"high","harness":"opencode","when":"x"}}}`
+	if err := os.WriteFile(filepath.Join(dir, "models.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := HCOpenCodeProfiles(project, home)
+	if len(got) != 1 || !got[0].Warn || got[0].Required || !strings.Contains(got[0].Detail, "ocode") || !strings.Contains(got[0].Detail, "herdr-core") {
+		t.Errorf("got %+v, want one non-required warning naming ocode", got)
 	}
 }

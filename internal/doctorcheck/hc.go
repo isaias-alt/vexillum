@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/isaias-alt/vexillum/internal/herdr"
+	"github.com/isaias-alt/vexillum/internal/models"
+	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
 // HCBackend reports on the experimental hc (herdr-core) backend, selected with
@@ -64,4 +67,29 @@ func BackendValue() Result {
 func herdrBackendError() error {
 	_, err := herdr.BackendName(os.Getenv)
 	return err
+}
+
+// HCOpenCodeProfiles warns, under VX_BACKEND=hc, about each configured model
+// profile (built-in, global or project models.json) that uses the opencode
+// harness: OpenCode reports no status to herdr-core, so dispatch refuses it.
+// Nothing is reported when no profile uses opencode.
+func HCOpenCodeProfiles(projectDir, vexillumHome string) []Result {
+	t, err := models.Load(projectDir, vexillumHome)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, p := range t.Profiles {
+		if p.Harness == soldier.HarnessOpenCode {
+			names = append(names, p.Name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	return []Result{{
+		Name:   "opencode profiles",
+		Warn:   true,
+		Detail: "profile(s) " + strings.Join(names, ", ") + " use the opencode harness, which reports no status to herdr-core - dispatch refuses them under " + herdr.BackendEnv + "=hc; use a claude or pi profile, or the herdr TUI backend",
+	}}
 }

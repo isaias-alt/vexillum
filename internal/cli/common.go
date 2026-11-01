@@ -108,6 +108,13 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 		return "", fmt.Errorf("cannot %s from here, nothing was started: %w", command, err)
 	}
 
+	// OpenCode never reports status over OSC 7501, which is all herdr-core
+	// reads, so under hc its soldier would only fail late. Refuse it before
+	// anything is created.
+	if herdr.WantsHC(getenv) && harness == soldier.HarnessOpenCode {
+		return "", fmt.Errorf("cannot %s from here, nothing was started: the opencode harness is not supported under %s=hc - OpenCode reports no status to herdr-core, so its soldier would stall. Use a claude or pi profile, or the herdr TUI backend (unset %s)", command, herdr.BackendEnv, herdr.BackendEnv)
+	}
+
 	var problems []string
 	multiplexer := "herdr"
 	switch {

@@ -87,6 +87,47 @@ func TestHCPreconditions(t *testing.T) {
 	})
 }
 
+// OpenCode never reports status over OSC 7501, so under the hc backend an
+// opencode soldier would only fail late (a prompt ends in agent_prompt_stalled):
+// dispatch and redispatch refuse it up front, and the herdr TUI path is unchanged.
+func TestHarnessPreconditions_OpenCodeUnderHC(t *testing.T) {
+	fake := fakeHCPath(t)
+	look := func(name string) (string, error) {
+		if name == "herdr-core" || name == "hc" {
+			return fake, nil
+		}
+		return "/bin/" + name, nil
+	}
+	app := envMap(map[string]string{"VX_BACKEND": "hc", "HC_TERMINAL_ID": "t1"})
+
+	for _, command := range []string{"dispatch", "redispatch"} {
+		t.Run(command+" refuses opencode under hc", func(t *testing.T) {
+			_, err := harnessPreconditions(command, "opencode", app, look)
+			if err == nil {
+				t.Fatal("want opencode refused under the hc backend, got nil")
+			}
+			for _, want := range []string{"nothing was started", "OpenCode reports no status to herdr-core", "claude or pi profile", "herdr TUI backend"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q lacks %q", err, want)
+				}
+			}
+		})
+	}
+	t.Run("claude and pi still pass under hc", func(t *testing.T) {
+		for _, harness := range []string{"", "claude", "pi"} {
+			if _, err := harnessPreconditions("dispatch", harness, app, look); err != nil {
+				t.Errorf("harness %q: %v", harness, err)
+			}
+		}
+	})
+	t.Run("opencode on the herdr TUI is unchanged", func(t *testing.T) {
+		tui := envMap(map[string]string{"HERDR_WORKSPACE_ID": "w1"})
+		if id, err := harnessPreconditions("dispatch", "opencode", tui, look); err != nil && strings.Contains(err.Error(), "herdr-core") {
+			t.Errorf("got %q, %v; the hc guard must not apply on the TUI", id, err)
+		}
+	})
+}
+
 func TestCommanderPaneAndManagedTerminal(t *testing.T) {
 	tui := map[string]string{"HERDR_WORKSPACE_ID": "w1", "HERDR_PANE_ID": "w1:p2"}
 	hc := map[string]string{"VX_BACKEND": "hc", "HC_TERMINAL_ID": "t5"}
