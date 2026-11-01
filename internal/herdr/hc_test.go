@@ -477,6 +477,26 @@ func TestHC_NameNeedsTheManagedLabel(t *testing.T) {
 // The commander's own pane is not one vexillum started, but it runs an agent, so
 // it can be looked up and prompted (the sentinel's wake injection); the user's
 // plain shells are not listed.
+func TestHC_CommanderCwdIsForegroundCwd(t *testing.T) {
+	h := fakeHC(t)
+	started(t, h, "vx-troop")
+	// The shell started in /work/ideaverse; claude runs from /work/proj.
+	t.Setenv("VXFAKE_HC_FG_CWD", "/work/proj")
+	if _, err := h.exec("run", "--bg", "--json", "--cwd", "/work/ideaverse"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.exec("send", "t2", "--", "claude"); err != nil {
+		t.Fatal(err)
+	}
+	info, err := h.AgentGet("t2")
+	if err != nil || info.Kind != "claude" {
+		t.Fatalf("AgentGet = %+v, %v; want a claude agent", info, err)
+	}
+	if info.Cwd != "/work/proj" || info.ForegroundCwd != "/work/proj" {
+		t.Errorf("Cwd = %q, ForegroundCwd = %q; want both the foreground cwd /work/proj", info.Cwd, info.ForegroundCwd)
+	}
+}
+
 func TestHC_CommanderAndList(t *testing.T) {
 	h := fakeHC(t)
 	started(t, h, "vx-troop")

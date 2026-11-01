@@ -468,8 +468,12 @@ func (t hcTerminal) info() AgentInfo {
 		Cwd:    t.Cwd,
 		Status: t.statusWord(),
 	}
-	if t.Foreground != nil {
+	if t.Foreground != nil && t.Foreground.Cwd != "" {
+		// The terminal's own cwd is where its shell started; the agent works
+		// where its foreground process runs (cd then claude), so that is the
+		// directory commanders are registered and looked up by.
 		info.ForegroundCwd = t.Foreground.Cwd
+		info.Cwd = t.Foreground.Cwd
 	}
 	return info
 }

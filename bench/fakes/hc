@@ -217,7 +217,7 @@ get)
 	prog=$(cat "$T/prog")
 	fg=""
 	if [ -n "$prog" ]; then
-		fg=$(printf ',"foreground":{"argv":["%s"],"cwd":"%s","name":"%s","pid":%s}' "$prog" "$(cat "$T/cwd")" "$prog" "$((2000 + ${T##*/t}))")
+		fg=$(printf ',"foreground":{"argv":["%s"],"cwd":"%s","name":"%s","pid":%s}' "$prog" "${VXFAKE_HC_FG_CWD:-$(cat "$T/cwd")}" "$prog" "$((2000 + ${T##*/t}))")
 	fi
 	rep=false
 	[ -n "$(cat "$T/status")" ] && rep=true
