@@ -53,7 +53,8 @@ tarea, vexillum/<task-id>, esté aterrizada o ya no exista, y se rechaza si no;
 la rama.
 
 Si tiene éxito, devuelve el worktree al pool para reutilizarlo y cierra el
-pane de herdr, y después poda: borra la rama local vexillum/<task-id> de la
+pane de herdr (con VX_BACKEND=hc, la terminal de la app de Herdr: se mata y se
+elimina, 'hc kill' y luego 'hc rm'), y después poda: borra la rama local vexillum/<task-id> de la
 tarea con la semántica de git branch -d (nunca -D) cuando la rama es
 ancestro de la rama base, o cuando la tarea está shipped, gh informa que su
 pull request tuvo merge y se hizo pull de la base. Si no, o cuando la rama

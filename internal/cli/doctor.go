@@ -32,6 +32,10 @@ edited by hand, or missing), whether the model profiles in models.json are
 valid, and whether yolo mode is on (the commander lands a finished mission
 without asking).
 
+With VX_BACKEND=hc (the experimental Herdr app backend) the herdr lines are
+replaced by 'terminal backend', 'herdr-core' (required), 'herdr-core protocol',
+'Herdr app terminal' and 'herdr-app' (optional: it names each soldier's tab).
+
 When a model profile selects the pi harness, or a pi binary is on PATH, doctor
 also reports on Pi: the binary, its version, and whether herdr's integration for
 pi is installed ('herdr integration install pi'). They only ever warn; a setup

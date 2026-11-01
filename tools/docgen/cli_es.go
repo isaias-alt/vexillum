@@ -193,6 +193,11 @@ stale, editada a mano o faltante), si los perfiles de modelo de models.json son
 válidos, y si el modo yolo está activado (el commander aterriza una mission
 terminada sin preguntar).
 
+Con VX_BACKEND=hc (el backend experimental de la app de Herdr) las líneas de
+herdr se reemplazan por 'terminal backend', 'herdr-core' (obligatorio),
+'herdr-core protocol', 'Herdr app terminal' y 'herdr-app' (opcional: nombra el
+tab de cada soldier).
+
 Cuando un perfil de modelo selecciona el harness pi, o hay un binario pi en el
 PATH, doctor también informa sobre Pi: el binario, su versión y si la
 integración de herdr para pi está instalada ('herdr integration install pi').
@@ -313,7 +318,7 @@ el PATH. Ver 'vx doctor'.
 Corre una sesión real e interactiva del harness (Claude Code por defecto, con
 --dangerously-skip-permissions; pi no tiene prompts de permisos que saltear y
 arranca con --approve para que nunca se detenga a preguntar si confía en el
-camp) en un pane de herdr, dentro de un git worktree nuevo, aislado del árbol de
+camp) en un pane de herdr (una terminal de la app de Herdr con VX_BACKEND=hc), dentro de un git worktree nuevo, aislado del árbol de
 trabajo propio de este proyecto: el soldier tiene acceso total al host bajo
 el usuario del sistema operativo que invoca (sin contenedor, chroot ni otro
 sandbox); el worktree solo acota dónde caen sus commits, no lo que puede leer,
@@ -321,8 +326,9 @@ escribir o exfiltrar en otro lugar de la máquina. Nada llega al historial real
 del proyecto hasta que 'vx land' se aprueba explícitamente; nunca despaches
 contra un prompt, un repositorio o una máquina donde leer estado sensible del
 host sería un problema. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane
-administrado por herdr) y que herdr y el CLI del harness (claude, pi u
-opencode) estén en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
+administrado por herdr) o, con VX_BACKEND=hc, HC_TERMINAL_ID (corré esto desde
+una terminal de la app de Herdr), y que herdr (no hace falta con VX_BACKEND=hc)
+y el CLI del harness (claude, pi u opencode) estén en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
 revisa tu configuración).
 
 La tarea registra al commander que la despachó: el proyecto que drena el await
@@ -410,8 +416,10 @@ no se recupera nada del trabajo parcial ni de la sesión de agente del soldier
 muerto. La tarea se relanza en el harness con el que se despachó, y para opencode
 en la generación (1.x o 2.x) registrada al despachar: si ahora hay otra
 instalada, se rechaza con un mensaje que lo dice, antes de descartar nada.
-Requiere HERDR_WORKSPACE_ID (corré esto desde un pane administrado por herdr) y
-que herdr y el CLI de ese harness (claude, pi u opencode) estén en el PATH; si
+Requiere HERDR_WORKSPACE_ID (corré esto desde un pane administrado por herdr) o,
+con VX_BACKEND=hc, HC_TERMINAL_ID (corré esto desde una terminal de la app de
+Herdr), y que herdr (no hace falta con VX_BACKEND=hc) y el CLI de ese harness
+(claude, pi u opencode) estén en el PATH; si
 falta alguno lo dice y termina antes de crear nada.
 `,
 	},
@@ -805,7 +813,8 @@ tarea, vexillum/<task-id>, esté aterrizada o ya no exista, y se rechaza si no;
 la rama.
 
 Si tiene éxito, devuelve el worktree al pool para reutilizarlo y cierra el
-pane de herdr, y después poda: borra la rama local vexillum/<task-id> de la
+pane de herdr (con VX_BACKEND=hc, la terminal de la app de Herdr: se mata y se
+elimina, 'hc kill' y luego 'hc rm'), y después poda: borra la rama local vexillum/<task-id> de la
 tarea con la semántica de git branch -d (nunca -D) cuando la rama es
 ancestro de la rama base, o cuando la tarea está shipped, gh informa que su
 pull request tuvo merge y se hizo pull de la base. Si no, o cuando la rama
@@ -846,7 +855,8 @@ segundos) hasta que aparece un wake o se acaba el tiempo, así que el commander
 se despierta incluso si su turno ya había terminado antes de que un soldier
 terminara, y no solo cuando un wake ya está pendiente justo en el momento en
 que termina un turno. "await" sale de inmediato, sin esperar, fuera de un pane
-administrado por herdr (sin HERDR_WORKSPACE_ID): el hook se commitea en el
+administrado por herdr (sin HERDR_WORKSPACE_ID) o, con VX_BACKEND=hc, fuera de
+una terminal de la app de Herdr (sin HC_TERMINAL_ID): el hook se commitea en el
 proyecto y por eso alcanza también a los turnos de Claude Code de cualquier
 otra herramienta, que no tienen ninguna tarea para que el sentinel rastree.
 

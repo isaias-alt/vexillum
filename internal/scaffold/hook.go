@@ -30,7 +30,8 @@ const (
 	// herdr pane). runSentinelAwaitGuarded (see cli/sentinel.go) is what
 	// keeps that turn from sitting blocked on a wake the sentinel can
 	// never produce for it: it only actually waits inside a
-	// herdr-managed pane (HERDR_WORKSPACE_ID set), same as dispatch and
+	// herdr-managed pane (HERDR_WORKSPACE_ID set) or, with VX_BACKEND=hc, a
+	// Herdr app terminal (HC_TERMINAL_ID set), same as dispatch and
 	// redispatch already require of their own caller.
 	//
 	// The command does not depend on the PATH of the shell Claude Code

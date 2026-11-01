@@ -200,8 +200,11 @@ func TestHerdrApp(t *testing.T) {
 			if !r.OK || r.Warn || r.Required || r.Name == "" {
 				t.Fatalf("want an informational ok result, got %+v", r)
 			}
-			if !strings.Contains(r.Detail, name) || !strings.Contains(r.Detail, "herdr TUI") {
-				t.Errorf("detail should name %s and the herdr TUI, got %q", name, r.Detail)
+			if !strings.Contains(r.Detail, name) || !strings.Contains(r.Detail, "herdr TUI by default") {
+				t.Errorf("detail should name %s and the herdr TUI default, got %q", name, r.Detail)
+			}
+			if !strings.Contains(r.Detail, "set VX_BACKEND=hc to use it (experimental)") {
+				t.Errorf("detail should say how to opt in, got %q", r.Detail)
 			}
 		})
 	}

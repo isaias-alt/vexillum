@@ -67,7 +67,7 @@ opencode CLI on PATH. See '` + cmdname.Name + ` doctor'.
 Runs a real, interactive session of the harness (Claude Code by default, with
 --dangerously-skip-permissions; pi has no permission prompts to skip and is
 started with --approve so it never stops to ask whether to trust the camp) in
-a herdr pane, inside a fresh git worktree isolated from this project's own
+a herdr pane (a Herdr app terminal with VX_BACKEND=hc), inside a fresh git worktree isolated from this project's own
 working tree: the soldier has full host access under
 the invoking OS user (no container, chroot, or other sandbox) - the
 worktree only bounds where its commits land, not what it can read,
@@ -75,8 +75,9 @@ write, or exfiltrate elsewhere on the machine. Nothing reaches the
 project's real history until '` + cmdname.Name + ` land' is explicitly approved;
 never dispatch against a prompt, repository, or machine where reading
 sensitive host state would be a problem. Requires HERDR_WORKSPACE_ID (run
-this from inside a herdr-managed pane) and both herdr and the harness's CLI
-(claude, pi or opencode) on PATH; if any is missing it says so and exits before
+this from inside a herdr-managed pane) or, with VX_BACKEND=hc, HC_TERMINAL_ID
+(run it from inside a Herdr app terminal), and both herdr (not needed with
+VX_BACKEND=hc) and the harness's CLI (claude, pi or opencode) on PATH; if any is missing it says so and exits before
 creating anything ('` + cmdname.Name + ` doctor' checks your setup).
 
 The task records the commander that dispatched it: the project its Stop hook

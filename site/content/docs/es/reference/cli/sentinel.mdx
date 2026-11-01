@@ -34,7 +34,8 @@ segundos) hasta que aparece un wake o se acaba el tiempo, así que el commander
 se despierta incluso si su turno ya había terminado antes de que un soldier
 terminara, y no solo cuando un wake ya está pendiente justo en el momento en
 que termina un turno. "await" sale de inmediato, sin esperar, fuera de un pane
-administrado por herdr (sin HERDR_WORKSPACE_ID): el hook se commitea en el
+administrado por herdr (sin HERDR_WORKSPACE_ID) o, con VX_BACKEND=hc, fuera de
+una terminal de la app de Herdr (sin HC_TERMINAL_ID): el hook se commitea en el
 proyecto y por eso alcanza también a los turnos de Claude Code de cualquier
 otra herramienta, que no tienen ninguna tarea para que el sentinel rastree.
 

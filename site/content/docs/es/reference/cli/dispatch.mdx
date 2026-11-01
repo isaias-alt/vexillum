@@ -61,7 +61,7 @@ el PATH. Ver 'vx doctor'.
 Corre una sesión real e interactiva del harness (Claude Code por defecto, con
 --dangerously-skip-permissions; pi no tiene prompts de permisos que saltear y
 arranca con --approve para que nunca se detenga a preguntar si confía en el
-camp) en un pane de herdr, dentro de un git worktree nuevo, aislado del árbol de
+camp) en un pane de herdr (una terminal de la app de Herdr con VX_BACKEND=hc), dentro de un git worktree nuevo, aislado del árbol de
 trabajo propio de este proyecto: el soldier tiene acceso total al host bajo
 el usuario del sistema operativo que invoca (sin contenedor, chroot ni otro
 sandbox); el worktree solo acota dónde caen sus commits, no lo que puede leer,
@@ -69,8 +69,9 @@ escribir o exfiltrar en otro lugar de la máquina. Nada llega al historial real
 del proyecto hasta que 'vx land' se aprueba explícitamente; nunca despaches
 contra un prompt, un repositorio o una máquina donde leer estado sensible del
 host sería un problema. Requiere HERDR_WORKSPACE_ID (corré esto desde un pane
-administrado por herdr) y que herdr y el CLI del harness (claude, pi u
-opencode) estén en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
+administrado por herdr) o, con VX_BACKEND=hc, HC_TERMINAL_ID (corré esto desde
+una terminal de la app de Herdr), y que herdr (no hace falta con VX_BACKEND=hc)
+y el CLI del harness (claude, pi u opencode) estén en el PATH; si falta alguno lo dice y termina antes de crear nada ('vx doctor'
 revisa tu configuración).
 
 La tarea registra al commander que la despachó: el proyecto que drena el await

@@ -31,8 +31,10 @@ The task is relaunched on the harness it was dispatched with, and for opencode
 on the generation (1.x or 2.x) recorded at dispatch: if a different one is
 installed now, it is refused with a message saying so, before anything is
 discarded. Requires
-HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) and both herdr
-and that harness's CLI (claude, pi or opencode) on PATH; if any is missing it says so
+HERDR_WORKSPACE_ID (run this from inside a herdr-managed pane) or, with
+VX_BACKEND=hc, HC_TERMINAL_ID (run it from inside a Herdr app terminal), and
+both herdr (not needed with VX_BACKEND=hc) and that harness's CLI (claude, pi
+or opencode) on PATH; if any is missing it says so
 and exits before creating anything.
 `
 
