@@ -16,14 +16,14 @@ Le hablás a un commander. Él despacha soldiers, cada uno en su propio camp, y 
 />
 
 - Le hablás al **commander**, una sesión de Claude Code (o de Pi u OpenCode, mirá [Pi como commander](/es/docs/guides/pi-commander) y [OpenCode como commander](/es/docs/guides/opencode-commander)) guiada por `AGENTS.md` y skills. Te abre artefactos en el **forum** y lee de ahí tu feedback.
-- El commander ejecuta `vx dispatch`. El binario **vexillum** guarda su estado en disco, toma un **camp** e inicia un **soldier** en un pane de **herdr**.
+- El commander ejecuta `vx dispatch`. El binario **vexillum** guarda su estado en disco, toma un **camp** e inicia un **soldier** en un pane de **herdr** (o, de forma experimental, en una terminal de herdr-core con `VX_BACKEND=hc`, ver [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend)).
 - El **sentinel** consulta herdr cada 5 segundos, registra cada resultado en el estado y despierta al commander. A un commander de Claude Code lo despierta el hook `Stop`, a uno de Pi una extensión de wake que corre dentro de Pi, y a uno de OpenCode el sentinel, que publica el wake en su sesión a través de la API de OpenCode (ver [Sentinel](/es/docs/concepts/sentinel)).
 
 ## Decisiones cerradas
 
 - **Go**, distribuido como binario por Homebrew y curl, sin dependencias de runtime.
 - **Claude Code** es el harness por defecto del commander y de cada soldier. Un perfil de modelo puede correr sus soldiers en **Pi** u **OpenCode**; el binario llega a todos a través de una única interfaz `Harness`.
-- **herdr** aloja los panes donde corren los soldiers.
+- **herdr** aloja los panes donde corren los soldiers (o las terminales de herdr-core, experimental).
 - **La inteligencia es markdown, no Go.** El binario hace plomería determinista; el ruteo y el criterio viven en el núcleo de AGENTS.md y en las skills.
 - **El vocabulario del dominio se queda en inglés** (commander, soldier, mission, scout, camp, sentinel) en todos los idiomas.
 - **Un solo commander.** Siempre le hablás a un único commander.

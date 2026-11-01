@@ -3,6 +3,10 @@ title: Pi como commander
 description: Corré el commander, el agente con el que hablás, en Pi en lugar de Claude Code, o en los dos, y cómo vexillum lo despierta cuando un soldier termina.
 ---
 
+<Callout type="info" title="Con VX_BACKEND=hc">
+  `herdr integration install pi` es para la TUI de herdr. Con el backend experimental de la app de Herdr, Pi informa su estado por sí mismo: se confirmaron idle y error, mientras que `working` y `done` no se confirmaron, y tampoco se confirmó el wake de un commander de Pi en él. Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend).
+</Callout>
+
 El commander es el agente con el que hablás y que despacha soldiers. Por defecto es una sesión de Claude Code. También puede ser una sesión de [Pi](https://pi.dev), o las dos: un proyecto registra en qué harnesses corre su commander, y una persona puede usar Claude Code mientras otra usa Pi en el mismo repositorio. Los soldiers son otra elección, que se hace por perfil de modelo (ver [Usar Pi](/es/docs/guides/using-pi)).
 
 Esta página describe lo que se verificó contra **Pi 1.3.0**, manejado sin un modelo. Lo que solo un modelo real puede mostrar está listado al final.

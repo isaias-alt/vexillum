@@ -3,6 +3,10 @@ title: OpenCode as the commander
 description: Talk to the commander in OpenCode 2.x instead of Claude Code, and how the sentinel wakes it through OpenCode's HTTP API.
 ---
 
+<Callout type="warn" title="Not supported with VX_BACKEND=hc">
+  OpenCode does not report its status through OSC 7501, which the experimental Herdr app backend relies on, and `herdr integration install opencode` is an integration of the herdr TUI. Run an OpenCode commander on the herdr TUI. See [Run from the Herdr app](/docs/guides/herdr-app-backend).
+</Callout>
+
 The commander can run in [OpenCode](https://opencode.ai) instead of Claude Code, or next to it: `vx init --commander opencode` records OpenCode as one of the project's commander harnesses (`--commander` is repeatable, and Claude Code is the default). The soldiers keep their own harness, chosen per model profile, whichever tool the commander runs in. See [Using OpenCode](/docs/guides/using-opencode) for soldiers.
 
 This page describes **OpenCode 2.x, checked against 2.0.32**. The wake described below needs 2.x: 1.x has no `opencode api` command, see [OpenCode 1.x](#opencode-1x).

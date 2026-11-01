@@ -3,6 +3,10 @@ title: Usar OpenCode
 description: Corré los soldiers de un perfil de modelo en OpenCode en lugar de Claude Code, en OpenCode 1.x o 2.x, incluidos sus modelos gratuitos de Zen.
 ---
 
+<Callout type="warn" title="No soportado con VX_BACKEND=hc">
+  OpenCode no informa su estado por OSC 7501, del que depende el backend experimental de la app de Herdr, y `herdr integration install opencode` es una integración de la TUI de herdr. `vx dispatch` rechaza OpenCode bajo `VX_BACKEND=hc`. Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend).
+</Callout>
+
 Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Con `"harness": "opencode"` los soldiers de ese perfil corren en [OpenCode](https://opencode.ai), que puede usar muchos proveedores y modelos, incluidos los gratuitos. El commander sigue en Claude Code salvo que elijas otra cosa (mirá [OpenCode como commander](/es/docs/guides/opencode-commander)), y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
 
 OpenCode tiene dos generaciones que comparten el comando `opencode`, y vexillum maneja las dos:

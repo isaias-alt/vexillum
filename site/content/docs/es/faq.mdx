@@ -11,6 +11,10 @@ Por distribución, no por preferencia. Un binario estático de Go se instala con
 
 En Claude Code, que es el default, en [Pi](/es/docs/guides/using-pi) y en [OpenCode](/es/docs/guides/using-opencode), que se eligen por perfil de modelo con `"harness": "pi"` o `"harness": "opencode"`. El commander también puede correr en [Pi](/es/docs/guides/pi-commander) o en [OpenCode](/es/docs/guides/opencode-commander) (`vx init --commander`). El binario sigue siendo plomería detrás de una única interfaz `Harness`.
 
+## ¿Puedo correrlo desde la app de escritorio de Herdr?
+
+Sí, de forma experimental. Definí `VX_BACKEND=hc` e iniciá el commander desde una terminal de la app; la TUI de herdr sigue siendo la forma por defecto y soportada. Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend) para los requisitos y los límites.
+
 ## ¿Tengo que aprender comandos?
 
 No. Le hablás al commander, en Claude Code por defecto (o en Pi u OpenCode), y él corre `vx` por vos. La [referencia del CLI](/es/docs/reference/cli) es para cuando quieras manejarlo a mano.

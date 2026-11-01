@@ -3,6 +3,10 @@ title: Pi as the commander
 description: Run the commander, the agent you talk to, in Pi instead of Claude Code, or in both, and how vexillum wakes it when a soldier finishes.
 ---
 
+<Callout type="info" title="With VX_BACKEND=hc">
+  `herdr integration install pi` is for the herdr TUI. Under the experimental Herdr app backend, Pi reports its status itself: idle and error were confirmed, while `working` and `done` were not confirmed, and waking a Pi commander under it was not confirmed either. See [Run from the Herdr app](/docs/guides/herdr-app-backend).
+</Callout>
+
 The commander is the agent you talk to and that dispatches soldiers. It is a Claude Code session by default. It can also be a [Pi](https://pi.dev) session, or both: a project records which harnesses its commander runs in, and one person can use Claude Code while another uses Pi in the same repository. Soldiers are a separate choice, made per model profile (see [Using Pi](/docs/guides/using-pi)).
 
 This page describes what was checked against **Pi 1.3.0**, driven without a model. What only a real model can show is listed at the end.
