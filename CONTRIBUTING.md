@@ -217,6 +217,16 @@ docs edit. The curl commands point at the `canary` branch copy of
 examples use `vX.Y.Z` placeholders. `go test ./scripts` fails when a docs file
 pins a release tag again.
 
+Docs also avoid statements that go stale with time: which release is first or
+latest, that something has not been published yet, or how many built-in
+profiles exist. Link the GitHub releases page or say it without a number
+instead. `go test ./scripts` (`doctimebound_test.go`) fails on the small list
+of known-bad phrasings in `timeBound` (English and Spanish), and on any
+`vX.Y.Z` version literal in the hand-written docs that is not listed in
+`allowedVersions` with a reason (today only the OpenCode versions a live check
+was run against). Generated pages are skipped; fix their Go source and run
+`go run ./tools/docgen`.
+
 ## Third-party notices
 
 `THIRD-PARTY-NOTICES.md` is generated and never edited by hand. After changing
