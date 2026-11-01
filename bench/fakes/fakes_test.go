@@ -181,3 +181,104 @@ func TestFakePiAndOpenCodeCanBeMadeSlow(t *testing.T) {
 		}
 	}
 }
+
+// runFakeHC runs the fake hc in dir (its state directory) and returns its
+// stdout, stderr and exit code.
+func runFakeHC(t *testing.T, dir string, env []string, args ...string) (string, string, int) {
+	t.Helper()
+	cmd := exec.Command("sh", append([]string{"hc"}, args...)...)
+	cmd.Env = append([]string{"PATH=" + os.Getenv("PATH"), "VXFAKE_HC_DIR=" + dir}, env...)
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	code := 0
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		code = exitErr.ExitCode()
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	return stdout.String(), stderr.String(), code
+}
+
+// The fake answers --version like the core, and can play the herdr TUI for the
+// version gate.
+func TestFakeHCVersion(t *testing.T) {
+	out, _, code := runFakeHC(t, t.TempDir(), nil, "--version")
+	if code != 0 || strings.TrimSpace(out) != "hc 0.1.16" {
+		t.Errorf("--version = %q, %d", out, code)
+	}
+	out, _, _ = runFakeHC(t, t.TempDir(), []string{"VXFAKE_HC_VERSION_OUT=herdr 0.9.5"}, "--version")
+	if strings.TrimSpace(out) != "herdr 0.9.5" {
+		t.Errorf("the TUI impersonation = %q", out)
+	}
+}
+
+// Errors carry the exit code and the {"error":{kind,message,hint}} body on
+// stderr, which is what internal/herdr's parser reads.
+func TestFakeHCErrors(t *testing.T) {
+	dir := t.TempDir()
+	_, stderr, code := runFakeHC(t, dir, nil, "get", "t9")
+	if code != 3 || !strings.Contains(stderr, `"kind":"not_found"`) {
+		t.Errorf("get of an unknown terminal = %d, %q; want exit 3 and not_found on stderr", code, stderr)
+	}
+	runFakeHC(t, dir, nil, "run", "--bg", "--json")
+	_, stderr, code = runFakeHC(t, dir, nil, "rm", "t1")
+	if code != 1 || !strings.Contains(stderr, `"kind":"live"`) {
+		t.Errorf("rm of a live terminal = %d, %q; want exit 1 and live", code, stderr)
+	}
+	_, stderr, code = runFakeHC(t, dir, nil, "keys", "t1", "--", "+")
+	if code != 6 || !strings.Contains(stderr, "invalid_params") {
+		t.Errorf("keys '+' = %d, %q; want exit 6 and invalid_params", code, stderr)
+	}
+}
+
+func TestFakeHCLabelsAndListing(t *testing.T) {
+	dir := t.TempDir()
+	out, _, _ := runFakeHC(t, dir, nil, "run", "--bg", "--json", "--label", "a=1", "--label", "b=2")
+	if !strings.Contains(out, `"address":"t1"`) {
+		t.Fatalf("run = %q", out)
+	}
+	runFakeHC(t, dir, nil, "run", "--bg", "--json", "--label", "a=1")
+
+	out, _, _ = runFakeHC(t, dir, nil, "ls", "--json", "--label", "a=1")
+	if strings.Count(out, `"address"`) != 2 {
+		t.Errorf("ls a=1 = %s, want both terminals", out)
+	}
+	out, _, _ = runFakeHC(t, dir, nil, "ls", "--json", "--label", "a=1", "--label", "b=2")
+	if strings.Count(out, `"address"`) != 1 || !strings.Contains(out, `"t1"`) {
+		t.Errorf("ls a=1 b=2 = %s, want t1 only", out)
+	}
+	runFakeHC(t, dir, nil, "label", "t2", "b=2", "a=")
+	out, _, _ = runFakeHC(t, dir, nil, "get", "t2")
+	var got struct {
+		Labels map[string]string `json:"labels"`
+		Status any               `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("get is not JSON: %v\n%s", err, out)
+	}
+	if got.Labels["b"] != "2" || got.Labels["a"] != "" || got.Status != nil {
+		t.Errorf("get after label = %+v, want b=2, a removed, status null", got)
+	}
+}
+
+// A shell that is typed a launch line becomes an agent that reports idle; a
+// prompt typed into it works, then is done with the turn counted.
+func TestFakeHCAgentTurn(t *testing.T) {
+	dir := t.TempDir()
+	runFakeHC(t, dir, nil, "run", "--bg", "--json")
+	runFakeHC(t, dir, nil, "send", "t1", "--", "env A=1 claude")
+	out, _, _ := runFakeHC(t, dir, nil, "get", "t1")
+	if !strings.Contains(out, `"status":{"app":"claude-code","state":"idle"}`) {
+		t.Fatalf("after the launch line: %s", out)
+	}
+	out, _, code := runFakeHC(t, dir, []string{"VXFAKE_HC_WORK_SECS=0"}, "send", "t1", "--", "hello")
+	if code != 0 || !strings.Contains(out, `"started":true`) || !strings.Contains(out, `"status":"idle"`) {
+		t.Errorf("send = %q, %d", out, code)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	out, _, _ = runFakeHC(t, dir, nil, "ls", "--json")
+	if !strings.Contains(out, `"status":"done"`) || !strings.Contains(out, `"turn":1`) {
+		t.Errorf("after the turn: %s", out)
+	}
+}

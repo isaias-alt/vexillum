@@ -23,9 +23,32 @@ package herdr
 //     done (not idle), error (new), and "unknown" for a program that never
 //     reported (hc says null). Claude Code and pi report; opencode does not.
 //
-// See the experimental-backend notes in the commit history for the probes this
-// was built on; the facts that matter are repeated next to the code that uses
-// them.
+// Decisions
+//
+//   - Space. herdr-core has no "current workspace" a process can read (no
+//     HERDR_WORKSPACE_ID equivalent), so vexillum picks its own space for a
+//     project, vx-<project> (HCSpace), and labels every soldier terminal with it
+//     (herdr.space); the Herdr app creates a space for a label it does not
+//     know, as First Mate relies on. Nothing is discovered from the app.
+//   - Identity. The commander is the terminal in HC_TERMINAL_ID, the way it is
+//     the pane in HERDR_PANE_ID on the TUI; the session is pinned (PinnedSession).
+//   - One backend per task. A task records Backend, the sentinel and the
+//     task-level commands only touch tasks of their own backend, and a sentinel
+//     serves one backend at a time.
+//
+// Open items (not confirmed)
+//
+//   - Whether a terminal the app itself created carries herdr.space/herdr.tab,
+//     so a commander could be placed in the user's current space instead of
+//     vx-<project>; and whether the app keeps showing a killed soldier until rm.
+//   - Claude's OSC 7501 status under the "env K=V claude" launch line and the
+//     real trust dialog were not run here (only a stand-in that reports like
+//     Claude does); opencode never reports a status, so it cannot be watched
+//     (a prompt to it ends agent_prompt_stalled).
+//   - Pi's working and done states; Claude's permission-blocked screens;
+//     modals other than one AskUserQuestion; hc events instead of polling.
+//   - Passing env through terminal.run over "hc connect" instead of a launch
+//     line prefix; the commander's own pane being prompted while it is busy.
 
 import (
 	"bufio"
