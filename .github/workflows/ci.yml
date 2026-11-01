@@ -58,6 +58,8 @@ jobs:
   # vx targets macOS first, so the same checks run there. Tests that need
   # herdr or claude skip themselves when the binary is missing, the same
   # way they do on the Linux job.
+  # The hc backend tests use the fakes in bench/fakes, so no real herdr-core
+  # (hc) or Herdr app is needed here.
   test-macos:
     runs-on: macos-latest
     steps:

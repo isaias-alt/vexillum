@@ -18,9 +18,9 @@ In scope: the `vx` binary and the files it writes under `~/.vexillum/`, the
 install script `scripts/install.sh`, and the release artifacts and their
 checksums.
 
-Out of scope: vulnerabilities in Claude Code, herdr, git or `gh`
-themselves (report those upstream), and anything that requires an attacker who
-already has control of your OS user.
+Out of scope: vulnerabilities in Claude Code, herdr, herdr-core, the
+Herdr app, git or `gh` themselves (report those upstream), and anything that
+requires an attacker who already has control of your OS user.
 
 ## Soldiers run unsandboxed
 

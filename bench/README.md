@@ -177,13 +177,22 @@ timed runs, not 30, because each takes several seconds.
 
 ### Fakes
 
-`bench/fakes/` holds `herdr`, `claude`, `pi`, `opencode` and `gh`, shell
-scripts that answer what `vx` asks with the real JSON shape and cost one shell
-start. They are on PATH only inside the benchmark. See the comments at the top
+`bench/fakes/` holds `herdr`, `claude`, `pi`, `opencode`, `gh`, `hc` and
+`herdr-app`, shell scripts that answer what `vx` asks with the real JSON shape
+and cost one shell start. They are on PATH only inside the benchmark. See the comments at the top
 of `herdr` for the environment variables that change what it does
 (`VXBENCH_PROMPT_MODE`, `VXBENCH_AGENT_STATUS`, `VXBENCH_STATUS_FILE`,
 `VXBENCH_SEEN_FILE`) and of `pi` and `opencode` for their start-up delay
 (`VXBENCH_PI_DELAY`, `VXBENCH_OPENCODE_DELAY`).
+
+`hc` stands in for herdr-core (the experimental `VX_BACKEND=hc` backend) and
+`herdr-app` for the Herdr desktop app's CLI, which the backend uses to name a
+soldier's tab. They are driven by `VXFAKE_HC_DIR` and `VXFAKE_APP_DIR` (required
+state directories) and, for `hc`, `VXFAKE_HC_START`, `VXFAKE_HC_WORK_SECS`,
+`VXFAKE_HC_BLOCK`, `VXFAKE_HC_VERSION_OUT` and `VXFAKE_HC_GENERATION`; see the
+comments at the top of each script. No `vxbench` scenario mentions them (a grep of
+`bench/cmd/vxbench` for `hc` and `herdr-app` found nothing);
+`bench/fakes/fakes_test.go` tests them.
 
 The doctor scenarios use a *hermetic* PATH: a directory of links to the fakes
 and to `git`, `ps`, `sh`, `env` and `sleep`, and nothing else. Without it a
