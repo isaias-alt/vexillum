@@ -1,0 +1,90 @@
+---
+title: Correr desde la app de Herdr (experimental)
+description: Corré los soldiers de vexillum como terminales de la app de Herdr en lugar de panes de la TUI, con VX_BACKEND=hc, y qué está soportado y qué no.
+---
+
+Por defecto los soldiers corren en panes de [herdr](https://herdr.dev), en la TUI de herdr. vexillum tiene un segundo backend, **experimental**, que los corre como terminales de la app de escritorio de Herdr, a través de herdr-core y su comando `hc`. Lo activás con la variable de entorno `VX_BACKEND=hc`. No cambia nada para quien no la define.
+
+<Callout type="warn" title="Experimental">
+  Este backend es nuevo y solo se ejercitó en parte. La TUI de herdr es la forma por defecto y soportada de correr vexillum. Abajo se dice qué se verificó, y lo que no se verificó lo aclara. No muevas todavía una configuración de la que dependés.
+</Callout>
+
+## Qué es
+
+Con `VX_BACKEND=hc`, `vx dispatch` inicia cada soldier como una terminal de herdr-core, y la app de Herdr la muestra. El camp, el flujo de mission y scout, `vx land`, `vx ship`, `vx strike` y el forum funcionan igual que en la TUI de herdr. El sentinel vigila a los soldiers a través de `hc` y lee su estado del propio harness (la secuencia de escape OSC 7501), no de una integración de agente de herdr.
+
+## Requisitos
+
+- [herdr-core](https://herdr.dev) (el comando `hc`) en el `PATH`. vexillum busca primero `herdr-core`, después `hc`, y acepta solo un binario cuyo `--version` imprima `hc x.y.z`. Se probó con **0.1.16**. El código no exige una versión mínima, y no se confirmó cuál es la más baja que funciona. `vx doctor` imprime este comando de instalación cuando falta:
+
+  ```bash
+  curl -fsSL https://releases.herdr.dev/core/install.sh | sh
+  ```
+
+- La app de escritorio de Herdr, para ver las terminales. Corrés el commander desde una de sus terminales, así `HC_TERMINAL_ID` queda definido.
+- El CLI de tu harness (Claude Code por defecto). El binario de la TUI de herdr no hace falta con este backend.
+- Opcional: `herdr-app` en el `PATH`. Después de iniciar un soldier, vexillum nombra la pestaña de la app `vx-<slug>`. Es de mejor esfuerzo y nunca hace fallar un dispatch, y solo funciona en la sesión `default` de la app. Sin él, las pestañas se ven como `1`, `2` y así.
+
+## Activarlo
+
+1. Exportá la variable en el entorno de tu commander, antes de iniciarlo. Los comandos `vx` del commander la heredan, así que tiene que estar definida donde el commander arranca, no después:
+
+   ```bash
+   export VX_BACKEND=hc
+   ```
+
+2. Abrí una terminal en la app de Herdr, hacé `cd` al proyecto e iniciá ahí tu commander. `vx dispatch` y `vx redispatch` necesitan `HC_TERMINAL_ID`, que la app define en sus terminales. Fuera de una se niegan a correr y te lo dicen.
+3. Corré `vx doctor`. Con `hc` reemplaza las líneas de herdr por estas:
+
+   | Línea | Significado |
+   | --- | --- |
+   | `terminal backend` | se lee `VX_BACKEND=hc` y no se usa la TUI de herdr |
+   | `herdr-core` | el binario encontrado y su versión; requerido |
+   | `herdr-core protocol` | si el core respondió un hello; un fallo solo advierte |
+   | `Herdr app terminal` | el id de la terminal y la sesión, o una advertencia si `HC_TERMINAL_ID` no está definido |
+   | `herdr-app` | si el nombrado opcional de pestañas está disponible |
+
+   El valor no distingue mayúsculas y se ignoran los espacios alrededor. Cualquier valor distinto de `herdr` o `hc` es un error para todos los comandos salvo `sentinel` y `doctor`, y `vx doctor` lo informa como una línea requerida que falla.
+
+## Qué vas a ver
+
+- **Su propio space.** vexillum pone a los soldiers en un space que llama `vx-<proyecto>` y etiqueta cada terminal con él. No lee ni se une al space en el que estás, y el commander no se ubica en tu space actual. La app puede mostrar el space con un nombre más corto que el id completo; el renombrado no está hecho.
+- **Nombres de pestañas.** Con `herdr-app` en el `PATH`, la pestaña de cada soldier dice `vx-<slug>`. Sin él, las pestañas van numeradas.
+- **Una sesión.** vexillum usa `HC_SESSION` si está definido; si no, la sesión de tu terminal; si no, `default`. La app solo muestra la sesión `default`.
+- **El campo `backend`.** Una task despachada en `hc` guarda `"backend": "hc"` en su JSON. La TUI de herdr lo omite.
+
+En la ayuda de los comandos y en otras páginas, "pane de herdr" y "pestaña de herdr" significan la terminal cuando corrés en este backend.
+
+## Límites
+
+- **OpenCode no está soportado.** OpenCode no informa su estado por OSC 7501, así que el sentinel no puede saber qué hace un soldier de OpenCode. `vx dispatch` lo rechaza bajo `hc`. Mirá [Usar OpenCode](/es/docs/guides/using-opencode).
+- **Pi.** Se confirmaron los estados idle y error. No se confirmó si Pi informa `working` y `done` bajo `hc`.
+- **Un sentinel atiende un solo backend a la vez.** Si corre un sentinel del otro backend, `vx dispatch` avisa que "a sentinel serves one backend at a time" y te dice qué proceso detener (`kill <pid>`). Las tasks guardan su backend, y `strike`, `decide`, `prompt` y el sentinel rechazan o saltean una task del otro backend. Para usar los dos, corrélos uno después del otro, no juntos.
+- **Preguntas bloqueantes y pantallas de permisos.** La detección de un soldier bloqueado bajo `hc` se verificó con una pregunta de Claude Code a 200 columnas de ancho. Las pantallas de permisos reales no se verificaron.
+- **Terminales terminadas.** No se confirmó qué hace la app con una terminal que vexillum mata, y `hc kill` no detiene a los nietos desacoplados (por ejemplo un proceso iniciado con `nohup`). Revisalos después de un `vx strike`.
+- **El sentinel consulta.** vexillum no usa `hc events`; el sentinel consulta, como en la TUI de herdr.
+- **Sin ubicación en el space actual.** No se confirmó si una terminal creada en la app lleva las etiquetas que permitirían unirse a tu space actual.
+
+## La advertencia del `PATH`
+
+El hook Stop commiteado corre `sh -c` y busca `vx` en este orden: lo que `command -v vx` encuentre en el `PATH`, después `$HOME/.local/bin/vx`, después las ubicaciones de Homebrew y `/usr/local`. Gana el primer `vx` del `PATH`. Si un `vx` más viejo o estable va primero, corre `sentinel await` sin conocer `hc`, y tus wakes nunca llegan. `vx doctor` advierte cuando otro `vx` va antes del que corrés.
+
+Verificá que el primer `vx` del `PATH` sea el build que corrés. Para probar un build instalado con otro nombre, como `vx-dev`, enlazalo como `vx` en un directorio que vaya primero en el `PATH`, iniciá el commander desde el directorio de tu proyecto con la variable exportada, y detené cualquier sentinel que ya esté corriendo:
+
+```bash
+mkdir -p ~/.vx-dev-bin && ln -sf ~/.local/bin/vx-dev ~/.vx-dev-bin/vx
+export PATH=~/.vx-dev-bin:$PATH
+export VX_BACKEND=hc
+```
+
+No se confirmó si el release de Homebrew ya trae este backend; si lo trae, la advertencia solo aplica a versiones mezcladas.
+
+## Volver
+
+Quitá la variable e iniciá el commander desde un pane de herdr otra vez:
+
+```bash
+unset VX_BACKEND
+```
+
+Las tasks que se despacharon en `hc` quedan en él. Volvé a definir la variable para hacerles `strike`, `decide` o `prompt`.
