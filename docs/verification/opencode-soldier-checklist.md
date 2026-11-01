@@ -475,7 +475,68 @@ Not steps to pass or fail, but to watch for during a real use, and to report:
 - **Always allow.** Whether "Always allow" saves a rule somewhere is not
   something vexillum tests: it never chooses it.
 
-## 13. Results
+## 13. VX_BACKEND=hc: the status plugin (OpenCode 2.x only)
+
+Under the experimental Herdr app backend OpenCode prints no OSC 7501, so
+vexillum launches a 2.x soldier with its own TUI plugin (`internal/opencodeosc`,
+embedded in `vx`) through `OPENCODE_CLI_CONFIG_CONTENT`. What was checked: a
+scout report (2026-11-01, hc 0.1.16, OpenCode 2.0.32, a throwaway `HOME` and
+XDG directories, a scripted fake provider) showed the plugin reporting idle,
+working, a question, a permission, an interrupt and an error, with soldiers
+sharing one OpenCode service kept apart. **Not confirmed: OpenCode 1.x under
+hc (dispatch refuses it), a real model, narrow terminals and the real app
+pane, `vx decide` typing free text under hc (hc's key vocabulary rejects `+`
+and `_`), a bare file path as the plugin entry, a service restart under a live
+TUI, sub-agent sessions, and Windows or Linux.** Run these only in a throwaway
+environment.
+
+1. Throwaway environment, with its own herdr-core session (the core must start
+   with this environment, because terminals inherit the core's):
+
+   ```sh
+   export TH=/private/tmp/ocs; mkdir -p $TH/.config $TH/.local/share $TH/.local/state $TH/.cache
+   export HOME=$TH XDG_CONFIG_HOME=$TH/.config XDG_DATA_HOME=$TH/.local/share XDG_STATE_HOME=$TH/.local/state XDG_CACHE_HOME=$TH/.cache HC_SESSION=scratchoc
+   unset HC_SOCKET HC_TERMINAL_ID HC_TERMINAL_SOCKET HC_SCOPE HERDR_ENV HERDR_PANE_ID HERDR_SOCKET_PATH
+   env -i HOME=$HOME PATH=$PATH XDG_CONFIG_HOME=$XDG_CONFIG_HOME XDG_DATA_HOME=$XDG_DATA_HOME XDG_STATE_HOME=$XDG_STATE_HOME XDG_CACHE_HOME=$XDG_CACHE_HOME TERM=xterm-256color SHELL=/bin/zsh HC_SESSION=scratchoc hc server start
+   opencode service set port 49781   # the real service owns 49374
+   ```
+
+   The project's `opencode.json` points a provider at a local scripted server
+   (`@ai-sdk/openai-compatible`, for example `http://127.0.0.1:18765/v1`).
+2. `vx doctor` with `VX_BACKEND=hc` and a profile on the opencode harness: an
+   `opencode status plugin` line (OK when 2.x, a warning when `opencode` in
+   `PATH` is 1.x), and no `herdr integration for opencode` line.
+3. `VX_BACKEND=hc vx dispatch` of an opencode scout from a Herdr app terminal.
+   Expect the terminal to report idle within 4 s, then working, then done with
+   a turn counter (`hc get <name>`). The plugin file is
+   `<project root>/opencode/osc7501/tui.js`; nothing is written into the camp or
+   into `~/.config/opencode`.
+4. The same by hand, to see the plugin alone:
+
+   ```sh
+   hc run --bg --json --no-parent --outlive-parent --no-notify --name oc --cwd $TH/proj \
+     env OPENCODE_CLI_CONFIG_CONTENT='{"plugins":["<plugin dir>"]}' opencode --auto
+   hc get oc; hc send oc --wait --timeout 30 -- "say hello"; hc keys oc -- enter
+   ```
+
+5. A question and a permission prompt: the terminal reports blocked with the
+   kind, and `vx decide` answers it. Interrupt a turn, and make the provider
+   fail (a 5xx or a 401): the terminal reports error.
+6. With a 1.x `opencode` first in `PATH`, `vx dispatch` is refused before
+   anything is created, and says OpenCode 2.x is needed under `VX_BACKEND=hc`.
+7. A terminal that never reports (for example a soldier started by hand
+   without the plugin): the dispatch ends with
+   `opencode reported no status within 4s (agent_not_ready)`. A prompt typed to
+   such a terminal later ends with `agent_not_reporting` and is typed once,
+   not three times.
+8. Your own TUI plugins are not loaded in that soldier, because the variable
+   replaces the `plugins` list of your `cli.json` for it. Whether any user
+   plugin matters for a soldier is not known.
+9. Teardown: `hc kill` and `hc rm` each terminal, `opencode service stop`,
+   `hc server stop`, then remove `$TH` and the `scratchoc` state directory by
+   hand.
+
+## 14. Results
 
 | Step | Pass / fail / skipped | Notes (versions, model, anything odd) |
 | --- | --- | --- |
@@ -491,6 +552,7 @@ Not steps to pass or fail, but to watch for during a real use, and to report:
 | 10 tribunal | | |
 | 11 V1: every sub-step (1 to 9) | | |
 | 12 who starts the service, auto-update, what's new, several soldiers | | |
+| 13 hc: doctor line, dispatch, blocked and error, V1 refusal, never-reporting terminal | | |
 
 When you report back, include `vx doctor`, `opencode --version`,
 `herdr --version`, the OS, and for any failed step the exact command, what you
