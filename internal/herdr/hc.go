@@ -127,10 +127,27 @@ type HC struct {
 	// BlockedGrace is off when negative. Tests shorten them.
 	PollInterval, StallWindow, StartWindow, ShellWindow, BlockedGrace time.Duration
 
-	mu    sync.Mutex
-	bin   string
-	names map[string]string   // agent name -> terminal address
-	envs  map[string][]string // terminal address -> env AgentStart sets
+	// AppBin is the herdr-app binary that names the tab in the Herdr app. Empty
+	// means look it up on PATH (AppLookPath); no binary means no naming.
+	AppBin string
+	// AppLookPath, AppNow and AppSleep default to exec.LookPath, time.Now and
+	// time.Sleep; tests inject them. AppWait and AppPoll bound the wait for the
+	// app to show a new tab (defaultAppWait and defaultAppPoll when zero).
+	AppLookPath      func(string) (string, error)
+	AppNow           func() time.Time
+	AppSleep         func(time.Duration)
+	AppWait, AppPoll time.Duration
+	// AppWarn receives the one line logged when naming a tab fails; nil prints
+	// it to stderr.
+	AppWarn func(string)
+
+	mu      sync.Mutex
+	bin     string
+	names   map[string]string   // agent name -> terminal address
+	envs    map[string][]string // terminal address -> env AgentStart sets
+	tabIDs  map[string]string   // terminal address -> herdr.tab id, once the app named its tab
+	tabName map[string]string   // terminal address -> the name that tab carries
+	warned  bool
 }
 
 // NewHC returns the hc backend.
@@ -613,6 +630,14 @@ func (h *HC) CreateTab(workspaceID, cwd, label string, env ...string) (string, s
 	}
 	h.envs[resp.Address] = append([]string(nil), env...)
 	h.mu.Unlock()
+	if h.nameTab(label, label) {
+		h.mu.Lock()
+		if h.tabIDs == nil {
+			h.tabIDs, h.tabName = map[string]string{}, map[string]string{}
+		}
+		h.tabIDs[resp.Address], h.tabName[resp.Address] = label, label
+		h.mu.Unlock()
+	}
 	return resp.Address, resp.Address, nil
 }
 
@@ -686,7 +711,16 @@ func (h *HC) AgentStart(name, kind, paneID string, agentArgs ...string) error {
 
 	h.mu.Lock()
 	env := h.envs[paneID]
+	tabID, tabName := h.tabIDs[paneID], h.tabName[paneID]
 	h.mu.Unlock()
+	if tabID != "" && tabName != name {
+		// The name was retried after a clash: the tab keeps its id, takes the final name.
+		if h.renameTab(tabID, name) {
+			h.mu.Lock()
+			h.tabName[paneID] = name
+			h.mu.Unlock()
+		}
+	}
 
 	h.waitShellPrompt(paneID)
 	if _, err := h.exec("send", paneID, "--", launchLine(env, kind, agentArgs)); err != nil {
@@ -1166,4 +1200,139 @@ func (h *HC) blockedGrace() time.Duration {
 		return 0
 	}
 	return orDefault(h.BlockedGrace, defaultBlockedGrace)
+}
+
+// ---- naming the tab in the Herdr app ----
+
+const (
+	// defaultAppWait is how long CreateTab waits for the app to adopt the new
+	// terminal into a tab before giving up on naming it.
+	defaultAppWait = 5 * time.Second
+	defaultAppPoll = 250 * time.Millisecond
+)
+
+// appBinary returns the herdr-app binary, or "" when there is none.
+func (h *HC) appBinary() string {
+	if h.AppBin != "" {
+		return h.AppBin
+	}
+	look := h.AppLookPath
+	if look == nil {
+		look = exec.LookPath
+	}
+	path, err := look("herdr-app")
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
+// appWarn logs a naming failure, the first one only: the name is cosmetic and a
+// missing or windowless app would otherwise repeat the line for every soldier.
+func (h *HC) appWarn(format string, args ...any) {
+	h.mu.Lock()
+	first := !h.warned
+	h.warned = true
+	h.mu.Unlock()
+	if !first {
+		return
+	}
+	msg := "vx: could not name the tab in the Herdr app: " + fmt.Sprintf(format, args...)
+	if h.AppWarn != nil {
+		h.AppWarn(msg)
+		return
+	}
+	fmt.Fprintln(os.Stderr, msg)
+}
+
+// appRun runs herdr-app with the same session pin as hc.
+func (h *HC) appRun(bin string, args ...string) ([]byte, error) {
+	cmd := exec.Command(bin, args...)
+	cmd.Env = hcEnv(os.Environ(), h.session())
+	out, err := cmd.Output()
+	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+			return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(ee.Stderr)))
+		}
+	}
+	return out, err
+}
+
+// appHasTab reports whether "herdr-app ls" lists a tab with this id.
+func appHasTab(ls []byte, id string) (bool, error) {
+	var doc struct {
+		Spaces []struct {
+			Tabs []struct {
+				ID string `json:"id"`
+			} `json:"tabs"`
+		} `json:"spaces"`
+	}
+	if err := json.Unmarshal(ls, &doc); err != nil {
+		return false, fmt.Errorf("parsing herdr-app ls: %w", err)
+	}
+	for _, sp := range doc.Spaces {
+		for _, tab := range sp.Tabs {
+			if tab.ID == id {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// nameTab names the app tab whose id is the herdr.tab value id, once the app
+// has adopted the terminal. Best effort: it reports whether the tab was named
+// and never fails the caller. The app only shows the default session, and an
+// unnamed tab is displayed by its position, which is why this exists.
+func (h *HC) nameTab(id, name string) bool {
+	if h.session() != "default" {
+		return false
+	}
+	bin := h.appBinary()
+	if bin == "" {
+		return false
+	}
+	now, sleep := h.AppNow, h.AppSleep
+	if now == nil {
+		now = time.Now
+	}
+	if sleep == nil {
+		sleep = time.Sleep
+	}
+	deadline := now().Add(orDefault(h.AppWait, defaultAppWait))
+	for {
+		out, err := h.appRun(bin, "ls")
+		if err != nil {
+			// No app window or core: waiting longer will not help.
+			h.appWarn("herdr-app ls: %v", err)
+			return false
+		}
+		found, err := appHasTab(out, id)
+		if err != nil {
+			h.appWarn("%v", err)
+			return false
+		}
+		if found {
+			return h.renameTab(id, name)
+		}
+		if !now().Before(deadline) {
+			h.appWarn("the app did not show tab %s within %s", id, orDefault(h.AppWait, defaultAppWait))
+			return false
+		}
+		sleep(orDefault(h.AppPoll, defaultAppPoll))
+	}
+}
+
+// renameTab runs "herdr-app do tab.rename" for the tab id.
+func (h *HC) renameTab(id, name string) bool {
+	bin := h.appBinary()
+	if bin == "" || h.session() != "default" {
+		return false
+	}
+	if _, err := h.appRun(bin, "do", "tab.rename", "--id", id, "--name", name); err != nil {
+		h.appWarn("herdr-app do tab.rename: %v", err)
+		return false
+	}
+	return true
 }

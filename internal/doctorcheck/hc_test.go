@@ -25,6 +25,7 @@ func TestHCBackend(t *testing.T) {
 			"herdr-core":          "/opt/herdr-core (hc 0.1.16)",
 			"herdr-core protocol": "generation 1",
 			"Herdr app terminal":  "terminal t3, session work",
+			"herdr-app":           "not on PATH",
 		}
 		if len(got) != len(want) {
 			t.Fatalf("got %d results, want %d: %+v", len(got), len(want), got)
@@ -59,11 +60,20 @@ func TestHCBackend(t *testing.T) {
 	})
 	t.Run("outside an app terminal it warns", func(t *testing.T) {
 		got := hcBackend(hcEnvOf(nil), look, version, hello)
-		last := got[len(got)-1]
+		last := got[len(got)-2]
 		if last.Name != "Herdr app terminal" || !last.Warn || !strings.Contains(last.Detail, "HC_TERMINAL_ID is not set") {
 			t.Errorf("got %+v", last)
 		}
 	})
+}
+
+func TestHCBackendReportsHerdrAppInformationally(t *testing.T) {
+	look := func(name string) (string, error) { return "/opt/" + name, nil }
+	got := hcBackend(hcEnvOf(nil), look, func(string) (string, error) { return "0.1.16", nil }, func(string) error { return nil })
+	last := got[len(got)-1]
+	if last.Name != "herdr-app" || !last.OK || last.Warn || last.Required || !strings.Contains(last.Detail, "/opt/herdr-app") {
+		t.Errorf("got %+v", last)
+	}
 }
 
 func TestBackendValue(t *testing.T) {

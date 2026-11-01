@@ -282,3 +282,47 @@ func TestFakeHCAgentTurn(t *testing.T) {
 		t.Errorf("after the turn: %s", out)
 	}
 }
+
+// runFakeApp runs the fake herdr-app in dir (its state directory).
+func runFakeApp(t *testing.T, dir string, env []string, args ...string) (string, int) {
+	t.Helper()
+	cmd := exec.Command("sh", append([]string{"herdr-app"}, args...)...)
+	cmd.Env = append([]string{"PATH=" + os.Getenv("PATH"), "VXFAKE_APP_DIR=" + dir}, env...)
+	var stdout strings.Builder
+	cmd.Stdout = &stdout
+	err := cmd.Run()
+	code := 0
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		code = exitErr.ExitCode()
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	return stdout.String(), code
+}
+
+// The fake lists its tabs only from the Nth ls on, and records renames.
+func TestFakeHerdrApp(t *testing.T) {
+	dir := t.TempDir()
+	env := []string{"VXFAKE_APP_TABS=a,b", "VXFAKE_APP_APPEAR_AFTER=2"}
+	if out, _ := runFakeApp(t, dir, env, "ls"); strings.Contains(out, `"id":"a"`) {
+		t.Errorf("the first ls must not show the tab yet: %q", out)
+	}
+	if out, _ := runFakeApp(t, dir, env, "ls"); !strings.Contains(out, `"id":"a"`) || !strings.Contains(out, `"id":"b"`) {
+		t.Errorf("the second ls must show both tabs: %q", out)
+	}
+	if _, code := runFakeApp(t, dir, nil, "do", "tab.rename", "--id", "a", "--name", "vx-a"); code != 0 {
+		t.Errorf("rename exit = %d", code)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(dir, "renames")); string(raw) != "a vx-a\n" {
+		t.Errorf("renames = %q", raw)
+	}
+	if _, code := runFakeApp(t, dir, []string{"VXFAKE_APP_RENAME_FAIL=1"}, "do", "tab.rename", "--id", "a", "--name", "x"); code == 0 {
+		t.Error("a refused rename must fail")
+	}
+	if _, code := runFakeApp(t, dir, []string{"VXFAKE_APP_LS_FAIL=1"}, "ls"); code == 0 {
+		t.Error("ls with no window must fail")
+	}
+	if _, code := runFakeApp(t, dir, nil, "status"); code == 0 {
+		t.Error("an unknown call must fail loudly")
+	}
+}

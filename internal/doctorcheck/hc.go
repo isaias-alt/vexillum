@@ -45,6 +45,11 @@ func hcBackend(getenv func(string) string, lookPath func(string) (string, error)
 	} else {
 		results = append(results, Result{Name: "Herdr app terminal", Warn: true, Detail: "HC_TERMINAL_ID is not set - dispatch, redispatch and the Stop hook await need a Herdr app terminal (session " + session + ")"})
 	}
+	if path, err := lookPath("herdr-app"); err == nil {
+		results = append(results, Result{Name: "herdr-app", OK: true, Detail: path + " - names each soldier's tab vx-<slug> in the app (default session only)"})
+	} else {
+		results = append(results, Result{Name: "herdr-app", OK: true, Detail: "not on PATH - soldier tabs show as 1, 2... in the Herdr app (optional)"})
+	}
 	return results
 }
 

@@ -1,6 +1,7 @@
 package herdr
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -619,5 +620,150 @@ func TestStripPanelColumn(t *testing.T) {
 	plain := "a │ b\nplain\nmore text\n"
 	if got := stripPanelColumn(plain); got != plain {
 		t.Errorf("stripPanelColumn changed text without a panel: %q", got)
+	}
+}
+
+// ---- naming the tab in the Herdr app ----
+
+// fakeApp points h at bench/fakes/herdr-app with a virtual clock (sleeping
+// advances it, so no test waits), on the default session the app shows. It
+// returns the fake's state directory and the warnings logged.
+func fakeApp(t *testing.T, h *HC, env map[string]string) (dir string, warns *[]string) {
+	t.Helper()
+	fake, err := filepath.Abs(filepath.Join("..", "..", "bench", "fakes", "herdr-app"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir = t.TempDir()
+	t.Setenv("VXFAKE_APP_DIR", dir)
+	for k, v := range env {
+		t.Setenv(k, v)
+	}
+	clock := time.Unix(1000, 0)
+	warns = new([]string)
+	h.Session = "default"
+	h.AppBin = fake
+	h.AppNow = func() time.Time { return clock }
+	h.AppSleep = func(d time.Duration) { clock = clock.Add(d) }
+	h.AppWarn = func(s string) { *warns = append(*warns, s) }
+	return dir, warns
+}
+
+func appFile(t *testing.T, dir, name string) string {
+	t.Helper()
+	raw, _ := os.ReadFile(filepath.Join(dir, name))
+	return string(raw)
+}
+
+func TestHCCreateTabNamesTheTabOnceTheAppShowsIt(t *testing.T) {
+	h := fakeHC(t)
+	dir, warns := fakeApp(t, h, map[string]string{"VXFAKE_APP_TABS": "vx-soldier", "VXFAKE_APP_APPEAR_AFTER": "3"})
+	if _, _, err := h.CreateTab("vx-proj", t.TempDir(), "vx-soldier"); err != nil {
+		t.Fatalf("CreateTab: %v", err)
+	}
+	if got := appFile(t, dir, "renames"); got != "vx-soldier vx-soldier\n" {
+		t.Errorf("renames = %q, want one rename of vx-soldier to vx-soldier", got)
+	}
+	if got := appFile(t, dir, "ls-count"); got != "3\n" {
+		t.Errorf("ls ran %q times, want 3 (polled until the tab showed)", got)
+	}
+	if !strings.Contains(appFile(t, dir, "calls.log"), "session=default") {
+		t.Errorf("herdr-app must be pinned to the default session, calls: %q", appFile(t, dir, "calls.log"))
+	}
+	if len(*warns) != 0 {
+		t.Errorf("unexpected warnings: %v", *warns)
+	}
+}
+
+func TestHCCreateTabGivesUpWhenTheTabNeverAppears(t *testing.T) {
+	h := fakeHC(t)
+	dir, warns := fakeApp(t, h, map[string]string{"VXFAKE_APP_TABS": "someone-else"})
+	h.AppWait, h.AppPoll = time.Second, 250*time.Millisecond
+	if _, _, err := h.CreateTab("vx-proj", t.TempDir(), "vx-soldier"); err != nil {
+		t.Fatalf("a tab that never shows must not fail CreateTab: %v", err)
+	}
+	if got := appFile(t, dir, "renames"); got != "" {
+		t.Errorf("renamed %q though the tab never appeared", got)
+	}
+	if got := appFile(t, dir, "ls-count"); got != "5\n" {
+		t.Errorf("ls ran %q times, want 5 (1s window at 250ms)", got)
+	}
+	if len(*warns) != 1 {
+		t.Errorf("want one warning, got %v", *warns)
+	}
+}
+
+func TestHCCreateTabWithoutAppWindowStopsAtOnceAndWarnsOnce(t *testing.T) {
+	h := fakeHC(t)
+	dir, warns := fakeApp(t, h, map[string]string{"VXFAKE_APP_LS_FAIL": "1"})
+	for _, label := range []string{"vx-a", "vx-b"} {
+		if _, _, err := h.CreateTab("vx-proj", t.TempDir(), label); err != nil {
+			t.Fatalf("CreateTab: %v", err)
+		}
+	}
+	if got := strings.Count(appFile(t, dir, "calls.log"), "args=ls"); got != 2 {
+		t.Errorf("want one failing ls per CreateTab, got %d", got)
+	}
+	if len(*warns) != 1 {
+		t.Errorf("want the failure logged once, got %v", *warns)
+	}
+}
+
+func TestHCCreateTabWithoutHerdrAppBinary(t *testing.T) {
+	h := fakeHC(t)
+	dir, warns := fakeApp(t, h, nil)
+	h.AppBin = ""
+	h.AppLookPath = func(name string) (string, error) {
+		if name != "herdr-app" {
+			t.Errorf("looked up %q, want herdr-app", name)
+		}
+		return "", errors.New("not found")
+	}
+	if _, _, err := h.CreateTab("vx-proj", t.TempDir(), "vx-soldier"); err != nil {
+		t.Fatalf("a missing herdr-app must not fail CreateTab: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "calls.log")); err == nil {
+		t.Error("herdr-app ran though it is not on PATH")
+	}
+	if len(*warns) != 0 {
+		t.Errorf("a missing binary is the normal case without the app, want no warning, got %v", *warns)
+	}
+}
+
+func TestHCCreateTabSkipsTheAppOnANonDefaultSession(t *testing.T) {
+	h := fakeHC(t)
+	dir, _ := fakeApp(t, h, map[string]string{"VXFAKE_APP_TABS": "vx-soldier"})
+	h.Session = "scratch"
+	if _, _, err := h.CreateTab("vx-proj", t.TempDir(), "vx-soldier"); err != nil {
+		t.Fatalf("CreateTab: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "calls.log")); err == nil {
+		t.Error("herdr-app ran for a session the app does not show")
+	}
+}
+
+func TestHCCreateTabSurvivesAFailingRename(t *testing.T) {
+	h := fakeHC(t)
+	dir, warns := fakeApp(t, h, map[string]string{"VXFAKE_APP_TABS": "vx-soldier", "VXFAKE_APP_RENAME_FAIL": "1"})
+	if _, _, err := h.CreateTab("vx-proj", t.TempDir(), "vx-soldier"); err != nil {
+		t.Fatalf("a failing rename must not fail CreateTab: %v", err)
+	}
+	if appFile(t, dir, "renames") != "" || len(*warns) != 1 || !strings.Contains((*warns)[0], "refused") {
+		t.Errorf("want one warning carrying herdr-app's message and no rename, got %v", *warns)
+	}
+}
+
+func TestHCAgentStartRenamesTheTabWhenTheFinalNameDiffers(t *testing.T) {
+	h := fakeHC(t)
+	dir, _ := fakeApp(t, h, map[string]string{"VXFAKE_APP_TABS": "vx-soldier"})
+	_, pane, err := h.CreateTab("vx-proj", t.TempDir(), "vx-soldier")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.AgentStart("vx-soldier-2", "claude", pane); err != nil {
+		t.Fatalf("AgentStart: %v", err)
+	}
+	if got := appFile(t, dir, "renames"); got != "vx-soldier vx-soldier\nvx-soldier vx-soldier-2\n" {
+		t.Errorf("renames = %q, want the tab (id vx-soldier) renamed to the final name", got)
 	}
 }

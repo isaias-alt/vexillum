@@ -1,0 +1,52 @@
+#!/bin/sh
+# Fake herdr-app (the Herdr desktop app's CLI) for tests. It answers the two
+# calls vexillum's hc backend makes to name a soldier's tab (internal/herdr/hc.go):
+# "ls", which prints the app's spaces and tabs as JSON, and
+# "do tab.rename --id <id> --name <name>". It is never on PATH outside tests.
+#
+# State lives in $VXFAKE_APP_DIR (required). Every call is appended to
+# $VXFAKE_APP_DIR/calls.log with the HC_SESSION it saw; a rename is also written
+# to $VXFAKE_APP_DIR/renames as "<id> <name>".
+#
+#   VXFAKE_APP_TABS         comma-separated tab ids the app shows (default none)
+#   VXFAKE_APP_APPEAR_AFTER the tabs only show from the Nth "ls" on (default 1),
+#                           which plays the app adopting a terminal late
+#   VXFAKE_APP_LS_FAIL      "ls" fails, as with no app window
+#   VXFAKE_APP_RENAME_FAIL  the rename fails
+
+D="${VXFAKE_APP_DIR:?VXFAKE_APP_DIR is required}"
+mkdir -p "$D"
+echo "session=${HC_SESSION-unset} args=$*" >>"$D/calls.log"
+
+case "$1" in
+ls)
+	[ -n "$VXFAKE_APP_LS_FAIL" ] && {
+		echo "herdr-app: no window" >&2
+		exit 1
+	}
+	n=$(($(cat "$D/ls-count" 2>/dev/null || echo 0) + 1))
+	echo "$n" >"$D/ls-count"
+	tabs=""
+	if [ "$n" -ge "${VXFAKE_APP_APPEAR_AFTER:-1}" ]; then
+		for id in $(echo "${VXFAKE_APP_TABS:-}" | tr ',' ' '); do
+			tabs="${tabs:+$tabs,}{\"id\":\"$id\",\"name\":\"\",\"terminals\":[]}"
+		done
+	fi
+	printf '{"spaces":[{"id":"sp1","name":"vexillum","tabs":[%s]}]}\n' "$tabs"
+	;;
+do)
+	if [ "$2" != "tab.rename" ] || [ "$3" != "--id" ] || [ "$5" != "--name" ]; then
+		echo "herdr-app: unsupported call: $*" >&2
+		exit 2
+	fi
+	[ -n "$VXFAKE_APP_RENAME_FAIL" ] && {
+		echo "herdr-app: rename refused" >&2
+		exit 1
+	}
+	echo "$4 $6" >>"$D/renames"
+	;;
+*)
+	echo "herdr-app: unsupported call: $*" >&2
+	exit 2
+	;;
+esac
