@@ -141,7 +141,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	}
 	if herdr.WantsHC(os.Getenv) {
 		terminal = []doctorcheck.Check{doctorcheck.HCBackend, func() []doctorcheck.Result {
-			return doctorcheck.HCOpenCodeProfiles(projectDir, vexillumHome)
+			return doctorcheck.HCOpenCodePlugin(projectDir, vexillumHome, probes)
 		}}
 	}
 	steps := []doctorcheck.Check{

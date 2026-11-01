@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,9 +88,22 @@ func TestHCPreconditions(t *testing.T) {
 	})
 }
 
-// OpenCode never reports status over OSC 7501, so under the hc backend an
-// opencode soldier would only fail late (a prompt ends in agent_prompt_stalled):
-// dispatch and redispatch refuse it up front, and the herdr TUI path is unchanged.
+// fakeOpenCodePath puts an opencode that prints version first on PATH: the
+// precondition asks the real opencode on PATH which generation it is.
+func fakeOpenCodePath(t *testing.T, version string) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\necho '" + version + "'\n"
+	if err := os.WriteFile(filepath.Join(dir, "opencode"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+}
+
+// OpenCode prints no status for herdr-core, so under the hc backend an OpenCode
+// 2.x soldier is launched with vexillum's own plugin that does and is allowed;
+// 1.x has no such plugin and dispatch and redispatch refuse it up front, and the
+// herdr TUI path is unchanged.
 func TestHarnessPreconditions_OpenCodeUnderHC(t *testing.T) {
 	fake := fakeHCPath(t)
 	look := func(name string) (string, error) {
@@ -101,12 +115,20 @@ func TestHarnessPreconditions_OpenCodeUnderHC(t *testing.T) {
 	app := envMap(map[string]string{"VX_BACKEND": "hc", "HC_TERMINAL_ID": "t1"})
 
 	for _, command := range []string{"dispatch", "redispatch"} {
-		t.Run(command+" refuses opencode under hc", func(t *testing.T) {
+		t.Run(command+" allows opencode 2.x under hc", func(t *testing.T) {
+			fakeOpenCodePath(t, "opencode v2.0.32")
+			id, err := harnessPreconditions(command, "opencode", app, look)
+			if err != nil || id != "" {
+				t.Fatalf("got %q, %v; want opencode 2.x allowed under the hc backend", id, err)
+			}
+		})
+		t.Run(command+" refuses opencode 1.x under hc", func(t *testing.T) {
+			fakeOpenCodePath(t, "1.19.3")
 			_, err := harnessPreconditions(command, "opencode", app, look)
 			if err == nil {
-				t.Fatal("want opencode refused under the hc backend, got nil")
+				t.Fatal("want opencode 1.x refused under the hc backend, got nil")
 			}
-			for _, want := range []string{"nothing was started", "OpenCode reports no status to herdr-core", "claude or pi profile", "herdr TUI backend"} {
+			for _, want := range []string{"nothing was started", "needs OpenCode 2.x", "VX_BACKEND=hc", "1.19.3", "herdr TUI backend"} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error %q lacks %q", err, want)
 				}
@@ -120,9 +142,10 @@ func TestHarnessPreconditions_OpenCodeUnderHC(t *testing.T) {
 			}
 		}
 	})
-	t.Run("opencode on the herdr TUI is unchanged", func(t *testing.T) {
+	t.Run("opencode 1.x on the herdr TUI is unchanged", func(t *testing.T) {
+		fakeOpenCodePath(t, "1.19.3")
 		tui := envMap(map[string]string{"HERDR_WORKSPACE_ID": "w1"})
-		if id, err := harnessPreconditions("dispatch", "opencode", tui, look); err != nil && strings.Contains(err.Error(), "herdr-core") {
+		if id, err := harnessPreconditions("dispatch", "opencode", tui, look); err != nil {
 			t.Errorf("got %q, %v; the hc guard must not apply on the TUI", id, err)
 		}
 	})

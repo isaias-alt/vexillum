@@ -8,6 +8,8 @@ import (
 
 	"github.com/isaias-alt/vexillum/internal/herdr"
 	"github.com/isaias-alt/vexillum/internal/models"
+	"github.com/isaias-alt/vexillum/internal/opencodeosc"
+	"github.com/isaias-alt/vexillum/internal/project"
 	"github.com/isaias-alt/vexillum/internal/soldier"
 )
 
@@ -69,11 +71,22 @@ func herdrBackendError() error {
 	return err
 }
 
-// HCOpenCodeProfiles warns, under VX_BACKEND=hc, about each configured model
-// profile (built-in, global or project models.json) that uses the opencode
-// harness: OpenCode reports no status to herdr-core, so dispatch refuses it.
-// Nothing is reported when no profile uses opencode.
-func HCOpenCodeProfiles(projectDir, vexillumHome string) []Result {
+// HCOpenCodePlugin reports, under VX_BACKEND=hc, on what an OpenCode soldier
+// needs to be watched there. herdr-core reads a status from the OSC 7501 an agent
+// prints and OpenCode prints none, so vexillum launches an OpenCode 2.x soldier
+// with a plugin of its own that does (internal/opencodeosc). Nothing is reported
+// when no model profile (built-in, global or project models.json) uses the
+// opencode harness. Otherwise: a warning when the opencode that wins in PATH is
+// a 1.x, which has no plugin here and is refused at dispatch, and for 2.x
+// whether the plugin file is installed and current. A missing or stale file is
+// not a problem to fix: every dispatch (re)writes it, a running soldier keeps
+// the copy it loaded. Never Required. A missing or unreadable opencode is
+// reported by OpenCodeChecks, not repeated here.
+func HCOpenCodePlugin(projectDir, vexillumHome string, probes *Probes) []Result {
+	return hcOpenCodePlugin(projectDir, vexillumHome, os.Getenv("PATH"), probes)
+}
+
+func hcOpenCodePlugin(projectDir, vexillumHome, pathEnv string, probes *Probes) []Result {
 	t, err := models.Load(projectDir, vexillumHome)
 	if err != nil {
 		return nil
@@ -87,9 +100,30 @@ func HCOpenCodeProfiles(projectDir, vexillumHome string) []Result {
 	if len(names) == 0 {
 		return nil
 	}
-	return []Result{{
-		Name:   "opencode profiles",
-		Warn:   true,
-		Detail: "profile(s) " + strings.Join(names, ", ") + " use the opencode harness, which reports no status to herdr-core - dispatch refuses them under " + herdr.BackendEnv + "=hc; use a claude or pi profile, or the herdr TUI backend",
-	}}
+
+	const name = "opencode status plugin"
+	installs := probes.openCodeInstalls(pathEnv)
+	if len(installs) == 0 || installs[0].Err != nil {
+		return nil
+	}
+	if v := installs[0].Version; v.Major != 2 {
+		return []Result{{Name: name, Warn: true, Detail: fmt.Sprintf("profile(s) %s use the opencode harness, but opencode %s is not 2.x - under %s=hc only OpenCode 2.x reports a status (through vexillum's plugin), so dispatch refuses it; install 2.x or use the herdr TUI backend",
+			strings.Join(names, ", "), v, herdr.BackendEnv)}}
+	}
+
+	root, err := project.Root(vexillumHome, projectDir)
+	if err != nil {
+		return []Result{{Name: name, Warn: true, Detail: "could not resolve the project root: " + err.Error()}}
+	}
+	state, err := opencodeosc.Inspect(root)
+	if err != nil {
+		return []Result{{Name: name, Warn: true, Detail: "could not read the plugin: " + err.Error()}}
+	}
+	switch state {
+	case opencodeosc.Missing:
+		return []Result{{Name: name, OK: true, Detail: "not installed yet - written to " + opencodeosc.Dir(root) + " at the next opencode dispatch"}}
+	case opencodeosc.Stale:
+		return []Result{{Name: name, OK: true, Detail: opencodeosc.Path(root) + " differs from this vx's plugin - the next opencode dispatch rewrites it (a running soldier keeps the copy it loaded)"}}
+	}
+	return []Result{{Name: name, OK: true, Detail: opencodeosc.Path(root) + " (current); it replaces the TUI plugins in your cli.json for hc soldiers"}}
 }

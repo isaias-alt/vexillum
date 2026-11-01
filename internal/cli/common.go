@@ -100,19 +100,13 @@ func herdrAppMessage(command string) string {
 // With VX_BACKEND=hc the terminal backend is herdr-core instead: the command
 // must run in a Herdr app terminal (HC_TERMINAL_ID) and a real hc binary must
 // be on PATH, and no workspace id comes back (the space is chosen from the
-// project, see backendWorkspace).
+// project, see backendWorkspace). The opencode harness is allowed there on
+// OpenCode 2.x only, which vexillum launches with its own status plugin.
 func harnessPreconditions(command, harness string, getenv func(string) string, lookPath func(string) (string, error)) (string, error) {
 	workspaceID := getenv("HERDR_WORKSPACE_ID")
 	harnessBinary, err := soldier.HarnessBinary(harness)
 	if err != nil {
 		return "", fmt.Errorf("cannot %s from here, nothing was started: %w", command, err)
-	}
-
-	// OpenCode never reports status over OSC 7501, which is all herdr-core
-	// reads, so under hc its soldier would only fail late. Refuse it before
-	// anything is created.
-	if herdr.WantsHC(getenv) && harness == soldier.HarnessOpenCode {
-		return "", fmt.Errorf("cannot %s from here, nothing was started: the opencode harness is not supported under %s=hc - OpenCode reports no status to herdr-core, so its soldier would stall. Use a claude or pi profile, or the herdr TUI backend (unset %s)", command, herdr.BackendEnv, herdr.BackendEnv)
 	}
 
 	var problems []string
@@ -152,8 +146,17 @@ func harnessPreconditions(command, harness string, getenv func(string) string, l
 	// A harness whose CLI has generations that launch differently needs one
 	// vexillum can drive. Asked only once the binary is known to be there.
 	if harnessFound {
-		if _, _, err := soldier.DetectHarnessVersion(harness); err != nil {
+		major, version, err := soldier.DetectHarnessVersion(harness)
+		switch {
+		case err != nil:
 			problems = append(problems, err.Error())
+		case herdr.WantsHC(getenv) && harness == soldier.HarnessOpenCode && major != 2:
+			// herdr-core reads a status from the OSC 7501 an agent prints and
+			// OpenCode prints none. An OpenCode 2.x soldier is launched with a
+			// plugin of vexillum's that does (internal/opencodeosc); V1 has a
+			// different plugin API and none here, so its soldier would only
+			// stall. Refused before anything is created.
+			problems = append(problems, fmt.Sprintf("the opencode harness needs OpenCode 2.x under %s=hc - opencode %s has no status plugin for herdr-core, so its soldier would stall; install 2.x or use the herdr TUI backend (unset %s)", herdr.BackendEnv, version, herdr.BackendEnv))
 		}
 	}
 	if len(problems) == 0 {

@@ -754,7 +754,12 @@ func (h *HC) AgentStart(name, kind, paneID string, agentArgs ...string) error {
 			// Still no status: a first-run dialog (Claude's trust prompt reports
 			// nothing) or a program that never reports. Same verdict herdr gives,
 			// and startAgent looks at the screen from here.
-			return &APIError{Code: "agent_not_ready", Message: fmt.Sprintf("%s reported no status within %s", kind, h.startWindow())}
+			msg := fmt.Sprintf("%s reported no status within %s", kind, h.startWindow())
+			if kind == "opencode" {
+				// OpenCode reports only through the plugin vexillum launches it with.
+				msg += " (its vexillum status plugin did not load: the soldier needs OpenCode 2.x)"
+			}
+			return &APIError{Code: "agent_not_ready", Message: msg}
 		}
 		time.Sleep(h.pollInterval())
 	}

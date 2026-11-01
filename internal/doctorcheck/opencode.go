@@ -139,8 +139,9 @@ func openCodeShadow(installs []openCodeInstall) (Result, bool) {
 // instead of herdr reading the screen. ok is false when herdr is not on PATH,
 // which the "herdr" check already reports.
 func openCodeIntegration(probes *Probes) (Result, bool) {
-	// herdr's integration is for the herdr TUI; under the hc backend the
-	// program reports its own status (OSC 7501) and there is nothing to install.
+	// herdr's integration is for the herdr TUI. Under the hc backend an
+	// OpenCode soldier reports through vexillum's own plugin instead, which
+	// HCOpenCodePlugin checks, and there is nothing of herdr's to install.
 	if herdr.UsingHC() {
 		return Result{}, false
 	}

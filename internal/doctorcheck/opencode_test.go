@@ -137,6 +137,16 @@ func TestOpenCodeChecks_HerdrIntegration(t *testing.T) {
 		})
 	}
 
+	// Under the hc backend herdr's integration is not what reports an OpenCode
+	// soldier's status, so it is not asked about.
+	hcDir := binDir(t, map[string]string{"opencode": "echo opencode v2.0.32", "herdr": "echo 'opencode: not installed (/x)'"})
+	t.Setenv("PATH", hcDir)
+	t.Setenv("VX_BACKEND", "hc")
+	if _, ok := result(openCodeChecks(projectWithProfiles(t, ""), t.TempDir(), hcDir, false, nil), "herdr integration for opencode"); ok {
+		t.Error("an integration line under VX_BACKEND=hc")
+	}
+	t.Setenv("VX_BACKEND", "")
+
 	// herdr itself missing is the "herdr" check's to report.
 	dir := ocBin(t, "opencode v2.0.32")
 	t.Setenv("PATH", dir)

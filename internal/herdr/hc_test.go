@@ -357,6 +357,13 @@ func TestHC_PromptToATerminalThatNeverReported(t *testing.T) {
 	if !strings.Contains(err.Error(), "never reported") {
 		t.Errorf("the error does not name the cause: %v", err)
 	}
+	// And at the start, the same silence names the plugin for opencode only.
+	_, pane2, _ := h.CreateTab("vx-p", t.TempDir(), "vx-mute2")
+	_ = h.BindTask(pane2, "t2")
+	err = h.AgentStart("vx-mute2", "opencode", pane2)
+	if !IsNotReady(err) || !strings.Contains(err.Error(), "opencode reported no status within") || !strings.Contains(err.Error(), "status plugin") {
+		t.Errorf("AgentStart of a silent opencode = %v, want agent_not_ready naming the plugin", err)
+	}
 	if n := strings.Count(termFile(t, pane, "sent"), "hello there"); n != 1 {
 		t.Errorf("the prompt was typed %d times, want exactly once", n)
 	}

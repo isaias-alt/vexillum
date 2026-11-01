@@ -3,9 +3,11 @@ package doctorcheck
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/isaias-alt/vexillum/internal/opencodeosc"
+	"github.com/isaias-alt/vexillum/internal/project"
 )
 
 func hcEnvOf(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
@@ -93,23 +95,80 @@ func TestBackendValue(t *testing.T) {
 	}
 }
 
-func TestHCOpenCodeProfiles(t *testing.T) {
-	home := t.TempDir()
-	project := t.TempDir()
-	if got := HCOpenCodeProfiles(project, home); len(got) != 0 {
-		t.Fatalf("no opencode profile: got %+v, want nothing", got)
+func TestHCOpenCodePlugin(t *testing.T) {
+	const name = "opencode status plugin"
+	// Each case gets its own project and home: the plugin lives under the
+	// project's state in the home.
+	setup := func(t *testing.T, profiles, version string) (project, home, pathEnv string) {
+		t.Helper()
+		project = projectWithProfiles(t, profiles)
+		home = t.TempDir()
+		if version != "" {
+			pathEnv = ocBin(t, version)
+		} else {
+			pathEnv = binDir(t, map[string]string{"herdr": "exit 0"})
+		}
+		return
+	}
+	root := func(t *testing.T, projectDir, home string) string {
+		t.Helper()
+		r, err := project.Root(home, projectDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
 	}
 
-	dir := filepath.Join(project, ".vexillum")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cfg := `{"profiles":{"ocode":{"model":"some/model","effort":"high","harness":"opencode","when":"x"}}}`
-	if err := os.WriteFile(filepath.Join(dir, "models.json"), []byte(cfg), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	got := HCOpenCodeProfiles(project, home)
-	if len(got) != 1 || !got[0].Warn || got[0].Required || !strings.Contains(got[0].Detail, "ocode") || !strings.Contains(got[0].Detail, "herdr-core") {
-		t.Errorf("got %+v, want one non-required warning naming ocode", got)
-	}
+	t.Run("no opencode profile", func(t *testing.T) {
+		project, home, pathEnv := setup(t, "", "opencode v2.0.32")
+		if got := hcOpenCodePlugin(project, home, pathEnv, nil); len(got) != 0 {
+			t.Errorf("got %+v, want nothing", got)
+		}
+	})
+
+	t.Run("opencode missing or unreadable is not repeated here", func(t *testing.T) {
+		project, home, pathEnv := setup(t, openCodeProfile, "")
+		if got := hcOpenCodePlugin(project, home, pathEnv, nil); len(got) != 0 {
+			t.Errorf("got %+v, want nothing (OpenCodeChecks reports it)", got)
+		}
+		project, home, pathEnv = setup(t, openCodeProfile, "garbage")
+		if got := hcOpenCodePlugin(project, home, pathEnv, nil); len(got) != 0 {
+			t.Errorf("unreadable version: got %+v, want nothing", got)
+		}
+	})
+
+	t.Run("v1 has no plugin", func(t *testing.T) {
+		project, home, pathEnv := setup(t, openCodeProfile, "1.19.3")
+		got := hcOpenCodePlugin(project, home, pathEnv, nil)
+		if len(got) != 1 || got[0].Name != name || !got[0].Warn || got[0].Required || !strings.Contains(got[0].Detail, "1.19.3") || !strings.Contains(got[0].Detail, "oc-scout") {
+			t.Errorf("got %+v, want one non-required warning naming 1.19.3 and oc-scout", got)
+		}
+	})
+
+	t.Run("v2 not installed yet", func(t *testing.T) {
+		project, home, pathEnv := setup(t, openCodeProfile, "opencode v2.0.32")
+		got := hcOpenCodePlugin(project, home, pathEnv, nil)
+		if len(got) != 1 || got[0].Name != name || !got[0].OK || got[0].Warn || got[0].Required || !strings.Contains(got[0].Detail, "not installed yet") {
+			t.Errorf("got %+v, want an ok line saying it is installed at the next dispatch", got)
+		}
+	})
+
+	t.Run("v2 current and stale", func(t *testing.T) {
+		project, home, pathEnv := setup(t, openCodeProfile, "opencode v2.0.32")
+		r := root(t, project, home)
+		if _, err := opencodeosc.Install(r); err != nil {
+			t.Fatal(err)
+		}
+		got := hcOpenCodePlugin(project, home, pathEnv, nil)
+		if len(got) != 1 || !got[0].OK || got[0].Required || !strings.Contains(got[0].Detail, "(current)") || !strings.Contains(got[0].Detail, opencodeosc.Path(r)) {
+			t.Errorf("current: got %+v", got)
+		}
+		if err := os.WriteFile(opencodeosc.Path(r), []byte("// old\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got = hcOpenCodePlugin(project, home, pathEnv, nil)
+		if len(got) != 1 || !got[0].OK || got[0].Required || !strings.Contains(got[0].Detail, "differs") {
+			t.Errorf("stale: got %+v", got)
+		}
+	})
 }
