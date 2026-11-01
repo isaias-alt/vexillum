@@ -24,9 +24,16 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	os.Setenv("HOME", home)
-	// The suite may itself run in a herdr pane; no test registers that pane as
-	// a commander unless it sets HERDR_PANE_ID and a fake locator itself.
-	os.Unsetenv("HERDR_PANE_ID")
+	// The suite may itself run in a herdr or hc terminal; no test sees that
+	// terminal (or registers its pane as a commander) unless it sets the
+	// variables and a fake locator itself.
+	for _, name := range []string{
+		"HERDR_PANE_ID", "HERDR_WORKSPACE_ID", "HERDR_ENV", "HERDR_SOCKET_PATH",
+		"HC_TERMINAL_ID", "HC_SESSION", "HC_SOCKET", "HC_SCOPE", "HC_TERMINAL_SOCKET",
+		"VX_BACKEND",
+	} {
+		os.Unsetenv(name)
+	}
 	doctorcheck.SetLiveSentinelPIDs(func() ([]int, error) { return nil, nil })
 	sentinel.SetSettleReadGap(time.Millisecond)
 	code := m.Run()
