@@ -64,7 +64,7 @@ brews:
     extra_install: |
       doc.install "LICENSE", "THIRD-PARTY-NOTICES.md"
     caveats: |
-      vx needs Claude Code (logged in) and herdr installed.
+      vx needs Claude Code (logged in) and herdr installed (running from the Herdr app is experimental, see the docs).
       Run `vx init` inside a git repository to set it up.
       Then run `vx doctor` to check your environment.
       Docs: https://vx.lucasco.dev
@@ -79,7 +79,7 @@ release:
   # as GitHub pre-releases, so releases/latest keeps pointing at the last stable.
   prerelease: auto
   header: |
-    Install: `brew install isaias-alt/tap/vexillum`, or the curl command in the [README](https://github.com/isaias-alt/vexillum#install). Requires Claude Code (logged in), herdr and git.
+    Install: `brew install isaias-alt/tap/vexillum`, or the curl command in the [README](https://github.com/isaias-alt/vexillum#install). Requires Claude Code (logged in), herdr and git (running from the Herdr app is experimental, see the [docs](https://vx.lucasco.dev/docs/guides/herdr-app-backend)).
     Soldiers run unsandboxed with full access to your machine, see the [warning in the README](https://github.com/isaias-alt/vexillum#install).
 
   footer: |

@@ -19,10 +19,11 @@ Requirements:
 - optional: `gh` (for `vx ship`)
 - optional: [Pi](https://pi.dev), only if a model profile sets `"harness": "pi"` to run its soldiers on Pi instead of Claude Code
 - optional: [OpenCode](https://opencode.ai) (1.x from 1.18.29, or 2.x), only if a model profile sets `"harness": "opencode"`, or to run the commander in OpenCode 2.x (`vx init --commander opencode`, see the [guide](https://vx.lucasco.dev/docs/guides/opencode-commander)); Pi can run the commander too (`vx init --commander pi`, see the [guide](https://vx.lucasco.dev/docs/guides/pi-commander))
+- optional: [herdr-core](https://herdr.dev) (`hc`, tested with 0.1.16) and the Herdr desktop app, only to run vexillum from the app with `VX_BACKEND=hc` (experimental, see [below](#experimental-run-from-the-herdr-app))
 
 Example `models.json` profiles that run scouts and missions on Pi or OpenCode with free and cheap models are in [Models for other harnesses](https://vx.lucasco.dev/docs/guides/models-for-other-harnesses) and in `docs/examples/`.
 
-`vx doctor` checks that the CLI of each of the project's commander harnesses (Claude Code by default), herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane.
+`vx doctor` checks that the CLI of each of the project's commander harnesses (Claude Code by default), herdr and git are present, and that the project scaffold is healthy. It does not check that Claude Code is logged in, your OS or architecture, or that you are inside a herdr pane; `vx dispatch` only works inside a herdr pane (an app terminal under `VX_BACKEND=hc`).
 
 > **Warning:** soldiers run Claude Code with `--dangerously-skip-permissions` (or
 > Pi, which has no permission prompts at all, or OpenCode with `--auto`), as
@@ -52,6 +53,10 @@ stability promise) or an exact version, pass an option to the script:
 curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --channel canary
 curl -fsSL https://raw.githubusercontent.com/isaias-alt/vexillum/canary/scripts/install.sh | bash -s -- --version <tag>
 ```
+
+### Experimental: run from the Herdr app
+
+Set `VX_BACKEND=hc` in the environment of your commander and start it from a terminal of the [Herdr](https://herdr.dev) desktop app. It needs herdr-core (`hc`, tested with 0.1.16) on `PATH`; `herdr-app` on `PATH` is optional and names each soldier's tab `vx-<slug>`. Soldiers appear in their own space, `vx-<project>`, not the one you are in. Limits: OpenCode is not supported (it reports no status, and `vx dispatch` refuses it), one sentinel serves one backend at a time, and the committed Stop hook finds `vx` through `PATH`, so make sure the `vx` first on `PATH` is the one you run. `vx doctor` shows the backend lines. Unset the variable to go back to the herdr TUI. Details are in the [guide](https://vx.lucasco.dev/docs/guides/herdr-app-backend).
 
 ## Usage
 
