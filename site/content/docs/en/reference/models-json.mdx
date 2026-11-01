@@ -66,7 +66,7 @@ The built-in profiles, in priority order (the first that matches wins):
 | `fable-5-1` | `claude-fable-5-1`, `high` | only when you explicitly ask for Fable 5.1; expensive, the commander asks for your OK first |
 | default | `sonnet`, `medium` | nothing above fits |
 
-The last twelve are pinned model versions. `vx init` writes all 17 profiles to a new project's `models.json`, so you can see and edit each one there. They are also built in, so a project whose file is shorter, or has none, still inherits the ones it does not list, and they sit after the general-purpose profiles so they never shadow one. Each is used only when you ask for that exact model; the two Fable profiles are expensive, so the commander tells you and waits for your explicit OK before dispatching with one.
+The pinned model versions come after the general-purpose profiles. `vx init` writes every built-in profile to a new project's `models.json`, so you can see and edit each one there. They are also built in, so a project whose file is shorter, or has none, still inherits the ones it does not list, and they sit after the general-purpose profiles so they never shadow one. Each is used only when you ask for that exact model; the two Fable profiles are expensive, so the commander tells you and waits for your explicit OK before dispatching with one.
 
 ## How layers merge
 

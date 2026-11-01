@@ -66,7 +66,7 @@ Los perfiles incluidos, en orden de prioridad (gana el primero que coincide):
 | `fable-5-1` | `claude-fable-5-1`, `high` | solo cuando pedís Fable 5.1 explícitamente; es caro, el commander te pide el OK antes |
 | default | `sonnet`, `medium` | nada de lo anterior aplica |
 
-Los últimos doce son versiones de modelo fijadas. `vx init` escribe los 17 perfiles en el `models.json` de un proyecto nuevo, así que podés ver y editar cada uno ahí. También vienen incluidos, así que un proyecto con un archivo más corto, o sin archivo, hereda igual los que no lista, y van después de los perfiles de propósito general para no taparlos nunca. Cada uno se usa solo cuando pedís ese modelo exacto; los dos perfiles Fable son caros, así que el commander te avisa y espera tu OK explícito antes de despachar con uno.
+Las versiones de modelo fijadas vienen después de los perfiles de propósito general. `vx init` escribe todos los perfiles incluidos en el `models.json` de un proyecto nuevo, así que podés ver y editar cada uno ahí. También vienen incluidos, así que un proyecto con un archivo más corto, o sin archivo, hereda igual los que no lista, y van después de los perfiles de propósito general para no taparlos nunca. Cada uno se usa solo cuando pedís ese modelo exacto; los dos perfiles Fable son caros, así que el commander te avisa y espera tu OK explícito antes de despachar con uno.
 
 ## Cómo se combinan las capas
 
