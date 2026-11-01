@@ -40,7 +40,8 @@
 // Three layers are merged, later ones winning:
 //
 //  1. the defaults embedded in the binary: the five general-purpose
-//     profiles (DefaultJSON) followed by the pinned model-version profiles,
+//     profiles followed by the pinned model-version profiles (DefaultJSON
+//     lists all of them; a short project file still inherits the rest),
 //  2. the optional global base, <vexillumHome>/models.json,
 //  3. the optional project file, <projectDir>/.vexillum/models.json.
 //
@@ -54,6 +55,7 @@
 package models
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -79,18 +81,102 @@ const DefaultName = "default"
 var defaultJSON []byte
 
 // pinnedJSON holds the pinned model-version profiles (haiku-4-5 ... fable-5-1).
-// They are built in, so every project inherits them, but they are not part of
-// DefaultJSON: `vx init` writes only the five general-purpose profiles to keep
-// a new project's models.json short, and the layer merge supplies the rest.
+// They are built in, so every project inherits them through the layer merge
+// even when its models.json is short. DefaultJSON appends them to the five
+// general-purpose profiles, so a new project's file lists all of them while
+// each profile stays defined in exactly one embedded file.
 //
 //go:embed pinned-models.json
 var pinnedJSON []byte
 
-// DefaultJSON returns the embedded general-purpose defaults: the content
-// `vx init` writes to a new project's .vexillum/models.json. The pinned
-// profiles are built in too but are not written there. The returned slice is a copy.
+// DefaultJSON returns the content `vx init` writes to a new project's
+// .vexillum/models.json: the five general-purpose profiles followed by the
+// pinned ones, in the order the layer merge lists them, and the default entry.
+// The returned slice is a fresh copy.
 func DefaultJSON() []byte {
-	return append([]byte(nil), defaultJSON...)
+	out, err := joinDefaults(defaultJSON, pinnedJSON)
+	if err != nil {
+		// Both inputs are embedded and checked by the tests; a failure here
+		// is a build defect, not a runtime condition.
+		panic("models: embedded defaults are not mergeable: " + err.Error())
+	}
+	return out
+}
+
+// joinDefaults appends the profiles of extra to base, keeping each file's key
+// order, and returns indented JSON with the default entry of base.
+func joinDefaults(base, extra []byte) ([]byte, error) {
+	b, err := orderedLayer(base)
+	if err != nil {
+		return nil, err
+	}
+	e, err := orderedLayer(extra)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	buf.WriteString("{\n  \"profiles\": {")
+	n := 0
+	for _, f := range [][]orderedProfile{b.profiles, e.profiles} {
+		for _, p := range f {
+			if n > 0 {
+				buf.WriteByte(',')
+			}
+			n++
+			name, _ := json.Marshal(p.name)
+			var body bytes.Buffer
+			if err := json.Indent(&body, p.body, "    ", "  "); err != nil {
+				return nil, err
+			}
+			fmt.Fprintf(&buf, "\n    %s: %s", name, body.Bytes())
+		}
+	}
+	buf.WriteString("\n  }")
+	if b.def != nil {
+		var def bytes.Buffer
+		if err := json.Indent(&def, b.def, "  ", "  "); err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(&buf, ",\n  \"default\": %s", def.Bytes())
+	}
+	buf.WriteString("\n}\n")
+	return buf.Bytes(), nil
+}
+
+type orderedProfile struct {
+	name string
+	body json.RawMessage
+}
+
+type orderedFile struct {
+	profiles []orderedProfile
+	def      json.RawMessage
+}
+
+// orderedLayer reads a models file keeping the order its profiles are
+// written in, which decoding into a map would lose.
+func orderedLayer(data []byte) (orderedFile, error) {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(data, &top); err != nil {
+		return orderedFile{}, err
+	}
+	f := orderedFile{def: top["default"]}
+	dec := json.NewDecoder(bytes.NewReader(top["profiles"]))
+	if _, err := dec.Token(); err != nil { // opening brace
+		return orderedFile{}, err
+	}
+	for dec.More() {
+		key, err := dec.Token()
+		if err != nil {
+			return orderedFile{}, err
+		}
+		var body json.RawMessage
+		if err := dec.Decode(&body); err != nil {
+			return orderedFile{}, err
+		}
+		f.profiles = append(f.profiles, orderedProfile{name: key.(string), body: body})
+	}
+	return f, nil
 }
 
 // Profile is one named model/effort pair with its selection guidance.

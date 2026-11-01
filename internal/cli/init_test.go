@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/isaias-alt/vexillum/internal/install"
+	"github.com/isaias-alt/vexillum/internal/models"
 	"github.com/isaias-alt/vexillum/internal/scaffold"
 	"github.com/isaias-alt/vexillum/internal/slot"
 	"github.com/isaias-alt/vexillum/skills"
@@ -582,6 +583,74 @@ func TestInit_ClaudeMDSlot(t *testing.T) {
 			t.Errorf("CLAUDE.md was touched:\n%s", got)
 		}
 	})
+}
+
+// A fresh init writes every built-in profile (the five general-purpose and the
+// twelve pinned ones) and the file passes the same validation as any other.
+func TestInit_WritesAllSeventeenProfiles(t *testing.T) {
+	projectDir, home := newProject(t)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	path := filepath.Join(projectDir, ".vexillum", "models.json")
+	if got := readFile(t, path); got != string(models.DefaultJSON()) {
+		t.Errorf("models.json differs from models.DefaultJSON:\n%s", got)
+	}
+	var f struct {
+		Profiles map[string]json.RawMessage `json:"profiles"`
+	}
+	if err := json.Unmarshal([]byte(readFile(t, path)), &f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Profiles) != 17 {
+		t.Errorf("models.json has %d profiles, want 17", len(f.Profiles))
+	}
+	tbl, err := models.Load(projectDir, home)
+	if err != nil {
+		t.Fatalf("written models.json does not validate: %v", err)
+	}
+	if len(tbl.Profiles) != 17 {
+		t.Errorf("loaded %d profiles, want 17", len(tbl.Profiles))
+	}
+}
+
+// Running init again leaves a models.json that init wrote byte for byte as it was.
+func TestInit_ReinitLeavesWrittenModelsUntouched(t *testing.T) {
+	projectDir, home := newProject(t)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	path := filepath.Join(projectDir, ".vexillum", "models.json")
+	before := readFile(t, path)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	if got := readFile(t, path); got != before {
+		t.Errorf("models.json changed on re-init:\n%s", got)
+	}
+}
+
+// A short existing file still inherits the built-in profiles it does not list.
+func TestInit_ShortExistingModelsStillInherits(t *testing.T) {
+	projectDir, home := newProject(t)
+	custom := `{"profiles": {"mission-big": {"effort": "max"}}}`
+	writeFileT(t, filepath.Join(projectDir, ".vexillum", "models.json"), custom)
+	if r := doInit(projectDir, home, setupOptions{Yes: true}, "", false); r.code != 0 {
+		t.Fatal(r.out, r.errOut)
+	}
+	if got := readFile(t, filepath.Join(projectDir, ".vexillum", "models.json")); got != custom {
+		t.Errorf("models.json overwritten: %q", got)
+	}
+	tbl, err := models.Load(projectDir, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tbl.Profiles) != 17 {
+		t.Errorf("got %d profiles, want 17", len(tbl.Profiles))
+	}
+	if c, _ := tbl.Lookup("mission-big"); c.Effort != "max" {
+		t.Errorf("mission-big = %+v", c)
+	}
 }
 
 // models.json is created once and never overwritten.

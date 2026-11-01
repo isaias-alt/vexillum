@@ -1,8 +1,10 @@
 package models
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -157,6 +159,64 @@ func TestDefaultJSONIsAValidModelsFile(t *testing.T) {
 	b[0] = 'X'
 	if DefaultJSON()[0] == 'X' {
 		t.Error("DefaultJSON exposes its backing array")
+	}
+}
+
+func TestDefaultJSONWritesAllSeventeenProfilesAndDefault(t *testing.T) {
+	var f struct {
+		Profiles map[string]json.RawMessage `json:"profiles"`
+		Default  Choice                     `json:"default"`
+	}
+	if err := json.Unmarshal(DefaultJSON(), &f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Profiles) != 17 {
+		t.Errorf("DefaultJSON has %d profiles, want 17", len(f.Profiles))
+	}
+	if f.Default != (Choice{Model: "sonnet", Effort: "medium"}) {
+		t.Errorf("default = %+v", f.Default)
+	}
+	// The written file lists the profiles in the documented order, so a
+	// project that adds its own after them keeps the built-in ordering.
+	of, err := orderedLayer(DefaultJSON())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, p := range of.profiles {
+		order = append(order, p.name)
+	}
+	if got := strings.Join(order, ","); got != allBuiltIn {
+		t.Errorf("order = %s", got)
+	}
+	// Written as-is, the file must merge to exactly the built-in table.
+	project, home := layout(t)
+	want, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeModels(t, projectModels(project), string(DefaultJSON()))
+	got, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Profiles, want.Profiles) || got.Default != want.Default {
+		t.Error("table from the written file differs from the built-in table")
+	}
+}
+
+func TestShortProjectFileStillInheritsEveryBuiltIn(t *testing.T) {
+	project, home := layout(t)
+	writeModels(t, projectModels(project), `{"profiles": {"opus-5": {"effort": "max"}}}`)
+	tbl, err := Load(project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names(tbl) != allBuiltIn {
+		t.Errorf("got %s", names(tbl))
+	}
+	if c, _ := tbl.Lookup("opus-5"); c.Effort != "max" || c.Model != "claude-opus-5" {
+		t.Errorf("opus-5 = %+v", c)
 	}
 }
 
