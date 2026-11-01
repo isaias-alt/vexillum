@@ -57,7 +57,7 @@ In command help and in other pages, "herdr pane" and "herdr tab" mean the termin
 
 ## Limits
 
-- **OpenCode is not supported.** OpenCode does not report its status through OSC 7501, so the sentinel cannot tell what an OpenCode soldier is doing. `vx dispatch` refuses it under `hc`. See [Using OpenCode](/docs/guides/using-opencode).
+- **OpenCode works on 2.x only.** OpenCode prints no OSC 7501, so vexillum launches each OpenCode 2.x soldier with a status plugin of its own, embedded in `vx` and passed to that soldier's TUI through `OPENCODE_CLI_CONFIG_CONTENT` (which replaces the `plugins` list of your own `cli.json` for that soldier). `vx dispatch` refuses OpenCode 1.x under `hc`, and `vx doctor` shows an `opencode status plugin` line. An OpenCode commander is not covered, since you start it. A real model run, OpenCode 1.x and narrow terminals were not confirmed. If a soldier fails with `opencode reported no status within 4s (agent_not_ready)`, see [Troubleshooting](/docs/reference/troubleshooting). See [Using OpenCode](/docs/guides/using-opencode).
 - **Pi.** Idle and error states were confirmed. Whether Pi reports `working` and `done` under `hc` was not confirmed.
 - **One sentinel serves one backend at a time.** If a sentinel from the other backend is running, `vx dispatch` warns that "a sentinel serves one backend at a time" and tells you which process to stop (`kill <pid>`). Tasks record their backend, and `strike`, `decide`, `prompt` and the sentinel refuse or skip a task of the other backend. To use both, run them one after the other, not together.
 - **Blocked questions and permission screens.** Detecting a blocked soldier under `hc` was checked on one Claude Code question at a 200 column width. Real permission screens were not checked.

@@ -4,7 +4,7 @@ description: Run a model profile's soldiers on the Pi coding agent instead of Cl
 ---
 
 <Callout type="info" title="With VX_BACKEND=hc">
-  `herdr integration install pi` is for the herdr TUI. Under the experimental Herdr app backend, Pi reports its status itself: idle and error were confirmed, while `working` and `done` were not confirmed. See [Run from the Herdr app](/docs/guides/herdr-app-backend).
+  `herdr integration install pi` is for the herdr TUI. Under the experimental Herdr app backend, Pi reports its status itself: idle and error were confirmed, while `working` and `done` were not confirmed. OpenCode 2.x soldiers are supported there through a status plugin vexillum loads, and OpenCode 1.x is not: see [Using OpenCode](/docs/guides/using-opencode). See [Run from the Herdr app](/docs/guides/herdr-app-backend).
 </Callout>
 
 A model profile can name a **harness**, the agent CLI its soldiers run on. Claude Code is the default. With `"harness": "pi"` the soldiers of that profile run on [Pi](https://pi.dev), which can use almost any provider and model, including free tiers. The commander is a Claude Code session unless you also run it in Pi (see [Pi as the commander](/docs/guides/pi-commander)), and a task keeps its harness through `vx redispatch`, `vx prompt`, `vx decide`, `vx land` and `vx strike`.

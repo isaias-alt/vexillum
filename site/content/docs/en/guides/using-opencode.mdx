@@ -3,8 +3,8 @@ title: Using OpenCode
 description: Run a model profile's soldiers on OpenCode instead of Claude Code, on OpenCode 1.x or 2.x, including its free Zen models.
 ---
 
-<Callout type="warn" title="Not supported with VX_BACKEND=hc">
-  OpenCode does not report its status through OSC 7501, which the experimental Herdr app backend relies on, and `herdr integration install opencode` is an integration of the herdr TUI. `vx dispatch` refuses OpenCode under `VX_BACKEND=hc`. See [Run from the Herdr app](/docs/guides/herdr-app-backend).
+<Callout type="info" title="With VX_BACKEND=hc">
+  `herdr integration install opencode` is an integration of the herdr TUI. Under the experimental Herdr app backend, OpenCode **2.x** soldiers are supported through a status plugin that vexillum embeds in the `vx` binary and loads into that soldier's TUI, because herdr-core reads a status from OSC 7501 and OpenCode prints none. OpenCode 1.x is not supported there: `vx dispatch` refuses it. The plugin is passed through `OPENCODE_CLI_CONFIG_CONTENT`, which replaces the `plugins` list of your own `cli.json` for that soldier, so your own TUI plugins are not loaded in it. Not confirmed: OpenCode 1.x under `hc`, a run with a real model (only a scripted provider was used), and narrow terminals. See [Run from the Herdr app](/docs/guides/herdr-app-backend) and [Using Pi](/docs/guides/using-pi) for the same rule on the other harness.
 </Callout>
 
 A model profile can name a **harness**, the agent CLI its soldiers run on. With `"harness": "opencode"` the soldiers of that profile run on [OpenCode](https://opencode.ai), which can use many providers and models, including free ones. The commander stays in Claude Code unless you choose otherwise (see [OpenCode as the commander](/docs/guides/opencode-commander)), and a task keeps its harness through `vx redispatch`, `vx prompt`, `vx decide`, `vx land` and `vx strike`.

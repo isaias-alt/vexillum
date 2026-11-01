@@ -119,7 +119,7 @@ Un hook que no encuentra vx es un aviso (`warn`), no un fallo, y la línea nombr
 
 Un sentinel vigila soldiers de un solo backend de terminal a la vez: la TUI de herdr por defecto, o las terminales de herdr-core cuando el commander corre con el backend experimental `VX_BACKEND=hc`. Cada tarea registra su backend en `backend` (omitido para la TUI de herdr, `"hc"` para herdr-core), y el registro de build en `sentinel.json` lleva el backend que atiende. `vx dispatch` avisa cuando ya hay corriendo un sentinel del otro backend y nombra el proceso a detener. `vx strike`, `vx decide`, `vx prompt` y el propio sentinel se niegan a tocar, u omiten, las tareas del otro backend.
 
-Bajo `hc` el sentinel lee el estado que el harness reporta a su terminal (Claude Code y Pi lo hacen; OpenCode no, así que no está soportado ahí) y la lista de terminales de `hc ls`, en vez de `herdr agent`. Todo lo demás de esta página funciona igual. Si la vía de wakes aguanta todas las pantallas reales de bloqueo o de permisos bajo `hc` no está confirmado.
+Bajo `hc` el sentinel lee el estado que el harness reporta a su terminal (Claude Code y Pi lo hacen; OpenCode no, así que vexillum carga un plugin de estado propio en la TUI de cada soldier de OpenCode 2.x, y OpenCode 1.x y un commander de OpenCode no están soportados ahí) y la lista de terminales de `hc ls`, en vez de `herdr agent`. Todo lo demás de esta página funciona igual. Si la vía de wakes aguanta todas las pantallas reales de bloqueo o de permisos bajo `hc` no está confirmado.
 
 ## Dar seguimiento a un soldier terminado
 

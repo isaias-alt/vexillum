@@ -3,8 +3,8 @@ title: Usar OpenCode
 description: Corré los soldiers de un perfil de modelo en OpenCode en lugar de Claude Code, en OpenCode 1.x o 2.x, incluidos sus modelos gratuitos de Zen.
 ---
 
-<Callout type="warn" title="No soportado con VX_BACKEND=hc">
-  OpenCode no informa su estado por OSC 7501, del que depende el backend experimental de la app de Herdr, y `herdr integration install opencode` es una integración de la TUI de herdr. `vx dispatch` rechaza OpenCode bajo `VX_BACKEND=hc`. Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend).
+<Callout type="info" title="Con VX_BACKEND=hc">
+  `herdr integration install opencode` es una integración de la TUI de herdr. Con el backend experimental de la app de Herdr, los soldiers de OpenCode **2.x** están soportados a través de un plugin de estado que vexillum embebe en el binario `vx` y carga en la TUI de ese soldier, porque herdr-core lee el estado de OSC 7501 y OpenCode no emite ninguno. OpenCode 1.x no está soportado ahí: `vx dispatch` lo rechaza. El plugin se pasa por `OPENCODE_CLI_CONFIG_CONTENT`, que reemplaza la lista `plugins` de tu propio `cli.json` para ese soldier, así que tus propios plugins de TUI no se cargan en él. No se confirmó: OpenCode 1.x bajo `hc`, una corrida con un modelo real (solo se usó un provider guionado) ni las terminales angostas. Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend) y [Usar Pi](/es/docs/guides/using-pi) para la misma regla en el otro harness.
 </Callout>
 
 Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Con `"harness": "opencode"` los soldiers de ese perfil corren en [OpenCode](https://opencode.ai), que puede usar muchos proveedores y modelos, incluidos los gratuitos. El commander sigue en Claude Code salvo que elijas otra cosa (mirá [OpenCode como commander](/es/docs/guides/opencode-commander)), y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.

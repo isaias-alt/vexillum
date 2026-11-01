@@ -4,7 +4,7 @@ description: Corré los soldiers de un perfil de modelo en el agente de código 
 ---
 
 <Callout type="info" title="Con VX_BACKEND=hc">
-  `herdr integration install pi` es para la TUI de herdr. Con el backend experimental de la app de Herdr, Pi informa su estado por sí mismo: se confirmaron idle y error, mientras que `working` y `done` no se confirmaron. Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend).
+  `herdr integration install pi` es para la TUI de herdr. Con el backend experimental de la app de Herdr, Pi informa su estado por sí mismo: se confirmaron idle y error, mientras que `working` y `done` no se confirmaron. Los soldiers de OpenCode 2.x están soportados ahí a través de un plugin de estado que carga vexillum, y OpenCode 1.x no: mirá [Usar OpenCode](/es/docs/guides/using-opencode). Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend).
 </Callout>
 
 Un perfil de modelo puede nombrar un **harness**, el CLI de agente en el que corren sus soldiers. Claude Code es el default. Con `"harness": "pi"` los soldiers de ese perfil corren en [Pi](https://pi.dev), que puede usar casi cualquier proveedor y modelo, incluidos los planes gratuitos. El commander es una sesión de Claude Code salvo que también lo corras en Pi (ver [Pi como commander](/es/docs/guides/pi-commander)), y una tarea conserva su harness a través de `vx redispatch`, `vx prompt`, `vx decide`, `vx land` y `vx strike`.
