@@ -40,9 +40,11 @@ Read the file that matches the moment, in addition to this one:
 | A mission finished, or the general wants one merged locally (check `vx yolo status` first) | [landing.md](landing.md) |
 | The general wants a real, validated GitHub PR | [shipping.md](shipping.md) |
 
-**On an `unconfirmed` sentinel notice, never trust a `herdr pane read` for
-liveness** (the viewport can be stale). Check `ls pauses/<agent>.md` (exists and
-fresh?), `herdr pane list` (`agent_status`) and the task output from `vx status`.
+**On an `unconfirmed` sentinel notice, never trust a `herdr pane read` (or
+`hc read <terminal>` under `VX_BACKEND=hc`) for liveness** (the viewport can be
+stale). Check `ls pauses/<agent>.md` (exists and fresh?), `herdr pane list`
+(`agent_status`) or `hc get <terminal>` (`status.state`) and the task output from
+`vx status`.
 No fresh pause, an idle pane and no commit or report means the soldier stopped
 without delivering: re-prompt it with `vx prompt`, do not explain it away. The
 steps are in [sentinel.md](sentinel.md).
@@ -51,8 +53,8 @@ steps are in [sentinel.md](sentinel.md).
 
 **Do NOT use your own Agent/Task tool for this.** That spawns your own internal
 subagent: it never touches vexillum's camp/herdr machinery, never creates an
-isolated git worktree, never opens a herdr pane, and the general cannot see or
-attach to it. It is not a vexillum soldier, even though the word is similar. Use
+isolated git worktree, never opens a herdr pane (or hc terminal), and the general
+cannot see or attach to it. It is not a vexillum soldier, even though the word is similar. Use
 `vx dispatch` through your Bash tool:
 
 ```
@@ -67,8 +69,12 @@ change code.
 This creates an isolated camp (git worktree, own branch) and starts a real,
 interactive session of the profile's harness (Claude Code unless the profile
 selects another) inside a herdr pane in the current workspace (requires
-`$HERDR_WORKSPACE_ID`, set automatically inside a herdr-managed pane), started
-so it never stops to ask for permission (Claude Code gets
+`$HERDR_WORKSPACE_ID`, set automatically inside a herdr-managed pane). With
+`VX_BACKEND=hc` (experimental) it starts in a Herdr app terminal in the
+project's own space `vx-<project>` instead (requires `$HC_TERMINAL_ID`), and the
+commander is not placed in the general's current space. OpenCode 2.x soldiers
+work there through the status plugin vexillum embeds. The soldier is
+started so it never stops to ask for permission (Claude Code gets
 `--dangerously-skip-permissions`). Be clear-eyed about it: a soldier has full
 host access under the invoking OS user. There is no container, chroot or other
 sandbox. The camp's worktree isolation only bounds where its commits can land,

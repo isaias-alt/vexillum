@@ -21,7 +21,7 @@ the sentinel. Go check on it (report to the general, or land/strike as
 appropriate) before actually stopping. Verify before you report a soldier as
 finished: look at `git log` and `git status` in its camp rather than trusting the
 status word alone. And never judge whether a soldier is alive or waiting from a
-`herdr pane read`: the viewport can be stale (see `unconfirmed` below).
+`herdr pane read` (or `hc read <terminal>` under `VX_BACKEND=hc`): the viewport can be stale (see `unconfirmed` below).
 
 ## Forum wakes
 
@@ -61,8 +61,8 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
   (running, done, or interrupted), and it is refused if the pane is really
   blocked. `vx prompt` and `vx ship` refuse a blocked task and name this flag.
 - **interrupted**: the sentinel lost the soldier itself, not a failure at its
-  task: its herdr pane disappeared (closed by hand, or herdr restarted) while it
-  was working. Check its camp directly (`git log`, `git status`) before doing
+  task: its herdr pane disappeared (closed by hand, or herdr restarted; under
+  `VX_BACKEND=hc`, its terminal is gone from `hc ls`) while it was working. Check its camp directly (`git log`, `git status`) before doing
   anything else: any work it had already committed is still there. If that work
   matters, land it normally first (`vx land <task-id>`). One more cause: a
   soldier that went idle without ever being sent its prompt (the `vx dispatch`
@@ -77,14 +77,16 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
   declared. It was prompted and its pane is open. The task's `output` carries the
   pane read taken when it was marked and a note saying why, including whether a
   pause file existed earlier and is now gone. Never trust a `herdr pane read`
-  for liveness here: the viewport can be stale and show an old "still running"
+  (or `hc read <terminal>`) for liveness here: the viewport can be stale and show an old "still running"
   screen for a soldier that stopped long ago (it cost 41 minutes once). Verify
   with the facts instead:
   1. `ls ~/.vexillum/projects/<key>/pauses/<agent>.md` (the note in the task's
      output gives the full path): does it exist, and is it fresh (written in the
      last 30 minutes)? A pause file is the only thing that makes
      an idle soldier "waiting".
-  2. `herdr pane list`: the pane's `agent_status` (`idle` or `working`).
+  2. `herdr pane list`: the pane's `agent_status` (`idle` or `working`). Under
+     `VX_BACKEND=hc`, `hc get <terminal>` (`status.state`) or `hc ls` (`status`).
+     An absent status means the program never reported.
   3. The task's `output` from `vx status`, plus `git log` / `git status` in the
      camp (or the report path for a scout).
 
@@ -93,7 +95,7 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
   file and ended its turn). It is not waiting on anything: re-prompt it with
   `vx prompt <task-id> "<finish the deliverable>"`. Do not explain it away to the
   general ("it is waiting in the background") and do not wait. If the checks
-  show it is genuinely working (`agent_status` is `working`), leave it; the
+  show it is genuinely working (`agent_status` or `status.state` is `working`), leave it; the
   sentinel reopens it when it works again.
 
 ## What a wake is, and what you are not told
@@ -151,7 +153,8 @@ characters and a task keeps its 20 most recent. So when the general widens the
 scope, relay it through `vx prompt` or `vx decide` rather than by hand in the
 pane, or the review will not know about it.
 
-Do not prompt the soldier's pane by hand with `herdr agent prompt`: the task
+Do not prompt the soldier's pane by hand with `herdr agent prompt` (or send to
+its terminal with `hc send`): the task
 would stay `done` and a second finish would never notify you. The sentinel does
 reopen a settled task it later sees working again, but only on a poll, so a
 short follow-up that finishes between two polls could still slip past.
