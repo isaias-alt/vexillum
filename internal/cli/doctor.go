@@ -89,7 +89,8 @@ wakes older than a minute that nothing will deliver: no live '` + cmdname.Name +
 await' there and no live registered commander. The commander that dispatched
 those soldiers may live in another project, or have been idle past the await's
 55 minutes. Nothing is lost: the wakes wait for the next commander turn in that
-project.
+project. A wake detected more than 7 days ago is stale: doctor does not count it
+and never warns about it, and the sentinel deletes it.
 
 The sentinel line warns, and never fails, when more than one sentinel process is
 alive (they would race over the same tasks), when the live sentinel is a

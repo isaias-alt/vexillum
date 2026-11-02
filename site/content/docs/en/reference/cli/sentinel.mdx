@@ -56,6 +56,13 @@ has run out its 55 minutes (inside the hook's one-hour timeout): it hears nothin
 turn, and vx status shows what happened meanwhile. A Pi commander starts a new "await"
 by itself when one times out, and an OpenCode commander has none.
 
+A wake detected more than 7 days ago is stale and is never delivered: "drain"
+and "await" delete it instead of keeping it queued, and report nothing to the
+commander for it; the sentinel's own sweep deletes the stale wakes it finds, so
+they do not pile up in a project nobody uses any more; and 'vx doctor' does
+not count them. A fresh wake waits for a commander as before. Forum wakes are
+not subject to this: they are dropped when their messages were confirmed.
+
 A project has one wake queue and a wake is delivered once, to whichever
 commander asks first. Two commanders live in the same project (say Claude Code
 and Pi) therefore do not both hear it: keep one commander per project (the

@@ -253,7 +253,8 @@ de wakes tenga wakes de más de un minuto que nada va a entregar: ningún 'vx
 sentinel await' vivo ahí ni commander registrado vivo. El commander que despachó
 esos soldiers puede vivir en otro proyecto, o llevar más de los 55 minutos del
 await sin turno. No se pierde nada: los wakes esperan al próximo turno de un
-commander en ese proyecto.
+commander en ese proyecto. Un wake detectado hace más de 7 días está vencido:
+doctor no lo cuenta ni advierte nunca por él, y el sentinel lo borra.
 
 La línea del sentinel advierte, y nunca falla, cuando hay más de un proceso
 sentinel vivo (competirían por las mismas tareas), cuando el sentinel vivo es
@@ -884,6 +885,14 @@ vivo los informa 'vx doctor'. Así también se ve un commander de Claude Code cu
 sus 55 minutos (dentro del timeout de una hora del hook): no oye nada hasta su
 próximo turno, y vx status muestra lo que pasó mientras tanto. Un commander Pi
 arranca solo un "await" nuevo cuando uno vence, y uno OpenCode no tiene ninguno.
+
+Un wake detectado hace más de 7 días está vencido y nunca se entrega: "drain" y
+"await" lo borran en lugar de dejarlo en la cola y no le informan nada al
+commander; el barrido propio del sentinel borra los wakes vencidos que
+encuentra, para que no se acumulen en un proyecto que nadie usa más; y 'vx
+doctor' no los cuenta. Un wake reciente espera a un commander como siempre. Los
+wakes de forum no están sujetos a esto: se descartan cuando sus mensajes ya
+fueron confirmados.
 
 Un proyecto tiene una sola cola de wakes y un wake se entrega una sola vez, al
 primer commander que lo pide. Dos commanders vivos en el mismo proyecto (por

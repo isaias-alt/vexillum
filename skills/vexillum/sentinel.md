@@ -103,7 +103,8 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
 A wake is a one-shot note that a task changed status, delivered once. Before
 one reaches you the sentinel drops it if it is no longer news: the task's
 status has since changed (you answered, re-prompted or shipped it), its camp
-was struck, or its mission was landed. A burst of notices for old, finished
+was struck, or its mission was landed. A wake more than 7 days old is stale
+and is deleted without being delivered. A burst of notices for old, finished
 tasks after a long absence should not happen; if you want the full picture
 after being away, run `vx status` rather than relying on wakes.
 

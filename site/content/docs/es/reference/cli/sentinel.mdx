@@ -56,6 +56,14 @@ sus 55 minutos (dentro del timeout de una hora del hook): no oye nada hasta su
 próximo turno, y vx status muestra lo que pasó mientras tanto. Un commander Pi
 arranca solo un "await" nuevo cuando uno vence, y uno OpenCode no tiene ninguno.
 
+Un wake detectado hace más de 7 días está vencido y nunca se entrega: "drain" y
+"await" lo borran en lugar de dejarlo en la cola y no le informan nada al
+commander; el barrido propio del sentinel borra los wakes vencidos que
+encuentra, para que no se acumulen en un proyecto que nadie usa más; y 'vx
+doctor' no los cuenta. Un wake reciente espera a un commander como siempre. Los
+wakes de forum no están sujetos a esto: se descartan cuando sus mensajes ya
+fueron confirmados.
+
 Un proyecto tiene una sola cola de wakes y un wake se entrega una sola vez, al
 primer commander que lo pide. Dos commanders vivos en el mismo proyecto (por
 ejemplo Claude Code y Pi) por lo tanto no lo oyen los dos: mantené un commander
