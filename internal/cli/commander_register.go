@@ -22,7 +22,7 @@ import (
 var commanderLocator herdr.Locator = herdr.Default()
 
 // registerCommander records the herdr pane the running command was typed in
-// (HERDR_PANE_ID, or HC_TERMINAL_ID with VX_BACKEND=hc) in the project's commander registry, under the harness herdr
+// (HERDR_PANE_ID, or HC_TERMINAL_ID with the hc backend) in the project's commander registry, under the harness herdr
 // reports for it. The commands a commander runs ("dispatch", "forum open") call
 // it, so the sentinel and the forum listener can find a commander that has no
 // Stop hook await to find. It is best effort: a command run outside a herdr

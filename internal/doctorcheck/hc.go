@@ -14,7 +14,7 @@ import (
 )
 
 // HCBackend reports on the experimental hc (herdr-core) backend, selected with
-// VX_BACKEND=hc, in place of the herdr TUI lines: the core binary and its
+// VX_BACKEND=hc or detected in a Herdr app terminal, in place of the herdr TUI lines: the core binary and its
 // "hc x.y.z" version (which also rejects the herdr TUI), the protocol hello over
 // "hc connect", and whether doctor runs in an app terminal. It costs the
 // --version run and one short "hc connect" round trip, nothing slower.
@@ -26,11 +26,7 @@ func HCBackend() []Result {
 
 // hcBackend is HCBackend with everything it touches injected, so tests control it.
 func hcBackend(getenv func(string) string, lookPath func(string) (string, error), version func(string) (string, error), hello func(bin string) error) []Result {
-	results := []Result{{
-		Name:   "terminal backend",
-		OK:     true,
-		Detail: herdr.BackendEnv + "=hc - herdr-core, experimental (the herdr TUI is not used)",
-	}}
+	var results []Result
 
 	bin, ver, err := herdr.ResolveHC(lookPath, version)
 	if err != nil {
@@ -58,17 +54,30 @@ func hcBackend(getenv func(string) string, lookPath func(string) (string, error)
 	return results
 }
 
-// BackendValue reports a VX_BACKEND value vexillum does not know.
-func BackendValue() Result {
-	if err := herdrBackendError(); err != nil {
+// BackendChoice reports which terminal backend vexillum uses and how it was
+// chosen (an explicit VX_BACKEND, or detected from the Herdr app terminal this
+// runs in), or a VX_BACKEND value vexillum does not know.
+func BackendChoice() Result { return backendChoice(os.Getenv) }
+
+func backendChoice(getenv func(string) string) Result {
+	sel, err := herdr.Select(getenv)
+	if err != nil {
 		return Result{Name: herdr.BackendEnv, Required: true, Detail: err.Error()}
 	}
-	return Result{}
-}
-
-func herdrBackendError() error {
-	_, err := herdr.BackendName(os.Getenv)
-	return err
+	product := "herdr TUI"
+	if sel.Name == herdr.BackendHC {
+		product = "herdr-core, experimental (the herdr TUI is not used)"
+	}
+	var how string
+	switch sel.Source {
+	case herdr.SourceEnv:
+		how = "chosen by " + herdr.BackendEnv + "=" + sel.Name
+	case herdr.SourceDetected:
+		how = "detected from the Herdr app terminal (" + herdr.HCTerminalEnv + " is set, " + herdr.BackendEnv + " is not)"
+	default:
+		how = "default (" + herdr.BackendEnv + " is not set)"
+	}
+	return Result{Name: "terminal backend", OK: true, Detail: product + " - " + how}
 }
 
 // HCOpenCodePlugin reports, under VX_BACKEND=hc, on what an OpenCode soldier

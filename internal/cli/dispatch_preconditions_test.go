@@ -95,17 +95,14 @@ func TestHerdrPreconditions(t *testing.T) {
 		},
 	}
 	t.Run("Herdr app terminal gets its own message", func(t *testing.T) {
-		app := func(key string) string {
-			if key == "HC_TERMINAL_ID" {
-				return "t1"
-			}
-			return ""
-		}
+		// VX_BACKEND=herdr is the explicit choice of the TUI inside an app
+		// terminal; unset, the app terminal would select hc (herdr.Select).
+		app := envMap(map[string]string{"HC_TERMINAL_ID": "t1", "VX_BACKEND": "herdr"})
 		_, err := herdrPreconditions("dispatch", app, found)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		for _, w := range []string{"Herdr app", "herdr TUI", "dispatch from a herdr TUI pane"} {
+		for _, w := range []string{"Herdr app", "VX_BACKEND=herdr selects the herdr TUI", "dispatch from a herdr TUI pane", "set VX_BACKEND=hc"} {
 			if !strings.Contains(err.Error(), w) {
 				t.Errorf("error missing %q:\n%s", w, err)
 			}

@@ -7,14 +7,35 @@ import (
 )
 
 // BackendEnv is the environment variable that picks the terminal backend
-// vexillum drives. Unset (or "herdr") is the herdr TUI, the default; "hc" is the
+// vexillum drives. Set to "herdr" it is the herdr TUI, set to "hc" the
 // experimental herdr-core backend, which lets vexillum run from a Herdr desktop
-// app terminal.
+// app terminal. Unset, Select decides from the terminal the process runs in.
 const BackendEnv = "VX_BACKEND"
 
 const (
 	BackendHerdr = "herdr"
 	BackendHC    = "hc"
+)
+
+// The variables Select reads to recognize the terminal. The Herdr app (hc) sets
+// HCTerminalEnv and none of the HERDR_* ones; a herdr TUI pane sets the latter,
+// and these two are the ones the commands already use to tell a pane apart
+// (the workspace dispatch needs, the pane a commander registers).
+const (
+	HCTerminalEnv   = "HC_TERMINAL_ID"
+	TUIPaneEnv      = "HERDR_PANE_ID"
+	TUIWorkspaceEnv = "HERDR_WORKSPACE_ID"
+)
+
+// How a backend was chosen (Selection.Source).
+const (
+	// SourceEnv: VX_BACKEND was set.
+	SourceEnv = "env"
+	// SourceDetected: VX_BACKEND was unset and the process runs in a Herdr app
+	// terminal.
+	SourceDetected = "detected"
+	// SourceDefault: neither, so the herdr TUI.
+	SourceDefault = "default"
 )
 
 // Backend is a terminal backend: both what internal/soldier drives (Client) and
@@ -25,26 +46,54 @@ type Backend interface {
 	Locator
 }
 
-// BackendName returns the backend getenv selects, or an error naming the
-// values that are accepted. It is a pure function of the environment so a
-// command can reject a bad value before it touches anything.
-func BackendName(getenv func(string) string) (string, error) {
+// Selection is the backend a process uses and how it was chosen.
+type Selection struct {
+	Name   string
+	Source string
+}
+
+// Select is the one place the backend is chosen. In order:
+//
+//  1. VX_BACKEND set: it wins ("hc" or "herdr"; any other value is an error
+//     naming the accepted ones).
+//  2. VX_BACKEND unset and the process runs in a Herdr app terminal, that is
+//     HC_TERMINAL_ID is set and neither HERDR_PANE_ID nor HERDR_WORKSPACE_ID is:
+//     hc. A core restarted with the app carries HC_TERMINAL_ID and no VX_BACKEND,
+//     and exporting VX_BACKEND=hc in a shell rc would break the TUI.
+//  3. Anything else: the herdr TUI. That includes an environment with both HC_*
+//     and HERDR_* variables set: it is not guessed, the TUI stays what it was.
+//
+// It is a pure function of the environment so a command can reject a bad value
+// before it touches anything.
+func Select(getenv func(string) string) (Selection, error) {
 	switch v := strings.ToLower(strings.TrimSpace(getenv(BackendEnv))); v {
-	case "", BackendHerdr:
-		return BackendHerdr, nil
 	case BackendHC:
-		return BackendHC, nil
+		return Selection{BackendHC, SourceEnv}, nil
+	case BackendHerdr:
+		return Selection{BackendHerdr, SourceEnv}, nil
+	case "":
+		if getenv(HCTerminalEnv) != "" && getenv(TUIPaneEnv) == "" && getenv(TUIWorkspaceEnv) == "" {
+			return Selection{BackendHC, SourceDetected}, nil
+		}
+		return Selection{BackendHerdr, SourceDefault}, nil
 	default:
-		return "", fmt.Errorf("unknown %s %q (want %q or %q)", BackendEnv, getenv(BackendEnv), BackendHerdr, BackendHC)
+		return Selection{}, fmt.Errorf("unknown %s %q (want %q or %q)", BackendEnv, getenv(BackendEnv), BackendHerdr, BackendHC)
 	}
 }
 
-// WantsHC reports whether getenv selects the hc backend. Any other value,
-// including an unusable one, counts as not selecting it: the commands validate
-// the variable up front (BackendName) and refuse to run on a bad one, so a
-// helper deep inside one need not.
+// BackendName is the name of the backend Select picks, or its error.
+func BackendName(getenv func(string) string) (string, error) {
+	sel, err := Select(getenv)
+	return sel.Name, err
+}
+
+// WantsHC reports whether getenv selects the hc backend. An unusable VX_BACKEND
+// counts as not selecting it: the commands validate the variable up front
+// (BackendName) and refuse to run on a bad one, so a helper deep inside one
+// need not.
 func WantsHC(getenv func(string) string) bool {
-	return strings.EqualFold(strings.TrimSpace(getenv(BackendEnv)), BackendHC)
+	sel, err := Select(getenv)
+	return err == nil && sel.Name == BackendHC
 }
 
 // UsingHC is WantsHC for the process environment.
@@ -86,8 +135,8 @@ func SameBackend(taskBackend string, c any) bool {
 	return taskBackend == NameOf(c)
 }
 
-// Default is the backend the process environment selects: the herdr TUI client
-// unless VX_BACKEND=hc.
+// Default is the backend the process environment selects (see Select): the
+// herdr TUI client unless that is hc.
 func Default() Backend {
 	if UsingHC() {
 		return NewHC()

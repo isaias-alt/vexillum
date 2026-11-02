@@ -335,16 +335,14 @@ func TestRunSentinelAwaitGuarded_NoWorkspaceExitsImmediately(t *testing.T) {
 	}
 }
 
-// In a Herdr app terminal (HC_TERMINAL_ID set, no HERDR_WORKSPACE_ID) the guard
-// also exits 0 without running, but says why.
+// In a Herdr app terminal (HC_TERMINAL_ID set, no HERDR_WORKSPACE_ID) where the
+// TUI backend is chosen explicitly, the guard also exits 0 without running, but
+// says why. (Without VX_BACKEND the app terminal selects hc and the await runs.)
 func TestRunSentinelAwaitGuarded_HerdrAppExplains(t *testing.T) {
 	var stderr bytes.Buffer
 	ran := false
 	code := runSentinelAwaitGuarded(func(k string) string {
-		if k == "HC_TERMINAL_ID" {
-			return "t1"
-		}
-		return ""
+		return map[string]string{"HC_TERMINAL_ID": "t1", "VX_BACKEND": "herdr"}[k]
 	}, &stderr, func() int { ran = true; return 2 })
 	if code != 0 || ran {
 		t.Fatalf("code = %d, ran = %v; want 0, false", code, ran)

@@ -32,8 +32,11 @@ edited by hand, or missing), whether the model profiles in models.json are
 valid, and whether yolo mode is on (the commander lands a finished mission
 without asking).
 
-With VX_BACKEND=hc (the experimental Herdr app backend) the herdr lines are
-replaced by 'terminal backend', 'herdr-core' (required), 'herdr-core protocol',
+The 'terminal backend' line says which backend is in use and how it was chosen:
+an explicit VX_BACKEND, detected from the Herdr app terminal doctor runs in
+(HC_TERMINAL_ID set, VX_BACKEND and the herdr pane variables not), or the
+default, the herdr TUI. With the hc backend (the experimental Herdr app backend)
+the herdr lines are replaced by 'herdr-core' (required), 'herdr-core protocol',
 'Herdr app terminal' and 'herdr-app' (optional: it names each soldier's tab).
 When a model profile selects the opencode harness, a line 'opencode status plugin'
 is added: OpenCode 2.x soldiers are watched there through a status plugin vexillum
@@ -136,8 +139,8 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 	// the report takes about as long as the slowest one. RunAll keeps the
 	// results in the order listed here, so the report reads the same.
 	probes := &doctorcheck.Probes{}
-	// The terminal backend lines: the herdr TUI by default, herdr-core with
-	// VX_BACKEND=hc.
+	// The terminal backend lines: the herdr TUI by default, herdr-core when
+	// selected (VX_BACKEND=hc) or detected in a Herdr app terminal.
 	terminal := []doctorcheck.Check{
 		doctorcheck.One(func() doctorcheck.Result { return doctorcheck.Binary("herdr", "herdr", true) }),
 		doctorcheck.One(doctorcheck.HerdrVersion),
@@ -152,7 +155,7 @@ func runDoctor(projectDir, vexillumHome, homeDir string, out io.Writer) int {
 		doctorcheck.One(func() doctorcheck.Result {
 			return doctorcheck.Binary("Claude Code", "claude", isCommander(soldier.HarnessClaude))
 		}),
-		doctorcheck.One(doctorcheck.BackendValue),
+		doctorcheck.One(doctorcheck.BackendChoice),
 	}
 	steps = append(steps, terminal...)
 	steps = append(steps,

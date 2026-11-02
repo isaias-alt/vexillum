@@ -62,7 +62,7 @@ vexillum/<task-id> is landed, or gone, and refuses otherwise; --discard skips
 that check and lists the unlanded commits, keeping the branch.
 
 On success, returns the worktree to the pool for reuse and closes the
-herdr pane (with VX_BACKEND=hc, the Herdr app terminal: it is killed and
+herdr pane (with the hc backend, the Herdr app terminal: it is killed and
 removed, 'hc kill' then 'hc rm'), then prunes: it deletes the task's local branch
 vexillum/<task-id> with git branch -d semantics (never -D) when the branch
 is an ancestor of the base branch, or when the task is shipped, gh reports

@@ -203,8 +203,8 @@ func TestHerdrApp(t *testing.T) {
 			if !strings.Contains(r.Detail, name) || !strings.Contains(r.Detail, "herdr TUI by default") {
 				t.Errorf("detail should name %s and the herdr TUI default, got %q", name, r.Detail)
 			}
-			if !strings.Contains(r.Detail, "set VX_BACKEND=hc to use it (experimental)") {
-				t.Errorf("detail should say how to opt in, got %q", r.Detail)
+			if !strings.Contains(r.Detail, "inside a Herdr app terminal, or when VX_BACKEND=hc") {
+				t.Errorf("detail should say when the app backend is used, got %q", r.Detail)
 			}
 		})
 	}

@@ -81,9 +81,15 @@ func TestHCPreconditions(t *testing.T) {
 		}
 	})
 	t.Run("the herdr backend still wants a pane", func(t *testing.T) {
-		_, err := herdrPreconditions("dispatch", envMap(map[string]string{"HC_TERMINAL_ID": "t1"}), look("herdr", "claude"))
+		_, err := herdrPreconditions("dispatch", envMap(map[string]string{"HC_TERMINAL_ID": "t1", "VX_BACKEND": "herdr"}), look("herdr", "claude"))
 		if err == nil || !strings.Contains(err.Error(), "VX_BACKEND=hc") {
 			t.Fatalf("got %v, want the app terminal message to point at VX_BACKEND=hc", err)
+		}
+	})
+	t.Run("an app terminal with a herdr pane variable too stays on the TUI and says so", func(t *testing.T) {
+		_, err := herdrPreconditions("dispatch", envMap(map[string]string{"HC_TERMINAL_ID": "t1", "HERDR_PANE_ID": "w1:p1"}), look("herdr", "claude"))
+		if err == nil || !strings.Contains(err.Error(), "HERDR_PANE_ID is set too") {
+			t.Fatalf("got %v, want the message to name HERDR_PANE_ID", err)
 		}
 	})
 }
@@ -164,7 +170,8 @@ func TestCommanderPaneAndManagedTerminal(t *testing.T) {
 	}{
 		{"herdr pane", tui, "w1:p2", true},
 		{"app terminal with the hc backend", hc, "t5", true},
-		{"app terminal without it", map[string]string{"HC_TERMINAL_ID": "t5"}, "", false},
+		{"app terminal detected without VX_BACKEND", map[string]string{"HC_TERMINAL_ID": "t5"}, "t5", true},
+		{"app terminal with the TUI chosen explicitly", map[string]string{"VX_BACKEND": "herdr", "HC_TERMINAL_ID": "t5"}, "", false},
 		{"the selected backend wins", both, "t5", true},
 		{"nowhere", nil, "", false},
 	} {
@@ -189,9 +196,9 @@ func TestRunSentinelAwaitGuarded_HCBackend(t *testing.T) {
 
 	stderr.Reset()
 	ran = false
-	code = runSentinelAwaitGuarded(envMap(map[string]string{"HC_TERMINAL_ID": "t1"}), &stderr, func() int { ran = true; return 7 })
+	code = runSentinelAwaitGuarded(envMap(map[string]string{"VX_BACKEND": "herdr", "HC_TERMINAL_ID": "t1"}), &stderr, func() int { ran = true; return 7 })
 	if code != 0 || ran || !strings.Contains(stderr.String(), "VX_BACKEND=hc") {
-		t.Errorf("without the backend: code = %d, ran = %v, stderr = %q; want an explained no-op", code, ran, stderr.String())
+		t.Errorf("with the TUI chosen: code = %d, ran = %v, stderr = %q; want an explained no-op", code, ran, stderr.String())
 	}
 }
 

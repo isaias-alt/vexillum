@@ -162,7 +162,7 @@ func herdrApp(pathEnv string) Result {
 			return Result{
 				Name:   "Herdr desktop app",
 				OK:     true,
-				Detail: fmt.Sprintf("%s found on PATH (%s) - %s runs on the herdr TUI by default; set VX_BACKEND=hc to use it (experimental)", name, found, cmdname.Name),
+				Detail: fmt.Sprintf("%s found on PATH (%s) - %s runs on the herdr TUI by default and switches to the app backend (experimental) inside a Herdr app terminal, or when %s=hc", name, found, cmdname.Name, herdr.BackendEnv),
 			}
 		}
 	}

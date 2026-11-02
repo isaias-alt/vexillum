@@ -47,7 +47,7 @@ until a wake shows up or it times out, so the commander gets woken even
 if its turn already ended before a soldier settled, not just when a wake
 happens to already be pending at the exact moment a turn is ending.
 "await" exits immediately, without waiting, outside a herdr-managed pane
-(no HERDR_WORKSPACE_ID) or, with VX_BACKEND=hc, outside a Herdr app terminal
+(no HERDR_WORKSPACE_ID) or, with the hc backend, outside a Herdr app terminal
 (no HC_TERMINAL_ID) - the hook is committed into the project and so
 reaches any other tool's own Claude Code turns too, which have no task
 for the sentinel to track.
@@ -248,8 +248,8 @@ func runSentinelDrainOrAwait(mode string) int {
 // commander's own interactive session, or a dispatched soldier's - both
 // of which always run inside a herdr-managed pane (vx dispatch and
 // redispatch already require the same HERDR_WORKSPACE_ID from their
-// caller; see cli/dispatch.go) or, with VX_BACKEND=hc, inside a Herdr app
-// terminal (HC_TERMINAL_ID). getenv supplies those env vars, and run
+// caller; see cli/dispatch.go) or, with the hc backend selected (see herdr.Select),
+// inside a Herdr app terminal (HC_TERMINAL_ID). getenv supplies those env vars, and run
 // is the real await to start when it is set.
 //
 // The Stop hook itself is registered in .claude/settings.json, which
@@ -270,7 +270,7 @@ func runSentinelDrainOrAwait(mode string) int {
 func runSentinelAwaitGuarded(getenv func(string) string, stderr io.Writer, run func() int) int {
 	if !inManagedTerminal(getenv) {
 		if inHerdrApp(getenv) {
-			fmt.Fprintln(stderr, cmdname.Name+": sentinel await: "+herdrAppMessage("it"))
+			fmt.Fprintln(stderr, cmdname.Name+": sentinel await: "+herdrAppMessage("it", getenv))
 		}
 		return 0
 	}

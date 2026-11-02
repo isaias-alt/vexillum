@@ -25,7 +25,6 @@ func TestHCBackend(t *testing.T) {
 	t.Run("all good", func(t *testing.T) {
 		got := hcBackend(hcEnvOf(map[string]string{"HC_TERMINAL_ID": "t3", "HC_SESSION": "work"}), look, version, hello)
 		want := map[string]string{
-			"terminal backend":    "VX_BACKEND=hc",
 			"herdr-core":          "/opt/herdr-core (hc 0.1.16)",
 			"herdr-core protocol": "generation 1",
 			"Herdr app terminal":  "terminal t3, session work",
@@ -43,7 +42,7 @@ func TestHCBackend(t *testing.T) {
 	t.Run("no core is a required failure and the rest is skipped", func(t *testing.T) {
 		got := hcBackend(hcEnvOf(nil), func(string) (string, error) { return "", errors.New("no") }, version, hello)
 		last := got[len(got)-1]
-		if len(got) != 2 || last.Name != "herdr-core" || last.OK || !last.Required || !strings.Contains(last.Detail, "not on PATH") {
+		if len(got) != 1 || last.Name != "herdr-core" || last.OK || !last.Required || !strings.Contains(last.Detail, "not on PATH") {
 			t.Errorf("got %+v", got)
 		}
 	})
@@ -80,17 +79,25 @@ func TestHCBackendReportsHerdrAppInformationally(t *testing.T) {
 	}
 }
 
-func TestBackendValue(t *testing.T) {
-	t.Setenv("VX_BACKEND", "")
-	if r := BackendValue(); r.Name != "" {
-		t.Errorf("an unset backend reports nothing, got %+v", r)
+func TestBackendChoice(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"unset is the TUI by default", nil, "herdr TUI - default (VX_BACKEND is not set)"},
+		{"explicit TUI", map[string]string{"VX_BACKEND": "herdr"}, "herdr TUI - chosen by VX_BACKEND=herdr"},
+		{"explicit hc", map[string]string{"VX_BACKEND": "hc"}, "herdr-core, experimental (the herdr TUI is not used) - chosen by VX_BACKEND=hc"},
+		{"detected in an app terminal", map[string]string{"HC_TERMINAL_ID": "t1"}, "herdr-core, experimental (the herdr TUI is not used) - detected from the Herdr app terminal (HC_TERMINAL_ID is set, VX_BACKEND is not)"},
+		{"explicit TUI wins in an app terminal", map[string]string{"HC_TERMINAL_ID": "t1", "VX_BACKEND": "herdr"}, "herdr TUI - chosen by VX_BACKEND=herdr"},
+	} {
+		r := backendChoice(hcEnvOf(c.env))
+		if r.Name != "terminal backend" || !r.OK || r.Warn || r.Required || r.Detail != c.want {
+			t.Errorf("%s: got %+v, want ok %q", c.name, r, c.want)
+		}
 	}
-	t.Setenv("VX_BACKEND", "hc")
-	if r := BackendValue(); r.Name != "" {
-		t.Errorf("hc reports nothing here, got %+v", r)
-	}
-	t.Setenv("VX_BACKEND", "zellij")
-	if r := BackendValue(); r.Name != "VX_BACKEND" || r.OK || !r.Required || !strings.Contains(r.Detail, `"zellij"`) {
+	r := backendChoice(hcEnvOf(map[string]string{"VX_BACKEND": "zellij"}))
+	if r.Name != "VX_BACKEND" || r.OK || !r.Required || !strings.Contains(r.Detail, `"zellij"`) {
 		t.Errorf("a typo must be a required failure, got %+v", r)
 	}
 }

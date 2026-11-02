@@ -226,6 +226,7 @@ func TestDoctor_DefaultCommanderOutputIsUnchanged(t *testing.T) {
 	}
 	want := []string{
 		"[ok] Claude Code",
+		"[ok] terminal backend - herdr TUI - default (VX_BACKEND is not set)",
 		"[ok] herdr",
 		`[warn] herdr version - could not determine herdr version: unexpected herdr --version output: ""`,
 		"[missing] GitHub CLI (gh) - not found in PATH (optional - only needed for 'vx ship'/'vx land' on a shipped mission) - install it with 'brew install gh' or from https://cli.github.com",
