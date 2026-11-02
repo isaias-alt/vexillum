@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -14,12 +14,31 @@ import (
 	"github.com/isaias-alt/vexillum/internal/sentinel"
 )
 
+// lockedBuffer is a stderr capture that is safe to read while the exec copy
+// goroutine is still writing to it, because the await keeps running.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // awaitRun is one "vx sentinel await" the way a Stop hook starts it, from a
 // real vx binary, in a throwaway HOME and project.
 type awaitRun struct {
 	home    string // HOME of the process; the state lives in home/.vexillum
 	cmd     *exec.Cmd
-	stderr  *bytes.Buffer
+	stderr  *lockedBuffer
 	exited  chan error
 	started time.Time
 }
@@ -60,7 +79,7 @@ func startAwait(t *testing.T, vx string, env map[string]string) *awaitRun {
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-	run := &awaitRun{home: home, cmd: cmd, stderr: &bytes.Buffer{}, exited: make(chan error, 1), started: time.Now()}
+	run := &awaitRun{home: home, cmd: cmd, stderr: &lockedBuffer{}, exited: make(chan error, 1), started: time.Now()}
 	cmd.Stderr = run.stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
