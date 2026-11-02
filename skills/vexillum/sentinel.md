@@ -21,7 +21,7 @@ the sentinel. Go check on it (report to the general, or land/strike as
 appropriate) before actually stopping. Verify before you report a soldier as
 finished: look at `git log` and `git status` in its camp rather than trusting the
 status word alone. And never judge whether a soldier is alive or waiting from a
-`herdr pane read` (or `hc read <terminal>` under `VX_BACKEND=hc`): the viewport can be stale (see `unconfirmed` below).
+`herdr pane read` (or `hc read <terminal>` on the hc backend): the viewport can be stale (see `unconfirmed` below).
 
 ## Forum wakes
 
@@ -61,8 +61,8 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
   (running, done, or interrupted), and it is refused if the pane is really
   blocked. `vx prompt` and `vx ship` refuse a blocked task and name this flag.
 - **interrupted**: the sentinel lost the soldier itself, not a failure at its
-  task: its herdr pane disappeared (closed by hand, or herdr restarted; under
-  `VX_BACKEND=hc`, its terminal is gone from `hc ls`) while it was working. Check its camp directly (`git log`, `git status`) before doing
+  task: its herdr pane disappeared (closed by hand, or herdr restarted; on the
+  hc backend, its terminal is gone from `hc ls`) while it was working. Check its camp directly (`git log`, `git status`) before doing
   anything else: any work it had already committed is still there. If that work
   matters, land it normally first (`vx land <task-id>`). One more cause: a
   soldier that went idle without ever being sent its prompt (the `vx dispatch`
@@ -84,8 +84,8 @@ wake for messages you already confirmed is dropped, like a stale soldier wake.
      output gives the full path): does it exist, and is it fresh (written in the
      last 30 minutes)? A pause file is the only thing that makes
      an idle soldier "waiting".
-  2. `herdr pane list`: the pane's `agent_status` (`idle` or `working`). Under
-     `VX_BACKEND=hc`, `hc get <terminal>` (`status.state`) or `hc ls` (`status`).
+  2. `herdr pane list`: the pane's `agent_status` (`idle` or `working`). On the
+     hc backend, `hc get <terminal>` (`status.state`) or `hc ls` (`status`).
      An absent status means the program never reported.
   3. The task's `output` from `vx status`, plus `git log` / `git status` in the
      camp (or the report path for a scout).

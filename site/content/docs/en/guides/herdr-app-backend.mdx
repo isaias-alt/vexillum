@@ -1,9 +1,9 @@
 ---
 title: Run from the Herdr app (experimental)
-description: Run vexillum's soldiers as terminals of the Herdr desktop app instead of herdr TUI panes, with VX_BACKEND=hc, and what is and is not supported.
+description: Run soldiers as Herdr desktop app terminals instead of herdr TUI panes, with VX_BACKEND=hc or detected in an app terminal, and what is and is not supported.
 ---
 
-By default soldiers run in [herdr](https://herdr.dev) panes, in the herdr TUI. vexillum has a second, **experimental** backend that runs them as terminals of the Herdr desktop app instead, through herdr-core and its `hc` command. You opt in with the `VX_BACKEND=hc` environment variable. Nothing changes for anyone who does not set it.
+By default soldiers run in [herdr](https://herdr.dev) panes, in the herdr TUI. vexillum has a second, **experimental** backend that runs them as terminals of the Herdr desktop app instead, through herdr-core and its `hc` command. vexillum uses it when `VX_BACKEND=hc` is set, and picks it by itself inside a Herdr app terminal (see [How the backend is chosen](#how-the-backend-is-chosen)). Nothing changes for a herdr TUI pane.
 
 <Callout type="warn" title="Experimental">
   This backend is experimental and has only been exercised in part. The herdr TUI is the default and the supported way to run vexillum. What was checked is stated below, and anything not checked says so. Do not move a setup you depend on to it yet.
@@ -11,7 +11,7 @@ By default soldiers run in [herdr](https://herdr.dev) panes, in the herdr TUI. v
 
 ## What it is
 
-With `VX_BACKEND=hc`, `vx dispatch` starts each soldier as a terminal of herdr-core, and the Herdr app shows it. The camp, the mission and scout flow, `vx land`, `vx ship`, `vx strike` and the forum work as they do on the herdr TUI. The sentinel watches the soldiers through `hc` and reads their status from the harness itself (the OSC 7501 escape sequence), not from a herdr agent integration.
+On this backend, `vx dispatch` starts each soldier as a terminal of herdr-core, and the Herdr app shows it. The camp, the mission and scout flow, `vx land`, `vx ship`, `vx strike` and the forum work as they do on the herdr TUI. The sentinel watches the soldiers through `hc` and reads their status from the harness itself (the OSC 7501 escape sequence), not from a herdr agent integration.
 
 ## Requirements
 
@@ -25,20 +25,31 @@ With `VX_BACKEND=hc`, `vx dispatch` starts each soldier as a terminal of herdr-c
 - The CLI of your harness (Claude Code by default). The herdr TUI binary is not needed under this backend.
 - Optional: `herdr-app` on `PATH`. After it starts a soldier, vexillum names the app tab `vx-<slug>`. This is best effort and never fails a dispatch, and it only works in the app's `default` session. Without it the tabs show as `1`, `2` and so on.
 
+## How the backend is chosen
+
+Every command picks the backend the same way, in this order:
+
+1. **`VX_BACKEND` is set.** It wins: `hc` selects this backend and `herdr` selects the herdr TUI, even inside a Herdr app terminal. Any other value is an error.
+2. **`VX_BACKEND` is not set and you are in a Herdr app terminal.** That means `HC_TERMINAL_ID` is set and neither `HERDR_PANE_ID` nor `HERDR_WORKSPACE_ID` is. vexillum selects `hc`.
+3. **Anything else.** The herdr TUI, as before. An environment that has both `HC_*` and `HERDR_*` variables is not guessed at: it stays on the herdr TUI.
+
+The sentinel follows the same rule and records its backend in `~/.vexillum/sentinel.json`. A sentinel that a commander in an app terminal starts is an `hc` sentinel, and one started from a herdr TUI pane is a TUI sentinel.
+
+Do not export `VX_BACKEND=hc` in your shell rc to get this backend: it would also apply to herdr TUI panes, which stay the default.
+
 ## Turn it on
 
-1. Export the variable in the environment of your commander, before you start it. The commander's own `vx` commands inherit it, so it has to be set where the commander starts, not afterwards:
+1. Open a terminal in the Herdr app, `cd` into your project and start your commander there. Nothing else is needed: the app sets `HC_TERMINAL_ID`, which is how vexillum recognizes the terminal. This also holds after you close and reopen the app, when its core restarts with the app's own environment. To force the backend instead, for example in a terminal that does not carry the app's variables, export `VX_BACKEND=hc` where the commander starts. The commander's own `vx` commands inherit it, so it has to be set before the commander starts, not afterwards:
 
    ```bash
    export VX_BACKEND=hc
    ```
 
-2. Open a terminal in the Herdr app, `cd` into your project and start your commander there. `vx dispatch` and `vx redispatch` need `HC_TERMINAL_ID`, which the app sets in its terminals. Outside one they refuse to run and tell you so.
-3. Run `vx doctor`. Under `hc` it replaces the herdr lines with these:
+2. `vx dispatch` and `vx redispatch` need `HC_TERMINAL_ID`, which the app sets in its terminals. Outside one they refuse to run and tell you so.
+3. Run `vx doctor`. Under `hc` it replaces the herdr lines with these, after a `terminal backend` line that says which backend is in use and how it was chosen (`chosen by VX_BACKEND=hc`, `detected from the Herdr app terminal`, or `default`, which is the herdr TUI):
 
    | Line | Meaning |
    | --- | --- |
-   | `terminal backend` | `VX_BACKEND=hc` is read, and the herdr TUI is not used |
    | `herdr-core` | the binary found and its version; required |
    | `herdr-core protocol` | whether the core answered a hello; a failure only warns |
    | `Herdr app terminal` | the terminal id and session, or a warning when `HC_TERMINAL_ID` is not set |
@@ -67,9 +78,9 @@ In command help and in other pages, "herdr pane" and "herdr tab" mean the termin
 
 ## The `PATH` caveat
 
-The committed Stop hook runs `sh -c` and looks for `vx` in this order: whatever `command -v vx` finds on `PATH`, then `$HOME/.local/bin/vx`, then the Homebrew and `/usr/local` locations. The first `vx` on `PATH` wins. If an older or stable `vx` comes first, it runs `sentinel await` without knowing about `hc`, and your wakes never arrive. `vx doctor` warns when another `vx` comes before the one you run.
+The committed Stop hook runs `sh -c` and looks for `vx` in this order: whatever `command -v vx` finds on `PATH`, then `$HOME/.local/bin/vx`, then the Homebrew and `/usr/local` locations. The first `vx` on `PATH` wins. If an older or stable `vx` comes first, it runs `sentinel await` without knowing about `hc` or the app terminal detection, and your wakes never arrive. `vx doctor` warns when another `vx` comes before the one you run.
 
-Check that the `vx` first on `PATH` is the build you run. To try a build installed under another name, such as `vx-dev`, link it as `vx` in a directory that comes first on `PATH`, start the commander from your project directory with the variable exported, and stop any sentinel that is already running:
+Check that the `vx` first on `PATH` is the build you run. To try a build installed under another name, such as `vx-dev`, link it as `vx` in a directory that comes first on `PATH`, start the commander from your project directory (in an app terminal the backend is detected; otherwise export the variable), and stop any sentinel that is already running:
 
 ```bash
 mkdir -p ~/.vx-dev-bin && ln -sf ~/.local/bin/vx-dev ~/.vx-dev-bin/vx
@@ -81,10 +92,10 @@ Whether the Homebrew release already ships this backend was not confirmed; if it
 
 ## Going back
 
-Unset the variable and start the commander from a herdr pane again:
+Start the commander from a herdr pane again. If you exported `VX_BACKEND=hc`, unset it. To stay on the herdr TUI even inside an app terminal, set `VX_BACKEND=herdr`:
 
 ```bash
 unset VX_BACKEND
 ```
 
-Tasks that were dispatched on `hc` stay on it. Set the variable again to `strike`, `decide` or `prompt` them.
+Tasks that were dispatched on `hc` stay on it. Run `strike`, `decide` or `prompt` on them from a Herdr app terminal, or with `VX_BACKEND=hc` set.

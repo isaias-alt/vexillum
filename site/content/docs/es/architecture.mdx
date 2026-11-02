@@ -16,7 +16,7 @@ Le hablás a un commander. Él despacha soldiers, cada uno en su propio camp, y 
 />
 
 - Le hablás al **commander**, una sesión de Claude Code (o de Pi u OpenCode, mirá [Pi como commander](/es/docs/guides/pi-commander) y [OpenCode como commander](/es/docs/guides/opencode-commander)) guiada por `AGENTS.md` y skills. Te abre artefactos en el **forum** y lee de ahí tu feedback.
-- El commander ejecuta `vx dispatch`. El binario **vexillum** guarda su estado en disco, toma un **camp** e inicia un **soldier** en un pane de **herdr** (o, de forma experimental, en una terminal de herdr-core con `VX_BACKEND=hc`, ver [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend)).
+- El commander ejecuta `vx dispatch`. El binario **vexillum** guarda su estado en disco, toma un **camp** e inicia un **soldier** en un pane de **herdr** (o, de forma experimental, en una terminal de herdr-core, elegida con `VX_BACKEND=hc` o detectada en una terminal de la app de Herdr, ver [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend)).
 - El **sentinel** consulta herdr cada 5 segundos, registra cada resultado en el estado y despierta al commander. A un commander de Claude Code lo despierta el hook `Stop`, a uno de Pi una extensión de wake que corre dentro de Pi, y a uno de OpenCode el sentinel, que publica el wake en su sesión a través de la API de OpenCode (ver [Sentinel](/es/docs/concepts/sentinel)).
 
 ## Decisiones cerradas

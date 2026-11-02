@@ -41,7 +41,7 @@ Read the file that matches the moment, in addition to this one:
 | The general wants a real, validated GitHub PR | [shipping.md](shipping.md) |
 
 **On an `unconfirmed` sentinel notice, never trust a `herdr pane read` (or
-`hc read <terminal>` under `VX_BACKEND=hc`) for liveness** (the viewport can be
+`hc read <terminal>` on the hc backend) for liveness** (the viewport can be
 stale). Check `ls pauses/<agent>.md` (exists and fresh?), `herdr pane list`
 (`agent_status`) or `hc get <terminal>` (`status.state`) and the task output from
 `vx status`.
@@ -70,7 +70,8 @@ This creates an isolated camp (git worktree, own branch) and starts a real,
 interactive session of the profile's harness (Claude Code unless the profile
 selects another) inside a herdr pane in the current workspace (requires
 `$HERDR_WORKSPACE_ID`, set automatically inside a herdr-managed pane). With
-`VX_BACKEND=hc` (experimental) it starts in a Herdr app terminal in the
+the experimental hc backend (`VX_BACKEND=hc`, or detected inside a Herdr app
+terminal) it starts in a Herdr app terminal in the
 project's own space `vx-<project>` instead (requires `$HC_TERMINAL_ID`), and the
 commander is not placed in the general's current space. OpenCode 2.x soldiers
 work there through the status plugin vexillum embeds. The soldier is

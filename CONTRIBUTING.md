@@ -43,7 +43,7 @@ go build -o vx ./cmd/vx
 
 No other runtime dependency is required to build or test the binary itself.
 (Exercising `dispatch`/`sentinel` end-to-end additionally needs Claude Code
-and herdr installed, or herdr-core (`hc`) for the experimental `VX_BACKEND=hc`
+and herdr installed, or herdr-core (`hc`) for the experimental `hc`
 backend - `vx doctor` tells you what's missing.)
 
 ## Before opening a PR
@@ -112,8 +112,10 @@ applies to a soldier doing a manual run as much as to a test:
 
 ## Testing the hc backend
 
-The experimental `hc` (herdr-core) backend is selected with `VX_BACKEND=hc`; see
-`internal/herdr/hc.go`. Its tests need no real hc.
+The experimental `hc` (herdr-core) backend is selected with `VX_BACKEND=hc` or
+detected in a Herdr app terminal (`herdr.Select` in `internal/herdr/backend.go`:
+`VX_BACKEND` wins, else `HC_TERMINAL_ID` without `HERDR_PANE_ID` and
+`HERDR_WORKSPACE_ID` means hc, else the herdr TUI); see `internal/herdr/hc.go`. Its tests need no real hc.
 
 - **Fakes.** `bench/fakes/hc` and `bench/fakes/herdr-app` are shell scripts that
   answer what the backend asks with the shapes and exit codes of hc 0.1.16. Tests
@@ -130,7 +132,7 @@ The experimental `hc` (herdr-core) backend is selected with `VX_BACKEND=hc`; see
   `HC_TERMINAL_SOCKET` and `VX_BACKEND` in `TestMain`, so they do not depend on
   it. Verified on the camp that wrote this section: the packages without such a
   `TestMain` (among them `internal/herdr`, `internal/soldier` and
-  `internal/sentinel`) also pass with `VX_BACKEND=hc` and `HC_TERMINAL_ID` exported. The
+  `internal/sentinel`) also pass with `VX_BACKEND=hc` and `HC_TERMINAL_ID` exported (`HC_TERMINAL_ID` alone now selects hc as well). The
   `internal/cli` run in that setup did not finish within 10 minutes on a loaded
   machine, so it is not confirmed there; run the full suite with both variables
   unset, as CI does.
@@ -194,14 +196,15 @@ scripts/install-local.sh --force    # skip the clean and branch guards
 `VX_INSTALL_FORCE=1` is the same as `--force`.
 
 `vx-dev` is installed under that name, so the committed Stop hook, which looks up
-`vx`, does not find it. To exercise a dev build under `VX_BACKEND=hc`, put a `vx`
+`vx`, does not find it. To exercise a dev build under the `hc` backend, put a `vx`
 symlink to it in a directory that comes first on `PATH`, for example
 `mkdir -p ~/.vx-dev-bin && ln -sf ~/.local/bin/vx-dev ~/.vx-dev-bin/vx` and
 `export PATH=~/.vx-dev-bin:$PATH`. The first `vx` on `PATH` wins, so a Homebrew
 `vx` ahead of it runs a different build for wakes (not confirmed: whether the
-Homebrew formula already ships a build that knows `hc`). `VX_BACKEND` is read
-from the environment of each `vx` process, so export it before starting the
-commander, and stop any running sentinel of the other backend.
+Homebrew formula already ships a build that knows `hc`). The backend is chosen
+from the environment of each `vx` process (an app terminal selects `hc` by
+itself; otherwise export `VX_BACKEND=hc` before starting the commander), and
+stop any running sentinel of the other backend.
 
 ## Releases
 

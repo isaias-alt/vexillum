@@ -3,7 +3,7 @@ title: OpenCode como commander
 description: Hablale al commander en OpenCode 2.x en lugar de Claude Code, y cómo el sentinel lo despierta a través de la API HTTP de OpenCode.
 ---
 
-<Callout type="warn" title="No soportado con VX_BACKEND=hc">
+<Callout type="warn" title="No soportado con el backend hc">
   Los soldiers de OpenCode 2.x funcionan con el backend experimental de la app de Herdr porque vexillum carga un plugin de estado en la TUI de cada soldier. Un commander es distinto: ese OpenCode lo iniciás vos, no vexillum, así que el plugin no se carga y herdr-core no ve ningún estado de él (OpenCode no emite OSC 7501). Sigue sin estar soportado bajo `hc`, salvo que registres vos un plugin que informe el estado, que vexillum no incluye para este caso y que no se probó. `herdr integration install opencode` es una integración de la TUI de herdr. Corré un commander de OpenCode en la TUI de herdr. Mirá [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend) y [Usar OpenCode](/es/docs/guides/using-opencode).
 </Callout>
 

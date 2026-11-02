@@ -33,7 +33,7 @@ until a wake shows up or it times out, so the commander gets woken even
 if its turn already ended before a soldier settled, not just when a wake
 happens to already be pending at the exact moment a turn is ending.
 "await" exits immediately, without waiting, outside a herdr-managed pane
-(no HERDR_WORKSPACE_ID) or, with VX_BACKEND=hc, outside a Herdr app terminal
+(no HERDR_WORKSPACE_ID) or, with the hc backend, outside a Herdr app terminal
 (no HC_TERMINAL_ID) - the hook is committed into the project and so
 reaches any other tool's own Claude Code turns too, which have no task
 for the sentinel to track.

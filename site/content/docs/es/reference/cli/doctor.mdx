@@ -23,8 +23,11 @@ stale, editada a mano o faltante), si los perfiles de modelo de models.json son
 válidos, y si el modo yolo está activado (el commander aterriza una mission
 terminada sin preguntar).
 
-Con VX_BACKEND=hc (el backend experimental de la app de Herdr) las líneas de
-herdr se reemplazan por 'terminal backend', 'herdr-core' (obligatorio),
+La línea 'terminal backend' dice qué backend se usa y cómo se eligió: un
+VX_BACKEND explícito, detectado desde la terminal de la app de Herdr donde corre
+doctor (HC_TERMINAL_ID definido, VX_BACKEND y las variables de pane de herdr no),
+o el default, la TUI de herdr. Con el backend hc (el backend experimental de la
+app de Herdr) las líneas de herdr se reemplazan por 'herdr-core' (obligatorio),
 'herdr-core protocol', 'Herdr app terminal' y 'herdr-app' (opcional: nombra el
 tab de cada soldier). Cuando un perfil de modelo selecciona el harness opencode,
 se agrega una línea 'opencode status plugin': los soldiers de OpenCode 2.x se

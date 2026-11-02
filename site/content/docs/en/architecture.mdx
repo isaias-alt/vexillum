@@ -16,7 +16,7 @@ You talk to a commander. It dispatches soldiers, each in its own camp, and a sen
 />
 
 - You talk to the **commander**, a Claude Code session (or Pi or OpenCode, see [Pi as the commander](/docs/guides/pi-commander) and [OpenCode as the commander](/docs/guides/opencode-commander)) steered by `AGENTS.md` and skills. It opens artifacts for you in the **forum** and reads your feedback from there.
-- The commander runs `vx dispatch`. The **vexillum** binary keeps its state on disk, acquires a **camp** and starts a **soldier** in a **herdr** pane (or, experimentally, a herdr-core terminal with `VX_BACKEND=hc`, see [Run from the Herdr app](/docs/guides/herdr-app-backend)).
+- The commander runs `vx dispatch`. The **vexillum** binary keeps its state on disk, acquires a **camp** and starts a **soldier** in a **herdr** pane (or, experimentally, a herdr-core terminal, chosen with `VX_BACKEND=hc` or detected in a Herdr app terminal, see [Run from the Herdr app](/docs/guides/herdr-app-backend)).
 - The **sentinel** polls herdr every 5 seconds, records each outcome in the state and wakes the commander. A Claude Code commander is woken by the `Stop` hook, a Pi commander by a wake extension that runs inside Pi, and an OpenCode commander by the sentinel posting the wake into its session through OpenCode's API (see [Sentinel](/docs/concepts/sentinel)).
 
 ## Decisions that are settled

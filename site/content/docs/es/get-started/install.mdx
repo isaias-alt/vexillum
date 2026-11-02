@@ -12,10 +12,10 @@ vexillum soporta macOS y Linux, en amd64 y arm64.
 - [herdr](https://herdr.dev) (`brew install herdr` funciona)
 - un repositorio git para tu proyecto
 - opcional: `gh` (para `vx ship`)
-- opcional: [herdr-core](https://herdr.dev) (`hc`) y la app de escritorio de Herdr, solo para correr vexillum desde la app con `VX_BACKEND=hc` (experimental, ver [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend))
+- opcional: [herdr-core](https://herdr.dev) (`hc`) y la app de escritorio de Herdr, solo para correr vexillum desde la app (experimental, elegido con `VX_BACKEND=hc` o detectado en una terminal de la app, ver [Correr desde la app de Herdr](/es/docs/guides/herdr-app-backend))
 - opcional: [Pi](https://pi.dev) u [OpenCode](https://opencode.ai), para correr en ellos el commander o los soldiers de un perfil de modelo (ver [Pi como commander](/es/docs/guides/pi-commander), [OpenCode como commander](/es/docs/guides/opencode-commander) y [Modelos para otros harnesses](/es/docs/guides/models-for-other-harnesses)); un proyecto cuyo commander no es Claude Code necesita acá su propio CLI
 
-`vx doctor` verifica que estén presentes el CLI de cada harness de commander del proyecto (Claude Code por defecto), herdr y git, y que el scaffold del proyecto esté sano. No verifica que Claude Code tenga la sesión iniciada, tu SO o arquitectura, ni que estés dentro de un pane de herdr; `vx dispatch` solo funciona dentro de un pane de herdr (una terminal de la app con `VX_BACKEND=hc`).
+`vx doctor` verifica que estén presentes el CLI de cada harness de commander del proyecto (Claude Code por defecto), herdr y git, y que el scaffold del proyecto esté sano. No verifica que Claude Code tenga la sesión iniciada, tu SO o arquitectura, ni que estés dentro de un pane de herdr; `vx dispatch` solo funciona dentro de un pane de herdr (una terminal de la app con el backend hc).
 
 <Callout type="warn" title="Los soldiers tienen acceso total al host">
   Un soldier corre con todos los permisos (Claude Code con `--dangerously-skip-permissions`, Pi, que no tiene prompts de permisos, u OpenCode con `--auto`), con tu usuario del sistema, sin contenedor ni sandbox. Aterrizar una mission es la puerta de aprobación: nada llega al historial real de tu proyecto hasta que lo aprobás. Nunca despaches contra un repositorio o una máquina donde leer credenciales sería un problema.
@@ -67,7 +67,7 @@ vexillum no instala sus herramientas; las verifica.
 | [Claude Code](https://claude.com/claude-code) | el commander y los soldiers por defecto | sí, salvo que el commander del proyecto sea Pi u OpenCode |
 | [Pi](https://pi.dev), [OpenCode](https://opencode.ai) | un commander o los soldiers de un perfil de modelo en ese harness | solo para eso |
 | [herdr](https://herdr.dev) | los panes donde corren los soldiers | sí |
-| herdr-core (`hc`) y la app de Herdr | las terminales donde corren los soldiers con `VX_BACKEND=hc` | solo para el [backend experimental](/es/docs/guides/herdr-app-backend) |
+| herdr-core (`hc`) y la app de Herdr | las terminales donde corren los soldiers con el backend hc | solo para el [backend experimental](/es/docs/guides/herdr-app-backend) |
 | `gh` (GitHub CLI) | `vx ship`, y aterrizar un PR enviado | solo para eso |
 
 Corré la verificación cuando quieras:
@@ -76,7 +76,7 @@ Corré la verificación cuando quieras:
 vx doctor
 ```
 
-`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr (con `VX_BACKEND=hc`, la de herdr-core en su lugar), `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y, para un proyecto inicializado, el estado del [bloque de vexillum](/es/docs/concepts/agents-md-slot) en `AGENTS.md` o `CLAUDE.md`, si `CLAUDE.md` importa `AGENTS.md` (cuando el bloque está en `AGENTS.md`), cada [skill](/es/docs/concepts/skills), si [`models.json`](/es/docs/reference/models-json) es válido, y el hook `Stop` del sentinel: si está registrado, si [encuentra vx desde un entorno mínimo](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path) y si hay un sentinel corriendo:
+`doctor` es de solo lectura. Imprime `[ok]` o `[missing]` por cada herramienta, la versión de herdr (con el backend hc, la de herdr-core en su lugar), `~/.vexillum/`, si el proyecto actual está inicializado y es un repositorio git, y, para un proyecto inicializado, el estado del [bloque de vexillum](/es/docs/concepts/agents-md-slot) en `AGENTS.md` o `CLAUDE.md`, si `CLAUDE.md` importa `AGENTS.md` (cuando el bloque está en `AGENTS.md`), cada [skill](/es/docs/concepts/skills), si [`models.json`](/es/docs/reference/models-json) es válido, y el hook `Stop` del sentinel: si está registrado, si [encuentra vx desde un entorno mínimo](/es/docs/concepts/sentinel#el-hook-no-depende-de-tu-path) y si hay un sentinel corriendo:
 
 ```text
 [ok] AGENTS.md vexillum block - current (en)
