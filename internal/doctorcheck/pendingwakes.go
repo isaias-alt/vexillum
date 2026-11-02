@@ -31,7 +31,7 @@ func PendingWakes(vexillumHome string) []Result {
 
 func pendingWakes(vexillumHome string, h herdr.Locator, now time.Time, hasAwaiter func(vexillumHome, projectRoot string) bool) []Result {
 	var out []Result
-	for _, q := range sentinel.PendingQueues(vexillumHome) {
+	for _, q := range sentinel.PendingQueues(vexillumHome, now) {
 		if now.Sub(q.Oldest) < pendingWakeGrace {
 			continue
 		}

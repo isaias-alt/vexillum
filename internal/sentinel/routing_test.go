@@ -157,7 +157,7 @@ func TestPendingQueues_ListsProjectsWithWakesWaiting(t *testing.T) {
 	held, _ := sentinel.Claim(projectRoot(home, "held-3")) // nothing there: no queue
 	_ = held
 
-	queues := sentinel.PendingQueues(home)
+	queues := sentinel.PendingQueues(home, time.Now())
 	if len(queues) != 1 || queues[0].ProjectRoot != busy || queues[0].Count != 3 || queues[0].Oldest.IsZero() {
 		t.Errorf("queues = %+v, want only busy-2 with 3 wakes", queues)
 	}

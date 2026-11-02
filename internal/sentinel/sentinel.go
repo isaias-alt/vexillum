@@ -95,6 +95,17 @@ func claimedPath(path string) string {
 	return fmt.Sprintf("%s%s%d-%d-%d", path, claimMarker, time.Now().UnixMilli(), os.Getpid(), claimSeq.Add(1))
 }
 
+// StaleWakeAfter is how old a wake may get before it is stale: nobody will act
+// on a status change detected this long ago, so it is dropped instead of kept
+// queued (see wakeIsCurrent) and doctor does not warn about it.
+const StaleWakeAfter = 7 * 24 * time.Hour
+
+// IsStale reports whether the wake was detected more than StaleWakeAfter before
+// now. A wake with no detection time cannot be aged and is never stale.
+func (w Wake) IsStale(now time.Time) bool {
+	return !w.DetectedAt.IsZero() && now.Sub(w.DetectedAt) > StaleWakeAfter
+}
+
 func wakePath(projectRoot, taskID string) string {
 	return filepath.Join(wakesDir(projectRoot), taskID+".json")
 }
@@ -147,6 +158,8 @@ func Tick(vexillumHome string, client herdr.Client) (int, error) {
 type Sweeper struct {
 	log    io.Writer
 	warned map[string]string // problem subject -> the warning line already logged
+	// Now is time.Now when nil.
+	Now func() time.Time
 }
 
 // NewSweeper returns a Sweeper that writes its warnings to log.
@@ -186,9 +199,26 @@ func (s *Sweeper) Tick(vexillumHome string, client herdr.Client) (int, error) {
 		if err != nil {
 			note("project "+projectRoot, fmt.Sprintf("sentinel: warning: skipping project %s: %v", projectRoot, err))
 		}
+		s.purgeStale(projectRoot, note)
 	}
 	s.warn(problems)
 	return woke, nil
+}
+
+// purgeStale drops the stale wakes of one project's queue (see
+// PurgeStaleWakes), so they do not pile up when nobody drains.
+func (s *Sweeper) purgeStale(projectRoot string, note func(subject, line string)) {
+	now := time.Now()
+	if s.Now != nil {
+		now = s.Now()
+	}
+	n, err := PurgeStaleWakes(projectRoot, now)
+	if err != nil {
+		note("stale wakes "+projectRoot, fmt.Sprintf("sentinel: warning: cannot drop the stale wakes of %s: %v", projectRoot, err))
+	}
+	if n > 0 {
+		fmt.Fprintf(s.log, "sentinel: dropped %d stale wake(s) of %s\n", n, projectRoot)
+	}
 }
 
 // warn logs each problem not already logged with the same text, then
@@ -1017,7 +1047,7 @@ func writeWake(projectRoot string, w Wake) error {
 // plain remove is not enough: concurrent unlinks of one file can all
 // report success on some filesystems, so no remove result says who won.
 func Drain(projectRoot string) ([]Wake, error) {
-	drained, held, err := claimWakes(projectRoot)
+	drained, held, err := claimWakes(projectRoot, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -1031,7 +1061,7 @@ func Drain(projectRoot string) ([]Wake, error) {
 // returns the ones that are still news, oldest first, with the claimed files
 // that hold them. A wake that is not news (or corrupt) is consumed right away;
 // the held files are for the caller to commit or release.
-func claimWakes(projectRoot string) ([]Wake, []heldFile, error) {
+func claimWakes(projectRoot string, now time.Time) ([]Wake, []heldFile, error) {
 	dir := wakesDir(projectRoot)
 	names, err := listPending(dir)
 	if err != nil {
@@ -1062,7 +1092,7 @@ func claimWakes(projectRoot string) ([]Wake, []heldFile, error) {
 			discard(claimed)
 			continue
 		}
-		if !wakeIsCurrent(projectRoot, w, leases) {
+		if !wakeIsCurrent(projectRoot, w, now, leases) {
 			discard(claimed)
 			continue
 		}
@@ -1099,6 +1129,9 @@ func lazyLeases() func(projectRoot string) map[string]bool {
 // wakeIsCurrent reports whether w still describes its task: the commander
 // would learn something true by hearing it. It is not when
 //
+//   - it is stale, detected more than StaleWakeAfter before now: whoever
+//     could act on it is long gone, and with no commander listening it would
+//     otherwise stay queued for good;
 //   - the task is gone, or its status is no longer the one the wake
 //     announced (the commander answered, re-prompted, shipped or redispatched
 //     it since - whoever did that already knows);
@@ -1112,7 +1145,10 @@ func lazyLeases() func(projectRoot string) map[string]bool {
 // cannot be read) counts as current: a notice is never dropped on a guess.
 // The task is looked up in the wake's own origin when it names one, since a
 // wake sits in its commander's project, not always its task's.
-func wakeIsCurrent(queueRoot string, w Wake, leases func(projectRoot string) map[string]bool) bool {
+func wakeIsCurrent(queueRoot string, w Wake, now time.Time, leases func(projectRoot string) map[string]bool) bool {
+	if w.IsStale(now) {
+		return false
+	}
 	projectRoot := queueRoot
 	if w.Origin != "" && filepath.IsAbs(w.Origin) {
 		projectRoot = w.Origin

@@ -322,8 +322,10 @@ type PendingQueue struct {
 
 // PendingQueues lists the projects under vexillumHome with wakes waiting for a
 // commander, in project order. It only reads. Wakes claimed by a delivery in
-// flight are not pending and are not counted.
-func PendingQueues(vexillumHome string) []PendingQueue {
+// flight are not pending and are not counted, and neither are the task wakes
+// that are stale at now (see Wake.IsStale): the next drain or sentinel sweep
+// deletes them, they are not news.
+func PendingQueues(vexillumHome string, now time.Time) []PendingQueue {
 	roots, err := project.AllRoots(vexillumHome)
 	if err != nil {
 		return nil
@@ -338,6 +340,9 @@ func PendingQueues(vexillumHome string) []PendingQueue {
 			}
 			for _, e := range entries {
 				if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+					continue
+				}
+				if dir == wakesDir(root) && readWake(filepath.Join(dir, e.Name())).IsStale(now) {
 					continue
 				}
 				q.Count++

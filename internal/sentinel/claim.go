@@ -1,6 +1,7 @@
 package sentinel
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -43,9 +44,14 @@ type Claimed struct {
 
 // Claim claims every wake of the project that is still news, both kinds, and
 // holds them. A wake that is not news any more is consumed on the spot (see
-// wakeIsCurrent). Whatever one kind returned is kept even if the other failed.
+// wakeIsCurrent, which also covers a wake older than StaleWakeAfter). Whatever one kind returned is kept even if the other failed.
 func Claim(projectRoot string) (*Claimed, error) {
-	wakes, wheld, werr := claimWakes(projectRoot)
+	return ClaimAt(projectRoot, time.Now())
+}
+
+// ClaimAt is Claim judging staleness against now instead of the clock.
+func ClaimAt(projectRoot string, now time.Time) (*Claimed, error) {
+	wakes, wheld, werr := claimWakes(projectRoot, now)
 	forumWakes, fheld, ferr := claimForum(projectRoot)
 	return &Claimed{Wakes: wakes, ForumWakes: forumWakes, held: append(wheld, fheld...)}, errors.Join(werr, ferr)
 }
@@ -158,4 +164,45 @@ func abandonedClaim(name string, now time.Time) (pending string, ok bool) {
 		return "", false
 	}
 	return base, now.Sub(time.UnixMilli(ms)) >= staleClaimAfter
+}
+
+// PurgeStaleWakes deletes the stale task wakes (see Wake.IsStale) of the queue
+// at projectRoot and returns how many it deleted, so a queue nobody drains does
+// not keep them for good. Fresh wakes are left untouched; forum wakes are not
+// task wakes and are not looked at. A stale wake is claimed before it is
+// deleted, so one rewritten since it was read is not lost.
+func PurgeStaleWakes(projectRoot string, now time.Time) (int, error) {
+	dir := wakesDir(projectRoot)
+	names, err := listPending(dir)
+	if err != nil {
+		return 0, fmt.Errorf("listing wakes: %w", err)
+	}
+	purged := 0
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		if !readWake(path).IsStale(now) {
+			continue
+		}
+		claimed := claimedPath(path)
+		if err := os.Rename(path, claimed); err != nil {
+			continue
+		}
+		if readWake(claimed).IsStale(now) {
+			discard(claimed)
+			purged++
+		} else if err := restore(claimed, path); err != nil {
+			return purged, fmt.Errorf("putting back wake %s: %w", name, err)
+		}
+	}
+	return purged, nil
+}
+
+// readWake reads the wake file at path; one that cannot be read or parsed is
+// the zero Wake, which is never stale.
+func readWake(path string) Wake {
+	var w Wake
+	if data, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(data, &w)
+	}
+	return w
 }
